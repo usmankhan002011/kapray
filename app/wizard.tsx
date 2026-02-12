@@ -2,62 +2,52 @@ import { getDressTypes } from "@/utils/supabase/dressType";
 import React, { useEffect, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { SelectOption } from "../components/ui/select-panel";
+import { useRouter } from "expo-router";
+import { useAppDispatch } from "@/store/hooks";
+import { setDressTypeId } from "@/store/filtersSlice";
 
-const dressTypeOptions: SelectOption[] = [];
+export default function Wizard({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
+  const dispatch = useAppDispatch();
 
-const subTypeOptions: { [key: string]: SelectOption[] } = {
-  lehenga: [
-    { key: "bridal", label: "Bridal", icon: "diamond" },
-    { key: "party", label: "Party", icon: "star" },
-  ],
-  sherwani: [
-    { key: "classic", label: "Classic", icon: "ribbon" },
-    { key: "designer", label: "Designer", icon: "color-wand" },
-  ],
-  gown: [
-    { key: "walima", label: "Walima", icon: "rose" },
-    { key: "evening", label: "Evening", icon: "moon" },
-  ],
-  gharara: [
-    { key: "mehndi", label: "Mehndi", icon: "leaf" },
-    { key: "wedding", label: "Wedding", icon: "heart" },
-  ],
-  sari: [
-    { key: "banarasi", label: "Banarasi", icon: "flower" },
-    { key: "cotton", label: "Cotton", icon: "cloud" },
-  ],
-};
-
-export const Wizard: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const [step, setStep] = useState(1);
   const [selectedType, setSelectedType] = useState<string>("");
-  const [selectedSubType, setSelectedSubType] = useState<string>("");
   const [dressTypeOptions, setDressTypeOptions] = useState<SelectOption[]>([]);
 
   useEffect(() => {
-    // Load the true dress types
-    async function fetchDressTypes() {
-      getDressTypes().then((types) => {
-        setDressTypeOptions(
-          types.map((type) => ({
-            key: type.name.toLowerCase(),
-            label: type.name,
-            icon: type.iconURL,
-          })),
-        );
-      });
-    }
+    let alive = true;
 
-    fetchDressTypes();
+    getDressTypes()
+      .then((types) => {
+        if (!alive) return;
+
+        setDressTypeOptions(
+          (types ?? []).map((type: any) => {
+            const key = String(type.id);
+            const name = String(type.name ?? "");
+
+            return {
+              key,
+              label: name,
+              icon: type?.iconURL
+            };
+          })
+        );
+      })
+      .catch(() => {
+        if (!alive) return;
+        setDressTypeOptions([]);
+      });
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  // Custom Duolingo-style select panel
   const DuolingoSelectPanel: React.FC<{
     options: SelectOption[];
-    singleSelect?: boolean;
     selected: string;
     onSelect: (selected: string) => void;
-  }> = ({ options, singleSelect = true, selected, onSelect }) => (
+  }> = ({ options, selected, onSelect }) => (
     <View style={styles.duoPanel}>
       {options.map((opt) => (
         <Pressable
@@ -65,36 +55,31 @@ export const Wizard: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           style={[styles.duoOption, selected === opt.key && styles.duoSelected]}
           onPress={() => onSelect(opt.key)}
         >
-          <React.Fragment>
-            {/* Remote image */}
-            <View
-              style={{
-                width: "100%",
-                height: 200,
-                marginBottom: 8,
-                borderRadius: 12,
-                overflow: "hidden",
-                backgroundColor: "#eee",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
+          <View
+            style={{
+              width: "100%",
+              height: 200,
+              marginBottom: 8,
+              borderRadius: 12,
+              overflow: "hidden",
+              backgroundColor: "#eee",
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
+            {opt.icon ? (
               <Image
                 source={{ uri: opt.icon }}
-                style={{
-                  width: "100%",
-                  height: 200,
-                  borderRadius: 12,
-                }}
+                style={{ width: "100%", height: 200, borderRadius: 12 }}
                 resizeMode="cover"
               />
-            </View>
-          </React.Fragment>
+            ) : null}
+          </View>
 
           <Text
             style={[
               styles.duoLabel,
-              selected === opt.key && styles.duoSelectedLabel,
+              selected === opt.key && styles.duoSelectedLabel
             ]}
           >
             {opt.label}
@@ -106,53 +91,24 @@ export const Wizard: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   return (
     <View style={{ minWidth: 320 }}>
-      {step === 1 && (
-        <>
-          <Text style={styles.heading}>Select Dress Type</Text>
-          <DuolingoSelectPanel
-            options={dressTypeOptions}
-            singleSelect
-            selected={selectedType}
-            onSelect={(type) => {
-              setSelectedType(type);
-              setStep(2);
-            }}
-          />
-          <View style={styles.buttonRow}>
-            <Pressable style={styles.skipButton} onPress={() => setStep(2)}>
-              <Text style={styles.skipText}>Skip</Text>
-            </Pressable>
-            <Pressable style={styles.closeButton} onPress={onClose}>
-              <Text style={styles.closeText}>Close</Text>
-            </Pressable>
-          </View>
-        </>
-      )}
-      {step === 2 && (selectedType || true) && (
-        <>
-          <Text style={styles.heading}>Select Sub Type</Text>
-          <DuolingoSelectPanel
-            options={subTypeOptions[selectedType] || []}
-            singleSelect
-            selected={selectedSubType}
-            onSelect={(subType) => {
-              setSelectedSubType(subType);
-              onClose();
-            }}
-          />
-          <View style={styles.buttonRow}>
-            <Pressable style={styles.skipButton} onPress={onClose}>
-              <Text style={styles.skipText}>Skip</Text>
-            </Pressable>
-            <Pressable style={styles.closeButton} onPress={() => setStep(1)}>
-              <Text style={styles.closeText}>Back</Text>
-            </Pressable>
-          </View>
-        </>
-      )}
+      <Text style={styles.heading}>Select Dress Type</Text>
+
+      <DuolingoSelectPanel
+        options={dressTypeOptions}
+        selected={selectedType}
+        onSelect={(typeKey) => {
+          setSelectedType(typeKey);
+
+          const idNum = Number(typeKey);
+          dispatch(setDressTypeId(Number.isNaN(idNum) ? null : idNum));
+
+          onClose();
+          router.push("/fabric");
+        }}
+      />
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   heading: {
@@ -160,14 +116,14 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginBottom: 24,
     textAlign: "center",
-    color: "#d7263d",
+    color: "#d7263d"
   },
   duoPanel: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "center",
     gap: 16,
-    marginBottom: 32,
+    marginBottom: 32
   },
   duoOption: {
     width: "40%",
@@ -183,50 +139,20 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     borderWidth: 2,
-    borderColor: "#f2f2f2",
-    transition: "border-color 0.2s",
+    borderColor: "#f2f2f2"
   },
   duoSelected: {
     backgroundColor: "#d7263d",
-    borderColor: "#d7263d",
+    borderColor: "#d7263d"
   },
   duoLabel: {
     fontSize: 14,
     color: "#444",
     fontWeight: "600",
-    textAlign: "center",
+    textAlign: "center"
   },
   duoSelectedLabel: {
     color: "#fff",
-    fontWeight: "bold",
-  },
-  buttonRow: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 12,
-    marginTop: 8,
-  },
-  closeButton: {
-    backgroundColor: "#222",
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignSelf: "flex-end",
-  },
-  closeText: {
-    color: "#fff",
-    fontWeight: "bold",
-  },
-  skipButton: {
-    backgroundColor: "#f2f2f2",
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignSelf: "flex-end",
-    marginRight: 8,
-  },
-  skipText: {
-    color: "#d7263d",
-    fontWeight: "bold",
-  },
+    fontWeight: "bold"
+  }
 });

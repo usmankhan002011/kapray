@@ -1,0 +1,130 @@
+import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+
+type Multi = string[];
+
+export type FiltersState = {
+  dressTypeId: number | null;
+
+  fabricTypeIds: Multi;
+  colorShadeIds: Multi;
+  workTypeIds: Multi;
+  workDensityIds: Multi;
+  originCityIds: Multi;
+  wearStateIds: Multi;
+  priceBandIds: Multi;
+};
+
+const initialState: FiltersState = {
+  dressTypeId: null,
+
+  fabricTypeIds: [],
+  colorShadeIds: [],
+  workTypeIds: [],
+  workDensityIds: [],
+  originCityIds: [],
+  wearStateIds: [],
+  priceBandIds: []
+};
+
+// empty array = ANY
+function toggleId(arr: string[], id: string) {
+  return arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id];
+}
+
+const filtersSlice = createSlice({
+  name: "filters",
+  initialState,
+  reducers: {
+    resetAllFilters: () => initialState,
+
+    setDressTypeId: (state, action: PayloadAction<number | null>) => {
+      state.dressTypeId = action.payload;
+
+      // Reset downstream filters when dress type changes
+      state.fabricTypeIds = [];
+      state.colorShadeIds = [];
+      state.workTypeIds = [];
+      state.workDensityIds = [];
+      state.originCityIds = [];
+      state.wearStateIds = [];
+      state.priceBandIds = [];
+    },
+
+    clearFabricTypes: (state) => {
+      state.fabricTypeIds = [];
+    },
+    toggleFabricType: (state, action: PayloadAction<string>) => {
+      state.fabricTypeIds = toggleId(state.fabricTypeIds, action.payload);
+    },
+
+    clearColorShades: (state) => {
+      state.colorShadeIds = [];
+    },
+    toggleColorShade: (state, action: PayloadAction<string>) => {
+      state.colorShadeIds = toggleId(state.colorShadeIds, action.payload);
+    },
+
+    clearWorkTypes: (state) => {
+      state.workTypeIds = [];
+    },
+    toggleWorkType: (state, action: PayloadAction<string>) => {
+      state.workTypeIds = toggleId(state.workTypeIds, action.payload);
+    },
+
+    clearWorkDensities: (state) => {
+      state.workDensityIds = [];
+    },
+    toggleWorkDensity: (state, action: PayloadAction<string>) => {
+      state.workDensityIds = toggleId(state.workDensityIds, action.payload);
+    },
+
+    clearOriginCities: (state) => {
+      state.originCityIds = [];
+    },
+    toggleOriginCity: (state, action: PayloadAction<string>) => {
+      state.originCityIds = toggleId(state.originCityIds, action.payload);
+    },
+
+    clearWearStates: (state) => {
+      state.wearStateIds = [];
+    },
+    toggleWearState: (state, action: PayloadAction<string>) => {
+      state.wearStateIds = toggleId(state.wearStateIds, action.payload);
+    },
+
+    clearPriceBands: (state) => {
+      state.priceBandIds = [];
+    },
+    togglePriceBand: (state, action: PayloadAction<string>) => {
+      state.priceBandIds = toggleId(state.priceBandIds, action.payload);
+    }
+  }
+});
+
+export const {
+  resetAllFilters,
+  setDressTypeId,
+
+  clearFabricTypes,
+  toggleFabricType,
+
+  clearColorShades,
+  toggleColorShade,
+
+  clearWorkTypes,
+  toggleWorkType,
+
+  clearWorkDensities,
+  toggleWorkDensity,
+
+  clearOriginCities,
+  toggleOriginCity,
+
+  clearWearStates,
+  toggleWearState,
+
+  clearPriceBands,
+  togglePriceBand
+} = filtersSlice.actions;
+
+export default filtersSlice.reducer;
