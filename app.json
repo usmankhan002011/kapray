@@ -32,7 +32,8 @@
         }
       ],
       "@react-native-google-signin/google-signin",
-      "expo-video"
+      "expo-video",
+      "expo-build-properties"
     ],
     "experiments": {
       "typedRoutes": true
