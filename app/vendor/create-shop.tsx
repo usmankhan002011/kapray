@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+// C:\DEV\kapray\kapray\app\vendor\create-shop.tsx
+import React, { useMemo, useRef, useState } from "react";
 import {
   Alert,
   Image,
@@ -22,6 +23,13 @@ const BUCKET_VENDOR = "vendor_images";
 
 type Picked = { uri: string; mimeType?: string; fileName?: string };
 
+function prettyNameFromPicked(p: Picked, fallback: string) {
+  if (p.fileName && p.fileName.trim()) return p.fileName.trim();
+  const parts = (p.uri || "").split("/");
+  const last = parts[parts.length - 1];
+  return last || fallback;
+}
+
 export default function CreateShopScreen() {
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -29,6 +37,8 @@ export default function CreateShopScreen() {
   // Login not active yet → we will not rely on vendorId.
   // Keeping this read for future use (no functional dependency).
   const authUserId = useAppSelector((s) => s.user?.userDetails?.userId);
+
+  const selectedVendor = useAppSelector((s) => s.vendor as any);
 
   const [shopName, setShopName] = useState("");
   const [ownerName, setOwnerName] = useState("");
@@ -47,6 +57,57 @@ export default function CreateShopScreen() {
 
   const [saving, setSaving] = useState(false);
   const [locLoading, setLocLoading] = useState(false);
+
+  // Compact UI: tap to expand each input
+  const [openOwner, setOpenOwner] = useState(true);
+  const [openEmail, setOpenEmail] = useState(false);
+  const [openMobile, setOpenMobile] = useState(false);
+  const [openShop, setOpenShop] = useState(false);
+  const [openLandline, setOpenLandline] = useState(false);
+  const [openAddress, setOpenAddress] = useState(false);
+  const [openLocation, setOpenLocation] = useState(false);
+
+  // Refs for proactive focus
+  const ownerRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+  const mobileRef = useRef<TextInput>(null);
+  const shopRef = useRef<TextInput>(null);
+  const landlineRef = useRef<TextInput>(null);
+  const addressRef = useRef<TextInput>(null);
+  const locationRef = useRef<TextInput>(null);
+
+  const focusSoon = (ref: React.RefObject<TextInput>) => {
+    setTimeout(() => ref.current?.focus(), 50);
+  };
+
+  const openAndFocusOwner = () => {
+    if (!openOwner) setOpenOwner(true);
+    focusSoon(ownerRef);
+  };
+  const openAndFocusEmail = () => {
+    if (!openEmail) setOpenEmail(true);
+    focusSoon(emailRef);
+  };
+  const openAndFocusMobile = () => {
+    if (!openMobile) setOpenMobile(true);
+    focusSoon(mobileRef);
+  };
+  const openAndFocusShop = () => {
+    if (!openShop) setOpenShop(true);
+    focusSoon(shopRef);
+  };
+  const openAndFocusLandline = () => {
+    if (!openLandline) setOpenLandline(true);
+    focusSoon(landlineRef);
+  };
+  const openAndFocusAddress = () => {
+    if (!openAddress) setOpenAddress(true);
+    focusSoon(addressRef);
+  };
+  const openAndFocusLocation = () => {
+    if (!openLocation) setOpenLocation(true);
+    focusSoon(locationRef);
+  };
 
   const canSubmit = useMemo(() => {
     return (
@@ -104,6 +165,7 @@ export default function CreateShopScreen() {
   ): Promise<string | null> {
     try {
       const contentType = file.mimeType || fallbackContentType;
+
       const base64 = await FileSystem.readAsStringAsync(file.uri, {
         encoding: FileSystem.EncodingType.Base64
       });
@@ -117,6 +179,7 @@ export default function CreateShopScreen() {
         Alert.alert("Upload failed", error.message);
         return null;
       }
+
       return data?.path ?? null;
     } catch (e: any) {
       Alert.alert("Upload error", e?.message ?? String(e));
@@ -138,6 +201,7 @@ export default function CreateShopScreen() {
       const lat = pos.coords.latitude.toFixed(6);
       const lng = pos.coords.longitude.toFixed(6);
       setLocationUrl(`https://maps.google.com/?q=${lat},${lng}`);
+      openAndFocusLocation();
     } catch (e: any) {
       Alert.alert("Location Error", e?.message ?? "Could not get location.");
     } finally {
@@ -167,8 +231,7 @@ export default function CreateShopScreen() {
         address: address.trim(),
         location_url: locationUrl.trim() || null,
 
-        // keep legacy column if you still use it elsewhere
-        // location can be used as a short label; we keep it in sync
+        // legacy compatibility (keep in sync)
         location: address.trim(),
 
         status: "pending"
@@ -277,97 +340,178 @@ export default function CreateShopScreen() {
 
         status: "pending",
 
-        // keep legacy compatibility fields if you still show them somewhere
         location: address.trim(),
         image: null as any
       } as any)
     );
 
-    router.replace("/vendor");
+    router.replace("/vendor/confirmation");
   }
+
+  const FieldHeader = ({
+    label,
+    open,
+    onPress
+  }: {
+    label: string;
+    open: boolean;
+    onPress: () => void;
+  }) => (
+    <Text style={styles.fieldBtnBlue} onPress={onPress}>
+      {label}
+    </Text>
+  );
+
+  const showSetCurrentLocation = (locationUrl || "").trim().length === 0;
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <Text style={styles.title}>Register Vendor</Text>
 
-      <Text style={styles.label}>Shop name *</Text>
-      <View style={optionStyles.card}>
-        <TextInput
-          style={styles.input}
-          value={shopName}
-          onChangeText={setShopName}
-          autoCapitalize="words"
-        />
-      </View>
 
-      <Text style={styles.label}>Vendor / owner name *</Text>
-      <View style={optionStyles.card}>
-        <TextInput
-          style={styles.input}
-          value={ownerName}
-          onChangeText={setOwnerName}
-          autoCapitalize="words"
-        />
-      </View>
+      <FieldHeader
+        label="Vendor / owner name *"
+        open={openOwner}
+        onPress={openAndFocusOwner}
+      />
+      {openOwner && (
+        <View style={optionStyles.card}>
+          <TextInput
+            ref={ownerRef}
+            style={styles.input}
+            value={ownerName}
+            onChangeText={setOwnerName}
+            autoCapitalize="words"
+            placeholder="Enter name"
+            placeholderTextColor="#777"
+          />
+        </View>
+      )}
 
-      <Text style={styles.label}>Email *</Text>
-      <View style={optionStyles.card}>
-        <TextInput
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-      </View>
+      <FieldHeader label="Email *" open={openEmail} onPress={openAndFocusEmail} />
+      {openEmail && (
+        <View style={optionStyles.card}>
+          <TextInput
+            ref={emailRef}
+            style={styles.input}
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            placeholder="Enter email"
+            placeholderTextColor="#777"
+          />
+        </View>
+      )}
 
-      <Text style={styles.label}>Mobile *</Text>
-      <View style={optionStyles.card}>
-        <TextInput
-          style={styles.input}
-          value={mobile}
-          onChangeText={setMobile}
-          keyboardType="phone-pad"
-        />
-      </View>
+      <FieldHeader
+        label="Mobile *"
+        open={openMobile}
+        onPress={openAndFocusMobile}
+      />
+      {openMobile && (
+        <View style={optionStyles.card}>
+          <TextInput
+            ref={mobileRef}
+            style={styles.input}
+            value={mobile}
+            onChangeText={setMobile}
+            keyboardType="phone-pad"
+            placeholder="Enter mobile"
+            placeholderTextColor="#777"
+          />
+        </View>
+      )}
 
-      <Text style={styles.label}>Landline</Text>
-      <View style={optionStyles.card}>
-        <TextInput
-          style={styles.input}
-          value={landline}
-          onChangeText={setLandline}
-          keyboardType="phone-pad"
-        />
-      </View>
+      <FieldHeader
+        label="Shop name *"
+        open={openShop}
+        onPress={openAndFocusShop}
+      />
+      {openShop && (
+        <View style={optionStyles.card}>
+          <TextInput
+            ref={shopRef}
+            style={styles.input}
+            value={shopName}
+            onChangeText={setShopName}
+            autoCapitalize="words"
+            placeholder="Enter shop name"
+            placeholderTextColor="#777"
+          />
+        </View>
+      )}
 
-      <Text style={styles.label}>Address *</Text>
-      <View style={optionStyles.card}>
-        <TextInput
-          style={[styles.input, styles.multi]}
-          value={address}
-          onChangeText={setAddress}
-          multiline
-        />
-      </View>
+      <FieldHeader
+        label="Landline"
+        open={openLandline}
+        onPress={openAndFocusLandline}
+      />
+      {openLandline && (
+        <View style={optionStyles.card}>
+          <TextInput
+            ref={landlineRef}
+            style={styles.input}
+            value={landline}
+            onChangeText={setLandline}
+            keyboardType="phone-pad"
+            placeholder="Enter landline (optional)"
+            placeholderTextColor="#777"
+          />
+        </View>
+      )}
 
-      <Text style={styles.label}>Location URL</Text>
-      <View style={optionStyles.card}>
-        <TextInput
-          style={styles.input}
-          value={locationUrl}
-          onChangeText={setLocationUrl}
-          keyboardType="url"
-          autoCapitalize="none"
-        />
-      </View>
+      <FieldHeader
+        label="Address *"
+        open={openAddress}
+        onPress={openAndFocusAddress}
+      />
+      {openAddress && (
+        <View style={optionStyles.card}>
+          <TextInput
+            ref={addressRef}
+            style={[styles.input, styles.multi]}
+            value={address}
+            onChangeText={setAddress}
+            multiline
+            placeholder="Enter address"
+            placeholderTextColor="#777"
+          />
+        </View>
+      )}
 
-      <Text
-        style={[styles.blueBtn, locLoading && styles.disabledText]}
-        onPress={locLoading ? undefined : setCurrentLocation}
-      >
-        {locLoading ? "Setting current location..." : "Set current location"}
-      </Text>
+      <FieldHeader
+        label="Location URL"
+        open={openLocation}
+        onPress={openAndFocusLocation}
+      />
+      {openLocation && (
+        <View style={optionStyles.card}>
+          <TextInput
+            ref={locationRef}
+            style={styles.input}
+            value={locationUrl}
+            onChangeText={setLocationUrl}
+            keyboardType="url"
+            autoCapitalize="none"
+            placeholder="Optional"
+            placeholderTextColor="#777"
+          />
+        </View>
+      )}
+
+      {showSetCurrentLocation && (
+        <>
+          <Text style={styles.orText}>-----OR------</Text>
+
+          <Text
+            style={[styles.blueBtn, locLoading && styles.disabledText]}
+            onPress={locLoading ? undefined : setCurrentLocation}
+          >
+            {locLoading ? "Setting current location..." : "Set current location"}
+          </Text>
+        </>
+      )}
 
       <Text
         style={styles.blueBtn}
@@ -408,17 +552,35 @@ export default function CreateShopScreen() {
         Shop images
       </Text>
       {!!images.length && (
-        <Text style={styles.meta}>{images.length} selected</Text>
+        <View style={styles.mediaRow}>
+          {images.slice(0, 6).map((it, idx) => (
+            <Image
+              key={`${it.uri}-${idx}`}
+              source={{ uri: it.uri }}
+              style={styles.thumb}
+            />
+          ))}
+          {images.length > 6 && (
+            <Text style={styles.moreText}>+{images.length - 6} more</Text>
+          )}
+        </View>
       )}
 
-      <Text
-        style={styles.blueBtn}
-        onPress={async () => setVideos(await pickVideos(true))}
-      >
+      <Text style={styles.blueBtn} onPress={async () => setVideos(await pickVideos(true))}>
         Shop videos
       </Text>
       {!!videos.length && (
-        <Text style={styles.meta}>{videos.length} selected</Text>
+        <View style={styles.videoList}>
+          <Text style={styles.videoCount}>{videos.length} selected</Text>
+          {videos.slice(0, 5).map((v, idx) => (
+            <Text key={`${v.uri}-${idx}`} style={styles.videoItem} numberOfLines={1}>
+              {idx + 1}. {prettyNameFromPicked(v, `video-${idx + 1}`)}
+            </Text>
+          ))}
+          {videos.length > 5 && (
+            <Text style={styles.moreText}>+{videos.length - 5} more</Text>
+          )}
+        </View>
       )}
 
       <Text
@@ -428,7 +590,7 @@ export default function CreateShopScreen() {
         {saving ? "Saving..." : "Submit"}
       </Text>
 
-      {!!authUserId && (
+      {false && !!authUserId && (
         <Text style={styles.meta}>Auth user detected: {String(authUserId)}</Text>
       )}
     </ScrollView>
@@ -440,21 +602,50 @@ const styles = StyleSheet.create({
 
   title: { fontSize: 20, fontWeight: "700", color: "#111", marginBottom: 6 },
 
-  label: { fontSize: 16, color: "#111", marginBottom: 8, marginTop: 12 },
+  fieldBtnBlue: {
+    marginTop: 12,
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#005ea6"
+  },
+
   input: { fontSize: 16, color: "#111" },
   multi: { minHeight: 90, textAlignVertical: "top" },
 
   blueBtn: {
-    marginTop: 12,
+    marginTop: 14,
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#005ea6"
   },
   disabledText: { opacity: 0.6 },
 
+  orText: {
+    marginTop: 14,
+    textAlign: "center",
+    fontSize: 13,
+    fontWeight: "900",
+    color: "#111",
+    opacity: 0.75
+  },
+
   meta: { marginTop: 6, fontSize: 12, color: "#111", opacity: 0.7 },
 
   preview: { width: "100%", height: 160, borderRadius: 10, marginTop: 10 },
+
+  mediaRow: {
+    marginTop: 10,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  thumb: { width: 56, height: 56, borderRadius: 10 },
+
+  videoList: { marginTop: 8 },
+  videoCount: { marginTop: 6, fontSize: 12, color: "#111", opacity: 0.7 },
+  videoItem: { marginTop: 6, fontSize: 12, color: "#111", opacity: 0.85 },
+
+  moreText: { marginTop: 10, fontSize: 12, color: "#111", opacity: 0.7 },
 
   submitBtn: {
     marginTop: 18,

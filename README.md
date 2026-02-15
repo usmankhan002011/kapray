@@ -53,11 +53,6 @@ npx expo run:android
 
 -------------------------------------------------------------------------------------------
 
-Windows PowerShell
-Copyright (C) Microsoft Corporation. All rights reserved.
-
-Install the latest PowerShell for new features and improvements! https://aka.ms/PSWindows
-
 PS C:\Users\Arif Nawaz> function Show-CustomTree {
 >>   param(
 >>     [string]$Path = ".",
@@ -69,20 +64,28 @@ PS C:\Users\Arif Nawaz> function Show-CustomTree {
 >>     )
 >>   )
 >>
->>   if ($Level -ge $MaxDepth) { return }
+>>   if ($Level -eq 0) {
+>>     Write-Output (Split-Path -Leaf (Resolve-Path -LiteralPath $Path))
+>>   }
+>>
+>>   if ($Level -ge ($MaxDepth - 1)) { return }
 >>
 >>   $items = Get-ChildItem -LiteralPath $Path -Force |
 >>     Where-Object { $Exclude -notcontains $_.Name } |
 >>     Sort-Object `
->>       @{ Expression = { -not $_.PSIsContainer }; Ascending = $true }, `
+>>       @{ Expression = { $_.PSIsContainer }; Descending = $true }, `
 >>       @{ Expression = { $_.Name }; Ascending = $true }
 >>
->>   foreach ($item in $items) {
+>>   for ($idx = 0; $idx -lt $items.Count; $idx++) {
+>>     $item = $items[$idx]
+>>     $isLast = ($idx -eq $items.Count - 1)
 >>
 >>     $indent = ""
->>     if ($Level -gt 0) {
+>>     if ($Level -ge 1) {
 >>       for ($i = 0; $i -lt ($Level - 1); $i++) { $indent += "│   " }
->>       $indent += "├── "
+>>       $indent += $(if ($isLast) { "└── " } else { "├── " })
+>>     } else {
+>>       $indent += $(if ($isLast) { "└── " } else { "├── " })
 >>     }
 >>
 >>     Write-Output "$indent$($item.Name)"
@@ -96,26 +99,38 @@ PS C:\Users\Arif Nawaz> function Show-CustomTree {
 >>     }
 >>   }
 >> }
+PS C:\Users\Arif Nawaz>
 PS C:\Users\Arif Nawaz> Set-Location "C:\DEV\kapray\kapray"
-PS C:\DEV\kapray\kapray>
-PS C:\DEV\kapray\kapray> Show-CustomTree -MaxDepth 6
-.idea
+PS C:\DEV\kapray\kapray> Show-CustomTree -MaxDepth 6 | Tee-Object -FilePath ".\tree.txt"
+kapray
+├── .idea
 ├── caches
-│   ├── deviceStreaming.xml
+│   └── deviceStreaming.xml
 ├── kapray.iml
 ├── misc.xml
 ├── modules.xml
 ├── vcs.xml
-├── workspace.xml
-.vscode
+└── workspace.xml
+├── .vscode
 ├── .react
 ├── extensions.json
-├── settings.json
-app
+└── settings.json
+├── app
 ├── (tabs)
 │   ├── _layout.tsx
 │   ├── index.tsx
-│   ├── shops.tsx
+│   └── shops.tsx
+├── vendor
+│   ├── profile
+│   │   ├── _layout.tsx
+│   │   ├── index.tsx
+│   │   ├── products.tsx
+│   │   ├── settings.tsx
+│   │   ├── update.tsx
+│   │   └── view-profile.tsx
+│   ├── confirmation.tsx
+│   ├── create-shop.tsx
+│   └── index.tsx
 ├── _layout.tsx
 ├── color.tsx
 ├── fabric.tsx
@@ -126,8 +141,8 @@ app
 ├── wear-state.tsx
 ├── wizard.tsx
 ├── work.tsx
-├── work-density.tsx
-assets
+└── work-density.tsx
+├── assets
 ├── fabric-types-images
 │   ├── CHIFFON.jpg
 │   ├── GEORGETTE.jpg
@@ -136,9 +151,9 @@ assets
 │   ├── ORGANZA.jpg
 │   ├── SILK.jpg
 │   ├── TISSUE.jpg
-│   ├── VELVET.jpg
+│   └── VELVET.jpg
 ├── images
-│   ├── completeLogo.png
+│   └── completeLogo.png
 ├── origin-images
 │   ├── Bahawalpur.jpg
 │   ├── Faisalabad_labeled.jpg
@@ -147,13 +162,13 @@ assets
 │   ├── Lahore.jpg
 │   ├── Multan.jpg
 │   ├── Peshawar.jpg
-│   ├── Rawalpindi.jpg
+│   └── Rawalpindi.jpg
 ├── work-density-images
 │   ├── extra-heavy.jpg
 │   ├── heavy.jpg
 │   ├── light.png
-│   ├── medium.jpg
-├── work-images
+│   └── medium.jpg
+└── work-images
 │   ├── designer.jpg
 │   ├── gotta.jpg
 │   ├── machine.jpg
@@ -161,36 +176,37 @@ assets
 │   ├── sequin.jpg
 │   ├── stone.jpg
 │   ├── thread.jpg
-│   ├── zardozi.jpg
-components
+│   └── zardozi.jpg
+├── components
 ├── ui
 │   ├── collapsible.tsx
 │   ├── icon-symbol.ios.tsx
 │   ├── icon-symbol.tsx
 │   ├── select-panel.tsx
-│   ├── StandardFilterDisplay.tsx
+│   └── StandardFilterDisplay.tsx
 ├── external-link.tsx
 ├── haptic-tab.tsx
 ├── hello-wave.tsx
 ├── parallax-scroll-view.tsx
 ├── themed-text.tsx
-├── themed-view.tsx
-constants
-├── theme.ts
-data
-├── products.data.ts
-hooks
+└── themed-view.tsx
+├── constants
+└── theme.ts
+├── data
+└── products.data.ts
+├── hooks
 ├── use-color-scheme.ts
 ├── use-color-scheme.web.ts
-├── use-theme-color.ts
-scripts
-├── reset-project.js
-store
+└── use-theme-color.ts
+├── scripts
+└── reset-project.js
+├── store
 ├── filtersSlice.ts
 ├── hooks.ts
 ├── index.ts
-utils
-├── supabase
+└── vendorSlice.ts
+├── utils
+└── supabase
 │   ├── client.ts
 │   ├── consumer.ts
 │   ├── dressType.ts
@@ -203,16 +219,19 @@ utils
 │   ├── vendor.ts
 │   ├── wearState.ts
 │   ├── workDensity.ts
-│   ├── workType.ts
-.gitignore
-app.json
-eslint.config.js
-expo-env.d.ts
-package.json
-package-lock.json
-README.md
-tsconfig.json
+│   └── workType.ts
+├── .gitignore
+├── app.json
+├── eslint.config.js
+├── expo-env.d.ts
+├── package.json
+├── package-lock.json
+├── README.md
+├── tree.txt
+└── tsconfig.json
 PS C:\DEV\kapray\kapray>
+
+as on 14feb26
 
 -------------------------------------------------------------------------------------------------------------
 strategy

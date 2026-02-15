@@ -1,136 +1,137 @@
-import React, { useEffect, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useState } from "react";
+import {
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { setSelectedShop } from "@/store/vendorSlice";
-import StandardFilterDisplay, {
-  optionStyles
-} from "@/components/ui/StandardFilterDisplay";
-
-type ShopRow = {
-  shop_id: string;
-  shop_name: string;
-  owner_name: string;
-  mobile: string;
-  landline: string | null;
-  address: string;
-  location_url: string | null;
-
-  government_permission_url: string | null;
-  approval_certificate_url: string | null;
-
-  banner_url: string | null;
-  images: string[] | null;
-  videos: string[] | null;
-
-  status: string;
-};
+import { useAppDispatch } from "@/store/hooks";
+import { setSelectedVendor } from "@/store/vendorSlice";
 
 export default function VendorIndexScreen() {
   const router = useRouter();
   const dispatch = useAppDispatch();
 
-  const vendorId = useAppSelector((s) => s.user?.userDetails?.userId);
+  const [vendorIdInput, setVendorIdInput] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const [shops, setShops] = useState<ShopRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  async function handleOpenVendor() {
+    const id = Number(vendorIdInput.trim());
 
-  useEffect(() => {
-    const run = async () => {
-      if (!vendorId) {
-        setLoading(false);
-        return;
-      }
+    if (!id) {
+      Alert.alert("Enter Vendor ID", "Please enter a valid numeric ID.");
+      return;
+    }
+
+    try {
+      setLoading(true);
 
       const { data, error } = await supabase
-        .from("shops")
-        .select(
-          "shop_id, shop_name, owner_name, mobile, landline, address, location_url, government_permission_url, approval_certificate_url, banner_url, images, videos, status"
-        )
-        .eq("registered_by", vendorId)
-        .order("created_at", { ascending: false });
+        .from("vendor")
+        .select("*")
+        .eq("id", id)
+        .single();
 
-      if (error) {
-        Alert.alert("Error", error.message);
-        setLoading(false);
+      if (error || !data) {
+        Alert.alert(
+          "Vendor not found",
+          "No vendor exists with this ID. Please register."
+        );
+        router.push("/vendor/create-shop");
         return;
       }
 
-      setShops((data as any) || []);
+      dispatch(setSelectedVendor(data as any));
+      router.replace("/vendor/profile/settings");
+
+    } catch (e: any) {
+      Alert.alert("Error", e?.message ?? "Something went wrong.");
+    } finally {
       setLoading(false);
-    };
-
-    run();
-  }, [vendorId]);
-
-  const onPickShop = (s: ShopRow) => {
-    dispatch(
-      setSelectedShop({
-        shop_id: s.shop_id,
-        shop_name: s.shop_name,
-        owner_name: s.owner_name,
-        mobile: s.mobile,
-        landline: s.landline,
-        address: s.address,
-        location_url: s.location_url,
-        government_permission_url: s.government_permission_url,
-        approval_certificate_url: s.approval_certificate_url,
-        banner_url: s.banner_url,
-        images: s.images,
-        videos: s.videos,
-        status: s.status
-      })
-    );
-  };
+    }
+  }
 
   return (
-    <StandardFilterDisplay
-      title="Vendor"
-      onBack={() => router.back()}
-      onAny={undefined}
-      onNext={() => router.push("/vendor/create-shop" as any)}
-    >
-      <ScrollView contentContainerStyle={styles.content}>
-        {!vendorId && <Text style={styles.meta}>Login required.</Text>}
+    <ScrollView contentContainerStyle={styles.content}>
+      <Text style={styles.title}>Vendor Login</Text>
 
-        {loading && vendorId && <Text style={styles.meta}>Loading…</Text>}
+      <View style={styles.card}>
+        <Text style={styles.label}>Enter Vendor ID</Text>
 
-        {!loading && vendorId && shops.length === 0 && (
-          <Text style={styles.meta}>No shops yet.</Text>
-        )}
-
-        {!loading &&
-          vendorId &&
-          shops.map((s) => (
-            <View key={s.shop_id} style={optionStyles.card}>
-              <Text style={styles.title}>{s.shop_name}</Text>
-              <Text style={styles.meta}>{s.owner_name}</Text>
-              <Text style={styles.meta}>{s.mobile}</Text>
-              <Text style={styles.meta}>{s.address}</Text>
-              <Text style={styles.small}>Status: {s.status}</Text>
-
-              <Text style={styles.action} onPress={() => onPickShop(s)}>
-                Open
-              </Text>
-            </View>
-          ))}
+        <TextInput
+          style={styles.input}
+          value={vendorIdInput}
+          onChangeText={setVendorIdInput}
+          keyboardType="numeric"
+          placeholder="e.g. 20"
+          placeholderTextColor="#777"
+        />
+ 
+        <Text
+          style={[styles.button, loading && styles.disabled]}
+          onPress={loading ? undefined : handleOpenVendor}
+        >
+          {loading ? "Checking..." : "Open Vendor"}
+        </Text>
 
         <Text
-          style={[styles.action, { marginTop: 14 }]}
-          onPress={() => router.push("/vendor/create-shop" as any)}
+          style={styles.link}
+          onPress={() => router.push("/vendor/create-shop")}
         >
-          Create shop
+          Register new vendor
         </Text>
-      </ScrollView>
-    </StandardFilterDisplay>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { paddingBottom: 24 },
-  title: { fontSize: 16, fontWeight: "700", color: "#111" },
-  meta: { marginTop: 6, fontSize: 14, color: "#111", opacity: 0.75 },
-  small: { marginTop: 8, fontSize: 12, color: "#111", opacity: 0.7 },
-  action: { marginTop: 10, fontSize: 16, fontWeight: "700", color: "#111" }
+  content: { padding: 16, paddingBottom: 24, backgroundColor: "#fff" },
+
+  title: { fontSize: 20, fontWeight: "900", color: "#111" },
+
+  card: {
+    marginTop: 20,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#e7e7e7",
+    padding: 16
+  },
+
+  label: { fontSize: 14, fontWeight: "800", color: "#111" },
+
+  input: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 16,
+    color: "#111"
+  },
+
+  button: {
+    marginTop: 16,
+    backgroundColor: "#0b2f6b",
+    color: "#fff",
+    textAlign: "center",
+    paddingVertical: 12,
+    borderRadius: 10,
+    fontWeight: "900",
+    fontSize: 16
+  },
+
+  disabled: { opacity: 0.6 },
+
+  link: {
+    marginTop: 14,
+    textAlign: "center",
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#005ea6"
+  }
 });

@@ -14,8 +14,9 @@ export default function MainPage() {
       <View style={{ height: 20 }} />
       <Button
         title="Login as Vendor"
-        onPress={() => router.push("/vendor/create-shop" as any)}
+        onPress={() => router.push("/vendor")}
       />
+
     </View>
   );
 }
