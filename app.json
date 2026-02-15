@@ -13,8 +13,7 @@
     },
     "android": {
       "package": "com.anonymous.kapray",
-      "softwareKeyboardLayoutMode": "resize",
-      "newArchEnabled": true
+      "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
       "bundler": "metro",
