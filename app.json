@@ -33,7 +33,15 @@
       ],
       "@react-native-google-signin/google-signin",
       "expo-video",
-      "expo-build-properties"
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "ndkVersion": "26.1.10909125",
+            "cmakeVersion": "3.31.1"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
