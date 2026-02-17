@@ -52,8 +52,7 @@ Join our community of developers creating universal apps.
 npx expo run:android
 
 -------------------------------------------------------------------------------------------
-
-PS C:\Users\Arif Nawaz> function Show-CustomTree {
+PS C:\DEV\kapray\kapray> function Show-CustomTree {
 >>   param(
 >>     [string]$Path = ".",
 >>     [int]$Level = 0,
@@ -64,13 +63,15 @@ PS C:\Users\Arif Nawaz> function Show-CustomTree {
 >>     )
 >>   )
 >>
+>>   $resolved = Resolve-Path -LiteralPath $Path -ErrorAction Stop
+>>
 >>   if ($Level -eq 0) {
->>     Write-Output (Split-Path -Leaf (Resolve-Path -LiteralPath $Path))
+>>     Write-Output (Split-Path -Leaf $resolved.Path)
 >>   }
 >>
 >>   if ($Level -ge ($MaxDepth - 1)) { return }
 >>
->>   $items = Get-ChildItem -LiteralPath $Path -Force |
+>>   $items = Get-ChildItem -LiteralPath $resolved.Path -Force -ErrorAction SilentlyContinue |
 >>     Where-Object { $Exclude -notcontains $_.Name } |
 >>     Sort-Object `
 >>       @{ Expression = { $_.PSIsContainer }; Descending = $true }, `
@@ -99,9 +100,9 @@ PS C:\Users\Arif Nawaz> function Show-CustomTree {
 >>     }
 >>   }
 >> }
-PS C:\Users\Arif Nawaz>
-PS C:\Users\Arif Nawaz> Set-Location "C:\DEV\kapray\kapray"
-PS C:\DEV\kapray\kapray> Show-CustomTree -MaxDepth 6 | Tee-Object -FilePath ".\tree.txt"
+PS C:\DEV\kapray\kapray>
+PS C:\DEV\kapray\kapray> Set-Location "C:\DEV\kapray\kapray"
+PS C:\DEV\kapray\kapray> Show-CustomTree -MaxDepth 8 | Tee-Object -FilePath ".\tree.txt"
 kapray
 ├── .idea
 ├── caches
@@ -122,11 +123,22 @@ kapray
 │   └── shops.tsx
 ├── vendor
 │   ├── profile
+│   │   ├── (product-modals)
+│   │   │   ├── _layout.tsx
+│   │   │   ├── color_modal.tsx
+│   │   │   ├── dress-type_modal.tsx
+│   │   │   ├── fabric_modal.tsx
+│   │   │   ├── origin-city_modal.tsx
+│   │   │   ├── wear-state_modal.tsx
+│   │   │   ├── work_modal.tsx
+│   │   │   └── work-density_modal.tsx
 │   │   ├── _layout.tsx
+│   │   ├── add-product.tsx
 │   │   ├── index.tsx
 │   │   ├── products.tsx
 │   │   ├── settings.tsx
 │   │   ├── update.tsx
+│   │   ├── view-product.tsx
 │   │   └── view-profile.tsx
 │   ├── confirmation.tsx
 │   ├── create-shop.tsx
@@ -168,7 +180,7 @@ kapray
 │   ├── heavy.jpg
 │   ├── light.png
 │   └── medium.jpg
-└── work-images
+├── work-images
 │   ├── designer.jpg
 │   ├── gotta.jpg
 │   ├── machine.jpg
@@ -177,7 +189,10 @@ kapray
 │   ├── stone.jpg
 │   ├── thread.jpg
 │   └── zardozi.jpg
+└── sizes outline.jpg
 ├── components
+├── product
+│   └── ProductDraftContext.tsx
 ├── ui
 │   ├── collapsible.tsx
 │   ├── icon-symbol.ios.tsx
@@ -231,7 +246,7 @@ kapray
 └── tsconfig.json
 PS C:\DEV\kapray\kapray>
 
-as on 14feb26
+as on 16feb26
 
 -------------------------------------------------------------------------------------------------------------
 strategy

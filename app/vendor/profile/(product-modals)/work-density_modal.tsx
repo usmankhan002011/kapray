@@ -9,56 +9,62 @@ import {
   View
 } from "react-native";
 import { useRouter } from "expo-router";
-import { getOriginCities, OriginCityItem } from "@/utils/supabase/originCity";
+import { getWorkDensities, WorkDensityItem } from "@/utils/supabase/workDensity";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 
-const ORIGIN_CITY_LOCAL_IMAGES: Record<string, any> = {
-  bahawalpur: require("@/assets/origin-images/Bahawalpur.jpg"),
-  faisalabad: require("@/assets/origin-images/Faisalabad_labeled.jpg"),
-  hyderabad: require("@/assets/origin-images/Hyderabad.jpg"),
-  karachi: require("@/assets/origin-images/Karachi.jpg"),
-  lahore: require("@/assets/origin-images/Lahore.jpg"),
-  multan: require("@/assets/origin-images/Multan.jpg"),
-  peshawar: require("@/assets/origin-images/Peshawar.jpg"),
-  rawalpindi: require("@/assets/origin-images/Rawalpindi.jpg")
+const WORK_DENSITY_LOCAL_IMAGES: Record<string, any> = {
+  light: require("@/assets/work-density-images/light.png"),
+  medium: require("@/assets/work-density-images/medium.jpg"),
+  heavy: require("@/assets/work-density-images/heavy.jpg"),
+  "extra-heavy": require("@/assets/work-density-images/extra-heavy.jpg")
 };
 
 const GRID_GAP = 8;
 const H_PADDING = 12;
 
-// Responsive sizing to fit better on screen (still scrolls)
+// Responsive sizing so cards feel bigger and fill the screen
 const SCREEN_W = Dimensions.get("window").width;
 const CARD_W = (SCREEN_W - H_PADDING * 2 - GRID_GAP) / 2;
-const IMAGE_H = Math.max(92, Math.round(CARD_W * 0.62));
+const IMAGE_H = Math.round(CARD_W * 1.35);
 
-export default function ProductOriginCityModal() {
+function safeStr(v: any) {
+  return String(v ?? "").trim();
+}
+
+export default function ProductWorkDensityModal() {
   const router = useRouter();
-  const { draft, setOriginCityIds } = useProductDraft();
+  const { draft, setWorkDensityIds } = useProductDraft();
 
-  const [items, setItems] = useState<OriginCityItem[]>([]);
+  const [items, setItems] = useState<WorkDensityItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   // Local selection inside modal (apply to draft only on Done)
   const [selected, setSelected] = useState<string[]>(
-    Array.isArray(draft.spec.originCityIds) ? draft.spec.originCityIds : []
+    Array.isArray(draft.spec.workDensityIds) ? draft.spec.workDensityIds : []
   );
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
+
+  const itemById = useMemo(() => {
+    const m = new Map<string, WorkDensityItem>();
+    for (const it of items) m.set(String(it.id), it);
+    return m;
+  }, [items]);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
     setErr(null);
 
-    getOriginCities()
+    getWorkDensities()
       .then((res) => {
         if (!alive) return;
         setItems(res ?? []);
       })
       .catch((e) => {
         if (!alive) return;
-        setErr(e?.message ?? "Failed to load origin cities");
+        setErr(e?.message ?? "Failed to load work densities");
       })
       .finally(() => {
         if (!alive) return;
@@ -70,6 +76,10 @@ export default function ProductOriginCityModal() {
     };
   }, []);
 
+  function closeToAddProduct() {
+    router.replace("/vendor/profile/add-product" as any);
+  }
+
   function toggle(id: string) {
     setSelected((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -77,12 +87,21 @@ export default function ProductOriginCityModal() {
   }
 
   function onClear() {
+    (draft.spec as any).workDensityNames = [];
     setSelected([]);
+    setWorkDensityIds([]);
   }
 
   function onDone() {
-    setOriginCityIds(selected);
-    router.back();
+    const pickedNames = selected
+      .map((id) => itemById.get(String(id))?.name ?? "")
+      .map((s) => safeStr(s))
+      .filter(Boolean);
+
+    (draft.spec as any).workDensityNames = pickedNames;
+
+    setWorkDensityIds(selected);
+    closeToAddProduct();
   }
 
   return (
@@ -90,13 +109,13 @@ export default function ProductOriginCityModal() {
       {/* HEADER */}
       <View style={styles.header}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={closeToAddProduct}
           style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
         >
           <Text style={styles.headerBtnText}>Close</Text>
         </Pressable>
 
-        <Text style={styles.headerTitle}>Origin</Text>
+        <Text style={styles.headerTitle}>Work Density</Text>
 
         <Pressable
           onPress={onDone}
@@ -107,7 +126,7 @@ export default function ProductOriginCityModal() {
       </View>
 
       <View style={styles.subHeader}>
-        <Text style={styles.subText}>Select one or more origin cities.</Text>
+        <Text style={styles.subText}>Select one or more density levels.</Text>
 
         <Pressable
           onPress={onClear}
@@ -117,7 +136,7 @@ export default function ProductOriginCityModal() {
         </Pressable>
       </View>
 
-      <Text style={styles.heading}>Select Origin City</Text>
+      <Text style={styles.heading}>Select Work Density</Text>
 
       {loading ? <Text style={styles.infoText}>Loading...</Text> : null}
       {err ? <Text style={styles.infoText}>{err}</Text> : null}
@@ -132,7 +151,7 @@ export default function ProductOriginCityModal() {
         renderItem={({ item }) => {
           const isOn = selectedSet.has(item.id);
           const localImg =
-            ORIGIN_CITY_LOCAL_IMAGES[(item.code ?? "").toLowerCase()];
+            WORK_DENSITY_LOCAL_IMAGES[(item.code ?? "").toLowerCase()];
 
           return (
             <Pressable
@@ -142,7 +161,11 @@ export default function ProductOriginCityModal() {
             >
               <View style={styles.imageWrap}>
                 {localImg ? (
-                  <Image source={localImg} style={styles.image} resizeMode="cover" />
+                  <Image
+                    source={localImg}
+                    style={styles.image}
+                    resizeMode="cover"
+                  />
                 ) : (
                   <View style={styles.noImage}>
                     <Text style={styles.noImageText}>No Image</Text>
@@ -211,7 +234,7 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: H_PADDING,
     paddingBottom: 16,
-    paddingTop: 2
+    paddingTop: 4
   },
   columnWrap: {
     gap: GRID_GAP,
@@ -222,8 +245,8 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderColor: "#ddd",
-    borderRadius: 10,
-    padding: 6
+    borderRadius: 12,
+    padding: 8
   },
   cardSelected: {
     borderColor: "#0b2f6b",
@@ -234,10 +257,10 @@ const styles = StyleSheet.create({
   imageWrap: {
     width: "100%",
     height: IMAGE_H,
-    borderRadius: 8,
+    borderRadius: 10,
     overflow: "hidden",
     backgroundColor: "#eee",
-    marginBottom: 6
+    marginBottom: 8
   },
   image: {
     width: "100%",
@@ -252,7 +275,7 @@ const styles = StyleSheet.create({
   noImageText: { color: "#111", opacity: 0.6, fontWeight: "800" },
 
   label: {
-    fontSize: 13,
+    fontSize: 14,
     color: "#111",
     textAlign: "center",
     fontWeight: "700"

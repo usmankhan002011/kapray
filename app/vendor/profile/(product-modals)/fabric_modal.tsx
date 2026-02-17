@@ -1,37 +1,81 @@
-import React, { useMemo, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  FlatList,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View
+} from "react-native";
 import { useRouter } from "expo-router";
+import { getFabricTypes, FabricTypeItem } from "@/utils/supabase/fabricType";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 
-type ColorShadeItem = {
-  id: string;
-  name: string;
-  hex: string;
+const FABRIC_LOCAL_IMAGES: Record<string, any> = {
+  chiffon: require("@/assets/fabric-types-images/CHIFFON.jpg"),
+  georgette: require("@/assets/fabric-types-images/GEORGETTE.jpg"),
+  jamawar: require("@/assets/fabric-types-images/JAMAWAR.jpg"),
+  net: require("@/assets/fabric-types-images/NET.jpg"),
+  organza: require("@/assets/fabric-types-images/ORGANZA.jpg"),
+  silk: require("@/assets/fabric-types-images/SILK.jpg"),
+  tissue: require("@/assets/fabric-types-images/TISSUE.jpg"),
+  velvet: require("@/assets/fabric-types-images/VELVET.jpg")
 };
-
-const COLOR_SHADES: ColorShadeItem[] = [
-  { id: "red", name: "Red", hex: "#C21807" },
-  { id: "green", name: "Green", hex: "#1B5E20" },
-  { id: "yellow", name: "Yellow", hex: "#FBC02D" },
-  { id: "blue", name: "Blue", hex: "#1565C0" },
-  { id: "golden", name: "Golden", hex: "#D4AF37" },
-  { id: "silver", name: "Silver", hex: "#C0C0C0" },
-  { id: "white", name: "White", hex: "#FFFFFF" },
-  { id: "black", name: "Black", hex: "#000000" }
-];
 
 const GRID_GAP = 8;
 const H_PADDING = 12;
 
-export default function ProductColorModal() {
+function safeStr(v: any) {
+  return String(v ?? "").trim();
+}
+
+export default function ProductFabricModal() {
   const router = useRouter();
-  const { draft, setColorShadeIds } = useProductDraft();
+  const { draft, setFabricTypeIds } = useProductDraft();
+
+  const [items, setItems] = useState<FabricTypeItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   const [selected, setSelected] = useState<string[]>(
-    Array.isArray(draft.spec.colorShadeIds) ? draft.spec.colorShadeIds : []
+    Array.isArray(draft.spec.fabricTypeIds) ? draft.spec.fabricTypeIds : []
   );
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
+
+  const itemById = useMemo(() => {
+    const m = new Map<string, FabricTypeItem>();
+    for (const it of items) m.set(String(it.id), it);
+    return m;
+  }, [items]);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setErr(null);
+
+    getFabricTypes()
+      .then((res) => {
+        if (!alive) return;
+        setItems(res ?? []);
+      })
+      .catch((e) => {
+        if (!alive) return;
+        setErr(e?.message ?? "Failed to load fabric types");
+      })
+      .finally(() => {
+        if (!alive) return;
+        setLoading(false);
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  function closeToAddProduct() {
+    router.replace("/vendor/profile/add-product" as any);
+  }
 
   function toggle(id: string) {
     setSelected((prev) =>
@@ -40,26 +84,34 @@ export default function ProductColorModal() {
   }
 
   function onClear() {
+    (draft.spec as any).fabricTypeNames = [];
     setSelected([]);
+    setFabricTypeIds([]);
   }
 
   function onDone() {
-    setColorShadeIds(selected);
-    router.back();
+    const pickedNames = selected
+      .map((id) => itemById.get(String(id))?.name ?? "")
+      .map((s) => safeStr(s))
+      .filter(Boolean);
+
+    (draft.spec as any).fabricTypeNames = pickedNames;
+
+    setFabricTypeIds(selected);
+    closeToAddProduct();
   }
 
   return (
     <View style={styles.screen}>
-      {/* HEADER */}
       <View style={styles.header}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={closeToAddProduct}
           style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
         >
           <Text style={styles.headerBtnText}>Close</Text>
         </Pressable>
 
-        <Text style={styles.headerTitle}>Color</Text>
+        <Text style={styles.headerTitle}>Fabric</Text>
 
         <Pressable
           onPress={onDone}
@@ -70,7 +122,7 @@ export default function ProductColorModal() {
       </View>
 
       <View style={styles.subHeader}>
-        <Text style={styles.subText}>Select one or more color shades.</Text>
+        <Text style={styles.subText}>Select one or more fabric types.</Text>
 
         <Pressable
           onPress={onClear}
@@ -80,10 +132,13 @@ export default function ProductColorModal() {
         </Pressable>
       </View>
 
-      <Text style={styles.heading}>Select Color Shades</Text>
+      <Text style={styles.heading}>Select Fabric Type</Text>
+
+      {loading ? <Text style={styles.infoText}>Loading...</Text> : null}
+      {err ? <Text style={styles.infoText}>{err}</Text> : null}
 
       <FlatList
-        data={COLOR_SHADES}
+        data={items}
         keyExtractor={(i) => i.id}
         numColumns={2}
         showsVerticalScrollIndicator={false}
@@ -91,6 +146,7 @@ export default function ProductColorModal() {
         columnWrapperStyle={styles.columnWrap}
         renderItem={({ item }) => {
           const isOn = selectedSet.has(item.id);
+          const localImg = FABRIC_LOCAL_IMAGES[(item.code ?? "").toLowerCase()];
 
           return (
             <Pressable
@@ -98,8 +154,18 @@ export default function ProductColorModal() {
               style={[styles.card, isOn ? styles.cardSelected : null]}
               onPress={() => toggle(item.id)}
             >
-              <View style={styles.swatchWrap}>
-                <View style={[styles.swatch, { backgroundColor: item.hex }]} />
+              <View style={styles.imageWrap}>
+                {localImg ? (
+                  <Image
+                    source={localImg}
+                    style={styles.image}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.noImage}>
+                    <Text style={styles.noImageText}>No Image</Text>
+                  </View>
+                )}
               </View>
 
               <Text style={styles.label} numberOfLines={1}>
@@ -154,6 +220,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 6
   },
+  infoText: {
+    color: "#111",
+    marginBottom: 6,
+    paddingHorizontal: 14
+  },
 
   listContent: {
     paddingHorizontal: H_PADDING,
@@ -178,7 +249,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F3F7FF"
   },
 
-  swatchWrap: {
+  imageWrap: {
     width: "100%",
     height: 96,
     borderRadius: 6,
@@ -186,10 +257,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#eee",
     marginBottom: 6
   },
-  swatch: {
+  image: {
     width: "100%",
     height: 96
   },
+  noImage: {
+    width: "100%",
+    height: 96,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  noImageText: { color: "#111", opacity: 0.6, fontWeight: "800" },
 
   label: {
     fontSize: 13,

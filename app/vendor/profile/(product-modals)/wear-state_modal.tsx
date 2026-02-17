@@ -1,58 +1,94 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  Dimensions,
   FlatList,
-  Image,
   Pressable,
   StyleSheet,
   Text,
   View
 } from "react-native";
 import { useRouter } from "expo-router";
-import { getFabricTypes, FabricTypeItem } from "@/utils/supabase/fabricType";
+import { getWearStates, WearStateItem } from "@/utils/supabase/wearState";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 
-const FABRIC_LOCAL_IMAGES: Record<string, any> = {
-  chiffon: require("@/assets/fabric-types-images/CHIFFON.jpg"),
-  georgette: require("@/assets/fabric-types-images/GEORGETTE.jpg"),
-  jamawar: require("@/assets/fabric-types-images/JAMAWAR.jpg"),
-  net: require("@/assets/fabric-types-images/NET.jpg"),
-  organza: require("@/assets/fabric-types-images/ORGANZA.jpg"),
-  silk: require("@/assets/fabric-types-images/SILK.jpg"),
-  tissue: require("@/assets/fabric-types-images/TISSUE.jpg"),
-  velvet: require("@/assets/fabric-types-images/VELVET.jpg")
-};
-
-const GRID_GAP = 8;
+const GRID_GAP = 10;
 const H_PADDING = 12;
 
-export default function ProductFabricModal() {
-  const router = useRouter();
-  const { draft, setFabricTypeIds } = useProductDraft();
+const SCREEN_W = Dimensions.get("window").width;
+const CARD_W = (SCREEN_W - H_PADDING * 2 - GRID_GAP) / 2;
+const CARD_H = Math.max(120, Math.round(CARD_W * 1.05));
 
-  const [items, setItems] = useState<FabricTypeItem[]>([]);
+const CARD_COLORS: Record<string, { bg: string; text: string }> = {
+  stitched: { bg: "#FCE7F3", text: "#111" },
+  unstitched: { bg: "#E0F2FE", text: "#111" },
+  "ready-to-wear": { bg: "#DCFCE7", text: "#111" },
+  "one-piece": { bg: "#FEF3C7", text: "#111" },
+  "two-piece": { bg: "#EDE9FE", text: "#111" },
+  "three-piece": { bg: "#FFE4E6", text: "#111" }
+};
+
+function safeStr(v: any) {
+  return String(v ?? "").trim();
+}
+
+export default function ProductWearStateModal() {
+  const router = useRouter();
+  const { draft, setWearStateIds } = useProductDraft();
+
+  const [items, setItems] = useState<WearStateItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Local selection inside modal (draft is applied only on Done)
+  // Local selection inside modal (apply to draft only on Done)
   const [selected, setSelected] = useState<string[]>(
-    Array.isArray(draft.spec.fabricTypeIds) ? draft.spec.fabricTypeIds : []
+    Array.isArray(draft.spec.wearStateIds) ? draft.spec.wearStateIds : []
   );
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
+
+  const itemById = useMemo(() => {
+    const m = new Map<string, WearStateItem>();
+    for (const it of items) m.set(String(it.id), it);
+    return m;
+  }, [items]);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
     setErr(null);
 
-    getFabricTypes()
+    getWearStates()
       .then((res) => {
         if (!alive) return;
-        setItems(res ?? []);
+
+        const list = (res ?? []) as WearStateItem[];
+
+        const order = [
+          "stitched",
+          "unstitched",
+          "ready-to-wear",
+          "one-piece",
+          "two-piece",
+          "three-piece"
+        ];
+
+        const byCode = new Map(
+          list.map((x) => [String(x.code ?? "").toLowerCase(), x])
+        );
+
+        const ordered = order
+          .map((code) => byCode.get(code))
+          .filter(Boolean) as WearStateItem[];
+
+        const used = new Set(ordered.map((x) => x.id));
+        const rest = list.filter((x) => !used.has(x.id));
+
+        setItems([...ordered, ...rest]);
       })
       .catch((e) => {
         if (!alive) return;
-        setErr(e?.message ?? "Failed to load fabric types");
+        setErr(e?.message ?? "Failed to load wear states");
+        setItems([]);
       })
       .finally(() => {
         if (!alive) return;
@@ -64,6 +100,10 @@ export default function ProductFabricModal() {
     };
   }, []);
 
+  function closeToAddProduct() {
+    router.replace("/vendor/profile/add-product" as any);
+  }
+
   function toggle(id: string) {
     setSelected((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -71,12 +111,21 @@ export default function ProductFabricModal() {
   }
 
   function onClear() {
+    (draft.spec as any).wearStateNames = [];
     setSelected([]);
+    setWearStateIds([]);
   }
 
   function onDone() {
-    setFabricTypeIds(selected);
-    router.back();
+    const pickedNames = selected
+      .map((id) => itemById.get(String(id))?.name ?? "")
+      .map((s) => safeStr(s))
+      .filter(Boolean);
+
+    (draft.spec as any).wearStateNames = pickedNames;
+
+    setWearStateIds(selected);
+    closeToAddProduct();
   }
 
   return (
@@ -84,13 +133,13 @@ export default function ProductFabricModal() {
       {/* HEADER */}
       <View style={styles.header}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={closeToAddProduct}
           style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
         >
           <Text style={styles.headerBtnText}>Close</Text>
         </Pressable>
 
-        <Text style={styles.headerTitle}>Fabric</Text>
+        <Text style={styles.headerTitle}>Wear State</Text>
 
         <Pressable
           onPress={onDone}
@@ -101,7 +150,7 @@ export default function ProductFabricModal() {
       </View>
 
       <View style={styles.subHeader}>
-        <Text style={styles.subText}>Select one or more fabric types.</Text>
+        <Text style={styles.subText}>Select one or more wear states.</Text>
 
         <Pressable
           onPress={onClear}
@@ -111,7 +160,7 @@ export default function ProductFabricModal() {
         </Pressable>
       </View>
 
-      <Text style={styles.heading}>Select Fabric Type</Text>
+      <Text style={styles.heading}>Select Wear State</Text>
 
       {loading ? <Text style={styles.infoText}>Loading...</Text> : null}
       {err ? <Text style={styles.infoText}>{err}</Text> : null}
@@ -125,27 +174,28 @@ export default function ProductFabricModal() {
         columnWrapperStyle={styles.columnWrap}
         renderItem={({ item }) => {
           const isOn = selectedSet.has(item.id);
-          const localImg = FABRIC_LOCAL_IMAGES[(item.code ?? "").toLowerCase()];
+          const code = String(item.code ?? "").toLowerCase();
+          const colors = CARD_COLORS[code] ?? { bg: "#F3F4F6", text: "#111" };
 
           return (
             <Pressable
               key={item.id}
-              style={[styles.card, isOn ? styles.cardSelected : null]}
+              style={[
+                styles.card,
+                { backgroundColor: colors.bg, height: CARD_H },
+                isOn ? styles.cardSelected : null
+              ]}
               onPress={() => toggle(item.id)}
             >
-              <View style={styles.imageWrap}>
-                {localImg ? (
-                  <Image source={localImg} style={styles.image} resizeMode="cover" />
-                ) : (
-                  <View style={styles.noImage}>
-                    <Text style={styles.noImageText}>No Image</Text>
-                  </View>
-                )}
-              </View>
-
-              <Text style={styles.label} numberOfLines={1}>
-                {item.name} {isOn ? "✓" : ""}
+              <Text style={[styles.label, { color: colors.text }]}>
+                {item.name}
               </Text>
+
+              {isOn ? (
+                <Text style={[styles.selected, { color: colors.text }]}>
+                  ✓ Selected
+                </Text>
+              ) : null}
             </Pressable>
           );
         }}
@@ -203,8 +253,8 @@ const styles = StyleSheet.create({
 
   listContent: {
     paddingHorizontal: H_PADDING,
-    paddingBottom: 12,
-    paddingTop: 2
+    paddingBottom: 18,
+    paddingTop: 4
   },
   columnWrap: {
     gap: GRID_GAP,
@@ -215,8 +265,11 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 6
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    justifyContent: "center",
+    alignItems: "center"
   },
   cardSelected: {
     borderColor: "#0b2f6b",
@@ -224,33 +277,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#F3F7FF"
   },
 
-  imageWrap: {
-    width: "100%",
-    height: 96,
-    borderRadius: 6,
-    overflow: "hidden",
-    backgroundColor: "#eee",
-    marginBottom: 6
-  },
-  image: {
-    width: "100%",
-    height: 96
-  },
-  noImage: {
-    width: "100%",
-    height: 96,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  noImageText: { color: "#111", opacity: 0.6, fontWeight: "800" },
-
   label: {
-    fontSize: 13,
-    color: "#111",
-    textAlign: "center",
+    fontSize: 15,
+    fontWeight: "800",
+    textAlign: "center"
+  },
+  selected: {
+    marginTop: 6,
+    fontSize: 12,
     fontWeight: "700"
   },
 
   pressed: { opacity: 0.75 }
 });
-

@@ -1,68 +1,51 @@
-import React, { useEffect, useMemo, useState } from "react";
-import {
-  FlatList,
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  View
-} from "react-native";
+import React, { useMemo, useState } from "react";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import { getWorkTypes, WorkTypeItem } from "@/utils/supabase/workType";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 
-const WORK_LOCAL_IMAGES: Record<string, any> = {
-  designer: require("@/assets/work-images/designer.jpg"),
-  gotta: require("@/assets/work-images/gotta.jpg"),
-  machine: require("@/assets/work-images/machine.jpg"),
-  mirror: require("@/assets/work-images/mirror.jpg"),
-  sequin: require("@/assets/work-images/sequin.jpg"),
-  stone: require("@/assets/work-images/stone.jpg"),
-  thread: require("@/assets/work-images/thread.jpg"),
-  zardozi: require("@/assets/work-images/zardozi.jpg")
+type ColorShadeItem = {
+  id: string;
+  name: string;
+  hex: string;
 };
+
+const COLOR_SHADES: ColorShadeItem[] = [
+  { id: "red", name: "Red", hex: "#C21807" },
+  { id: "green", name: "Green", hex: "#1B5E20" },
+  { id: "yellow", name: "Yellow", hex: "#FBC02D" },
+  { id: "blue", name: "Blue", hex: "#1565C0" },
+  { id: "golden", name: "Golden", hex: "#D4AF37" },
+  { id: "silver", name: "Silver", hex: "#C0C0C0" },
+  { id: "white", name: "White", hex: "#FFFFFF" },
+  { id: "black", name: "Black", hex: "#000000" }
+];
 
 const GRID_GAP = 8;
 const H_PADDING = 12;
 
-export default function ProductWorkModal() {
+function safeStr(v: any) {
+  return String(v ?? "").trim();
+}
+
+export default function ProductColorModal() {
   const router = useRouter();
-  const { draft, setWorkTypeIds } = useProductDraft();
+  const { draft, setColorShadeIds } = useProductDraft();
 
-  const [items, setItems] = useState<WorkTypeItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  // Local selection inside modal (apply to draft only on Done)
   const [selected, setSelected] = useState<string[]>(
-    Array.isArray(draft.spec.workTypeIds) ? draft.spec.workTypeIds : []
+    Array.isArray(draft.spec.colorShadeIds) ? draft.spec.colorShadeIds : []
   );
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
 
-  useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    setErr(null);
-
-    getWorkTypes()
-      .then((res) => {
-        if (!alive) return;
-        setItems(res ?? []);
-      })
-      .catch((e) => {
-        if (!alive) return;
-        setErr(e?.message ?? "Failed to load work types");
-      })
-      .finally(() => {
-        if (!alive) return;
-        setLoading(false);
-      });
-
-    return () => {
-      alive = false;
-    };
+  const nameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of COLOR_SHADES) m.set(c.id, c.name);
+    return m;
   }, []);
+
+  function closeToAddProduct() {
+    router.replace("/vendor/profile/add-product" as any);
+  }
 
   function toggle(id: string) {
     setSelected((prev) =>
@@ -71,12 +54,21 @@ export default function ProductWorkModal() {
   }
 
   function onClear() {
+    (draft.spec as any).colorShadeNames = [];
     setSelected([]);
+    setColorShadeIds([]);
   }
 
   function onDone() {
-    setWorkTypeIds(selected);
-    router.back();
+    const pickedNames = selected
+      .map((id) => nameById.get(id) ?? "")
+      .map((s) => safeStr(s))
+      .filter(Boolean);
+
+    (draft.spec as any).colorShadeNames = pickedNames;
+
+    setColorShadeIds(selected);
+    closeToAddProduct();
   }
 
   return (
@@ -84,13 +76,13 @@ export default function ProductWorkModal() {
       {/* HEADER */}
       <View style={styles.header}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={closeToAddProduct}
           style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
         >
           <Text style={styles.headerBtnText}>Close</Text>
         </Pressable>
 
-        <Text style={styles.headerTitle}>Work</Text>
+        <Text style={styles.headerTitle}>Color</Text>
 
         <Pressable
           onPress={onDone}
@@ -101,7 +93,7 @@ export default function ProductWorkModal() {
       </View>
 
       <View style={styles.subHeader}>
-        <Text style={styles.subText}>Select one or more work types.</Text>
+        <Text style={styles.subText}>Select one or more color shades.</Text>
 
         <Pressable
           onPress={onClear}
@@ -111,13 +103,10 @@ export default function ProductWorkModal() {
         </Pressable>
       </View>
 
-      <Text style={styles.heading}>Select Work Type</Text>
-
-      {loading ? <Text style={styles.infoText}>Loading...</Text> : null}
-      {err ? <Text style={styles.infoText}>{err}</Text> : null}
+      <Text style={styles.heading}>Select Color Shades</Text>
 
       <FlatList
-        data={items}
+        data={COLOR_SHADES}
         keyExtractor={(i) => i.id}
         numColumns={2}
         showsVerticalScrollIndicator={false}
@@ -125,7 +114,6 @@ export default function ProductWorkModal() {
         columnWrapperStyle={styles.columnWrap}
         renderItem={({ item }) => {
           const isOn = selectedSet.has(item.id);
-          const localImg = WORK_LOCAL_IMAGES[(item.code ?? "").toLowerCase()];
 
           return (
             <Pressable
@@ -133,14 +121,8 @@ export default function ProductWorkModal() {
               style={[styles.card, isOn ? styles.cardSelected : null]}
               onPress={() => toggle(item.id)}
             >
-              <View style={styles.imageWrap}>
-                {localImg ? (
-                  <Image source={localImg} style={styles.image} resizeMode="cover" />
-                ) : (
-                  <View style={styles.noImage}>
-                    <Text style={styles.noImageText}>No Image</Text>
-                  </View>
-                )}
+              <View style={styles.swatchWrap}>
+                <View style={[styles.swatch, { backgroundColor: item.hex }]} />
               </View>
 
               <Text style={styles.label} numberOfLines={1}>
@@ -195,11 +177,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 6
   },
-  infoText: {
-    color: "#111",
-    marginBottom: 6,
-    paddingHorizontal: 14
-  },
 
   listContent: {
     paddingHorizontal: H_PADDING,
@@ -224,7 +201,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F3F7FF"
   },
 
-  imageWrap: {
+  swatchWrap: {
     width: "100%",
     height: 96,
     borderRadius: 6,
@@ -232,17 +209,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#eee",
     marginBottom: 6
   },
-  image: {
+  swatch: {
     width: "100%",
     height: 96
   },
-  noImage: {
-    width: "100%",
-    height: 96,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  noImageText: { color: "#111", opacity: 0.6, fontWeight: "800" },
 
   label: {
     fontSize: 13,

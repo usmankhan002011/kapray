@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Dimensions,
   FlatList,
   Image,
   Pressable,
@@ -9,52 +8,61 @@ import {
   View
 } from "react-native";
 import { useRouter } from "expo-router";
-import { getWorkDensities, WorkDensityItem } from "@/utils/supabase/workDensity";
+import { getWorkTypes, WorkTypeItem } from "@/utils/supabase/workType";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 
-const WORK_DENSITY_LOCAL_IMAGES: Record<string, any> = {
-  light: require("@/assets/work-density-images/light.png"),
-  medium: require("@/assets/work-density-images/medium.jpg"),
-  heavy: require("@/assets/work-density-images/heavy.jpg"),
-  "extra-heavy": require("@/assets/work-density-images/extra-heavy.jpg")
+const WORK_LOCAL_IMAGES: Record<string, any> = {
+  designer: require("@/assets/work-images/designer.jpg"),
+  gotta: require("@/assets/work-images/gotta.jpg"),
+  machine: require("@/assets/work-images/machine.jpg"),
+  mirror: require("@/assets/work-images/mirror.jpg"),
+  sequin: require("@/assets/work-images/sequin.jpg"),
+  stone: require("@/assets/work-images/stone.jpg"),
+  thread: require("@/assets/work-images/thread.jpg"),
+  zardozi: require("@/assets/work-images/zardozi.jpg")
 };
 
 const GRID_GAP = 8;
 const H_PADDING = 12;
 
-// Responsive sizing so cards feel bigger and fill the screen
-const SCREEN_W = Dimensions.get("window").width;
-const CARD_W = (SCREEN_W - H_PADDING * 2 - GRID_GAP) / 2;
-const IMAGE_H = Math.round(CARD_W * 1.35);
+function safeStr(v: any) {
+  return String(v ?? "").trim();
+}
 
-export default function ProductWorkDensityModal() {
+export default function ProductWorkModal() {
   const router = useRouter();
-  const { draft, setWorkDensityIds } = useProductDraft();
+  const { draft, setWorkTypeIds } = useProductDraft();
 
-  const [items, setItems] = useState<WorkDensityItem[]>([]);
+  const [items, setItems] = useState<WorkTypeItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   // Local selection inside modal (apply to draft only on Done)
   const [selected, setSelected] = useState<string[]>(
-    Array.isArray(draft.spec.workDensityIds) ? draft.spec.workDensityIds : []
+    Array.isArray(draft.spec.workTypeIds) ? draft.spec.workTypeIds : []
   );
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
+
+  const itemById = useMemo(() => {
+    const m = new Map<string, WorkTypeItem>();
+    for (const it of items) m.set(String(it.id), it);
+    return m;
+  }, [items]);
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
     setErr(null);
 
-    getWorkDensities()
+    getWorkTypes()
       .then((res) => {
         if (!alive) return;
         setItems(res ?? []);
       })
       .catch((e) => {
         if (!alive) return;
-        setErr(e?.message ?? "Failed to load work densities");
+        setErr(e?.message ?? "Failed to load work types");
       })
       .finally(() => {
         if (!alive) return;
@@ -66,6 +74,10 @@ export default function ProductWorkDensityModal() {
     };
   }, []);
 
+  function closeToAddProduct() {
+    router.replace("/vendor/profile/add-product" as any);
+  }
+
   function toggle(id: string) {
     setSelected((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -73,12 +85,21 @@ export default function ProductWorkDensityModal() {
   }
 
   function onClear() {
+    (draft.spec as any).workTypeNames = [];
     setSelected([]);
+    setWorkTypeIds([]);
   }
 
   function onDone() {
-    setWorkDensityIds(selected);
-    router.back();
+    const pickedNames = selected
+      .map((id) => itemById.get(String(id))?.name ?? "")
+      .map((s) => safeStr(s))
+      .filter(Boolean);
+
+    (draft.spec as any).workTypeNames = pickedNames;
+
+    setWorkTypeIds(selected);
+    closeToAddProduct();
   }
 
   return (
@@ -86,13 +107,13 @@ export default function ProductWorkDensityModal() {
       {/* HEADER */}
       <View style={styles.header}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={closeToAddProduct}
           style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
         >
           <Text style={styles.headerBtnText}>Close</Text>
         </Pressable>
 
-        <Text style={styles.headerTitle}>Work Density</Text>
+        <Text style={styles.headerTitle}>Work</Text>
 
         <Pressable
           onPress={onDone}
@@ -103,7 +124,7 @@ export default function ProductWorkDensityModal() {
       </View>
 
       <View style={styles.subHeader}>
-        <Text style={styles.subText}>Select one or more density levels.</Text>
+        <Text style={styles.subText}>Select one or more work types.</Text>
 
         <Pressable
           onPress={onClear}
@@ -113,7 +134,7 @@ export default function ProductWorkDensityModal() {
         </Pressable>
       </View>
 
-      <Text style={styles.heading}>Select Work Density</Text>
+      <Text style={styles.heading}>Select Work Type</Text>
 
       {loading ? <Text style={styles.infoText}>Loading...</Text> : null}
       {err ? <Text style={styles.infoText}>{err}</Text> : null}
@@ -127,8 +148,7 @@ export default function ProductWorkDensityModal() {
         columnWrapperStyle={styles.columnWrap}
         renderItem={({ item }) => {
           const isOn = selectedSet.has(item.id);
-          const localImg =
-            WORK_DENSITY_LOCAL_IMAGES[(item.code ?? "").toLowerCase()];
+          const localImg = WORK_LOCAL_IMAGES[(item.code ?? "").toLowerCase()];
 
           return (
             <Pressable
@@ -138,7 +158,11 @@ export default function ProductWorkDensityModal() {
             >
               <View style={styles.imageWrap}>
                 {localImg ? (
-                  <Image source={localImg} style={styles.image} resizeMode="cover" />
+                  <Image
+                    source={localImg}
+                    style={styles.image}
+                    resizeMode="cover"
+                  />
                 ) : (
                   <View style={styles.noImage}>
                     <Text style={styles.noImageText}>No Image</Text>
@@ -206,8 +230,8 @@ const styles = StyleSheet.create({
 
   listContent: {
     paddingHorizontal: H_PADDING,
-    paddingBottom: 16,
-    paddingTop: 4
+    paddingBottom: 12,
+    paddingTop: 2
   },
   columnWrap: {
     gap: GRID_GAP,
@@ -218,8 +242,8 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderColor: "#ddd",
-    borderRadius: 12,
-    padding: 8
+    borderRadius: 8,
+    padding: 6
   },
   cardSelected: {
     borderColor: "#0b2f6b",
@@ -229,26 +253,26 @@ const styles = StyleSheet.create({
 
   imageWrap: {
     width: "100%",
-    height: IMAGE_H,
-    borderRadius: 10,
+    height: 96,
+    borderRadius: 6,
     overflow: "hidden",
     backgroundColor: "#eee",
-    marginBottom: 8
+    marginBottom: 6
   },
   image: {
     width: "100%",
-    height: IMAGE_H
+    height: 96
   },
   noImage: {
     width: "100%",
-    height: IMAGE_H,
+    height: 96,
     alignItems: "center",
     justifyContent: "center"
   },
   noImageText: { color: "#111", opacity: 0.6, fontWeight: "800" },
 
   label: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#111",
     textAlign: "center",
     fontWeight: "700"

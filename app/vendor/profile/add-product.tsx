@@ -1,8 +1,9 @@
 // app/vendor/profile/add-product.tsx
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,7 +16,6 @@ import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
 import { decode } from "base64-arraybuffer";
 import * as VideoThumbnails from "expo-video-thumbnails";
-import { useFocusEffect } from "@react-navigation/native";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { supabase } from "@/utils/supabase/client";
@@ -23,17 +23,18 @@ import { supabase } from "@/utils/supabase/client";
 const BUCKET_VENDOR = "vendor_images";
 const PRODUCTS_TABLE = "products";
 
-const MODAL_ORDER = [
-  "dress-type",
-  "fabric",
-  "color",
-  "work",
-  "work-density",
-  "origin-city",
-  "wear-state"
+// Individual modal file names in /vendor/profile/(product-modals)/
+const MODALS = [
+  "dress-type_modal",
+  "fabric_modal",
+  "color_modal",
+  "work_modal",
+  "work-density_modal",
+  "origin-city_modal",
+  "wear-state_modal"
 ] as const;
 
-type ModalName = (typeof MODAL_ORDER)[number];
+type ModalName = (typeof MODALS)[number];
 
 function sanitizeNumber(input: string) {
   const cleaned = input.replace(/[^\d.]/g, "");
@@ -50,14 +51,6 @@ function safeInt(v: any) {
 
 function safeStr(v: any) {
   return String(v ?? "").trim();
-}
-
-// App-side product_code (no SQL dependency)
-// Format: V{vendorId}-P{6digits}{2rand}  e.g. V15-P48219374
-function makeProductCode(vendorId: number) {
-  const tail = String(Date.now()).slice(-6);
-  const r = String(Math.floor(10 + Math.random() * 90));
-  return `V${vendorId}-P${tail}${r}`;
 }
 
 async function uploadAssetToStorage(args: {
@@ -79,8 +72,19 @@ async function uploadAssetToStorage(args: {
   return data?.path ?? null;
 }
 
+// Show ALL picked values (no "+2" truncation)
+function formatPicked(list: any, emptyLabel: string) {
+  const arr = Array.isArray(list) ? list : [];
+  const cleaned = arr.map((x) => safeStr(x)).filter(Boolean);
+  if (!cleaned.length) return emptyLabel;
+  return cleaned.join(", ");
+}
+
 export default function AddProductScreen() {
   const router = useRouter();
+
+  // This screen’s route (origin screen for these modals)
+  const returnTo = "/vendor/profile/add-product";
 
   // Vendor id (Redux for vendor identity only)
   // NOTE: your vendor table uses bigint id, so we treat it as number.
@@ -106,14 +110,46 @@ export default function AddProductScreen() {
 
   const [saving, setSaving] = useState(false);
 
-  // --- Guided modal chain state (the missing piece) ---
-  const [guidedActive, setGuidedActive] = useState(false);
-  const [guidedIndex, setGuidedIndex] = useState<number>(-1);
+  // Made-on-order toggle (stores flag in spec; inventory_qty saved as 0)
+  const [madeOnOrder, setMadeOnOrder] = useState<boolean>(() => {
+    return Boolean((draft.spec as any)?.made_on_order ?? false);
+  });
 
-  // Used to prevent auto-running on first render
-  const hasFocusedOnceRef = useRef(false);
-  // Used to know we actually navigated to a modal and came back
-  const expectingReturnRef = useRef(false);
+  // Video thumbs for picked videos (uri -> thumb uri)
+  const [videoThumbs, setVideoThumbs] = useState<Record<string, string>>({});
+
+  // Generate thumbs whenever picked videos change (best-effort)
+  useEffect(() => {
+    let alive = true;
+
+    const vids: any[] = draft.media.videos ?? [];
+    const uris = vids.map((v) => safeStr(v?.uri)).filter(Boolean);
+
+    (async () => {
+      for (const uri of uris) {
+        if (!alive) return;
+        if (videoThumbs[uri]) continue;
+
+        try {
+          const t = await VideoThumbnails.getThumbnailAsync(uri, { time: 1500 });
+          if (!alive) return;
+          if (t?.uri) {
+            setVideoThumbs((prev) => {
+              if (prev[uri]) return prev;
+              return { ...prev, [uri]: t.uri };
+            });
+          }
+        } catch {
+          // ignore thumb failures
+        }
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.media.videos]);
 
   const canSave = useMemo(() => {
     if (!vendorId) return false;
@@ -130,58 +166,109 @@ export default function AddProductScreen() {
     if ((draft.media.images ?? []).length < 1) return false;
     if ((draft.spec.dressTypeIds ?? []).length < 1) return false;
 
+    // Inventory validation:
+    // - if made on order: allow (we will save inventory_qty = 0)
+    // - else: require >= 0 integer (your DB check enforces >= 0 anyway)
+    if (!madeOnOrder) {
+      const q = Number(draft.inventory_qty ?? 0);
+      if (!Number.isFinite(q) || q < 0) return false;
+    }
+
     return true;
-  }, [vendorId, draft]);
-
-  function pushModal(name: ModalName) {
-    expectingReturnRef.current = true;
-    router.push(`/vendor/profile/(product-modals)/${name}` as any);
-  }
-
-  function startGuidedFrom(name: ModalName) {
-    const idx = MODAL_ORDER.indexOf(name);
-    setGuidedActive(true);
-    setGuidedIndex(idx);
-    pushModal(name);
-  }
+  }, [vendorId, draft, madeOnOrder]);
 
   function goPickModal(name: ModalName) {
-    // If you want “single modal only”, call pushModal(name)
-    // If you want “auto-next chain”, call startGuidedFrom(name)
-    startGuidedFrom(name);
+    // DO NOT TOUCH: navigation is already correct per your instruction.
+    const encoded = encodeURIComponent(returnTo);
+    router.push(
+      `/vendor/profile/(product-modals)/${name}?returnTo=${encoded}` as any
+    );
   }
 
-  // When we return from a modal, auto-open the next one (guided chain)
-  useFocusEffect(
-    React.useCallback(() => {
-      // first focus after mount: do nothing
-      if (!hasFocusedOnceRef.current) {
-        hasFocusedOnceRef.current = true;
-        return;
-      }
+  function dressTypeSummary() {
+    const names = (draft.spec as any)?.dressTypeNames as any[] | undefined;
+    if (Array.isArray(names) && names.length) {
+      return formatPicked(names, "Not set");
+    }
 
-      // only run auto-next when we actually went to a modal
-      if (!expectingReturnRef.current) return;
-      expectingReturnRef.current = false;
+    const ids = (draft.spec.dressTypeIds ?? []).map((x) => String(x));
+    if (!ids.length) return "Not set";
+    return `${ids.length} selected`;
+  }
 
-      if (!guidedActive) return;
+  function fabricSummary() {
+    const names = (draft.spec as any)?.fabricTypeNames as any[] | undefined;
+    if (Array.isArray(names) && names.length) {
+      return formatPicked(names, "Any");
+    }
 
-      const nextIndex = guidedIndex + 1;
+    const list = (draft.spec.fabricTypeIds ?? []) as any[];
+    return list.length ? `${list.length} selected` : "Any";
+  }
 
-      if (nextIndex >= MODAL_ORDER.length) {
-        setGuidedActive(false);
-        setGuidedIndex(-1);
-        return;
-      }
+  function colorSummary() {
+    const names = (draft.spec as any)?.colorShadeNames as any[] | undefined;
+    if (Array.isArray(names) && names.length) {
+      return formatPicked(names, "Any");
+    }
 
-      setGuidedIndex(nextIndex);
+    const list = (draft.spec.colorShadeIds ?? []) as any[];
+    if (!list.length) return "Any";
 
-      // push next modal on next tick to keep navigation stable
-      setTimeout(() => {
-        pushModal(MODAL_ORDER[nextIndex]);
-      }, 0);
-    }, [guidedActive, guidedIndex])
-  );
+    const map: Record<string, string> = {
+      red: "Red",
+      green: "Green",
+      yellow: "Yellow",
+      blue: "Blue",
+      golden: "Golden",
+      silver: "Silver",
+      white: "White",
+      black: "Black"
+    };
+
+    const mapped = list.map((id) => map[String(id)] ?? String(id));
+    return formatPicked(mapped, "Any");
+  }
+
+  function workSummary() {
+    const names = (draft.spec as any)?.workTypeNames as any[] | undefined;
+    if (Array.isArray(names) && names.length) {
+      return formatPicked(names, "Any");
+    }
+
+    const list = (draft.spec.workTypeIds ?? []) as any[];
+    return list.length ? `${list.length} selected` : "Any";
+  }
+
+  function densitySummary() {
+    const names = (draft.spec as any)?.workDensityNames as any[] | undefined;
+    if (Array.isArray(names) && names.length) {
+      return formatPicked(names, "Any");
+    }
+
+    const list = (draft.spec.workDensityIds ?? []) as any[];
+    return list.length ? `${list.length} selected` : "Any";
+  }
+
+  function originSummary() {
+    const names = (draft.spec as any)?.originCityNames as any[] | undefined;
+    if (Array.isArray(names) && names.length) {
+      return formatPicked(names, "Any");
+    }
+
+    const list = (draft.spec.originCityIds ?? []) as any[];
+    return list.length ? `${list.length} selected` : "Any";
+  }
+
+  function wearStateSummary() {
+    const names = (draft.spec as any)?.wearStateNames as any[] | undefined;
+    if (Array.isArray(names) && names.length) {
+      return formatPicked(names, "Any");
+    }
+
+    const list = (draft.spec.wearStateIds ?? []) as any[];
+    return list.length ? `${list.length} selected` : "Any";
+  }
 
   async function pickImages() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -235,17 +322,6 @@ export default function AddProductScreen() {
     });
   }
 
-  function summaryLine(label: string, value: string) {
-    return (
-      <View style={styles.summaryRow}>
-        <Text style={styles.summaryLabel}>{label}</Text>
-        <Text style={styles.summaryValue} numberOfLines={2}>
-          {value}
-        </Text>
-      </View>
-    );
-  }
-
   async function saveProduct() {
     if (saving) return;
 
@@ -262,15 +338,24 @@ export default function AddProductScreen() {
     try {
       setSaving(true);
 
-      const productCode = makeProductCode(vendorId);
+      // IMPORTANT:
+      // Your DB now enforces vendor_seq + product_code via trigger: products_assign_code()
+      // So we DO NOT generate serials here. DB guarantees:
+      // - vendor-wise increasing serial (vendor_seq)
+      // - never reuse (unique vendor_id + vendor_seq)
+      // - product_code unique
+      // Just insert minimal fields and read back id/product_code.
 
-      // 1) Insert product row first (media empty for now)
-      const insertPayload = {
+      const inventoryQty = madeOnOrder ? 0 : Number(draft.inventory_qty ?? 0);
+
+      const insertPayload: any = {
         vendor_id: vendorId,
-        product_code: productCode,
         title: safeStr(draft.title),
-        inventory_qty: Number(draft.inventory_qty ?? 0),
-        spec: draft.spec,
+        inventory_qty: Number.isFinite(inventoryQty) ? Math.trunc(inventoryQty) : 0,
+        spec: {
+          ...(draft.spec ?? {}),
+          made_on_order: Boolean(madeOnOrder)
+        },
         price: draft.price,
         media: {
           images: [],
@@ -291,11 +376,10 @@ export default function AddProductScreen() {
       }
 
       const productId = created?.id as string | undefined;
-      const finalCode =
-        (created?.product_code as string | undefined) ?? productCode;
+      const finalCode = created?.product_code as string | undefined;
 
-      if (!productId) {
-        Alert.alert("Save failed", "Product id not returned.");
+      if (!productId || !finalCode) {
+        Alert.alert("Save failed", "Product id/code not returned.");
         return;
       }
 
@@ -385,10 +469,14 @@ export default function AddProductScreen() {
         return;
       }
 
-      // Done
+      // Done -> go to Products and pass new_product_id so products.tsx can insert at top
       Alert.alert("Saved", `Product created: ${finalCode}`);
       resetDraft();
-      router.back();
+      router.replace(
+        `/vendor/profile/products?new_product_id=${encodeURIComponent(
+          productId
+        )}` as any
+      );
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not save product.");
     } finally {
@@ -398,6 +486,17 @@ export default function AddProductScreen() {
 
   const imageCount = (draft.media.images ?? []).length;
   const videoCount = (draft.media.videos ?? []).length;
+
+  const dressTypeValue = dressTypeSummary();
+  const fabricValue = fabricSummary();
+  const colorValue = colorSummary();
+  const workValue = workSummary();
+  const densityValue = densitySummary();
+  const originValue = originSummary();
+  const wearValue = wearStateSummary();
+
+  const pickedImages: any[] = draft.media.images ?? [];
+  const pickedVideos: any[] = draft.media.videos ?? [];
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -435,18 +534,50 @@ export default function AddProductScreen() {
           maxLength={80}
         />
 
-        <Text style={styles.label}>Inventory Quantity *</Text>
+        <View style={styles.inventoryTopRow}>
+          <Text style={[styles.label, { marginTop: 0 }]}>
+            Inventory Quantity *
+          </Text>
+
+          <Pressable
+            onPress={() => setMadeOnOrder((v) => !v)}
+            style={({ pressed }) => [
+              styles.madeOnOrderPill,
+              madeOnOrder ? styles.madeOnOrderPillOn : null,
+              pressed ? styles.pressed : null
+            ]}
+          >
+            <Text
+              style={[
+                styles.madeOnOrderText,
+                madeOnOrder ? styles.madeOnOrderTextOn : null
+              ]}
+            >
+              Made on order
+            </Text>
+          </Pressable>
+        </View>
+
+        {madeOnOrder ? (
+          <Text style={styles.madeOnOrderHint}>
+            This product will be shown as “Made on order”.
+          </Text>
+        ) : null}
+
         <TextInput
           value={String(draft.inventory_qty ?? 0)}
-          onChangeText={(t) => setInventoryQty(Number(sanitizeNumber(t) || "0"))}
+          onChangeText={(t) =>
+            setInventoryQty(Number(sanitizeNumber(t) || "0"))
+          }
           placeholder="e.g., 10"
           placeholderTextColor={stylesVars.placeholder}
-          style={styles.input}
+          style={[styles.input, madeOnOrder ? styles.inputDisabled : null]}
           keyboardType="number-pad"
           maxLength={10}
+          editable={!madeOnOrder}
         />
 
-        <Text style={styles.label}>Cost Mode *</Text>
+        <Text style={styles.label}>Cost *</Text>
         <View style={styles.segmentRow}>
           <Pressable
             onPress={() => setPriceMode("stitched_total")}
@@ -517,7 +648,7 @@ export default function AddProductScreen() {
                     .filter(Boolean)
                 )
               }
-              placeholder="e.g., XS, S, M, L"
+              placeholder="e.g., XS, S, M, L, XL, XXL, All"
               placeholderTextColor={stylesVars.placeholder}
               style={styles.input}
               maxLength={80}
@@ -558,6 +689,24 @@ export default function AddProductScreen() {
             </Text>
           </Pressable>
 
+          {pickedImages.length ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.thumbRow}
+            >
+              {pickedImages.map((a: any, idx: number) => {
+                const uri = safeStr(a?.uri);
+                if (!uri) return null;
+                return (
+                  <View key={`${uri}-${idx}`} style={styles.thumbWrap}>
+                    <Image source={{ uri }} style={styles.thumbImg} />
+                  </View>
+                );
+              })}
+            </ScrollView>
+          ) : null}
+
           <Pressable
             style={({ pressed }) => [
               styles.secondaryBtn,
@@ -570,12 +719,39 @@ export default function AddProductScreen() {
               Pick Videos {videoCount ? `(${videoCount})` : ""}
             </Text>
           </Pressable>
+
+          {pickedVideos.length ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.thumbRow}
+            >
+              {pickedVideos.map((a: any, idx: number) => {
+                const uri = safeStr(a?.uri);
+                if (!uri) return null;
+
+                const tUri = videoThumbs[uri];
+
+                return (
+                  <View key={`${uri}-${idx}`} style={styles.thumbWrap}>
+                    {tUri ? (
+                      <Image source={{ uri: tUri }} style={styles.thumbImg} />
+                    ) : (
+                      <View style={styles.videoThumbFallback}>
+                        <Text style={styles.videoThumbText}>Video</Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </ScrollView>
+          ) : null}
         </View>
       </View>
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>
-          Build Product Description (Selections)
+          Build Product Description
         </Text>
 
         <View style={styles.btnRow}>
@@ -584,10 +760,11 @@ export default function AddProductScreen() {
               styles.pickBtn,
               pressed ? styles.pressed : null
             ]}
-            onPress={() => goPickModal("dress-type")}
+            onPress={() => goPickModal("dress-type_modal")}
             disabled={saving}
           >
-            <Text style={styles.pickText}>Dress Type *</Text>
+            <Text style={styles.pickTitle}>Dress Type *</Text>
+            <Text style={styles.pickValue}>{dressTypeValue}</Text>
           </Pressable>
 
           <Pressable
@@ -595,10 +772,11 @@ export default function AddProductScreen() {
               styles.pickBtn,
               pressed ? styles.pressed : null
             ]}
-            onPress={() => goPickModal("fabric")}
+            onPress={() => goPickModal("fabric_modal")}
             disabled={saving}
           >
-            <Text style={styles.pickText}>Fabric</Text>
+            <Text style={styles.pickTitle}>Fabric</Text>
+            <Text style={styles.pickValue}>{fabricValue}</Text>
           </Pressable>
 
           <Pressable
@@ -606,10 +784,11 @@ export default function AddProductScreen() {
               styles.pickBtn,
               pressed ? styles.pressed : null
             ]}
-            onPress={() => goPickModal("color")}
+            onPress={() => goPickModal("color_modal")}
             disabled={saving}
           >
-            <Text style={styles.pickText}>Color</Text>
+            <Text style={styles.pickTitle}>Color</Text>
+            <Text style={styles.pickValue}>{colorValue}</Text>
           </Pressable>
 
           <Pressable
@@ -617,10 +796,11 @@ export default function AddProductScreen() {
               styles.pickBtn,
               pressed ? styles.pressed : null
             ]}
-            onPress={() => goPickModal("work")}
+            onPress={() => goPickModal("work_modal")}
             disabled={saving}
           >
-            <Text style={styles.pickText}>Work</Text>
+            <Text style={styles.pickTitle}>Work</Text>
+            <Text style={styles.pickValue}>{workValue}</Text>
           </Pressable>
 
           <Pressable
@@ -628,10 +808,11 @@ export default function AddProductScreen() {
               styles.pickBtn,
               pressed ? styles.pressed : null
             ]}
-            onPress={() => goPickModal("work-density")}
+            onPress={() => goPickModal("work-density_modal")}
             disabled={saving}
           >
-            <Text style={styles.pickText}>Density</Text>
+            <Text style={styles.pickTitle}>Density</Text>
+            <Text style={styles.pickValue}>{densityValue}</Text>
           </Pressable>
 
           <Pressable
@@ -639,10 +820,11 @@ export default function AddProductScreen() {
               styles.pickBtn,
               pressed ? styles.pressed : null
             ]}
-            onPress={() => goPickModal("origin-city")}
+            onPress={() => goPickModal("origin-city_modal")}
             disabled={saving}
           >
-            <Text style={styles.pickText}>Origin</Text>
+            <Text style={styles.pickTitle}>Origin</Text>
+            <Text style={styles.pickValue}>{originValue}</Text>
           </Pressable>
 
           <Pressable
@@ -650,56 +832,12 @@ export default function AddProductScreen() {
               styles.pickBtn,
               pressed ? styles.pressed : null
             ]}
-            onPress={() => goPickModal("wear-state")}
+            onPress={() => goPickModal("wear-state_modal")}
             disabled={saving}
           >
-            <Text style={styles.pickText}>Wear State</Text>
+            <Text style={styles.pickTitle}>Wear State</Text>
+            <Text style={styles.pickValue}>{wearValue}</Text>
           </Pressable>
-        </View>
-
-        <View style={styles.summaryBox}>
-          {summaryLine(
-            "Dress Type",
-            (draft.spec.dressTypeIds ?? []).length
-              ? `${draft.spec.dressTypeIds.length} selected`
-              : "Not set"
-          )}
-          {summaryLine(
-            "Fabric",
-            (draft.spec.fabricTypeIds ?? []).length
-              ? `${draft.spec.fabricTypeIds.length} selected`
-              : "Any"
-          )}
-          {summaryLine(
-            "Color",
-            (draft.spec.colorShadeIds ?? []).length
-              ? `${draft.spec.colorShadeIds.length} selected`
-              : "Any"
-          )}
-          {summaryLine(
-            "Work",
-            (draft.spec.workTypeIds ?? []).length
-              ? `${draft.spec.workTypeIds.length} selected`
-              : "Any"
-          )}
-          {summaryLine(
-            "Density",
-            (draft.spec.workDensityIds ?? []).length
-              ? `${draft.spec.workDensityIds.length} selected`
-              : "Any"
-          )}
-          {summaryLine(
-            "Origin",
-            (draft.spec.originCityIds ?? []).length
-              ? `${draft.spec.originCityIds.length} selected`
-              : "Any"
-          )}
-          {summaryLine(
-            "Wear State",
-            (draft.spec.wearStateIds ?? []).length
-              ? `${draft.spec.wearStateIds.length} selected`
-              : "Any"
-          )}
         </View>
       </View>
 
@@ -786,6 +924,37 @@ const styles = StyleSheet.create({
     color: stylesVars.blue,
     letterSpacing: 0.2
   },
+
+  inventoryTopRow: {
+    marginTop: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10
+  },
+
+  madeOnOrderPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: "#fff"
+  },
+  madeOnOrderPillOn: {
+    borderColor: stylesVars.blue,
+    backgroundColor: stylesVars.blueSoft
+  },
+  madeOnOrderText: { fontSize: 12, fontWeight: "900", color: stylesVars.text },
+  madeOnOrderTextOn: { color: stylesVars.blue },
+
+  madeOnOrderHint: {
+    marginTop: 6,
+    color: stylesVars.subText,
+    fontWeight: "800",
+    fontSize: 12
+  },
+
   input: {
     marginTop: 6,
     borderWidth: 1,
@@ -797,6 +966,7 @@ const styles = StyleSheet.create({
     color: stylesVars.text,
     backgroundColor: "#fff"
   },
+  inputDisabled: { opacity: 0.55 },
 
   sectionTitle: { fontSize: 13, fontWeight: "900", color: stylesVars.blue },
 
@@ -838,6 +1008,28 @@ const styles = StyleSheet.create({
   },
   secondaryText: { color: stylesVars.blue, fontWeight: "900", fontSize: 14 },
 
+  thumbRow: {
+    paddingTop: 6,
+    gap: 8
+  },
+  thumbWrap: {
+    width: 54,
+    height: 54,
+    borderRadius: 10,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: stylesVars.borderSoft,
+    backgroundColor: "#f3f4f6"
+  },
+  thumbImg: { width: 54, height: 54 },
+  videoThumbFallback: {
+    width: 54,
+    height: 54,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  videoThumbText: { fontWeight: "900", color: "#111", opacity: 0.7 },
+
   pickBtn: {
     borderRadius: 12,
     paddingVertical: 12,
@@ -846,29 +1038,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: stylesVars.border
   },
-  pickText: { color: stylesVars.blue, fontWeight: "900", fontSize: 13 },
-
-  summaryBox: {
-    marginTop: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    padding: 12,
-    backgroundColor: "#F8FAFF"
-  },
-  summaryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 10,
-    marginBottom: 8
-  },
-  summaryLabel: { fontSize: 12, fontWeight: "900", color: stylesVars.blue },
-  summaryValue: {
-    fontSize: 12,
+  pickTitle: { color: stylesVars.blue, fontWeight: "900", fontSize: 13 },
+  pickValue: {
+    marginTop: 4,
     color: stylesVars.text,
-    opacity: 0.9,
-    flex: 1,
-    textAlign: "right"
+    opacity: 0.8,
+    fontSize: 12
   },
 
   saveBtn: {

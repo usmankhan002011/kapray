@@ -25,52 +25,37 @@ const CARD_PALETTE = [
   { bg: "#FCE7F3", text: "#111" }, // blush
   { bg: "#E0F2FE", text: "#111" }, // sky
   { bg: "#DCFCE7", text: "#111" }, // mint
-  { bg: "#FEF3C7", text: "#111" }, // gold
-  { bg: "#EDE9FE", text: "#111" }, // lavender
+  { bg: "#FEF3C7", text: "#111" }, // amber
+  { bg: "#EDE9FE", text: "#111" }, // violet
   { bg: "#FFE4E6", text: "#111" }, // rose
-  { bg: "#ECFCCB", text: "#111" }, // lime
-  { bg: "#E0E7FF", text: "#111" }, // periwinkle
-  { bg: "#FFEFD5", text: "#111" }, // peach
-  { bg: "#E5E7EB", text: "#111" }, // neutral
-  { bg: "#D1FAE5", text: "#111" }, // soft green
-  { bg: "#FDE68A", text: "#111" }  // warm yellow
+  { bg: "#F3F4F6", text: "#111" }, // gray
+  { bg: "#ECFCCB", text: "#111" } // lime
 ];
 
-function getCardColorsByIndex(i: number) {
-  return CARD_PALETTE[i % CARD_PALETTE.length];
+function getCardColorsByIndex(index: number) {
+  return CARD_PALETTE[index % CARD_PALETTE.length];
 }
 
-export default function PriceBandScreen() {
+export default function PriceBand() {
   const router = useRouter();
   const dispatch = useAppDispatch();
 
-  const selected = useAppSelector((s) => s.filters.priceBandIds);
-  const dressTypeId = useAppSelector((s) => s.filters.dressTypeId);
-
-  const [items, setItems] = useState<PriceBandItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const selected = useAppSelector((s: any) => s.filters?.priceBandIds ?? []);
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
 
+  const [options, setOptions] = useState<PriceBandItem[]>([]);
+
   useEffect(() => {
     let alive = true;
-    setLoading(true);
-    setErr(null);
 
     getPriceBands()
-      .then((res) => {
+      .then((rows) => {
         if (!alive) return;
-        setItems(res ?? []);
+        setOptions(rows ?? []);
       })
-      .catch((e) => {
-        if (!alive) return;
-        setErr(e?.message ?? "Failed to load price bands");
-        setItems([]);
-      })
-      .finally(() => {
-        if (!alive) return;
-        setLoading(false);
+      .catch(() => {
+        // keep silent, UI shows nothing
       });
 
     return () => {
@@ -80,23 +65,17 @@ export default function PriceBandScreen() {
 
   return (
     <StandardFilterDisplay
-      title={`Cost Range${dressTypeId ? "" : " (Dress type not set)"}`}
+      title="Price Band"
       onBack={() => router.back()}
       onAny={() => dispatch(clearPriceBands())}
-      onNext={() => router.replace("/(tabs)")}
+      onNext={() => router.replace("/results")}
     >
-      <Text style={styles.heading}>Select Cost Range (PKR)</Text>
-
-      {loading ? <Text style={styles.infoText}>Loading...</Text> : null}
-      {err ? <Text style={styles.infoText}>{err}</Text> : null}
-
       <FlatList
-        data={items}
-        keyExtractor={(i) => i.id}
+        data={options}
+        keyExtractor={(item) => item.id}
         numColumns={2}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
-        columnWrapperStyle={styles.columnWrap}
+        columnWrapperStyle={{ gap: GRID_GAP }}
+        contentContainerStyle={{ paddingHorizontal: H_PADDING }}
         renderItem={({ item, index }) => {
           const isOn = selectedSet.has(item.id);
           const colors = getCardColorsByIndex(index);
@@ -129,50 +108,25 @@ export default function PriceBandScreen() {
 }
 
 const styles = StyleSheet.create({
-  heading: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 6,
-    color: "#111"
-  },
-  infoText: {
-    color: "#111",
-    marginBottom: 6
-  },
-
-  listContent: {
-    paddingHorizontal: H_PADDING,
-    paddingBottom: 18,
-    paddingTop: 4
-  },
-  columnWrap: {
-    gap: GRID_GAP,
-    marginBottom: GRID_GAP
-  },
-
   card: {
     flex: 1,
+    borderRadius: 12,
+    padding: 12,
+    justifyContent: "space-between",
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    justifyContent: "center",
-    alignItems: "center"
+    borderColor: "rgba(0,0,0,0.08)",
+    marginBottom: GRID_GAP
   },
   cardSelected: {
     borderColor: "#111",
     borderWidth: 2
   },
-
   label: {
-    fontSize: 13,
-    fontWeight: "800",
-    textAlign: "center"
+    fontSize: 16,
+    fontWeight: "700"
   },
   selected: {
-    marginTop: 8,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "700"
   }
 });

@@ -6,7 +6,11 @@ import { useRouter } from "expo-router";
 import { useAppDispatch } from "@/store/hooks";
 import { setDressTypeId } from "@/store/filtersSlice";
 
-export default function Wizard({ onClose }: { onClose: () => void }) {
+type Props = {
+  onClose?: () => void;
+};
+
+export default function Wizard({ onClose }: Props) {
   const router = useRouter();
   const dispatch = useAppDispatch();
 
@@ -102,7 +106,7 @@ export default function Wizard({ onClose }: { onClose: () => void }) {
           const idNum = Number(typeKey);
           dispatch(setDressTypeId(Number.isNaN(idNum) ? null : idNum));
 
-          onClose();
+          if (onClose) onClose(); // ✅ fix
           router.push("/fabric");
         }}
       />
@@ -121,38 +125,29 @@ const styles = StyleSheet.create({
   duoPanel: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 16,
-    marginBottom: 32
+    gap: 12,
+    justifyContent: "center"
   },
   duoOption: {
-    width: "40%",
-    height: 200,
-    backgroundColor: "transparent",
-    borderRadius: 24,
-    margin: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    elevation: 3,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    borderWidth: 2,
-    borderColor: "#f2f2f2"
+    width: 160,
+    padding: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    backgroundColor: "#fff"
   },
   duoSelected: {
-    backgroundColor: "#d7263d",
-    borderColor: "#d7263d"
+    borderColor: "#d7263d",
+    borderWidth: 2
   },
   duoLabel: {
-    fontSize: 14,
-    color: "#444",
+    fontSize: 16,
     fontWeight: "600",
-    textAlign: "center"
+    textAlign: "center",
+    color: "#111"
   },
   duoSelectedLabel: {
-    color: "#fff",
-    fontWeight: "bold"
+    color: "#d7263d",
+    fontWeight: "800"
   }
 });

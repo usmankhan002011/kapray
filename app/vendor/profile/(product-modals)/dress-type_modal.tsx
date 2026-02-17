@@ -24,12 +24,17 @@ export default function ProductDressTypeModal() {
   const [options, setOptions] = useState<DressTypeOption[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Local selection in this modal (so user can pick multiple then Done)
   const [selected, setSelected] = useState<string[]>(
     (draft.spec.dressTypeIds ?? []).map((x) => String(x))
   );
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
+
+  const labelByKey = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const o of options) m.set(o.key, o.label);
+    return m;
+  }, [options]);
 
   useEffect(() => {
     let alive = true;
@@ -67,6 +72,10 @@ export default function ProductDressTypeModal() {
     };
   }, []);
 
+  function closeToAddProduct() {
+    router.replace("/vendor/profile/add-product" as any);
+  }
+
   function toggle(key: string) {
     setSelected((prev) =>
       prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]
@@ -78,19 +87,28 @@ export default function ProductDressTypeModal() {
       .map((k) => Number(k))
       .filter((n) => Number.isFinite(n));
 
+    const pickedNames = selected
+      .map((k) => labelByKey.get(k) ?? "")
+      .map((s) => String(s).trim())
+      .filter(Boolean);
+
+    (draft.spec as any).dressTypeNames = pickedNames;
+
     setDressTypeIds(ids);
-    router.back();
+    closeToAddProduct();
   }
 
   function onClear() {
+    (draft.spec as any).dressTypeNames = [];
     setSelected([]);
+    setDressTypeIds([]);
   }
 
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={closeToAddProduct}
           style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
         >
           <Text style={styles.headerBtnText}>Close</Text>
@@ -121,7 +139,10 @@ export default function ProductDressTypeModal() {
 
       {loading ? <Text style={styles.info}>Loading...</Text> : null}
 
-      <ScrollView contentContainerStyle={styles.grid} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.grid}
+        showsVerticalScrollIndicator={false}
+      >
         {options.map((opt) => {
           const isOn = selectedSet.has(opt.key);
 
@@ -145,7 +166,10 @@ export default function ProductDressTypeModal() {
                 )}
               </View>
 
-              <Text style={[styles.label, isOn && styles.labelOn]} numberOfLines={2}>
+              <Text
+                style={[styles.label, isOn && styles.labelOn]}
+                numberOfLines={2}
+              >
                 {opt.label} {isOn ? "✓" : ""}
               </Text>
             </Pressable>
