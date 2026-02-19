@@ -1,8 +1,9 @@
 ﻿// app/vendor/profile/update-product.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,20 +14,12 @@ import {
 import { useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { useAppSelector } from "@/store/hooks";
+import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system";
+import { decode } from "base64-arraybuffer";
 
 const PRODUCTS_TABLE = "products";
-
-const MODAL_ORDER = [
-  "dress-type",
-  "fabric",
-  "color",
-  "work",
-  "work-density",
-  "origin-city",
-  "wear-state"
-] as const;
-
-type ModalName = (typeof MODAL_ORDER)[number];
+const BUCKET_VENDOR = "vendor_images";
 
 type ProductRow = {
   id: string;
@@ -64,15 +57,35 @@ function safeJson(v: any) {
   return {};
 }
 
-function normalizeIdArray(v: any): string[] {
-  if (!Array.isArray(v)) return [];
-  return v.map((x) => String(x)).filter(Boolean);
-}
-
 function safeNumOrZero(v: any) {
   const n = Number(v);
   if (!Number.isFinite(n)) return 0;
   return n;
+}
+
+function isHttpUrl(v: any) {
+  return typeof v === "string" && /^https?:\/\//i.test(v);
+}
+
+function extFromUri(uri: string) {
+  const clean = String(uri || "");
+  const qIdx = clean.indexOf("?");
+  const base = qIdx >= 0 ? clean.slice(0, qIdx) : clean;
+  const dot = base.lastIndexOf(".");
+  if (dot < 0) return "";
+  return base.slice(dot + 1).toLowerCase();
+}
+
+function guessContentTypeFromExt(ext: string) {
+  const e = String(ext || "").toLowerCase();
+  if (e === "jpg" || e === "jpeg") return "image/jpeg";
+  if (e === "png") return "image/png";
+  if (e === "webp") return "image/webp";
+  if (e === "heic") return "image/heic";
+  if (e === "mp4") return "video/mp4";
+  if (e === "mov") return "video/quicktime";
+  if (e === "m4v") return "video/x-m4v";
+  return "application/octet-stream";
 }
 
 export default function UpdateProductScreen() {
@@ -86,6 +99,7 @@ export default function UpdateProductScreen() {
 
   const [loadingList, setLoadingList] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingMedia, setSavingMedia] = useState(false);
 
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [query, setQuery] = useState("");
@@ -95,7 +109,10 @@ export default function UpdateProductScreen() {
     return products.find((p) => p.id === selectedId) ?? null;
   }, [products, selectedId]);
 
-  // Editable fields (local state, independent of Add Product draft)
+  // ✅ picker visibility: once selected, hide list and show only the product editor
+  const [pickerOpen, setPickerOpen] = useState(true);
+
+  // ✅ Allowed edits only
   const [title, setTitle] = useState("");
   const [inventoryQty, setInventoryQty] = useState<number>(0);
 
@@ -106,14 +123,12 @@ export default function UpdateProductScreen() {
   const [pricePerMeter, setPricePerMeter] = useState<number>(0);
   const [availableSizes, setAvailableSizes] = useState<string[]>([]);
 
-  // spec selections (ids)
-  const [dressTypeIds, setDressTypeIds] = useState<number[]>([]);
-  const [fabricTypeIds, setFabricTypeIds] = useState<string[]>([]);
-  const [colorShadeIds, setColorShadeIds] = useState<string[]>([]);
-  const [workTypeIds, setWorkTypeIds] = useState<string[]>([]);
-  const [workDensityIds, setWorkDensityIds] = useState<string[]>([]);
-  const [originCityIds, setOriginCityIds] = useState<string[]>([]);
-  const [wearStateIds, setWearStateIds] = useState<string[]>([]);
+  const resolvePublicUrl = useCallback((path: string | null | undefined) => {
+    if (!path) return null;
+    if (isHttpUrl(path)) return path;
+    const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(path);
+    return data?.publicUrl ?? null;
+  }, []);
 
   async function fetchProducts() {
     if (!vendorId) {
@@ -167,21 +182,6 @@ export default function UpdateProductScreen() {
         ? price.available_sizes.map((x: any) => String(x).trim()).filter(Boolean)
         : []
     );
-
-    const spec = safeJson(selected.spec);
-
-    setDressTypeIds(
-      Array.isArray(spec?.dressTypeIds)
-        ? spec.dressTypeIds.map((x: any) => Number(x)).filter((n: any) => Number.isFinite(n))
-        : []
-    );
-
-    setFabricTypeIds(normalizeIdArray(spec?.fabricTypeIds));
-    setColorShadeIds(normalizeIdArray(spec?.colorShadeIds));
-    setWorkTypeIds(normalizeIdArray(spec?.workTypeIds));
-    setWorkDensityIds(normalizeIdArray(spec?.workDensityIds));
-    setOriginCityIds(normalizeIdArray(spec?.originCityIds));
-    setWearStateIds(normalizeIdArray(spec?.wearStateIds));
   }, [selected]);
 
   const filtered = useMemo(() => {
@@ -195,22 +195,38 @@ export default function UpdateProductScreen() {
     });
   }, [products, query]);
 
-  function pushModalGuided(name: ModalName) {
-    router.push(
-      `/vendor/profile/(product-modals)/${name}_modal?guided=1&step=${name}` as any
-    );
-  }
-
-  function goPickModal(name: ModalName) {
-    pushModalGuided(name);
-  }
-
-  const mediaCounts = useMemo(() => {
-    const m = safeJson(selected?.media);
-    const images = Array.isArray(m?.images) ? m.images.length : 0;
-    const videos = Array.isArray(m?.videos) ? m.videos.length : 0;
-    return { images, videos };
+  const inventoryEditable = useMemo(() => {
+    // ✅ If inventory_qty is null => made-on-order => hide inventory + do not update it
+    if (!selected) return false;
+    return selected.inventory_qty !== null && selected.inventory_qty !== undefined;
   }, [selected]);
+
+  const media = useMemo(() => safeJson(selected?.media), [selected]);
+  const imagePaths = useMemo(
+    () => (Array.isArray(media?.images) ? media.images.map(String) : []),
+    [media]
+  );
+  const videoPaths = useMemo(
+    () => (Array.isArray(media?.videos) ? media.videos.map(String) : []),
+    [media]
+  );
+  const thumbPaths = useMemo(
+    () => (Array.isArray(media?.thumbs) ? media.thumbs.map(String) : []),
+    [media]
+  );
+
+  const imageUrls = useMemo(
+    () => imagePaths.map((p) => resolvePublicUrl(p)).filter(Boolean) as string[],
+    [imagePaths, resolvePublicUrl]
+  );
+  const videoUrls = useMemo(
+    () => videoPaths.map((p) => resolvePublicUrl(p)).filter(Boolean) as string[],
+    [videoPaths, resolvePublicUrl]
+  );
+  const thumbUrls = useMemo(
+    () => thumbPaths.map((p) => resolvePublicUrl(p)).filter(Boolean) as string[],
+    [thumbPaths, resolvePublicUrl]
+  );
 
   const canSave = useMemo(() => {
     if (!vendorId) return false;
@@ -225,21 +241,8 @@ export default function UpdateProductScreen() {
       if (!Number.isFinite(n) || n <= 0) return false;
     }
 
-    if ((dressTypeIds ?? []).length < 1) return false;
-
     return true;
-  }, [vendorId, selectedId, title, priceMode, pricePerMeter, priceTotal, dressTypeIds]);
-
-  function summaryLine(label: string, value: string) {
-    return (
-      <View style={styles.summaryRow}>
-        <Text style={styles.summaryLabel}>{label}</Text>
-        <Text style={styles.summaryValue} numberOfLines={2}>
-          {value}
-        </Text>
-      </View>
-    );
-  }
+  }, [vendorId, selectedId, title, priceMode, pricePerMeter, priceTotal]);
 
   async function saveUpdate() {
     if (saving) return;
@@ -257,17 +260,6 @@ export default function UpdateProductScreen() {
     try {
       setSaving(true);
 
-      const spec = {
-        ...(safeJson(selected?.spec) ?? {}),
-        dressTypeIds: (dressTypeIds ?? []).map((x) => Number(x)).filter((n) => Number.isFinite(n)),
-        fabricTypeIds: fabricTypeIds ?? [],
-        colorShadeIds: colorShadeIds ?? [],
-        workTypeIds: workTypeIds ?? [],
-        workDensityIds: workDensityIds ?? [],
-        originCityIds: originCityIds ?? [],
-        wearStateIds: wearStateIds ?? []
-      };
-
       const price =
         priceMode === "unstitched_per_meter"
           ? {
@@ -280,13 +272,16 @@ export default function UpdateProductScreen() {
               available_sizes: (availableSizes ?? []).filter(Boolean)
             };
 
-      const updatePayload = {
+      // ✅ only allowed edits: title, (inventory if not made-on-order), price (+ updated_at)
+      const updatePayload: any = {
         title: title.trim(),
-        inventory_qty: Number(inventoryQty ?? 0),
-        spec,
         price,
         updated_at: new Date().toISOString()
       };
+
+      if (inventoryEditable) {
+        updatePayload.inventory_qty = Number(inventoryQty ?? 0);
+      }
 
       const { data, error } = await supabase
         .from(PRODUCTS_TABLE)
@@ -302,7 +297,6 @@ export default function UpdateProductScreen() {
       }
 
       const updated = data as any as ProductRow;
-
       setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
 
       Alert.alert("Updated", `Saved changes for ${safeText(updated.product_code)}`);
@@ -310,6 +304,175 @@ export default function UpdateProductScreen() {
       Alert.alert("Error", e?.message ?? "Could not update product.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveMedia(nextMedia: any) {
+    if (!vendorId || !selectedId) return;
+    if (savingMedia) return;
+
+    try {
+      setSavingMedia(true);
+
+      const updatePayload = {
+        media: nextMedia,
+        updated_at: new Date().toISOString()
+      };
+
+      const { data, error } = await supabase
+        .from(PRODUCTS_TABLE)
+        .update(updatePayload)
+        .eq("id", selectedId)
+        .eq("vendor_id", vendorId)
+        .select("id, vendor_id, product_code, title, inventory_qty, spec, price, media, created_at, updated_at")
+        .single();
+
+      if (error) {
+        Alert.alert("Media update failed", error.message);
+        return;
+      }
+
+      const updated = data as any as ProductRow;
+      setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    } catch (e: any) {
+      Alert.alert("Error", e?.message ?? "Could not update media.");
+    } finally {
+      setSavingMedia(false);
+    }
+  }
+
+  async function removeImageAt(idx: number) {
+    if (!selected) return;
+    const m = safeJson(selected.media);
+    const images = Array.isArray(m.images) ? [...m.images] : [];
+    if (idx < 0 || idx >= images.length) return;
+
+    images.splice(idx, 1);
+
+    const next = {
+      ...m,
+      images
+    };
+
+    await saveMedia(next);
+  }
+
+  async function removeVideoAt(idx: number) {
+    if (!selected) return;
+    const m = safeJson(selected.media);
+    const videos = Array.isArray(m.videos) ? [...m.videos] : [];
+    const thumbs = Array.isArray(m.thumbs) ? [...m.thumbs] : [];
+
+    if (idx < 0 || idx >= videos.length) return;
+
+    videos.splice(idx, 1);
+    if (idx < thumbs.length) thumbs.splice(idx, 1);
+
+    const next = {
+      ...m,
+      videos,
+      thumbs
+    };
+
+    await saveMedia(next);
+  }
+
+  async function pickAndUpload(kind: "image" | "video") {
+    if (!vendorId || !selectedId || !selected?.product_code) {
+      Alert.alert("Missing", "Select a product first.");
+      return;
+    }
+    if (savingMedia) return;
+
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission needed", "Please allow media library access.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes:
+        kind === "image"
+          ? ImagePicker.MediaTypeOptions.Images
+          : ImagePicker.MediaTypeOptions.Videos,
+      quality: kind === "image" ? 0.9 : undefined,
+      allowsEditing: false
+    });
+
+    if (result.canceled) return;
+    const asset = result.assets?.[0];
+    if (!asset?.uri) return;
+
+    try {
+      setSavingMedia(true);
+
+      const uri = asset.uri;
+      const ext = extFromUri(uri) || (kind === "image" ? "jpg" : "mp4");
+      const contentType = guessContentTypeFromExt(ext);
+
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64
+      });
+      const arrayBuffer = decode(base64);
+
+      const productCode = String(selected.product_code);
+      const folder = kind === "image" ? "images" : "videos";
+      const filename = `${Date.now()}_${Math.random().toString(16).slice(2)}.${ext}`;
+      const storagePath = `vendors/${vendorId}/products/${productCode}/${folder}/${filename}`;
+
+      const { error: uploadError } = await supabase.storage.from(BUCKET_VENDOR).upload(
+        storagePath,
+        arrayBuffer,
+        {
+          contentType,
+          upsert: false
+        }
+      );
+
+      if (uploadError) {
+        Alert.alert("Upload failed", uploadError.message);
+        return;
+      }
+
+      const m = safeJson(selected.media);
+      const nextImages = Array.isArray(m.images) ? [...m.images] : [];
+      const nextVideos = Array.isArray(m.videos) ? [...m.videos] : [];
+      const nextThumbs = Array.isArray(m.thumbs) ? [...m.thumbs] : [];
+
+      if (kind === "image") nextImages.push(storagePath);
+      else nextVideos.push(storagePath);
+
+      const next = {
+        ...m,
+        images: nextImages,
+        videos: nextVideos,
+        thumbs: nextThumbs
+      };
+
+      const updatePayload = {
+        media: next,
+        updated_at: new Date().toISOString()
+      };
+
+      const { data, error } = await supabase
+        .from(PRODUCTS_TABLE)
+        .update(updatePayload)
+        .eq("id", selectedId)
+        .eq("vendor_id", vendorId)
+        .select("id, vendor_id, product_code, title, inventory_qty, spec, price, media, created_at, updated_at")
+        .single();
+
+      if (error) {
+        Alert.alert("Media update failed", error.message);
+        return;
+      }
+
+      const updated = data as any as ProductRow;
+      setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    } catch (e: any) {
+      Alert.alert("Error", e?.message ?? "Could not upload media.");
+    } finally {
+      setSavingMedia(false);
     }
   }
 
@@ -332,67 +495,95 @@ export default function UpdateProductScreen() {
         </Text>
       ) : null}
 
+      {/* ✅ Product Picker (collapses after selection) */}
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Pick a product</Text>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Pick a product</Text>
 
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search by product code or title..."
-          placeholderTextColor={stylesVars.placeholder}
-          style={styles.input}
-          maxLength={80}
-        />
-
-        <View style={styles.topActionsRow}>
-          <Text
-            style={[styles.refresh, loadingList && styles.disabledText]}
-            onPress={loadingList ? undefined : fetchProducts}
-          >
-            {loadingList ? "Loading..." : "Refresh"}
-          </Text>
+          {selected ? (
+            <Pressable
+              onPress={() => setPickerOpen((v) => !v)}
+              style={({ pressed }) => [styles.smallBtn, pressed ? styles.pressed : null]}
+            >
+              <Text style={styles.smallBtnText}>{pickerOpen ? "Hide" : "Change Product"}</Text>
+            </Pressable>
+          ) : null}
         </View>
 
-        {loadingList ? (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator />
-            <Text style={styles.loadingText}>Loading products…</Text>
+        {selected ? (
+          <View style={styles.selectedBox}>
+            <Text style={styles.selectedCode}>{safeText(selected.product_code)}</Text>
+            <Text style={styles.selectedTitle} numberOfLines={1}>
+              {safeText(selected.title)}
+            </Text>
           </View>
-        ) : filtered.length ? (
-          <View style={styles.list}>
-            {filtered.slice(0, 30).map((p) => {
-              const isOn = p.id === selectedId;
-              const code = safeText(p.product_code);
-              const t = safeText(p.title);
+        ) : null}
 
-              return (
-                <Pressable
-                  key={p.id}
-                  style={({ pressed }) => [
-                    styles.item,
-                    isOn ? styles.itemOn : null,
-                    pressed ? styles.pressed : null
-                  ]}
-                  onPress={() => setSelectedId(p.id)}
-                >
-                  <View style={styles.itemLeft}>
-                    <Text style={styles.itemCode}>{code}</Text>
-                    <Text style={styles.itemTitle} numberOfLines={1}>
-                      {t}
-                    </Text>
-                  </View>
+        {pickerOpen ? (
+          <>
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search by product code or title..."
+              placeholderTextColor={stylesVars.placeholder}
+              style={styles.input}
+              maxLength={80}
+            />
 
-                  <Text style={styles.itemArrow}>{isOn ? "✓" : "›"}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        ) : (
-          <Text style={styles.empty}>No products found.</Text>
-        )}
+            <View style={styles.topActionsRow}>
+              <Text
+                style={[styles.refresh, loadingList && styles.disabledText]}
+                onPress={loadingList ? undefined : fetchProducts}
+              >
+                {loadingList ? "Loading..." : "Refresh"}
+              </Text>
+            </View>
 
-        {filtered.length > 30 ? (
-          <Text style={styles.hint}>Showing first 30 matches. Refine your search.</Text>
+            {loadingList ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator />
+                <Text style={styles.loadingText}>Loading products…</Text>
+              </View>
+            ) : filtered.length ? (
+              <View style={styles.list}>
+                {filtered.slice(0, 30).map((p) => {
+                  const isOn = p.id === selectedId;
+                  const code = safeText(p.product_code);
+                  const t = safeText(p.title);
+
+                  return (
+                    <Pressable
+                      key={p.id}
+                      style={({ pressed }) => [
+                        styles.item,
+                        isOn ? styles.itemOn : null,
+                        pressed ? styles.pressed : null
+                      ]}
+                      onPress={() => {
+                        setSelectedId(p.id);
+                        setPickerOpen(false);
+                      }}
+                    >
+                      <View style={styles.itemLeft}>
+                        <Text style={styles.itemCode}>{code}</Text>
+                        <Text style={styles.itemTitle} numberOfLines={1}>
+                          {t}
+                        </Text>
+                      </View>
+
+                      <Text style={styles.itemArrow}>{isOn ? "✓" : "›"}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : (
+              <Text style={styles.empty}>No products found.</Text>
+            )}
+
+            {filtered.length > 30 ? (
+              <Text style={styles.hint}>Showing first 30 matches. Refine your search.</Text>
+            ) : null}
+          </>
         ) : null}
       </View>
 
@@ -404,8 +595,7 @@ export default function UpdateProductScreen() {
         ) : (
           <>
             <Text style={styles.metaLine}>
-              Selected:{" "}
-              <Text style={styles.metaStrong}>{safeText(selected.product_code)}</Text>
+              Selected: <Text style={styles.metaStrong}>{safeText(selected.product_code)}</Text>
             </Text>
 
             <Text style={styles.label}>Title *</Text>
@@ -418,16 +608,20 @@ export default function UpdateProductScreen() {
               maxLength={80}
             />
 
-            <Text style={styles.label}>Inventory Quantity *</Text>
-            <TextInput
-              value={String(inventoryQty ?? 0)}
-              onChangeText={(t) => setInventoryQty(Number(sanitizeNumber(t) || "0"))}
-              placeholder="e.g., 10"
-              placeholderTextColor={stylesVars.placeholder}
-              style={styles.input}
-              keyboardType="number-pad"
-              maxLength={10}
-            />
+            {inventoryEditable ? (
+              <>
+                <Text style={styles.label}>Inventory Quantity *</Text>
+                <TextInput
+                  value={String(inventoryQty ?? 0)}
+                  onChangeText={(t) => setInventoryQty(Number(sanitizeNumber(t) || "0"))}
+                  placeholder="e.g., 10"
+                  placeholderTextColor={stylesVars.placeholder}
+                  style={styles.input}
+                  keyboardType="number-pad"
+                  maxLength={10}
+                />
+              </>
+            ) : null}
 
             <Text style={styles.label}>Cost Mode *</Text>
             <View style={styles.segmentRow}>
@@ -503,9 +697,7 @@ export default function UpdateProductScreen() {
                 <Text style={styles.label}>Cost per Meter (PKR) *</Text>
                 <TextInput
                   value={String(pricePerMeter ?? "")}
-                  onChangeText={(t) =>
-                    setPricePerMeter(Number(sanitizeNumber(t) || "0"))
-                  }
+                  onChangeText={(t) => setPricePerMeter(Number(sanitizeNumber(t) || "0"))}
                   placeholder="e.g., 1800"
                   placeholderTextColor={stylesVars.placeholder}
                   style={styles.input}
@@ -519,135 +711,111 @@ export default function UpdateProductScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Selections</Text>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Media</Text>
+
+          {selected ? (
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <Pressable
+                onPress={() => pickAndUpload("image")}
+                disabled={savingMedia}
+                style={({ pressed }) => [
+                  styles.smallBtn,
+                  savingMedia ? styles.smallBtnDisabled : null,
+                  pressed ? styles.pressed : null
+                ]}
+              >
+                <Text style={styles.smallBtnText}>+ Add Image</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => pickAndUpload("video")}
+                disabled={savingMedia}
+                style={({ pressed }) => [
+                  styles.smallBtn,
+                  savingMedia ? styles.smallBtnDisabled : null,
+                  pressed ? styles.pressed : null
+                ]}
+              >
+                <Text style={styles.smallBtnText}>+ Add Video</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
 
         {!selected ? (
-          <Text style={styles.empty}>Select a product above to edit selections.</Text>
+          <Text style={styles.empty}>Select a product above to edit media.</Text>
         ) : (
           <>
-            <View style={styles.btnRow}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.pickBtn,
-                  pressed ? styles.pressed : null
-                ]}
-                onPress={() => goPickModal("dress-type")}
-                disabled={saving}
-              >
-                <Text style={styles.pickText}>Dress Type *</Text>
-              </Pressable>
+            {savingMedia ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator />
+                <Text style={styles.loadingText}>Updating media…</Text>
+              </View>
+            ) : null}
 
-              <Pressable
-                style={({ pressed }) => [
-                  styles.pickBtn,
-                  pressed ? styles.pressed : null
-                ]}
-                onPress={() => goPickModal("fabric")}
-                disabled={saving}
-              >
-                <Text style={styles.pickText}>Fabric</Text>
-              </Pressable>
+            <Text style={styles.metaSmall}>Images</Text>
+            {imageUrls.length ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.thumbRow}>
+                  {imageUrls.map((u, idx) => (
+                    <View key={`${u}-${idx}`} style={styles.thumbWrap}>
+                      <Image source={{ uri: u }} style={styles.thumb} />
+                      <Pressable
+                        onPress={() => removeImageAt(idx)}
+                        disabled={savingMedia}
+                        style={({ pressed }) => [styles.thumbX, pressed ? styles.pressed : null]}
+                      >
+                        <Text style={styles.thumbXText}>✕</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
+            ) : (
+              <Text style={styles.emptyInline}>—</Text>
+            )}
 
-              <Pressable
-                style={({ pressed }) => [
-                  styles.pickBtn,
-                  pressed ? styles.pressed : null
-                ]}
-                onPress={() => goPickModal("color")}
-                disabled={saving}
-              >
-                <Text style={styles.pickText}>Color</Text>
-              </Pressable>
+            <Text style={[styles.metaSmall, { marginTop: 12 }]}>Videos</Text>
+            {videoUrls.length ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.thumbRow}>
+                  {videoUrls.map((u, idx) => {
+                    const t = thumbUrls[idx] ?? null;
+                    return (
+                      <View key={`${u}-${idx}`} style={styles.thumbWrap}>
+                        {t ? (
+                          <Image source={{ uri: t }} style={styles.thumb} />
+                        ) : (
+                          <View style={styles.videoPlaceholder}>
+                            <Text style={styles.videoPlaceholderText}>Video {idx + 1}</Text>
+                          </View>
+                        )}
 
-              <Pressable
-                style={({ pressed }) => [
-                  styles.pickBtn,
-                  pressed ? styles.pressed : null
-                ]}
-                onPress={() => goPickModal("work")}
-                disabled={saving}
-              >
-                <Text style={styles.pickText}>Work</Text>
-              </Pressable>
+                        <View style={styles.playBadge}>
+                          <Text style={styles.playBadgeText}>▶</Text>
+                        </View>
 
-              <Pressable
-                style={({ pressed }) => [
-                  styles.pickBtn,
-                  pressed ? styles.pressed : null
-                ]}
-                onPress={() => goPickModal("work-density")}
-                disabled={saving}
-              >
-                <Text style={styles.pickText}>Density</Text>
-              </Pressable>
+                        <Pressable
+                          onPress={() => removeVideoAt(idx)}
+                          disabled={savingMedia}
+                          style={({ pressed }) => [styles.thumbX, pressed ? styles.pressed : null]}
+                        >
+                          <Text style={styles.thumbXText}>✕</Text>
+                        </Pressable>
+                      </View>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            ) : (
+              <Text style={styles.emptyInline}>—</Text>
+            )}
 
-              <Pressable
-                style={({ pressed }) => [
-                  styles.pickBtn,
-                  pressed ? styles.pressed : null
-                ]}
-                onPress={() => goPickModal("origin-city")}
-                disabled={saving}
-              >
-                <Text style={styles.pickText}>Origin</Text>
-              </Pressable>
-
-              <Pressable
-                style={({ pressed }) => [
-                  styles.pickBtn,
-                  pressed ? styles.pressed : null
-                ]}
-                onPress={() => goPickModal("wear-state")}
-                disabled={saving}
-              >
-                <Text style={styles.pickText}>Wear State</Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.summaryBox}>
-              {summaryLine(
-                "Dress Type",
-                dressTypeIds.length ? `${dressTypeIds.length} selected` : "Not set"
-              )}
-              {summaryLine(
-                "Fabric",
-                fabricTypeIds.length ? `${fabricTypeIds.length} selected` : "Any"
-              )}
-              {summaryLine(
-                "Color",
-                colorShadeIds.length ? `${colorShadeIds.length} selected` : "Any"
-              )}
-              {summaryLine(
-                "Work",
-                workTypeIds.length ? `${workTypeIds.length} selected` : "Any"
-              )}
-              {summaryLine(
-                "Density",
-                workDensityIds.length ? `${workDensityIds.length} selected` : "Any"
-              )}
-              {summaryLine(
-                "Origin",
-                originCityIds.length ? `${originCityIds.length} selected` : "Any"
-              )}
-              {summaryLine(
-                "Wear State",
-                wearStateIds.length ? `${wearStateIds.length} selected` : "Any"
-              )}
-            </View>
+            <Text style={styles.hint}>
+              Tip: Use ✕ to remove a media item. Use “Add” to upload and attach new files.
+            </Text>
           </>
-        )}
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Media (read-only in v1)</Text>
-
-        {!selected ? (
-          <Text style={styles.empty}>Select a product above to view media counts.</Text>
-        ) : (
-          <View style={styles.summaryBox}>
-            {summaryLine("Images", String(mediaCounts.images))}
-            {summaryLine("Videos", String(mediaCounts.videos))}
-          </View>
         )}
       </View>
 
@@ -681,7 +849,10 @@ const stylesVars = {
   blueSoft: "#EAF2FF",
   text: "#111111",
   subText: "#60708A",
-  placeholder: "#94A3B8"
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5"
 };
 
 const styles = StyleSheet.create({
@@ -713,7 +884,36 @@ const styles = StyleSheet.create({
     padding: 14
   },
 
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10
+  },
+
   sectionTitle: { fontSize: 13, fontWeight: "900", color: stylesVars.blue },
+
+  selectedBox: {
+    marginTop: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.blueSoft,
+    padding: 12
+  },
+  selectedCode: { fontSize: 12, fontWeight: "900", color: stylesVars.blue },
+  selectedTitle: { marginTop: 3, fontSize: 13, fontWeight: "800", color: "#111" },
+
+  smallBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: stylesVars.border
+  },
+  smallBtnDisabled: { opacity: 0.5 },
+  smallBtnText: { color: stylesVars.blue, fontWeight: "900", fontSize: 12 },
 
   label: {
     marginTop: 10,
@@ -737,6 +937,7 @@ const styles = StyleSheet.create({
 
   metaLine: { marginTop: 8, color: stylesVars.subText, fontWeight: "800" },
   metaStrong: { color: stylesVars.blue, fontWeight: "900" },
+  metaSmall: { marginTop: 10, color: stylesVars.subText, fontWeight: "900", fontSize: 12 },
 
   topActionsRow: {
     marginTop: 10,
@@ -796,40 +997,58 @@ const styles = StyleSheet.create({
   segmentText: { color: stylesVars.text, fontWeight: "900", fontSize: 12 },
   segmentTextOn: { color: stylesVars.blue },
 
-  btnRow: { marginTop: 12, gap: 10 },
+  thumbRow: { flexDirection: "row", gap: 10, paddingTop: 10, paddingBottom: 4 },
 
-  pickBtn: {
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    backgroundColor: stylesVars.blueSoft,
+  thumbWrap: {
+    width: 92,
+    height: 92,
+    borderRadius: 14,
+    overflow: "hidden",
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: stylesVars.borderSoft,
+    backgroundColor: "#fff"
   },
-  pickText: { color: stylesVars.blue, fontWeight: "900", fontSize: 13 },
+  thumb: { width: "100%", height: "100%", backgroundColor: "#f3f3f3" },
 
-  summaryBox: {
-    marginTop: 12,
-    borderRadius: 12,
+  thumbX: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    backgroundColor: stylesVars.dangerSoft,
+    borderColor: stylesVars.dangerBorder,
     borderWidth: 1,
-    borderColor: stylesVars.border,
-    padding: 12,
-    backgroundColor: "#F8FAFF"
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center"
   },
-  summaryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 10,
-    marginBottom: 8
+  thumbXText: { color: stylesVars.danger, fontWeight: "900", fontSize: 12 },
+
+  videoPlaceholder: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5FF"
   },
-  summaryLabel: { fontSize: 12, fontWeight: "900", color: stylesVars.blue },
-  summaryValue: {
-    fontSize: 12,
-    color: stylesVars.text,
-    opacity: 0.9,
-    flex: 1,
-    textAlign: "right"
+  videoPlaceholderText: {
+    color: stylesVars.blue,
+    fontWeight: "900",
+    fontSize: 12
   },
+  playBadge: {
+    position: "absolute",
+    left: 6,
+    bottom: 6,
+    backgroundColor: "rgba(11,47,107,0.92)",
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  playBadgeText: { color: "#fff", fontWeight: "900", fontSize: 12 },
 
   saveBtn: {
     marginTop: 14,
@@ -843,6 +1062,7 @@ const styles = StyleSheet.create({
 
   warn: { marginTop: 10, color: stylesVars.subText, fontWeight: "800" },
   empty: { marginTop: 10, color: stylesVars.subText, fontWeight: "800" },
+  emptyInline: { marginTop: 8, color: stylesVars.subText, fontWeight: "800" },
 
   pressed: { opacity: 0.75 }
 });

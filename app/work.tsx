@@ -7,7 +7,7 @@ import {
   Text,
   View
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { getWorkTypes, WorkTypeItem } from "@/utils/supabase/workType";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearWorkTypes, toggleWorkType } from "@/store/filtersSlice";
@@ -29,6 +29,7 @@ const H_PADDING = 12;
 
 export default function WorkScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const dispatch = useAppDispatch();
 
   const selected = useAppSelector((s) => s.filters.workTypeIds);
@@ -39,6 +40,9 @@ export default function WorkScreen() {
   const [err, setErr] = useState<string | null>(null);
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
+
+  const from = String((params as any)?.from ?? "").trim();
+  const fromResultsFilters = from === "results-filters";
 
   useEffect(() => {
     let alive = true;
@@ -69,8 +73,9 @@ export default function WorkScreen() {
       title={`Work Type${dressTypeId ? "" : " (Dress type not set)"}`}
       onBack={() => router.back()}
       onAny={() => dispatch(clearWorkTypes())}
-      onNext={() => router.push("/work-density")}
-
+      onNext={() =>
+        fromResultsFilters ? router.back() : router.push("/work-density")
+      }
     >
       <Text style={styles.heading}>Select Work Type</Text>
 

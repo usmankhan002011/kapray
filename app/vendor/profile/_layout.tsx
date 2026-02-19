@@ -32,6 +32,16 @@ export default function VendorProfileTabsLayout() {
           }}
         />
 
+        {/* ORDERS TAB */}
+        <Tabs.Screen
+          name="orders"
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <CircleTab label="ORDERS" focused={focused} />
+            )
+          }}
+        />
+
         {/* SETTINGS TAB */}
         <Tabs.Screen
           name="settings"
@@ -42,17 +52,16 @@ export default function VendorProfileTabsLayout() {
           }}
         />
 
-        {/* HIDE ALL OTHER FILES */}
+        {/* HIDE ALL OTHER FILES IN THIS FOLDER */}
         <Tabs.Screen name="index" options={{ href: null }} />
+        <Tabs.Screen name="update-product" options={{ href: null }} />
+        <Tabs.Screen name="view-product" options={{ href: null }} />
         <Tabs.Screen name="view-profile" options={{ href: null }} />
-        <Tabs.Screen name="update" options={{ href: null }} />
-        <Tabs.Screen name="confirmation" options={{ href: null }} />
+        <Tabs.Screen name="add-product" options={{ href: null }} />
+        <Tabs.Screen name="edit-vendor" options={{ href: null }} />
 
         {/* HIDE PRODUCT MODALS GROUP */}
         <Tabs.Screen name="(product-modals)" options={{ href: null }} />
-
-        {/* HIDE ADD PRODUCT SCREEN (opened from products tab) */}
-        <Tabs.Screen name="add-product" options={{ href: null }} />
       </Tabs>
     </ProductDraftProvider>
   );

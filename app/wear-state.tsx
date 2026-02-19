@@ -6,7 +6,7 @@ import {
   StyleSheet,
   Text
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { getWearStates, WearStateItem } from "@/utils/supabase/wearState";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearWearStates, toggleWearState } from "@/store/filtersSlice";
@@ -30,6 +30,7 @@ const CARD_COLORS: Record<string, { bg: string; text: string }> = {
 
 export default function WearStateScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const dispatch = useAppDispatch();
 
   const selected = useAppSelector((s) => s.filters.wearStateIds);
@@ -40,6 +41,9 @@ export default function WearStateScreen() {
   const [err, setErr] = useState<string | null>(null);
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
+
+  const from = String((params as any)?.from ?? "").trim();
+  const fromResultsFilters = from === "results-filters";
 
   useEffect(() => {
     let alive = true;
@@ -94,8 +98,9 @@ export default function WearStateScreen() {
       title={`Wear State${dressTypeId ? "" : " (Dress type not set)"}`}
       onBack={() => router.back()}
       onAny={() => dispatch(clearWearStates())}
-      onNext={() => router.push("/price-band")}
-
+      onNext={() =>
+        fromResultsFilters ? router.back() : router.push("/price-band")
+      }
     >
       <Text style={styles.heading}>Select Wear State</Text>
 

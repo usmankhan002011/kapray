@@ -8,7 +8,7 @@ import {
   Text,
   View
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { getOriginCities, OriginCityItem } from "@/utils/supabase/originCity";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearOriginCities, toggleOriginCity } from "@/store/filtersSlice";
@@ -35,6 +35,7 @@ const IMAGE_H = Math.max(92, Math.round(CARD_W * 0.62)); // smaller cards; still
 
 export default function OriginCityScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const dispatch = useAppDispatch();
 
   const selected = useAppSelector((s) => s.filters.originCityIds);
@@ -45,6 +46,9 @@ export default function OriginCityScreen() {
   const [err, setErr] = useState<string | null>(null);
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
+
+  const from = String((params as any)?.from ?? "").trim();
+  const fromResultsFilters = from === "results-filters";
 
   useEffect(() => {
     let alive = true;
@@ -75,8 +79,9 @@ export default function OriginCityScreen() {
       title={`Origin City${dressTypeId ? "" : " (Dress type not set)"}`}
       onBack={() => router.back()}
       onAny={() => dispatch(clearOriginCities())}
-      onNext={() => router.push("/wear-state")}
-
+      onNext={() =>
+        fromResultsFilters ? router.back() : router.push("/wear-state")
+      }
     >
       <Text style={styles.heading}>Select Origin City</Text>
 

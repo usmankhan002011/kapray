@@ -29,6 +29,12 @@ export default function RootLayout() {
             name="modal"
             options={{ presentation: "modal", title: "Modal" }}
           />
+
+          {/* ✅ consumer filters modal */}
+          <Stack.Screen
+            name="results-filters"
+            options={{ presentation: "modal", title: "Filters" }}
+          />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>

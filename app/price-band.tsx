@@ -6,7 +6,7 @@ import {
   StyleSheet,
   Text
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { getPriceBands, PriceBandItem } from "@/utils/supabase/priceBand";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearPriceBands, togglePriceBand } from "@/store/filtersSlice";
@@ -38,6 +38,7 @@ function getCardColorsByIndex(index: number) {
 
 export default function PriceBand() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const dispatch = useAppDispatch();
 
   const selected = useAppSelector((s: any) => s.filters?.priceBandIds ?? []);
@@ -45,6 +46,9 @@ export default function PriceBand() {
   const selectedSet = useMemo(() => new Set(selected), [selected]);
 
   const [options, setOptions] = useState<PriceBandItem[]>([]);
+
+  const from = String((params as any)?.from ?? "").trim();
+  const fromResultsFilters = from === "results-filters";
 
   useEffect(() => {
     let alive = true;
@@ -68,7 +72,7 @@ export default function PriceBand() {
       title="Price Band"
       onBack={() => router.back()}
       onAny={() => dispatch(clearPriceBands())}
-      onNext={() => router.replace("/results")}
+      onNext={() => (fromResultsFilters ? router.back() : router.replace("/results"))}
     >
       <FlatList
         data={options}

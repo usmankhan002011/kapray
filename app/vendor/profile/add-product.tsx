@@ -110,10 +110,23 @@ export default function AddProductScreen() {
 
   const [saving, setSaving] = useState(false);
 
-  // Made-on-order toggle (stores flag in spec; inventory_qty saved as 0)
+  // Made-on-order toggle
   const [madeOnOrder, setMadeOnOrder] = useState<boolean>(() => {
     return Boolean((draft.spec as any)?.made_on_order ?? false);
   });
+
+  // Extra description (saved into spec.more_description)
+  const [moreDescription, setMoreDescription] = useState<string>(() => {
+    return safeStr((draft.spec as any)?.more_description ?? "");
+  });
+
+  // When made on order is ON, auto-fill inventory to 0 (UI + saved payload)
+  useEffect(() => {
+    if (madeOnOrder) {
+      setInventoryQty(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [madeOnOrder]);
 
   // Video thumbs for picked videos (uri -> thumb uri)
   const [videoThumbs, setVideoThumbs] = useState<Record<string, string>>({});
@@ -351,10 +364,17 @@ export default function AddProductScreen() {
       const insertPayload: any = {
         vendor_id: vendorId,
         title: safeStr(draft.title),
+
+        // NEW: DB column
+        made_on_order: Boolean(madeOnOrder),
+
+        // Inventory: auto 0 when made_on_order=true
         inventory_qty: Number.isFinite(inventoryQty) ? Math.trunc(inventoryQty) : 0,
+
         spec: {
           ...(draft.spec ?? {}),
-          made_on_order: Boolean(madeOnOrder)
+          made_on_order: Boolean(madeOnOrder),
+          more_description: safeStr(moreDescription)
         },
         price: draft.price,
         media: {
@@ -472,6 +492,7 @@ export default function AddProductScreen() {
       // Done -> go to Products and pass new_product_id so products.tsx can insert at top
       Alert.alert("Saved", `Product created: ${finalCode}`);
       resetDraft();
+      setMoreDescription("");
       router.replace(
         `/vendor/profile/products?new_product_id=${encodeURIComponent(
           productId
@@ -565,7 +586,7 @@ export default function AddProductScreen() {
         ) : null}
 
         <TextInput
-          value={String(draft.inventory_qty ?? 0)}
+          value={String(madeOnOrder ? 0 : (draft.inventory_qty ?? 0))}
           onChangeText={(t) =>
             setInventoryQty(Number(sanitizeNumber(t) || "0"))
           }
@@ -750,9 +771,7 @@ export default function AddProductScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>
-          Build Product Description
-        </Text>
+        <Text style={styles.sectionTitle}>Build Product Description</Text>
 
         <View style={styles.btnRow}>
           <Pressable
@@ -838,6 +857,18 @@ export default function AddProductScreen() {
             <Text style={styles.pickTitle}>Wear State</Text>
             <Text style={styles.pickValue}>{wearValue}</Text>
           </Pressable>
+
+          <Text style={styles.label}>Add more description</Text>
+          <TextInput
+            value={moreDescription}
+            onChangeText={setMoreDescription}
+            placeholder="e.g., occassion, neckline & sleeves, craftsmanship, design features"
+            placeholderTextColor={stylesVars.placeholder}
+            style={[styles.input, { minHeight: 44 }]}
+            multiline
+            maxLength={400}
+            editable={!saving}
+          />
         </View>
       </View>
 

@@ -7,7 +7,7 @@ import {
   Text,
   View
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { getFabricTypes, FabricTypeItem } from "@/utils/supabase/fabricType";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearFabricTypes, toggleFabricType } from "@/store/filtersSlice";
@@ -29,6 +29,7 @@ const H_PADDING = 12;
 
 export default function FabricScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const dispatch = useAppDispatch();
 
   const selected = useAppSelector((s) => s.filters.fabricTypeIds);
@@ -39,6 +40,9 @@ export default function FabricScreen() {
   const [err, setErr] = useState<string | null>(null);
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
+
+  const from = String((params as any)?.from ?? "").trim();
+  const fromResultsFilters = from === "results-filters";
 
   useEffect(() => {
     let alive = true;
@@ -69,7 +73,7 @@ export default function FabricScreen() {
       title={`Fabric Type${dressTypeId ? "" : " (Dress type not set)"}`}
       onBack={() => router.back()}
       onAny={() => dispatch(clearFabricTypes())}
-      onNext={() => router.push("/color")}
+      onNext={() => (fromResultsFilters ? router.back() : router.push("/color"))}
     >
       <Text style={styles.heading}>Select Fabric Type</Text>
 

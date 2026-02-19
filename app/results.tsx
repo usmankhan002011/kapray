@@ -5,6 +5,7 @@ import {
   Alert,
   FlatList,
   Image,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -25,7 +26,7 @@ const TABLE_ORIGIN_CITIES = "origin_cities";
 const TABLE_WEAR_STATES = "wear_states";
 const TABLE_PRICE_BANDS = "price_bands";
 
-const PAGE_SIZE = 250;
+const PAGE_SIZE = 30;
 
 type ProductRow = {
   id: number;
@@ -179,17 +180,8 @@ function idsToNames(ids: string[], map: Map<string, string>): string[] {
     .filter((x) => x.length > 0);
 }
 
-function joinOrAny(label: string, names: string[]): string {
-  if (!names.length) return `${label}: Any`;
-  return `${label}: ${names.join(", ")}`;
-}
-
 // ✅ if user selected IDs but names not loaded yet, show Loading… (not Any)
-function namesOrLoading(
-  label: string,
-  selectedIds: any[],
-  names: string[]
-): string {
+function namesOrLoading(label: string, selectedIds: any[], names: string[]): string {
   const hasSelection = Array.isArray(selectedIds) && selectedIds.length > 0;
   if (!hasSelection) return `${label}: Any`;
   if (!names.length) return `${label}: Loading…`;
@@ -210,7 +202,13 @@ export default function ResultsScreen() {
   const wearStateIds: string[] = filters?.wearStateIds ?? [];
   const priceBandIds: string[] = filters?.priceBandIds ?? [];
 
+  // ✅ vendors (multi-select, empty = Any)
+  const vendorIds: string[] = filters?.vendorIds ?? [];
+
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [priceBands, setPriceBands] = useState<PriceBandRow[]>([]);
 
@@ -222,12 +220,37 @@ export default function ResultsScreen() {
   const [originCities, setOriginCities] = useState<NameRow[]>([]);
   const [wearStates, setWearStates] = useState<NameRow[]>([]);
 
+  // ✅ local favourites (heart turns red). No DB yet.
+  const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
+
+  // ✅ sort (default: cost)
+  const [sortOpen, setSortOpen] = useState(false);
+  const [sortMode, setSortMode] = useState<"cost" | "date">("cost");
+
+  function toggleFavorite(productId: number) {
+    setFavoriteIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) next.delete(productId);
+      else next.add(productId);
+      return next;
+    });
+  }
+
+  async function fetchPage(from: number, to: number) {
+    return supabase
+      .from(PRODUCTS_TABLE)
+      .select("id, vendor_id, product_code, title, created_at, spec, price, media")
+      .order("created_at", { ascending: false })
+      .range(from, to);
+  }
+
   useEffect(() => {
     let alive = true;
 
     async function loadAll() {
       try {
         setLoading(true);
+        setHasMore(true);
 
         const [
           bandsRes,
@@ -244,11 +267,7 @@ export default function ResultsScreen() {
             .select("id, name, min_pkr, max_pkr, sort_order")
             .order("sort_order", { ascending: true }),
 
-          supabase
-            .from(PRODUCTS_TABLE)
-            .select("id, vendor_id, product_code, title, created_at, spec, price, media")
-            .order("created_at", { ascending: false })
-            .range(0, PAGE_SIZE - 1),
+          fetchPage(0, PAGE_SIZE - 1),
 
           supabase.from(TABLE_DRESS_TYPE).select("id, name").order("id", { ascending: true }),
           supabase.from(TABLE_FABRIC_TYPES).select("id, name").order("sort_order", { ascending: true }),
@@ -268,12 +287,15 @@ export default function ResultsScreen() {
           setPriceBands(((bandsRes as any).data as any) ?? []);
         }
 
-        // products
+        // products (first page only)
         if ((prodRes as any).error) {
           Alert.alert("Load error", (prodRes as any).error.message);
           setProducts([]);
+          setHasMore(false);
         } else {
-          setProducts(((prodRes as any).data as any) ?? []);
+          const rows = ((((prodRes as any).data as any) ?? []) as ProductRow[]);
+          setProducts(rows);
+          setHasMore(rows.length === PAGE_SIZE);
         }
 
         // lookups
@@ -294,6 +316,7 @@ export default function ResultsScreen() {
         setWorkDensities([]);
         setOriginCities([]);
         setWearStates([]);
+        setHasMore(false);
       } finally {
         if (!alive) return;
         setLoading(false);
@@ -306,6 +329,33 @@ export default function ResultsScreen() {
       alive = false;
     };
   }, []);
+
+  async function fetchMore() {
+    if (loading || loadingMore) return;
+    if (!hasMore) return;
+
+    try {
+      setLoadingMore(true);
+
+      const from = products.length;
+      const to = from + PAGE_SIZE - 1;
+
+      const { data, error } = await fetchPage(from, to);
+      if (error) return;
+
+      const rows = ((data as any) ?? []) as ProductRow[];
+
+      setProducts((prev) => {
+        const seen = new Set(prev.map((p) => p.id));
+        const add = rows.filter((r) => !seen.has(r.id));
+        return [...prev, ...add];
+      });
+
+      setHasMore(rows.length === PAGE_SIZE);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   const bandsById = useMemo(() => {
     const m = new Map<string, PriceBandRow>();
@@ -326,6 +376,13 @@ export default function ResultsScreen() {
       const spec = p?.spec ?? {};
       const price = p?.price ?? {};
 
+      // ✅ vendor filter (multi-select). Empty => ANY
+      if (vendorIds.length) {
+        const vid =
+          p?.vendor_id === null || p?.vendor_id === undefined ? "" : String(p.vendor_id);
+        if (!vid || !vendorIds.includes(vid)) return false;
+      }
+
       if (!includesSingleId(dressTypeId, spec?.dressTypeIds)) return false;
       if (!anyOverlap(fabricTypeIds, spec?.fabricTypeIds)) return false;
       if (!anyOverlap(colorShadeIds, spec?.colorShadeIds)) return false;
@@ -341,6 +398,7 @@ export default function ResultsScreen() {
     });
   }, [
     products,
+    vendorIds,
     dressTypeId,
     fabricTypeIds,
     colorShadeIds,
@@ -352,13 +410,54 @@ export default function ResultsScreen() {
     bandsById
   ]);
 
+  // ✅ apply sort (cost or date)
+  const sorted = useMemo(() => {
+    const arr = [...(filtered ?? [])];
+
+    if (sortMode === "cost") {
+      arr.sort((a, b) => {
+        const ap = getComparablePkr(a?.price);
+        const bp = getComparablePkr(b?.price);
+
+        // nulls last
+        if (ap === null && bp === null) return 0;
+        if (ap === null) return 1;
+        if (bp === null) return -1;
+
+        // ascending (low -> high)
+        if (ap < bp) return -1;
+        if (ap > bp) return 1;
+        return 0;
+      });
+      return arr;
+    }
+
+    // date: newest first
+    arr.sort((a, b) => {
+      const at = a?.created_at ? Date.parse(a.created_at) : NaN;
+      const bt = b?.created_at ? Date.parse(b.created_at) : NaN;
+
+      const aOk = Number.isFinite(at);
+      const bOk = Number.isFinite(bt);
+
+      if (!aOk && !bOk) return 0;
+      if (!aOk) return 1; // unknown dates last
+      if (!bOk) return -1;
+
+      // newest first
+      if (at > bt) return -1;
+      if (at < bt) return 1;
+      return 0;
+    });
+
+    return arr;
+  }, [filtered, sortMode]);
+
   // ✅ summary = NAMES ONLY (and "Loading…" if selection exists but names not loaded yet)
   const filtersSummary = useMemo(() => {
     const dressSelected = dressTypeId !== null && dressTypeId !== undefined;
 
-    const dressName = dressSelected
-      ? (dressMap.get(String(dressTypeId)) ?? "").trim()
-      : "";
+    const dressName = dressSelected ? (dressMap.get(String(dressTypeId)) ?? "").trim() : "";
 
     const dressPart = !dressSelected
       ? "Dress: Any"
@@ -414,7 +513,7 @@ export default function ResultsScreen() {
   ]);
 
   function openProduct(p: ProductRow) {
-    router.push(`/vendor/profile/view-product?id=${encodeURIComponent(String(p.id))}`);
+    router.push(`/view-product?id=${encodeURIComponent(String(p.id))}`);
   }
 
   if (loading) {
@@ -434,13 +533,100 @@ export default function ResultsScreen() {
         </Text>
 
         <Text style={styles.title} numberOfLines={1}>
-          Results ({filtered.length})
+          Products ({sorted.length})
         </Text>
 
-        <Text style={styles.link} onPress={() => router.replace("/wizard")}>
-          Restart
-        </Text>
+        <View style={{ flexDirection: "row", gap: 14, alignItems: "center" }}>
+          {/* ✅ sort button (emoji) */}
+          <Pressable
+            onPress={() => setSortOpen(true)}
+            style={({ pressed }) => [styles.sortBtn, pressed ? { opacity: 0.7 } : null]}
+          >
+            <Text style={styles.sortBtnText}>↕️ Sort</Text>
+          </Pressable>
+
+          <Text style={styles.link} onPress={() => router.push("/results-filters")}>
+            🔍Filters
+          </Text>
+
+          <Text style={styles.link} onPress={() => router.replace("/wizard")}>
+            Restart
+          </Text>
+        </View>
       </View>
+
+      {/* ✅ Sort Modal (dark background) */}
+      <Modal
+        visible={sortOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSortOpen(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setSortOpen(false)}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Sort</Text>
+
+            <Pressable
+              style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
+              onPress={() => {
+                setSortMode("cost");
+                setSortOpen(false);
+              }}
+            >
+              <View style={styles.modalLeft}>
+                <Text style={styles.modalEmoji}>💰</Text>
+                <View>
+                  <Text style={styles.modalItemTitle}>Cost</Text>
+                  <Text style={styles.modalItemSub}>Low to high</Text>
+                </View>
+              </View>
+              <Text style={styles.modalRight}>{sortMode === "cost" ? "✅" : ""}</Text>
+            </Pressable>
+
+            <View style={styles.divider} />
+
+            <Pressable
+              style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
+              onPress={() => {
+                setSortMode("date"); // ✅ new
+                setSortOpen(false);
+              }}
+            >
+              <View style={styles.modalLeft}>
+                <Text style={styles.modalEmoji}>🗓️</Text>
+                <View>
+                  <Text style={styles.modalItemTitle}>Date</Text>
+                  <Text style={styles.modalItemSub}>Newest first</Text>
+                </View>
+              </View>
+              <Text style={styles.modalRight}>{sortMode === "date" ? "✅" : ""}</Text>
+            </Pressable>
+
+            <View style={styles.divider} />
+
+            <Pressable
+              style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
+              onPress={() => {
+                setSortOpen(false);
+                Alert.alert("Coming soon", "⭐ Sort by vendor rating is a feature coming soon.");
+              }}
+            >
+              <View style={styles.modalLeft}>
+                <Text style={styles.modalEmoji}>⭐</Text>
+                <View>
+                  <Text style={styles.modalItemTitle}>Vendor Rating</Text>
+                  <Text style={styles.modalItemSub}>Feature coming soon</Text>
+                </View>
+              </View>
+              <Text style={styles.soonPill}>Soon</Text>
+            </Pressable>
+
+            <Pressable style={styles.modalCloseBtn} onPress={() => setSortOpen(false)}>
+              <Text style={styles.modalCloseText}>Close</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* quick windup line — names only */}
       <View style={styles.summaryWrap}>
@@ -449,23 +635,28 @@ export default function ResultsScreen() {
         </Text>
       </View>
 
-      {filtered.length === 0 ? (
+      {sorted.length === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.emptyTitle}>No matching products</Text>
+          <Text style={styles.emptyTitle}>No matching products (loaded so far)</Text>
           <Text style={styles.muted}>
-            Tip: choose “Any” on some steps or broaden your price band.
+            Tip: press “Load more” to search more products, or broaden filters.
           </Text>
         </View>
       ) : (
         <FlatList
-          data={filtered}
+          data={sorted}
           keyExtractor={(item) => String(item.id)}
           numColumns={2}
           columnWrapperStyle={{ gap: 10 }}
           contentContainerStyle={{ padding: 16 }}
+          onEndReachedThreshold={0.6}
+          onEndReached={() => {
+            if (!loadingMore && hasMore) fetchMore();
+          }}
           renderItem={({ item }) => {
             const imgPath = firstImagePath(item.media);
             const url = publicUrlForStoragePath(imgPath);
+            const isFav = favoriteIds.has(item.id);
 
             return (
               <Pressable style={styles.card} onPress={() => openProduct(item)}>
@@ -488,9 +679,34 @@ export default function ResultsScreen() {
                 <Text style={styles.cardSub} numberOfLines={1}>
                   {safeText(item.product_code)}
                 </Text>
+
+                {/* ✅ Favourite only (Purchase removed) */}
+                <View style={styles.actionRow}>
+                  <Pressable onPress={() => toggleFavorite(item.id)} style={styles.actionBtn}>
+                    <Text style={[styles.actionText, isFav ? styles.heartOn : null]}>
+                      {isFav ? "❤️" : "🤍"} Favourite
+                    </Text>
+                  </Pressable>
+                </View>
               </Pressable>
             );
           }}
+          ListFooterComponent={
+            <View style={{ paddingHorizontal: 16, paddingBottom: 18 }}>
+              {loadingMore ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator />
+                  <Text style={styles.muted}>Loading more…</Text>
+                </View>
+              ) : hasMore ? (
+                <Pressable style={styles.loadMoreBtn} onPress={fetchMore}>
+                  <Text style={styles.loadMoreText}>Load more</Text>
+                </Pressable>
+              ) : (
+                <Text style={styles.endText}>product list complete</Text>
+              )}
+            </View>
+          }
         />
       )}
     </View>
@@ -507,7 +723,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between"
   },
-  link: { fontSize: 16, color: "#111" },
+  link: { fontSize: 16, color: "#111", fontWeight: "700" },
   title: {
     flex: 1,
     textAlign: "center",
@@ -526,6 +742,74 @@ const styles = StyleSheet.create({
     color: "#666",
     lineHeight: 16
   },
+
+  // ✅ sort button
+  sortBtn: {
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    backgroundColor: "#F4F4F5",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.08)"
+  },
+  sortBtnText: { fontSize: 13, fontWeight: "900", color: "#111" },
+
+  // ✅ modal (dark background)
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    padding: 20,
+    justifyContent: "center"
+  },
+  modalCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.10)"
+  },
+  modalTitle: {
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 10,
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#111"
+  },
+  modalItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between"
+  },
+  modalLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+  modalEmoji: { fontSize: 18 },
+  modalItemTitle: { fontSize: 14, fontWeight: "900", color: "#111" },
+  modalItemSub: { fontSize: 12, fontWeight: "700", color: "#60708A", marginTop: 2 },
+  modalRight: { fontSize: 14, fontWeight: "900", color: "#0B2F6B" },
+  divider: { height: 1, backgroundColor: "rgba(0,0,0,0.08)" },
+  soonPill: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: "#60708A",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "#F4F4F5",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.08)"
+  },
+  modalCloseBtn: {
+    margin: 14,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+    backgroundColor: "#EAF2FF",
+    borderWidth: 1,
+    borderColor: "#D9E2F2"
+  },
+  modalCloseText: { color: "#0B2F6B", fontWeight: "900" },
 
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20 },
   emptyTitle: { fontSize: 18, fontWeight: "700", color: "#111", marginBottom: 8 },
@@ -568,5 +852,30 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     fontSize: 12,
     color: "#666"
-  }
+  },
+
+  actionRow: {
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-start"
+  },
+  actionBtn: { flex: 1 },
+  actionText: { fontSize: 13, fontWeight: "800", color: "#111" },
+  heartOn: { color: "#D11A2A" },
+
+  loadingRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10 },
+  loadMoreBtn: {
+    marginTop: 8,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: "#EAF2FF",
+    borderWidth: 1,
+    borderColor: "#D9E2F2",
+    alignItems: "center"
+  },
+  loadMoreText: { color: "#0B2F6B", fontWeight: "900" },
+  endText: { marginTop: 10, textAlign: "center", color: "#60708A", fontWeight: "800" }
 });

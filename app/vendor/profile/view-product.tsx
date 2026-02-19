@@ -17,10 +17,12 @@ import {
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { VideoView, useVideoPlayer } from "expo-video";
-import { useAppSelector } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { setSelectedVendor } from "@/store/vendorSlice";
 
 const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
+const FOOTER_H = 86;
 
 // Assumed lookup table names (adjust if your Supabase uses different names)
 const LOOKUP = {
@@ -32,17 +34,39 @@ const LOOKUP = {
   wearStates: "wear_states"
 } as const;
 
+type VendorRow = {
+  id: string | number;
+  name?: string | null;
+  shop_name?: string | null;
+  address?: string | null;
+  mobile?: string | null;
+  landline?: string | null;
+  email?: string | null;
+  location?: string | null;
+  location_url?: string | null;
+  profile_image_path?: string | null;
+  banner_path?: string | null;
+  status?: string | null;
+};
+
 type ProductRow = {
   id: string;
   vendor_id: string | number;
   product_code: string;
   title: string;
   inventory_qty: number;
+
+  // ✅ NEW DB column
+  made_on_order?: boolean;
+
   spec: any;
   price: any;
   media: any;
   created_at?: string | null;
   updated_at?: string | null;
+
+  // join alias
+  vendor?: VendorRow | null;
 };
 
 function safeText(v: any) {
@@ -106,28 +130,28 @@ function normalizeIdList(v: any): string[] {
 export default function ViewProductScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const dispatch = useAppDispatch();
 
+  // (Optional) current vendor session id (safe)
   const vendorId =
-    useAppSelector((s: any) => s?.vendorSlice?.vendor?.id ?? null) ??
-    useAppSelector((s: any) => s?.vendor?.id ?? null);
+    useAppSelector((s: any) => s?.vendor?.id ?? null) ??
+    useAppSelector((s: any) => s?.vendorSlice?.id ?? null) ??
+    useAppSelector((s: any) => s?.vendorSlice?.vendor?.id ?? null);
 
   // Accept either ?id=uuid OR ?code=V15-P0010 (also tolerate product_id/product_code)
   const productId = useMemo(() => {
-    const raw = firstParam(
-      (params as any)?.id ?? (params as any)?.product_id ?? null
-    );
+    const raw = firstParam((params as any)?.id ?? (params as any)?.product_id ?? null);
     return raw ? decodeURIComponent(raw) : null;
   }, [params]);
 
   const productCode = useMemo(() => {
-    const raw = firstParam(
-      (params as any)?.code ?? (params as any)?.product_code ?? null
-    );
+    const raw = firstParam((params as any)?.code ?? (params as any)?.product_code ?? null);
     return raw ? decodeURIComponent(raw) : null;
   }, [params]);
 
   const [loading, setLoading] = useState(false);
   const [product, setProduct] = useState<ProductRow | null>(null);
+  const [vendorRow, setVendorRow] = useState<VendorRow | null>(null);
   const [missingParam, setMissingParam] = useState(false);
 
   // resolved labels (names) for spec ids
@@ -168,9 +192,7 @@ export default function ViewProductScreen() {
   const resolveManyPublic = useCallback(
     (paths: any): string[] => {
       const list = Array.isArray(paths) ? paths : [];
-      return list
-        .map((p) => resolvePublicUrl(String(p || "").trim()))
-        .filter(Boolean) as string[];
+      return list.map((p) => resolvePublicUrl(String(p || "").trim())).filter(Boolean) as string[];
     },
     [resolvePublicUrl]
   );
@@ -214,10 +236,7 @@ export default function ViewProductScreen() {
 
     const t = setTimeout(() => {
       try {
-        flatListRef.current?.scrollToIndex({
-          index: currentIndex,
-          animated: false
-        });
+        flatListRef.current?.scrollToIndex({ index: currentIndex, animated: false });
       } catch {
         // ignore
       }
@@ -262,6 +281,7 @@ export default function ViewProductScreen() {
     if (!productId && !productCode) {
       setMissingParam(true);
       setProduct(null);
+      setVendorRow(null);
       return;
     }
 
@@ -269,20 +289,40 @@ export default function ViewProductScreen() {
       setMissingParam(false);
       setLoading(true);
 
-      let q = supabase.from("products").select(
-        [
-          "id",
-          "vendor_id",
-          "product_code",
-          "title",
-          "inventory_qty",
-          "spec",
-          "price",
-          "media",
-          "created_at",
-          "updated_at"
-        ].join(",")
-      );
+      // IMPORTANT: include vendor join so we can store vendor details in redux
+      let q = supabase
+        .from("products")
+        .select(
+          `
+          id,
+          vendor_id,
+          product_code,
+          title,
+          inventory_qty,
+
+          made_on_order,
+
+          spec,
+          price,
+          media,
+          created_at,
+          updated_at,
+          vendor:vendor_id (
+            id,
+            name,
+            shop_name,
+            address,
+            mobile,
+            landline,
+            email,
+            location,
+            location_url,
+            profile_image_path,
+            banner_path,
+            status
+          )
+        `
+        );
 
       if (productId) q = q.eq("id", productId);
       else q = q.eq("product_code", productCode);
@@ -292,43 +332,67 @@ export default function ViewProductScreen() {
       if (error) {
         Alert.alert("Load error", error.message);
         setProduct(null);
+        setVendorRow(null);
         return;
       }
 
-      setProduct(data as ProductRow);
+      const row = data as ProductRow;
+      setProduct(row);
+
+      const v = (row as any)?.vendor ?? null;
+      setVendorRow(v);
+
+      // Push vendor details into redux so purchase flow can access it reliably.
+      if (v && (v as any).id != null) {
+        const banner_url = resolvePublicUrl((v as any).banner_path ?? null);
+
+        dispatch(
+          setSelectedVendor({
+            shop_name: (v as any).shop_name ?? null,
+            owner_name: (v as any).name ?? null,
+
+            mobile: (v as any).mobile ?? null,
+            landline: (v as any).landline ?? null,
+
+            address: (v as any).address ?? null,
+            location_url: (v as any).location_url ?? null,
+
+            banner_url: banner_url ?? null,
+
+            government_permission_url: null,
+            images: null,
+            videos: null,
+
+            status: (v as any).status ?? null
+          } as any)
+        );
+      }
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not load product.");
       setProduct(null);
+      setVendorRow(null);
     } finally {
       setLoading(false);
     }
   }
 
   // resolve ids -> names (Dress Type etc.)
-  const resolveNamesByIds = useCallback(
-    async (table: string, ids: string[]): Promise<string[]> => {
-      const clean = ids.map((x) => String(x).trim()).filter(Boolean);
-      if (!clean.length) return [];
+  const resolveNamesByIds = useCallback(async (table: string, ids: string[]): Promise<string[]> => {
+    const clean = ids.map((x) => String(x).trim()).filter(Boolean);
+    if (!clean.length) return [];
 
-      const { data, error } = await supabase
-        .from(table)
-        .select("id, name")
-        .in("id", clean);
+    const { data, error } = await supabase.from(table).select("id, name").in("id", clean);
+    if (error || !data) return [];
 
-      if (error || !data) return [];
+    const map = new Map<string, string>();
+    for (const r of data as any[]) {
+      const id = String(r?.id ?? "").trim();
+      const name = String(r?.name ?? "").trim();
+      if (id && name) map.set(id, name);
+    }
 
-      const map = new Map<string, string>();
-      for (const r of data as any[]) {
-        const id = String(r?.id ?? "").trim();
-        const name = String(r?.name ?? "").trim();
-        if (id && name) map.set(id, name);
-      }
-
-      // keep original order
-      return clean.map((id) => map.get(id) ?? id);
-    },
-    []
-  );
+    return clean.map((id) => map.get(id) ?? id);
+  }, []);
 
   const resolveColorNames = useCallback((ids: any): string[] => {
     const list = normalizeIdList(ids);
@@ -368,31 +432,23 @@ export default function ViewProductScreen() {
         return;
       }
 
-      const dressTypeIds =
-        normalizeIdList(spec?.dressTypeIds ?? spec?.dressTypes ?? []);
-      const fabricTypeIds =
-        normalizeIdList(spec?.fabricTypeIds ?? spec?.fabricTypes ?? []);
-      const workTypeIds =
-        normalizeIdList(spec?.workTypeIds ?? spec?.workTypes ?? []);
-      const densityIds =
-        normalizeIdList(spec?.workDensityIds ?? spec?.workDensities ?? []);
-      const originIds =
-        normalizeIdList(spec?.originCityIds ?? spec?.originCities ?? []);
-      const wearIds =
-        normalizeIdList(spec?.wearStateIds ?? spec?.wearStates ?? []);
-      const colorIds =
-        normalizeIdList(spec?.colorShadeIds ?? spec?.colorShades ?? []);
+      const dressTypeIds = normalizeIdList(spec?.dressTypeIds ?? spec?.dressTypes ?? []);
+      const fabricTypeIds = normalizeIdList(spec?.fabricTypeIds ?? spec?.fabricTypes ?? []);
+      const workTypeIds = normalizeIdList(spec?.workTypeIds ?? spec?.workTypes ?? []);
+      const densityIds = normalizeIdList(spec?.workDensityIds ?? spec?.workDensities ?? []);
+      const originIds = normalizeIdList(spec?.originCityIds ?? spec?.originCities ?? []);
+      const wearIds = normalizeIdList(spec?.wearStateIds ?? spec?.wearStates ?? []);
+      const colorIds = normalizeIdList(spec?.colorShadeIds ?? spec?.colorShades ?? []);
 
       try {
-        const [dressType, fabric, work, density, origin, wear] =
-          await Promise.all([
-            resolveNamesByIds(LOOKUP.dressTypes, dressTypeIds),
-            resolveNamesByIds(LOOKUP.fabricTypes, fabricTypeIds),
-            resolveNamesByIds(LOOKUP.workTypes, workTypeIds),
-            resolveNamesByIds(LOOKUP.workDensities, densityIds),
-            resolveNamesByIds(LOOKUP.originCities, originIds),
-            resolveNamesByIds(LOOKUP.wearStates, wearIds)
-          ]);
+        const [dressType, fabric, work, density, origin, wear] = await Promise.all([
+          resolveNamesByIds(LOOKUP.dressTypes, dressTypeIds),
+          resolveNamesByIds(LOOKUP.fabricTypes, fabricTypeIds),
+          resolveNamesByIds(LOOKUP.workTypes, workTypeIds),
+          resolveNamesByIds(LOOKUP.workDensities, densityIds),
+          resolveNamesByIds(LOOKUP.originCities, originIds),
+          resolveNamesByIds(LOOKUP.wearStates, wearIds)
+        ]);
 
         const color = resolveColorNames(colorIds);
 
@@ -477,19 +533,37 @@ export default function ViewProductScreen() {
     return t ? `PKR ${t} (total)` : "—";
   }, [product]);
 
+  const priceTotalForParams = useMemo(() => {
+    const price = (product as any)?.price ?? {};
+    const mode = String(price?.mode ?? "");
+    if (mode === "unstitched_per_meter") {
+      const v = price?.cost_pkr_per_meter;
+      return v ? String(v) : "";
+    }
+    const t = price?.cost_pkr_total;
+    return t ? String(t) : "";
+  }, [product]);
+
   const sizeText = useMemo(() => {
     const price = (product as any)?.price ?? {};
-    const sizes = Array.isArray(price?.available_sizes)
-      ? price.available_sizes
-      : [];
+    const sizes = Array.isArray(price?.available_sizes) ? price.available_sizes : [];
     return sizes.length ? sizes.join(", ") : "—";
   }, [product]);
 
   const inventoryText = useMemo(() => {
+    const made =
+      Boolean((product as any)?.made_on_order) || Boolean((product as any)?.spec?.made_on_order);
+
+    if (made) return "Made on order";
+
     const n = Number((product as any)?.inventory_qty ?? 0);
     if (!Number.isFinite(n)) return "—";
-    if (n === 0) return "Made on order";
     return String(n);
+  }, [product]);
+
+  const moreDescriptionText = useMemo(() => {
+    const spec = (product as any)?.spec ?? {};
+    return safeText(spec?.more_description ?? "");
   }, [product]);
 
   const videoTiles = useMemo(() => {
@@ -500,17 +574,67 @@ export default function ViewProductScreen() {
     }));
   }, [videoUrls, thumbUrls]);
 
+  // ✅ Detect if current viewer is the product's own vendor
+  const isVendorSelf = useMemo(() => {
+    if (!vendorId) return false;
+    if (!product?.vendor_id) return false;
+    return String(product.vendor_id) === String(vendorId);
+  }, [vendorId, product?.vendor_id]);
+
+  // ✅ Only show Vendor card + View button + Purchase button for non-vendor viewers
+  const showBuyerActions = !isVendorSelf;
+
+  // start purchase flow
+  const onPurchase = useCallback(() => {
+    if (!product) return;
+
+    // pick best image to show during checkout
+    const imageUrl = bannerUrl || (imageUrls.length ? imageUrls[0] : "");
+
+    router.push({
+      pathname: "/purchase/size",
+      params: {
+        returnTo: "/purchase/place-order",
+
+        // product params forwarded
+        productId: String(product.id),
+        productCode: String(product.product_code || ""),
+        productName: String(product.title || ""),
+        currency: "PKR",
+        price: priceTotalForParams,
+        imageUrl
+      }
+    });
+  }, [router, product, bannerUrl, imageUrls, priceTotalForParams]);
+
+  const onViewVendorProfile = useCallback(() => {
+    const vId = (vendorRow as any)?.id ?? null;
+    if (!vId) {
+      Alert.alert("Vendor not found", "This product has no vendor attached.");
+      return;
+    }
+
+    router.push({
+      pathname: "/(buyer)/view-profile",
+      params: { vendorId: String(vId) }
+    });
+  }, [router, vendorRow]);
+
+  const purchaseDisabled = !product || loading || missingParam;
+
   return (
     <View style={{ flex: 1, backgroundColor: stylesVars.bg }}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: 24 + (showBuyerActions ? FOOTER_H : 0) }
+        ]}
+      >
         <View style={styles.headerRow}>
           <Text style={styles.title}>Product Details</Text>
           <Pressable
             onPress={() => router.back()}
-            style={({ pressed }) => [
-              styles.linkBtn,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.linkBtn, pressed ? styles.pressed : null]}
           >
             <Text style={styles.linkText}>Close</Text>
           </Pressable>
@@ -524,18 +648,6 @@ export default function ViewProductScreen() {
               {"\n"}• /vendor/profile/view-product?id=UUID
               {"\n"}• /vendor/profile/view-product?code=V15-P0010
             </Text>
-
-            <Text style={[styles.meta, { marginTop: 8 }]} selectable>
-              Example:
-              {"\n"}
-              {
-                'router.push({ pathname: "/vendor/profile/view-product", params: { id: product.id } })'
-              }
-              {"\n"}
-              {
-                'router.push({ pathname: "/vendor/profile/view-product", params: { code: product.product_code } })'
-              }
-            </Text>
           </View>
         ) : null}
 
@@ -546,26 +658,45 @@ export default function ViewProductScreen() {
           </View>
         )}
 
-        {!!vendorId &&
-        !!product?.vendor_id &&
-        String(product.vendor_id) !== String(vendorId) ? (
+        {!!vendorId && !!product?.vendor_id && String(product.vendor_id) !== String(vendorId) ? (
           <Text style={styles.warn}>
-            Note: This product belongs to a different vendor_id than the current
-            vendor session.
+            Note: This product belongs to a different vendor_id than the current vendor session.
           </Text>
         ) : null}
 
         {!!bannerUrl && (
           <Pressable
             onPress={() => openViewerAt(0)}
-            style={({ pressed }) => [
-              styles.bannerWrap,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.bannerWrap, pressed ? styles.pressed : null]}
           >
             <Image source={{ uri: bannerUrl }} style={styles.bannerImage} />
           </Pressable>
         )}
+
+        {/* ✅ Vendor card (ONLY for non-vendor viewers) */}
+        {showBuyerActions ? (
+          <View style={styles.card}>
+            <View style={styles.vendorHeaderRow}>
+              <Text style={styles.sectionTitle}>Vendor</Text>
+
+              <Pressable
+                onPress={onViewVendorProfile}
+                style={({ pressed }) => [styles.viewBtn, pressed ? styles.pressed : null]}
+              >
+                <Text style={styles.viewBtnText}>View</Text>
+              </Pressable>
+            </View>
+
+            {/* ✅ Vendor Name above + Shop Name below */}
+            <Field label="Vendor Name" value={vendorRow?.name ?? "—"} />
+            <Field label="Shop Name" value={vendorRow?.shop_name ?? "—"} />
+
+            <Field label="Mobile" value={vendorRow?.mobile ?? "—"} />
+            <Field label="Address" value={vendorRow?.address ?? "—"} />
+
+            {/* ✅ removed location / open location button */}
+          </View>
+        ) : null}
 
         <View style={styles.card}>
           <Field label="Product Code" value={product?.product_code} />
@@ -578,7 +709,6 @@ export default function ViewProductScreen() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Product Description</Text>
 
-          {/* Prefer resolved names; fallback to whatever is in spec */}
           <ChipRow
             title="Dress Type"
             items={
@@ -649,6 +779,14 @@ export default function ViewProductScreen() {
                   (product as any)?.spec?.wearStateIds
             }
           />
+
+          {/* ✅ NEW: free text description from Add Product */}
+          {safeText((product as any)?.spec?.more_description ?? "").trim() !== "—" ? (
+            <View style={{ marginTop: 12 }}>
+              <Text style={styles.specTitle}>More Description</Text>
+              <Text style={styles.moreDescText}>{moreDescriptionText}</Text>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.card}>
@@ -664,10 +802,7 @@ export default function ViewProductScreen() {
                     <Pressable
                       key={`${u}-${idx}`}
                       onPress={() => openViewerAt(idx)}
-                      style={({ pressed }) => [
-                        styles.thumbWrap,
-                        pressed ? styles.pressed : null
-                      ]}
+                      style={({ pressed }) => [styles.thumbWrap, pressed ? styles.pressed : null]}
                     >
                       <Image source={{ uri: u }} style={styles.thumb} />
                       {idx === 0 ? (
@@ -701,9 +836,7 @@ export default function ViewProductScreen() {
                 </View>
               )}
 
-              <Text style={styles.meta}>
-                Tap a thumbnail to play. Long-press to open externally.
-              </Text>
+              <Text style={styles.meta}>Tap a thumbnail to play. Long-press to open externally.</Text>
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={styles.hRow}>
@@ -714,22 +847,15 @@ export default function ViewProductScreen() {
                       onLongPress={() => openExternal(t.videoUrl)}
                       style={({ pressed }) => [
                         styles.thumbWrap,
-                        selectedVideoUrl === t.videoUrl
-                          ? styles.videoThumbOn
-                          : null,
+                        selectedVideoUrl === t.videoUrl ? styles.videoThumbOn : null,
                         pressed ? styles.pressed : null
                       ]}
                     >
                       {t.thumbUrl ? (
-                        <Image
-                          source={{ uri: t.thumbUrl }}
-                          style={styles.thumb}
-                        />
+                        <Image source={{ uri: t.thumbUrl }} style={styles.thumb} />
                       ) : (
                         <View style={styles.videoPlaceholder}>
-                          <Text style={styles.videoPlaceholderText}>
-                            Video {t.idx + 1}
-                          </Text>
+                          <Text style={styles.videoPlaceholderText}>Video {t.idx + 1}</Text>
                         </View>
                       )}
 
@@ -753,12 +879,34 @@ export default function ViewProductScreen() {
         </View>
       </ScrollView>
 
+      {/* ✅ Sticky Purchase footer (ONLY for non-vendor viewers) */}
+      {showBuyerActions ? (
+        <View style={styles.footer}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.footerTitle} numberOfLines={1}>
+              {safeText(product?.title)}
+            </Text>
+            <Text style={styles.footerSub} numberOfLines={1}>
+              {safeText(priceText)}
+            </Text>
+          </View>
+
+          <Pressable
+            onPress={onPurchase}
+            disabled={purchaseDisabled}
+            style={({ pressed }) => [
+              styles.footerBtn,
+              purchaseDisabled ? styles.footerBtnDisabled : null,
+              pressed && !purchaseDisabled ? styles.pressed : null
+            ]}
+          >
+            <Text style={styles.footerBtnText}>Purchase</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       {/* Fullscreen Viewer (images only) */}
-      <Modal
-        visible={viewerVisible}
-        transparent
-        onRequestClose={() => setViewerVisible(false)}
-      >
+      <Modal visible={viewerVisible} transparent onRequestClose={() => setViewerVisible(false)}>
         <View style={styles.viewerContainer}>
           <FlatList
             ref={flatListRef}
@@ -766,32 +914,19 @@ export default function ViewProductScreen() {
             horizontal
             pagingEnabled
             keyExtractor={(_, i) => i.toString()}
-            getItemLayout={(_, i) => ({
-              length: width,
-              offset: width * i,
-              index: i
-            })}
-            initialScrollIndex={Math.max(
-              0,
-              Math.min(currentIndex, Math.max(0, gallery.length - 1))
-            )}
+            getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
+            initialScrollIndex={Math.max(0, Math.min(currentIndex, Math.max(0, gallery.length - 1)))}
             onScrollToIndexFailed={() => {
               // ignore
             }}
             onMomentumScrollEnd={(e) => {
-              const next =
-                Math.round(e.nativeEvent.contentOffset.x / width) || 0;
+              const next = Math.round(e.nativeEvent.contentOffset.x / width) || 0;
               setCurrentIndex(next);
             }}
-            renderItem={({ item }) => (
-              <Image source={{ uri: item }} style={styles.viewerImage} />
-            )}
+            renderItem={({ item }) => <Image source={{ uri: item }} style={styles.viewerImage} />}
           />
 
-          <Pressable
-            style={styles.closeButton}
-            onPress={() => setViewerVisible(false)}
-          >
+          <Pressable style={styles.closeButton} onPress={() => setViewerVisible(false)}>
             <Text style={styles.closeText}>✕</Text>
           </Pressable>
 
@@ -815,11 +950,14 @@ const stylesVars = {
   blueSoft: "#EAF2FF",
   text: "#111111",
   subText: "#60708A",
-  placeholder: "#94A3B8"
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5"
 };
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 24, backgroundColor: stylesVars.bg },
+  content: { padding: 16, backgroundColor: stylesVars.bg },
 
   headerRow: {
     flexDirection: "row",
@@ -829,6 +967,16 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: "900", color: stylesVars.blue },
 
   linkBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: stylesVars.border
+  },
+  linkBtnInline: {
+    marginTop: 10,
+    alignSelf: "flex-start",
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 10,
@@ -979,6 +1127,63 @@ const styles = StyleSheet.create({
     fontSize: 12,
     maxWidth: 220
   },
+
+  // ✅ NEW: more description text style
+  moreDescText: {
+    marginTop: 6,
+    fontSize: 13,
+    fontWeight: "800",
+    color: stylesVars.text,
+    opacity: 0.9,
+    lineHeight: 18
+  },
+
+  // ✅ Vendor header + View button top-right
+  vendorHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between"
+  },
+  viewBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: stylesVars.dangerSoft,
+    borderWidth: 1,
+    borderColor: stylesVars.dangerBorder
+  },
+  viewBtnText: { color: stylesVars.danger, fontWeight: "900" },
+
+  // ✅ Sticky footer
+  footer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: FOOTER_H,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 18,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: stylesVars.border,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12
+  },
+  footerTitle: { fontSize: 13, fontWeight: "900", color: stylesVars.text },
+  footerSub: { marginTop: 4, fontSize: 12, fontWeight: "800", color: stylesVars.subText },
+
+  footerBtn: {
+    backgroundColor: stylesVars.blue,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  footerBtnDisabled: { opacity: 0.5 },
+  footerBtnText: { color: "#fff", fontWeight: "900", fontSize: 14 },
 
   viewerContainer: {
     flex: 1,

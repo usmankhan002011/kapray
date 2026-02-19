@@ -8,7 +8,7 @@ import {
   Text,
   View
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { getWorkDensities, WorkDensityItem } from "@/utils/supabase/workDensity";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearWorkDensities, toggleWorkDensity } from "@/store/filtersSlice";
@@ -31,6 +31,7 @@ const IMAGE_H = Math.round(CARD_W * 1.35); // increase/decrease this multiplier 
 
 export default function WorkDensityScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const dispatch = useAppDispatch();
 
   const selected = useAppSelector((s) => s.filters.workDensityIds);
@@ -41,6 +42,9 @@ export default function WorkDensityScreen() {
   const [err, setErr] = useState<string | null>(null);
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
+
+  const from = String((params as any)?.from ?? "").trim();
+  const fromResultsFilters = from === "results-filters";
 
   useEffect(() => {
     let alive = true;
@@ -71,8 +75,9 @@ export default function WorkDensityScreen() {
       title={`Work Density${dressTypeId ? "" : " (Dress type not set)"}`}
       onBack={() => router.back()}
       onAny={() => dispatch(clearWorkDensities())}
-    onNext={() => router.push("/origin-city")}
-
+      onNext={() =>
+        fromResultsFilters ? router.back() : router.push("/origin-city")
+      }
     >
       <Text style={styles.heading}>Select Work Density</Text>
 

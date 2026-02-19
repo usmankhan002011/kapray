@@ -1,46 +1,29 @@
-import React, { useState } from "react";
+import React from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import ViewProfile from "./view-profile";
 
 export default function VendorSettingsScreen() {
   const router = useRouter();
-  const [showProfile, setShowProfile] = useState(false);
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      {!showProfile ? (
-        <>
-          <Text style={styles.title}>Vendor Settings</Text>
+      <Text style={styles.title}>Vendor Settings</Text>
 
-          <View style={styles.card}>
-            <Text
-              style={styles.action}
-              onPress={() => setShowProfile(true)}
-            >
-              View Profile
-            </Text>
+      <View style={styles.card}>
+        <Text
+          style={styles.action}
+          onPress={() => router.push("/vendor/profile/view-profile")}
+        >
+          View Profile
+        </Text>
 
-            <Text
-              style={styles.action}
-              onPress={() => router.push("/vendor/profile/update")}
-            >
-              Update Vendor / Shop
-            </Text>
-          </View>
-        </>
-      ) : (
-        <>
-          <Text
-            style={styles.back}
-            onPress={() => setShowProfile(false)}
-          >
-            ? Back to Settings
-          </Text>
-
-          <ViewProfile />
-        </>
-      )}
+        <Text
+          style={styles.action}
+          onPress={() => router.push("/vendor/profile/edit-vendor")}
+        >
+          Edit Vendor
+        </Text>
+      </View>
     </ScrollView>
   );
 }
@@ -61,13 +44,6 @@ const styles = StyleSheet.create({
   action: {
     marginTop: 12,
     fontSize: 16,
-    fontWeight: "900",
-    color: "#005ea6"
-  },
-
-  back: {
-    marginTop: 12,
-    fontSize: 14,
     fontWeight: "900",
     color: "#005ea6"
   }

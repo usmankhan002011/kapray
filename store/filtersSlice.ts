@@ -12,6 +12,9 @@ export type FiltersState = {
   originCityIds: Multi;
   wearStateIds: Multi;
   priceBandIds: Multi;
+
+  // ✅ Vendors (multi-select). Empty = ANY
+  vendorIds: Multi;
 };
 
 const initialState: FiltersState = {
@@ -23,7 +26,10 @@ const initialState: FiltersState = {
   workDensityIds: [],
   originCityIds: [],
   wearStateIds: [],
-  priceBandIds: []
+  priceBandIds: [],
+
+  // ✅ Vendors
+  vendorIds: []
 };
 
 // empty array = ANY
@@ -48,6 +54,8 @@ const filtersSlice = createSlice({
       state.originCityIds = [];
       state.wearStateIds = [];
       state.priceBandIds = [];
+
+      // ✅ vendorIds intentionally NOT reset
     },
 
     clearFabricTypes: (state) => {
@@ -97,6 +105,17 @@ const filtersSlice = createSlice({
     },
     togglePriceBand: (state, action: PayloadAction<string>) => {
       state.priceBandIds = toggleId(state.priceBandIds, action.payload);
+    },
+
+    // ✅ Vendors
+    clearVendors: (state) => {
+      state.vendorIds = [];
+    },
+    toggleVendor: (state, action: PayloadAction<string>) => {
+      state.vendorIds = toggleId(state.vendorIds, action.payload);
+    },
+    setVendorIds: (state, action: PayloadAction<string[]>) => {
+      state.vendorIds = action.payload ?? [];
     }
   }
 });
@@ -124,7 +143,12 @@ export const {
   toggleWearState,
 
   clearPriceBands,
-  togglePriceBand
+  togglePriceBand,
+
+  // ✅ Vendors
+  clearVendors,
+  toggleVendor,
+  setVendorIds
 } = filtersSlice.actions;
 
 export default filtersSlice.reducer;

@@ -107,7 +107,7 @@ export default function Wizard({ onClose }: Props) {
           dispatch(setDressTypeId(Number.isNaN(idNum) ? null : idNum));
 
           if (onClose) onClose(); // ✅ fix
-          router.push("/fabric");
+          router.replace("/results"); // ✅ go directly to results
         }}
       />
     </View>

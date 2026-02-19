@@ -45,9 +45,16 @@ export default function VendorIndexScreen() {
         return;
       }
 
-      dispatch(setSelectedVendor(data as any));
-      router.replace("/vendor/profile/settings");
+      // ✅ IMPORTANT: store the full vendor row so existing screens that rely on
+      // profile_image_path/banner_path/shop_image_paths/shop_video_paths keep working.
+      dispatch(
+        setSelectedVendor({
+          ...(data as any),
+          id: Number((data as any).id)
+        })
+      );
 
+      router.replace("/vendor/profile/settings");
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Something went wrong.");
     } finally {
@@ -67,10 +74,10 @@ export default function VendorIndexScreen() {
           value={vendorIdInput}
           onChangeText={setVendorIdInput}
           keyboardType="numeric"
-          placeholder="e.g. 20"
+          placeholder="e.g. 15"
           placeholderTextColor="#777"
         />
- 
+
         <Text
           style={[styles.button, loading && styles.disabled]}
           onPress={loading ? undefined : handleOpenVendor}

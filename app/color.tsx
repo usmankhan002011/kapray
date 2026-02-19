@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearColorShades, toggleColorShade } from "@/store/filtersSlice";
 import StandardFilterDisplay from "@/components/ui/StandardFilterDisplay";
@@ -27,6 +27,7 @@ const H_PADDING = 12;
 
 export default function ColorScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const dispatch = useAppDispatch();
 
   const selected = useAppSelector((s) => s.filters.colorShadeIds);
@@ -34,12 +35,15 @@ export default function ColorScreen() {
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
 
+  const from = String((params as any)?.from ?? "").trim();
+  const fromResultsFilters = from === "results-filters";
+
   return (
     <StandardFilterDisplay
       title={`Color${dressTypeId ? "" : " (Dress type not set)"}`}
       onBack={() => router.back()}
       onAny={() => dispatch(clearColorShades())}
-      onNext={() => router.push("/work")}
+      onNext={() => (fromResultsFilters ? router.back() : router.push("/work"))}
     >
       <Text style={styles.heading}>Select Color Shades</Text>
 
