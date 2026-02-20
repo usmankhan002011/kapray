@@ -4,7 +4,7 @@
     "slug": "clothing-app",
     "version": "0.1.0",
     "orientation": "portrait",
-    "icon": "./assets/images/appLogo.png",
+    "icon": "",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -12,13 +12,13 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.anonymous.sportsappmarkhors",
+      "package": "com.anonymous.kapray",
       "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/completeLogo.png"
     },
     "plugins": [
       "expo-router",

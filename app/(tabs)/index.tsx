@@ -1,26 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
-import {
-  FlatList,
-  Image,
-  Modal,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import { Wizard } from "../wizard";
-import { products } from "./products";
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import Wizard from "../wizard";
 
 export default function HomeScreen() {
   const [wizardVisible, setWizardVisible] = useState(false);
-  const [productList, setProductList] = useState(products);
 
   return (
     <View style={styles.container}>
       {/* Header with search button */}
       <View style={styles.header}>
-        <Text style={styles.title}>Products</Text>
+        <Text style={styles.title}>Kapray</Text>
         <TouchableOpacity
           onPress={() => setWizardVisible(true)}
           style={styles.searchButton}
@@ -29,26 +19,9 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Product List */}
-      <FlatList
-        data={products}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Image
-              source={{ uri: item.image }}
-              style={styles.image}
-              resizeMode="cover"
-            />
-            <View style={styles.cardText}>
-              <Text style={styles.productName}>{item.name}</Text>
-              <Text style={styles.productDesc}>{item.description}</Text>
-            </View>
-          </View>
-        )}
-        showsVerticalScrollIndicator={false}
-      />
+      <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
+        <Text>Use search to select filters.</Text>
+      </View>
 
       {/* Wizard Modal */}
       <Modal
@@ -71,63 +44,30 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f7f7f7",
-    paddingTop: 40,
+    paddingTop: 40
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    marginBottom: 10,
+    marginBottom: 10
   },
   title: {
     fontSize: 28,
     fontWeight: "bold",
-    color: "#222",
+    color: "#222"
   },
   searchButton: {
     padding: 6,
     borderRadius: 20,
-    backgroundColor: "#e0e0e0",
-  },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-  },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 14,
-    marginBottom: 20,
-    overflow: "hidden",
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  image: {
-    width: "100%",
-    height: 180,
-    backgroundColor: "#eee",
-  },
-  cardText: {
-    padding: 16,
-  },
-  productName: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 4,
-    color: "#222",
-  },
-  productDesc: {
-    fontSize: 14,
-    color: "#666",
+    backgroundColor: "#e0e0e0"
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.3)",
     justifyContent: "center",
-    alignItems: "center",
+    alignItems: "center"
   },
   modalContent: {
     width: "100%",
@@ -139,13 +79,13 @@ const styles = StyleSheet.create({
     shadowColor: "#000",
     shadowOpacity: 0.15,
     shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 4 }
   },
   closeButton: {
     marginTop: 24,
     backgroundColor: "#222",
     paddingHorizontal: 24,
     paddingVertical: 10,
-    borderRadius: 8,
-  },
+    borderRadius: 8
+  }
 });

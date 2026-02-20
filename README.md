@@ -48,3 +48,231 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+-------------------------------------------------------------------------------------------
+npx expo run:android
+
+-------------------------------------------------------------------------------------------
+& {
+  Set-Location "C:\DEV\kapray\kapray"
+
+  function Show-CustomTree {
+    param(
+      [string]$Path = ".",
+      [string]$Prefix = "",
+      [int]$Level = 0,
+      [int]$MaxDepth = 8,
+      [string[]]$Exclude = @(
+        "node_modules","android","ios",".git",".expo","build","web-build",
+        ".yarn",".pnpm-store",".turbo","dist","coverage",".next",".output",".cache"
+      )
+    )
+
+    $resolved = (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path
+
+    if ($Level -eq 0) {
+      Write-Output (Split-Path -Leaf $resolved)
+    }
+
+    if ($Level -ge $MaxDepth) { return }
+
+    $items = @(
+      Get-ChildItem -LiteralPath $resolved -Force -ErrorAction SilentlyContinue |
+        Where-Object { $Exclude -notcontains $_.Name } |
+        Sort-Object @{ Expression = { $_.PSIsContainer }; Descending = $true },
+                    @{ Expression = { $_.Name }; Ascending = $true }
+    )
+
+    for ($idx = 0; $idx -lt $items.Count; $idx++) {
+      $item = $items[$idx]
+      $isLast = ($idx -eq $items.Count - 1)
+
+      $branch = if ($isLast) { "└── " } else { "├── " }
+      Write-Output ("{0}{1}{2}" -f $Prefix, $branch, $item.Name)
+
+      if ($item.PSIsContainer) {
+        $nextPrefix = $Prefix + $(if ($isLast) { "    " } else { "│   " })
+        Show-CustomTree -Path $item.FullName -Prefix $nextPrefix -Level ($Level + 1) -MaxDepth $MaxDepth -Exclude $Exclude
+      }
+    }
+  }
+
+  Show-CustomTree -Path "." -MaxDepth 8 | Tee-Object -FilePath ".\tree.txt"
+}
+
+kapray
+├── .idea
+│   ├── caches
+│   │   └── deviceStreaming.xml
+│   ├── kapray.iml
+│   ├── misc.xml
+│   ├── modules.xml
+│   ├── vcs.xml
+│   └── workspace.xml
+├── .vscode
+│   ├── .react
+│   ├── extensions.json
+│   └── settings.json
+├── app
+│   ├── (buyer)
+│   │   ├── view-product.tsx
+│   │   └── view-profile.tsx
+│   ├── (tabs)
+│   │   ├── _layout.tsx
+│   │   ├── index.tsx
+│   │   └── shops.tsx
+│   ├── couriers
+│   │   ├── (modals)
+│   │   │   ├── _layout.tsx
+│   │   │   └── courier-list_modal.tsx
+│   │   └── index.tsx
+│   ├── orders
+│   │   ├── [id].tsx
+│   │   └── index.tsx
+│   ├── purchase
+│   │   ├── _layout.tsx
+│   │   ├── cart.tsx
+│   │   ├── payment.tsx
+│   │   ├── place-order.tsx
+│   │   └── size.tsx
+│   ├── tailors
+│   │   ├── (modals)
+│   │   │   ├── _layout.tsx
+│   │   │   └── tailor-list_modal.tsx
+│   │   └── index.tsx
+│   ├── vendor
+│   │   ├── profile
+│   │   │   ├── (product-modals)
+│   │   │   │   ├── _layout.tsx
+│   │   │   │   ├── color_modal.tsx
+│   │   │   │   ├── dress-type_modal.tsx
+│   │   │   │   ├── fabric_modal.tsx
+│   │   │   │   ├── origin-city_modal.tsx
+│   │   │   │   ├── wear-state_modal.tsx
+│   │   │   │   ├── work_modal.tsx
+│   │   │   │   └── work-density_modal.tsx
+│   │   │   ├── _layout.tsx
+│   │   │   ├── add-product.tsx
+│   │   │   ├── edit-vendor.tsx
+│   │   │   ├── index.tsx
+│   │   │   ├── products.tsx
+│   │   │   ├── settings.tsx
+│   │   │   ├── update-product.tsx
+│   │   │   ├── view-product.tsx
+│   │   │   └── view-profile.tsx
+│   │   ├── confirmation.tsx
+│   │   ├── create-shop.tsx
+│   │   └── index.tsx
+│   ├── _layout.tsx
+│   ├── color.tsx
+│   ├── fabric.tsx
+│   ├── index.tsx
+│   ├── modal.tsx
+│   ├── origin-city.tsx
+│   ├── price-band.tsx
+│   ├── results.tsx
+│   ├── results-filters.tsx
+│   ├── vendor-search.tsx
+│   ├── wear-state.tsx
+│   ├── wizard.tsx
+│   ├── work.tsx
+│   └── work-density.tsx
+├── assets
+│   ├── fabric-types-images
+│   │   ├── CHIFFON.jpg
+│   │   ├── GEORGETTE.jpg
+│   │   ├── JAMAWAR.jpg
+│   │   ├── NET.jpg
+│   │   ├── ORGANZA.jpg
+│   │   ├── SILK.jpg
+│   │   ├── TISSUE.jpg
+│   │   └── VELVET.jpg
+│   ├── images
+│   │   └── completeLogo.png
+│   ├── origin-images
+│   │   ├── Bahawalpur.jpg
+│   │   ├── Faisalabad_labeled.jpg
+│   │   ├── Hyderabad.jpg
+│   │   ├── Karachi.jpg
+│   │   ├── Lahore.jpg
+│   │   ├── Multan.jpg
+│   │   ├── Peshawar.jpg
+│   │   └── Rawalpindi.jpg
+│   ├── work-density-images
+│   │   ├── extra-heavy.jpg
+│   │   ├── heavy.jpg
+│   │   ├── light.png
+│   │   └── medium.jpg
+│   ├── work-images
+│   │   ├── designer.jpg
+│   │   ├── gotta.jpg
+│   │   ├── machine.jpg
+│   │   ├── mirror.jpg
+│   │   ├── sequin.jpg
+│   │   ├── stone.jpg
+│   │   ├── thread.jpg
+│   │   └── zardozi.jpg
+│   ├── filter funnel emoji.jpg
+│   └── sizes outline.jpg
+├── components
+│   ├── product
+│   │   └── ProductDraftContext.tsx
+│   ├── ui
+│   │   ├── collapsible.tsx
+│   │   ├── icon-symbol.ios.tsx
+│   │   ├── icon-symbol.tsx
+│   │   ├── select-panel.tsx
+│   │   └── StandardFilterDisplay.tsx
+│   ├── external-link.tsx
+│   ├── haptic-tab.tsx
+│   ├── hello-wave.tsx
+│   ├── parallax-scroll-view.tsx
+│   ├── themed-text.tsx
+│   └── themed-view.tsx
+├── constants
+│   └── theme.ts
+├── data
+│   └── products.data.ts
+├── hooks
+│   ├── use-color-scheme.ts
+│   ├── use-color-scheme.web.ts
+│   └── use-theme-color.ts
+├── scripts
+│   └── reset-project.js
+├── store
+│   ├── filtersSlice.ts
+│   ├── hooks.ts
+│   ├── index.ts
+│   └── vendorSlice.ts
+├── utils
+│   └── supabase
+│       ├── client.ts
+│       ├── consumer.ts
+│       ├── dressType.ts
+│       ├── fabricType.ts
+│       ├── originCity.ts
+│       ├── priceBand.ts
+│       ├── product.ts
+│       ├── supabaseSecrets.ts
+│       ├── types.ts
+│       ├── vendor.ts
+│       ├── wearState.ts
+│       ├── workDensity.ts
+│       └── workType.ts
+├── .gitignore
+├── app.json
+├── eslint.config.js
+├── expo-env.d.ts
+├── package.json
+├── package-lock.json
+├── README.md
+├── tree.txt
+├── tree-app.txt
+└── tsconfig.json
+PS C:\DEV\kapray\kapray>
+as on 19feb26
+
+-------------------------------------------------------------------------------------------------------------
+strategy
+file lines < 200
+no special button or placeholder for the button. make text as button where required e.g., select, all etc>
+no placeholders. keeep the screen contents merged. no styling at this stage. keep styles minimum where required

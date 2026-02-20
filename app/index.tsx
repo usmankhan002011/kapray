@@ -13,9 +13,10 @@ export default function MainPage() {
       />
       <View style={{ height: 20 }} />
       <Button
-        title="Login as Venue"
-        onPress={() => router.push("/(tabs)?role=venue")}
+        title="Login as Vendor"
+        onPress={() => router.push("/vendor")}
       />
+
     </View>
   );
 }
@@ -25,11 +26,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: "#fff"
   },
   title: {
     fontSize: 24,
     fontWeight: "bold",
-    marginBottom: 40,
-  },
+    marginBottom: 40
+  }
 });
