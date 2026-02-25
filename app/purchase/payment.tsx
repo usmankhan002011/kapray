@@ -1,3 +1,4 @@
+// app/purchase/payment.tsx
 import React, { useMemo, useState } from "react";
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -40,9 +41,28 @@ type Params = {
   deliveryAddress?: string;
   city?: string;
   notes?: string;
+
+  // ✅ dyeing (buyer selection + vendor cost)
+  dye_shade_id?: string;
+  dye_hex?: string;
+  dye_label?: string;
+  dyeing_cost_pkr?: string;
+
+  // tolerate older key from modal
+  dyeing_selected_shade?: string;
 };
 
 const norm = (v: unknown) => (v == null ? "" : String(v).trim());
+
+function safeDecode(v: unknown) {
+  const s = norm(v);
+  if (!s) return "";
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
 
 export default function PaymentScreen() {
   const router = useRouter();
@@ -51,7 +71,9 @@ export default function PaymentScreen() {
 
   const data = useMemo(() => {
     const currency = norm(params.currency) || "PKR";
-    const price = norm(params.price);
+
+    // NOTE: place-order now passes total payable in params.price
+    const totalParam = norm(params.price);
 
     const mode = norm(params.mode) || "standard";
     const selectedSize = norm(params.selectedSize);
@@ -86,6 +108,23 @@ export default function PaymentScreen() {
 
     const vendorName = norm(params.vendorName) || norm(params.vendorShopName) || "Vendor";
 
+    // ✅ dyeing
+    const dyeShadeId = safeDecode(params.dye_shade_id);
+    const dyeHex = safeDecode(norm(params.dye_hex) || norm(params.dyeing_selected_shade));
+    const dyeLabel = safeDecode(params.dye_label);
+    const dyeingCostPkrRaw = safeDecode(params.dyeing_cost_pkr);
+
+    const hasDyeing = !!dyeHex || !!dyeShadeId;
+    const dyeCost = Number(dyeingCostPkrRaw || 0);
+    const safeDye = Number.isFinite(dyeCost) && dyeCost > 0 ? dyeCost : 0;
+
+    const totalPkrNum = Number(totalParam || 0);
+    const totalPkrSafe = Number.isFinite(totalPkrNum) && totalPkrNum > 0 ? totalPkrNum : 0;
+
+    // If shade selected, the totalParam should already include dyeing (from place-order).
+    // Still keep dye line for snapshot + UI.
+    const totalText = totalParam ? `${currency} ${totalParam}` : `${currency} —`;
+
     return {
       productId: norm(params.productId),
       productCode: norm(params.productCode),
@@ -93,7 +132,9 @@ export default function PaymentScreen() {
       imageUrl: norm(params.imageUrl),
 
       currency,
-      price,
+      totalParam,
+      totalText,
+      totalPkrSafe,
 
       vendorName,
 
@@ -108,7 +149,14 @@ export default function PaymentScreen() {
       mode,
       selectedSize,
       exactPairs,
-      sizeLine
+      sizeLine,
+
+      hasDyeing,
+      dyeShadeId,
+      dyeHex,
+      dyeLabel,
+      dyeingCostPkrRaw,
+      dyeCostPkr: hasDyeing ? safeDye : 0
     };
   }, [params]);
 
@@ -147,8 +195,20 @@ export default function PaymentScreen() {
       for (const [k, v] of data.exactPairs) exactMap[k] = v;
 
       const currency = data.currency || "PKR";
-      const totalPkr =
-        data.price && !Number.isNaN(Number(data.price)) ? Number(data.price) : null;
+
+      // ✅ total already includes dyeing when selected (from place-order)
+      const totalPkr = data.totalPkrSafe ? data.totalPkrSafe : null;
+
+      // ✅ merge dyeing fields into spec_snapshot (so Orders UI can access them)
+      const specSnapshot =
+        pRow.spec && typeof pRow.spec === "object" ? { ...(pRow.spec as any) } : {};
+
+      if (data.hasDyeing) {
+        (specSnapshot as any).dye_shade_id = data.dyeShadeId || "";
+        (specSnapshot as any).dye_hex = data.dyeHex || "";
+        (specSnapshot as any).dye_label = data.dyeLabel || "";
+        (specSnapshot as any).dyeing_cost_pkr = data.dyeCostPkr;
+      }
 
       const { data: oIns, error: oErr } = await supabase
         .from("orders")
@@ -167,7 +227,10 @@ export default function PaymentScreen() {
           product_id: productId,
           product_code_snapshot: productCode,
           title_snapshot: title,
-          spec_snapshot: pRow.spec ?? {},
+
+          // ✅ snapshot includes dye selection + dyeing cost when selected
+          spec_snapshot: specSnapshot,
+
           price_snapshot: pRow.price ?? {},
           media_snapshot: pRow.media ?? {},
 
@@ -225,12 +288,23 @@ export default function PaymentScreen() {
                 Vendor: <Text style={styles.metaStrong}>{data.vendorName}</Text>
               </Text>
 
+              {/* ✅ Total amount (already includes dyeing when selected) */}
               <Text style={styles.meta}>
                 Amount:{" "}
                 <Text style={styles.metaStrong}>
-                  {data.price ? `${data.currency} ${data.price}` : `${data.currency} —`}
+                  {data.totalParam ? `${data.currency} ${data.totalParam}` : `${data.currency} —`}
                 </Text>
               </Text>
+
+              {/* ✅ Dyeing cost line (only if selected) */}
+              {data.hasDyeing ? (
+                <Text style={styles.meta}>
+                  Dyeing:{" "}
+                  <Text style={styles.metaStrong}>
+                    {data.currency} {data.dyeCostPkr}
+                  </Text>
+                </Text>
+              ) : null}
             </View>
           </View>
 

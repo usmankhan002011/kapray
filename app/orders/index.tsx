@@ -27,6 +27,8 @@ type OrderRow = {
   product_code_snapshot: string;
   title_snapshot: string;
 
+  spec_snapshot: any;
+
   total_pkr: number | null;
   currency: string;
 };
@@ -35,10 +37,13 @@ function norm(v: unknown) {
   return (v == null ? "" : String(v)).trim().toLowerCase();
 }
 
+function safeText(v: any) {
+  const t = String(v ?? "").trim();
+  return t.length ? t : "—";
+}
+
 export default function OrdersIndexScreen() {
   const router = useRouter();
-
-  // ✅ vendor id comes from your vendor login flow (works for all vendors)
   const vendorIdFromStore = useAppSelector((s) => (s.vendor as any)?.id ?? null);
 
   const [loading, setLoading] = useState(true);
@@ -69,6 +74,7 @@ export default function OrdersIndexScreen() {
           city,
           product_code_snapshot,
           title_snapshot,
+          spec_snapshot,
           total_pkr,
           currency
         `
@@ -89,6 +95,7 @@ export default function OrdersIndexScreen() {
         city: String(o.city ?? ""),
         product_code_snapshot: String(o.product_code_snapshot ?? ""),
         title_snapshot: String(o.title_snapshot ?? ""),
+        spec_snapshot: o.spec_snapshot ?? {},
         total_pkr: o.total_pkr != null ? Number(o.total_pkr) : null,
         currency: String(o.currency ?? "PKR")
       }));
@@ -111,6 +118,12 @@ export default function OrdersIndexScreen() {
     if (!q) return rows;
 
     return rows.filter((r) => {
+      const spec = r.spec_snapshot && typeof r.spec_snapshot === "object" ? r.spec_snapshot : {};
+
+      // ✅ prefer hex so search can match if someone types it, but tolerate old field too
+      const dyeHex = safeText(spec?.dye_hex ?? spec?.dyeing_hex ?? "");
+      const dyeShadeLegacy = safeText(spec?.dyeing_selected_shade ?? "");
+
       const hay = [
         r.order_no ?? "",
         r.status,
@@ -118,7 +131,9 @@ export default function OrdersIndexScreen() {
         r.buyer_mobile,
         r.city,
         r.product_code_snapshot,
-        r.title_snapshot
+        r.title_snapshot,
+        dyeHex,
+        dyeShadeLegacy
       ]
         .join(" ")
         .toLowerCase();
@@ -130,11 +145,23 @@ export default function OrdersIndexScreen() {
   const renderItem = ({ item }: { item: OrderRow }) => {
     const orderNo = item.order_no || `Order #${item.id}`;
     const amount =
-      item.total_pkr != null ? `${item.currency} ${Number(item.total_pkr).toLocaleString()}` : `${item.currency} —`;
+      item.total_pkr != null
+        ? `${item.currency} ${Number(item.total_pkr).toLocaleString()}`
+        : `${item.currency} —`;
+
+    const spec = item.spec_snapshot && typeof item.spec_snapshot === "object" ? item.spec_snapshot : {};
+
+    // ✅ show swatch only (no shade number, no cost)
+    const dyeHex = safeText(spec?.dye_hex ?? spec?.dyeing_hex ?? "");
 
     return (
       <Pressable
-        onPress={() => router.push({ pathname: "/orders/[id]", params: { id: String(item.id) } })}
+        onPress={() =>
+          router.push({
+            pathname: "/orders/[id]",
+            params: { id: String(item.id) }
+          })
+        }
         style={({ pressed }) => [styles.card, pressed && styles.pressed]}
       >
         <View style={styles.rowBetween}>
@@ -149,6 +176,15 @@ export default function OrdersIndexScreen() {
         <Text style={styles.line} numberOfLines={1}>
           {item.title_snapshot} • {item.product_code_snapshot}
         </Text>
+
+        {dyeHex && dyeHex !== "—" ? (
+          <View style={styles.dyeRow}>
+            <Text style={styles.small} numberOfLines={1}>
+              Dyeing
+            </Text>
+            <View style={[styles.dyeSwatch, { backgroundColor: dyeHex }]} />
+          </View>
+        ) : null}
 
         <View style={styles.rowBetween}>
           <Text style={styles.small} numberOfLines={1}>
@@ -263,6 +299,17 @@ const styles = StyleSheet.create({
   status: { fontSize: 12, fontWeight: "800", color: "#333" },
   line: { fontSize: 13, color: "#333" },
   small: { fontSize: 12, color: "#555" },
+
+  // ✅ NEW: Dyeing swatch row
+  dyeRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  dyeSwatch: {
+    width: 22,
+    height: 22,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    backgroundColor: "#fff"
+  },
 
   empty: { padding: 20, gap: 8, alignItems: "center" },
   emptyTitle: { fontSize: 16, fontWeight: "800" },

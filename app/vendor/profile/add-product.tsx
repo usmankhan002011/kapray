@@ -53,6 +53,12 @@ function safeStr(v: any) {
   return String(v ?? "").trim();
 }
 
+function safeNumOrZero(v: any) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0;
+  return n;
+}
+
 async function uploadAssetToStorage(args: {
   bucket: string;
   path: string;
@@ -120,6 +126,19 @@ export default function AddProductScreen() {
     return safeStr((draft.spec as any)?.more_description ?? "");
   });
 
+  // ✅ Dyeing (Unstitched only) — vendor sets dyeable yes/no + dyeing cost (PKR)
+  const [dyeingEnabled, setDyeingEnabled] = useState<boolean>(() => {
+    return Boolean((draft.spec as any)?.dyeing_enabled ?? false);
+  });
+
+  const [dyeingCostPkr, setDyeingCostPkr] = useState<number>(() => {
+    const fromPrice = safeNumOrZero((draft.price as any)?.dyeing_cost_pkr ?? 0);
+    if (fromPrice > 0) return fromPrice;
+
+    const fromSpec = safeNumOrZero((draft.spec as any)?.dyeing_cost_pkr ?? 0);
+    return fromSpec > 0 ? fromSpec : 0;
+  });
+
   // When made on order is ON, auto-fill inventory to 0 (UI + saved payload)
   useEffect(() => {
     if (madeOnOrder) {
@@ -127,6 +146,23 @@ export default function AddProductScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [madeOnOrder]);
+
+  // ✅ If switched to stitched, auto-clear dyeing
+  useEffect(() => {
+    if (draft.price.mode !== "unstitched_per_meter") {
+      if (dyeingEnabled) setDyeingEnabled(false);
+      if (dyeingCostPkr !== 0) setDyeingCostPkr(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.price.mode]);
+
+  // ✅ If dyeing toggled OFF, clear dyeing cost
+  useEffect(() => {
+    if (!dyeingEnabled && dyeingCostPkr !== 0) {
+      setDyeingCostPkr(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dyeingEnabled]);
 
   // Video thumbs for picked videos (uri -> thumb uri)
   const [videoThumbs, setVideoThumbs] = useState<Record<string, string>>({});
@@ -164,6 +200,8 @@ export default function AddProductScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft.media.videos]);
 
+  const isUnstitched = draft.price.mode === "unstitched_per_meter";
+
   const canSave = useMemo(() => {
     if (!vendorId) return false;
     if (!draft.title.trim()) return false;
@@ -171,6 +209,12 @@ export default function AddProductScreen() {
     if (draft.price.mode === "unstitched_per_meter") {
       const n = Number(draft.price.cost_pkr_per_meter ?? 0);
       if (!Number.isFinite(n) || n <= 0) return false;
+
+      // ✅ If dyeable, require dyeing cost > 0
+      if (dyeingEnabled) {
+        const d = Number(dyeingCostPkr ?? 0);
+        if (!Number.isFinite(d) || d <= 0) return false;
+      }
     } else {
       const n = Number(draft.price.cost_pkr_total ?? 0);
       if (!Number.isFinite(n) || n <= 0) return false;
@@ -188,14 +232,12 @@ export default function AddProductScreen() {
     }
 
     return true;
-  }, [vendorId, draft, madeOnOrder]);
+  }, [vendorId, draft, madeOnOrder, dyeingEnabled, dyeingCostPkr]);
 
   function goPickModal(name: ModalName) {
     // DO NOT TOUCH: navigation is already correct per your instruction.
     const encoded = encodeURIComponent(returnTo);
-    router.push(
-      `/vendor/profile/(product-modals)/${name}?returnTo=${encoded}` as any
-    );
+    router.push(`/vendor/profile/(product-modals)/${name}?returnTo=${encoded}` as any);
   }
 
   function dressTypeSummary() {
@@ -361,6 +403,10 @@ export default function AddProductScreen() {
 
       const inventoryQty = madeOnOrder ? 0 : Number(draft.inventory_qty ?? 0);
 
+      const unstitchedDyeingEnabled = draft.price.mode === "unstitched_per_meter" ? Boolean(dyeingEnabled) : false;
+      const unstitchedDyeingCost =
+        unstitchedDyeingEnabled ? Math.max(0, Number(dyeingCostPkr ?? 0)) : 0;
+
       const insertPayload: any = {
         vendor_id: vendorId,
         title: safeStr(draft.title),
@@ -374,9 +420,18 @@ export default function AddProductScreen() {
         spec: {
           ...(draft.spec ?? {}),
           made_on_order: Boolean(madeOnOrder),
-          more_description: safeStr(moreDescription)
+          more_description: safeStr(moreDescription),
+
+          // ✅ Dyeing (unstitched only)
+          dyeing_enabled: unstitchedDyeingEnabled
         },
-        price: draft.price,
+
+        // ✅ Save dyeing cost in price JSONB (unstitched + dyeable only)
+        price: {
+          ...(draft.price ?? {}),
+          dyeing_cost_pkr: unstitchedDyeingCost
+        },
+
         media: {
           images: [],
           videos: [],
@@ -493,11 +548,9 @@ export default function AddProductScreen() {
       Alert.alert("Saved", `Product created: ${finalCode}`);
       resetDraft();
       setMoreDescription("");
-      router.replace(
-        `/vendor/profile/products?new_product_id=${encodeURIComponent(
-          productId
-        )}` as any
-      );
+      setDyeingEnabled(false);
+      setDyeingCostPkr(0);
+      router.replace(`/vendor/profile/products?new_product_id=${encodeURIComponent(productId)}` as any);
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not save product.");
     } finally {
@@ -534,10 +587,7 @@ export default function AddProductScreen() {
 
           <Pressable
             onPress={() => router.back()}
-            style={({ pressed }) => [
-              styles.linkBtn,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.linkBtn, pressed ? styles.pressed : null]}
           >
             <Text style={styles.linkText}>Close</Text>
           </Pressable>
@@ -556,9 +606,7 @@ export default function AddProductScreen() {
         />
 
         <View style={styles.inventoryTopRow}>
-          <Text style={[styles.label, { marginTop: 0 }]}>
-            Inventory Quantity *
-          </Text>
+          <Text style={[styles.label, { marginTop: 0 }]}>Inventory Quantity *</Text>
 
           <Pressable
             onPress={() => setMadeOnOrder((v) => !v)}
@@ -580,16 +628,12 @@ export default function AddProductScreen() {
         </View>
 
         {madeOnOrder ? (
-          <Text style={styles.madeOnOrderHint}>
-            This product will be shown as “Made on order”.
-          </Text>
+          <Text style={styles.madeOnOrderHint}>This product will be shown as “Made on order”.</Text>
         ) : null}
 
         <TextInput
           value={String(madeOnOrder ? 0 : (draft.inventory_qty ?? 0))}
-          onChangeText={(t) =>
-            setInventoryQty(Number(sanitizeNumber(t) || "0"))
-          }
+          onChangeText={(t) => setInventoryQty(Number(sanitizeNumber(t) || "0"))}
           placeholder="e.g., 10"
           placeholderTextColor={stylesVars.placeholder}
           style={[styles.input, madeOnOrder ? styles.inputDisabled : null]}
@@ -611,9 +655,7 @@ export default function AddProductScreen() {
             <Text
               style={[
                 styles.segmentText,
-                draft.price.mode === "stitched_total"
-                  ? styles.segmentTextOn
-                  : null
+                draft.price.mode === "stitched_total" ? styles.segmentTextOn : null
               ]}
             >
               Stitched / Ready-to-wear
@@ -624,18 +666,14 @@ export default function AddProductScreen() {
             onPress={() => setPriceMode("unstitched_per_meter")}
             style={({ pressed }) => [
               styles.segment,
-              draft.price.mode === "unstitched_per_meter"
-                ? styles.segmentOn
-                : null,
+              draft.price.mode === "unstitched_per_meter" ? styles.segmentOn : null,
               pressed ? styles.pressed : null
             ]}
           >
             <Text
               style={[
                 styles.segmentText,
-                draft.price.mode === "unstitched_per_meter"
-                  ? styles.segmentTextOn
-                  : null
+                draft.price.mode === "unstitched_per_meter" ? styles.segmentTextOn : null
               ]}
             >
               Unstitched (PKR/meter)
@@ -648,9 +686,7 @@ export default function AddProductScreen() {
             <Text style={styles.label}>Total Cost (PKR) *</Text>
             <TextInput
               value={String(draft.price.cost_pkr_total ?? "")}
-              onChangeText={(t) =>
-                setPriceTotal(Number(sanitizeNumber(t) || "0"))
-              }
+              onChangeText={(t) => setPriceTotal(Number(sanitizeNumber(t) || "0"))}
               placeholder="e.g., 25000"
               placeholderTextColor={stylesVars.placeholder}
               style={styles.input}
@@ -680,15 +716,58 @@ export default function AddProductScreen() {
             <Text style={styles.label}>Cost per Meter (PKR) *</Text>
             <TextInput
               value={String(draft.price.cost_pkr_per_meter ?? "")}
-              onChangeText={(t) =>
-                setPricePerMeter(Number(sanitizeNumber(t) || "0"))
-              }
+              onChangeText={(t) => setPricePerMeter(Number(sanitizeNumber(t) || "0"))}
               placeholder="e.g., 1800"
               placeholderTextColor={stylesVars.placeholder}
               style={styles.input}
               keyboardType="decimal-pad"
               maxLength={12}
             />
+
+            {/* ✅ Dyeing (Unstitched only) — dyeable yes/no + dyeing cost */}
+            <View style={styles.dyeRow}>
+              <Text style={[styles.label, { marginTop: 0 }]}>Dyeable</Text>
+
+              <Pressable
+                onPress={() => {
+                  if (!isUnstitched) return;
+                  setDyeingEnabled((v) => !v);
+                }}
+                style={({ pressed }) => [
+                  styles.dyePill,
+                  dyeingEnabled ? styles.dyePillOn : null,
+                  pressed ? styles.pressed : null
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.dyePillText,
+                    dyeingEnabled ? styles.dyePillTextOn : null
+                  ]}
+                >
+                  {dyeingEnabled ? "Yes" : "No"}
+                </Text>
+              </Pressable>
+            </View>
+
+            {dyeingEnabled ? (
+              <>
+                <Text style={styles.dyeHint}>
+                  Buyer will pick a dye shade at checkout (only for dyeable unstitched cloth).
+                </Text>
+
+                <Text style={styles.label}>Dyeing Cost (PKR) *</Text>
+                <TextInput
+                  value={String(dyeingCostPkr ?? "")}
+                  onChangeText={(t) => setDyeingCostPkr(Number(sanitizeNumber(t) || "0"))}
+                  placeholder="e.g., 800"
+                  placeholderTextColor={stylesVars.placeholder}
+                  style={styles.input}
+                  keyboardType="decimal-pad"
+                  maxLength={12}
+                />
+              </>
+            ) : null}
           </>
         )}
       </View>
@@ -698,10 +777,7 @@ export default function AddProductScreen() {
 
         <View style={styles.btnRow}>
           <Pressable
-            style={({ pressed }) => [
-              styles.primaryBtn,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.primaryBtn, pressed ? styles.pressed : null]}
             onPress={pickImages}
             disabled={saving}
           >
@@ -729,10 +805,7 @@ export default function AddProductScreen() {
           ) : null}
 
           <Pressable
-            style={({ pressed }) => [
-              styles.secondaryBtn,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.secondaryBtn, pressed ? styles.pressed : null]}
             onPress={pickVideos}
             disabled={saving}
           >
@@ -775,10 +848,7 @@ export default function AddProductScreen() {
 
         <View style={styles.btnRow}>
           <Pressable
-            style={({ pressed }) => [
-              styles.pickBtn,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.pickBtn, pressed ? styles.pressed : null]}
             onPress={() => goPickModal("dress-type_modal")}
             disabled={saving}
           >
@@ -787,10 +857,7 @@ export default function AddProductScreen() {
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [
-              styles.pickBtn,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.pickBtn, pressed ? styles.pressed : null]}
             onPress={() => goPickModal("fabric_modal")}
             disabled={saving}
           >
@@ -799,10 +866,7 @@ export default function AddProductScreen() {
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [
-              styles.pickBtn,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.pickBtn, pressed ? styles.pressed : null]}
             onPress={() => goPickModal("color_modal")}
             disabled={saving}
           >
@@ -811,10 +875,7 @@ export default function AddProductScreen() {
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [
-              styles.pickBtn,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.pickBtn, pressed ? styles.pressed : null]}
             onPress={() => goPickModal("work_modal")}
             disabled={saving}
           >
@@ -823,10 +884,7 @@ export default function AddProductScreen() {
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [
-              styles.pickBtn,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.pickBtn, pressed ? styles.pressed : null]}
             onPress={() => goPickModal("work-density_modal")}
             disabled={saving}
           >
@@ -835,10 +893,7 @@ export default function AddProductScreen() {
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [
-              styles.pickBtn,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.pickBtn, pressed ? styles.pressed : null]}
             onPress={() => goPickModal("origin-city_modal")}
             disabled={saving}
           >
@@ -847,10 +902,7 @@ export default function AddProductScreen() {
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [
-              styles.pickBtn,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.pickBtn, pressed ? styles.pressed : null]}
             onPress={() => goPickModal("wear-state_modal")}
             disabled={saving}
           >
@@ -1088,6 +1140,31 @@ const styles = StyleSheet.create({
   saveText: { color: "#fff", fontWeight: "900", fontSize: 15 },
 
   warn: { marginTop: 10, color: stylesVars.subText },
+
+  // ✅ Dyeing styles (unstitched)
+  dyeRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10
+  },
+  dyePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: "#fff"
+  },
+  dyePillOn: {
+    borderColor: stylesVars.blue,
+    backgroundColor: stylesVars.blueSoft
+  },
+  dyePillText: { fontSize: 12, fontWeight: "900", color: stylesVars.text },
+  dyePillTextOn: { color: stylesVars.blue },
+
+  dyeHint: { marginTop: 8, color: stylesVars.subText, fontWeight: "800", fontSize: 12 },
 
   pressed: { opacity: 0.75 }
 });

@@ -142,6 +142,9 @@ kapray
 │   ├── vendor
 │   │   ├── profile
 │   │   │   ├── (product-modals)
+│   │   │   │   ├── dyeing
+│   │   │   │   │   ├── dye_palette_modal.tsx
+│   │   │   │   │   └── palette.ts
 │   │   │   │   ├── _layout.tsx
 │   │   │   │   ├── color_modal.tsx
 │   │   │   │   ├── dress-type_modal.tsx
@@ -154,6 +157,7 @@ kapray
 │   │   │   ├── add-product.tsx
 │   │   │   ├── edit-vendor.tsx
 │   │   │   ├── index.tsx
+│   │   │   ├── orders.tsx
 │   │   │   ├── products.tsx
 │   │   │   ├── settings.tsx
 │   │   │   ├── update-product.tsx
@@ -269,7 +273,7 @@ kapray
 ├── tree-app.txt
 └── tsconfig.json
 PS C:\DEV\kapray\kapray>
-as on 19feb26
+as on 24feb26
 
 -------------------------------------------------------------------------------------------------------------
 strategy

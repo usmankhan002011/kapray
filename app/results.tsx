@@ -677,7 +677,11 @@ export default function ResultsScreen() {
                 </Text>
 
                 <Text style={styles.cardSub} numberOfLines={1}>
-                  {safeText(item.product_code)}
+                  {item?.price?.mode === "unstitched_per_meter"
+                    ? item?.spec?.dyeing_enabled
+                      ? "Unstitched • Dyeable"
+                      : "Unstitched"
+                    : ""}
                 </Text>
 
                 {/* ✅ Favourite only (Purchase removed) */}

@@ -23,6 +23,9 @@ type OrderRow = {
   product_code_snapshot: string;
   title_snapshot: string;
 
+  // ✅ needed for dye swatch
+  spec_snapshot: any;
+
   currency: string;
   subtotal_pkr: number | null;
   delivery_pkr: number | null;
@@ -39,6 +42,11 @@ function money(currency: string, v: any) {
   const n = typeof v === "number" ? v : Number(v);
   if (Number.isNaN(n)) return `${currency} —`;
   return `${currency} ${n.toLocaleString()}`;
+}
+
+function safeText(v: any) {
+  const t = String(v ?? "").trim();
+  return t.length ? t : "—";
 }
 
 export default function OrderDetailScreen() {
@@ -75,6 +83,7 @@ export default function OrderDetailScreen() {
           notes,
           product_code_snapshot,
           title_snapshot,
+          spec_snapshot,
           currency,
           subtotal_pkr,
           delivery_pkr,
@@ -109,6 +118,8 @@ export default function OrderDetailScreen() {
         product_code_snapshot: String(o.product_code_snapshot ?? ""),
         title_snapshot: String(o.title_snapshot ?? ""),
 
+        spec_snapshot: o.spec_snapshot ?? {},
+
         currency: String(o.currency ?? "PKR"),
         subtotal_pkr: o.subtotal_pkr != null ? Number(o.subtotal_pkr) : null,
         delivery_pkr: o.delivery_pkr != null ? Number(o.delivery_pkr) : null,
@@ -134,13 +145,23 @@ export default function OrderDetailScreen() {
   const sizeLine = useMemo(() => {
     if (!order) return "—";
     if (order.size_mode === "exact") {
-      const m = order.exact_measurements && typeof order.exact_measurements === "object" ? order.exact_measurements : {};
+      const m =
+        order.exact_measurements && typeof order.exact_measurements === "object"
+          ? order.exact_measurements
+          : {};
       const pairs = Object.entries(m)
         .map(([k, v]) => `${k}=${String(v ?? "").trim()}`)
         .filter((x) => !x.endsWith("="));
       return pairs.length ? `Exact: ${pairs.join(", ")}` : "Exact: —";
     }
     return order.selected_size ? `Standard: ${order.selected_size}` : "Standard: —";
+  }, [order]);
+
+  const dyeHex = useMemo(() => {
+    if (!order) return "";
+    const spec = order.spec_snapshot && typeof order.spec_snapshot === "object" ? order.spec_snapshot : {};
+    const hex = safeText(spec?.dye_hex ?? spec?.dyeing_hex ?? "");
+    return hex !== "—" ? hex : "";
   }, [order]);
 
   return (
@@ -181,6 +202,16 @@ export default function OrderDetailScreen() {
             <Text style={styles.meta}>
               Code: <Text style={styles.strong}>{order.product_code_snapshot}</Text>
             </Text>
+
+            {/* ✅ Dyeing swatch only (no shade number, no cost, no hex text) */}
+            {!!dyeHex ? (
+              <View style={styles.dyeRow}>
+                <Text style={styles.meta}>
+                  Dyeing: <Text style={styles.strong}>Selected</Text>
+                </Text>
+                <View style={[styles.dyeSwatch, { backgroundColor: dyeHex }]} />
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.card}>
@@ -261,6 +292,17 @@ const styles = StyleSheet.create({
   h2: { fontSize: 14, fontWeight: "900", marginBottom: 2 },
   meta: { fontSize: 13, color: "#444" },
   strong: { fontWeight: "900", color: "#111" },
+
+  // ✅ NEW: Dyeing swatch row
+  dyeRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 6 },
+  dyeSwatch: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    backgroundColor: "#fff"
+  },
 
   divider: { height: 1, backgroundColor: "#eee", marginVertical: 8 },
 

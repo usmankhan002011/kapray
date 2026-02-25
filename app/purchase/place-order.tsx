@@ -1,3 +1,4 @@
+// app/purchase/place-order.tsx
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   ActivityIndicator,
@@ -41,6 +42,15 @@ type Params = {
   vendorName?: string;
   vendorMobile?: string;
   vendorAddress?: string;
+
+  // ✅ dyeing (buyer selection + vendor cost)
+  dye_shade_id?: string;
+  dye_hex?: string;
+  dye_label?: string;
+  dyeing_cost_pkr?: string;
+
+  // tolerate older key from modal
+  dyeing_selected_shade?: string;
 };
 
 type VendorState = {
@@ -90,6 +100,16 @@ function firstNonEmpty(...vals: Array<unknown>) {
     if (s) return s;
   }
   return "";
+}
+
+function safeDecode(v: unknown) {
+  const s = norm(v);
+  if (!s) return "";
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
 }
 
 function resolvePublicUrl(path: string | null | undefined) {
@@ -144,16 +164,15 @@ export default function PlaceOrderScreen() {
       i: norm(params.i), j: norm(params.j), k: norm(params.k), l: norm(params.l),
       m: norm(params.m), n: norm(params.n)
     };
-
-    const exactPairs: Array<[string, string]> = [
+    const exactPairs: [string, string][] = [
       ["A", letters.a], ["B", letters.b], ["C", letters.c], ["D", letters.d],
       ["E", letters.e], ["F", letters.f], ["G", letters.g], ["H", letters.h],
       ["I", letters.i], ["J", letters.j], ["K", letters.k], ["L", letters.l],
       ["M", letters.m], ["N", letters.n]
-    ].filter((pair) => {
-      const v = pair[1];
-      return typeof v === "string" && v.length > 0;
-    });
+    ].filter(
+      (pair): pair is [string, string] =>
+        typeof pair[1] === "string" && pair[1].length > 0
+    );
 
     const sizeLabel =
       mode === "exact"
@@ -169,6 +188,13 @@ export default function PlaceOrderScreen() {
     const price = firstNonEmpty(params.price);
     const imageUrl = firstNonEmpty(params.imageUrl, params.image_url);
 
+    // ✅ dyeing (tolerate multiple keys)
+    const dyeShadeId = safeDecode(firstNonEmpty(params.dye_shade_id));
+    const dyeHex =
+      safeDecode(firstNonEmpty(params.dye_hex, params.dyeing_selected_shade));
+    const dyeLabel = safeDecode(firstNonEmpty(params.dye_label));
+    const dyeingCostPkr = safeDecode(firstNonEmpty(params.dyeing_cost_pkr));
+
     return {
       productId,
       productCode,
@@ -180,7 +206,12 @@ export default function PlaceOrderScreen() {
       productName,
       currency,
       price,
-      imageUrl
+      imageUrl,
+
+      dyeShadeId,
+      dyeHex,
+      dyeLabel,
+      dyeingCostPkr
     };
   }, [params]);
 
@@ -281,6 +312,9 @@ export default function PlaceOrderScreen() {
 
     const vendorStatus = firstNonEmpty(vendor?.status, vJoin?.status);
 
+    const dyeText =
+      base.dyeLabel || base.dyeShadeId || base.dyeHex || "";
+
     return {
       id,
       code,
@@ -294,9 +328,30 @@ export default function PlaceOrderScreen() {
       vendorMobile,
       vendorAddress,
       vendorBanner,
-      vendorStatus
+      vendorStatus,
+
+      dyeText,
+      dyeShadeId: base.dyeShadeId,
+      dyeHex: base.dyeHex,
+      dyeLabel: base.dyeLabel,
+      dyeingCostPkr: base.dyeingCostPkr
     };
   }, [base, fetchedProduct, vendor, params.vendorName, params.vendorMobile, params.vendorAddress]);
+
+  // ✅ NEW: compute payable (base + dyeing) ONLY if a shade is selected
+  const priceCalc = useMemo(() => {
+    const basePrice = Number(resolved.priceParam || 0);
+    const dyeCost = Number(resolved.dyeingCostPkr || 0);
+
+    const hasDyeing = !!resolved.dyeHex || !!resolved.dyeShadeId;
+    const safeBase = Number.isFinite(basePrice) && basePrice > 0 ? basePrice : 0;
+    const safeDye = Number.isFinite(dyeCost) && dyeCost > 0 ? dyeCost : 0;
+
+    const dyeAdd = hasDyeing ? safeDye : 0;
+    const totalPayable = safeBase + dyeAdd;
+
+    return { hasDyeing, safeBase, safeDye, dyeAdd, totalPayable };
+  }, [resolved.priceParam, resolved.dyeingCostPkr, resolved.dyeHex, resolved.dyeShadeId]);
 
   // buyer / delivery fields
   const [buyerName, setBuyerName] = useState("");
@@ -305,11 +360,28 @@ export default function PlaceOrderScreen() {
   const [city, setCity] = useState("");
   const [notes, setNotes] = useState("");
 
+  // ✅ debug helpers + more tolerant mobile validation (digits-only)
+  const buyerNameTrim = buyerName.trim();
+  const buyerMobileTrim = buyerMobile.trim();
+  const buyerMobileDigits = buyerMobileTrim.replace(/\D/g, "");
+  const deliveryTrim = deliveryAddress.trim();
+  const cityTrim = city.trim();
+
+  const checks = useMemo(
+    () => ({
+      buyerName_ok: buyerNameTrim.length >= 2,
+      buyerMobile_ok: buyerMobileDigits.length >= 10,
+      delivery_ok: deliveryTrim.length >= 10,
+      city_ok: cityTrim.length >= 2
+    }),
+    [buyerNameTrim, buyerMobileDigits, deliveryTrim, cityTrim]
+  );
+
   const canContinue =
-    buyerName.trim().length >= 2 &&
-    buyerMobile.trim().length >= 10 &&
-    deliveryAddress.trim().length >= 10 &&
-    city.trim().length >= 2;
+    checks.buyerName_ok &&
+    checks.buyerMobile_ok &&
+    checks.delivery_ok &&
+    checks.city_ok;
 
   const goChangeSize = () => {
     router.push({
@@ -327,7 +399,13 @@ export default function PlaceOrderScreen() {
         productName: resolved.title,
         price: resolved.priceParam,
         currency: resolved.currency,
-        imageUrl: resolved.imageUrl
+        imageUrl: resolved.imageUrl,
+
+        // ✅ keep dyeing forward too
+        dye_shade_id: resolved.dyeShadeId ? encodeURIComponent(resolved.dyeShadeId) : "",
+        dye_hex: resolved.dyeHex ? encodeURIComponent(resolved.dyeHex) : "",
+        dye_label: resolved.dyeLabel ? encodeURIComponent(resolved.dyeLabel) : "",
+        dyeing_cost_pkr: resolved.dyeingCostPkr ? encodeURIComponent(resolved.dyeingCostPkr) : ""
       }
     });
   };
@@ -339,7 +417,10 @@ export default function PlaceOrderScreen() {
         productId: resolved.id || base.productId,
         productCode: resolved.code || base.productCode,
         productName: resolved.title,
-        price: resolved.priceParam,
+
+        // ✅ IMPORTANT: send payable total (base + dyeing, only if selected)
+        price: String(priceCalc.totalPayable || 0),
+
         currency: resolved.currency,
         imageUrl: resolved.imageUrl,
 
@@ -350,6 +431,12 @@ export default function PlaceOrderScreen() {
         mode: base.mode,
         selectedSize: base.selectedSize,
         ...base.letters,
+
+        // ✅ dyeing goes to payment so it can be saved into order snapshot
+        dye_shade_id: resolved.dyeShadeId ? encodeURIComponent(resolved.dyeShadeId) : "",
+        dye_hex: resolved.dyeHex ? encodeURIComponent(resolved.dyeHex) : "",
+        dye_label: resolved.dyeLabel ? encodeURIComponent(resolved.dyeLabel) : "",
+        dyeing_cost_pkr: resolved.dyeingCostPkr ? encodeURIComponent(resolved.dyeingCostPkr) : "",
 
         buyerName: buyerName.trim(),
         buyerMobile: buyerMobile.trim(),
@@ -411,6 +498,47 @@ export default function PlaceOrderScreen() {
                   {resolved.priceParam ? `${resolved.currency} ${resolved.priceText}` : `${resolved.currency} —`}
                 </Text>
               </Text>
+
+              {/* ✅ NEW: Dyeing cost line (only if shade selected) */}
+              {priceCalc.hasDyeing ? (
+                <Text style={styles.meta}>
+                  Dyeing:{" "}
+                  <Text style={styles.metaStrong}>
+                    {resolved.currency} {priceCalc.dyeAdd}
+                  </Text>
+                </Text>
+              ) : null}
+
+              {/* ✅ NEW: Total payable */}
+              {resolved.priceParam ? (
+                <Text style={styles.meta}>
+                  Total Payable:{" "}
+                  <Text style={styles.metaStrong}>
+                    {resolved.currency} {priceCalc.totalPayable}
+                  </Text>
+                </Text>
+              ) : null}
+
+              {/* ✅ Selected Colour (preview only) */}
+              {!!resolved.dyeHex ? (
+                <View style={{ marginTop: 8 }}>
+                  <Text style={styles.meta}>
+                    Selected Colour
+                  </Text>
+
+                  <View
+                    style={{
+                      marginTop: 8,
+                      width: 60,
+                      height: 60,
+                      borderRadius: 14,
+                      backgroundColor: resolved.dyeHex,
+                      borderWidth: 1,
+                      borderColor: "#CBD5E1"
+                    }}
+                  />
+                </View>
+              ) : null}
             </View>
           </View>
 
@@ -528,7 +656,12 @@ export default function PlaceOrderScreen() {
           />
 
           <Pressable
-            onPress={goToPayment}
+            onPress={() => {
+              if (!canContinue) {
+                return;
+              }
+              goToPayment();
+            }}
             disabled={!canContinue}
             style={({ pressed }) => [
               styles.primaryBtn,
@@ -540,6 +673,15 @@ export default function PlaceOrderScreen() {
           </Pressable>
 
           {!canContinue ? <Text style={styles.helper}>Fill name, mobile, address, and city to continue.</Text> : null}
+
+          {/* ✅ debug panel */}
+          <View style={{ marginTop: 10, padding: 10, borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 12 }}>
+            <Text style={{ fontWeight: "900", marginBottom: 6 }}>Debug</Text>
+            <Text>buyerName_ok: {String(checks.buyerName_ok)}</Text>
+            <Text>buyerMobile_ok (digits&gt;=10): {String(checks.buyerMobile_ok)} ({buyerMobileDigits.length})</Text>
+            <Text>delivery_ok: {String(checks.delivery_ok)} ({deliveryTrim.length})</Text>
+            <Text>city_ok: {String(checks.city_ok)} ({cityTrim.length})</Text>
+          </View>
         </View>
 
         <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>

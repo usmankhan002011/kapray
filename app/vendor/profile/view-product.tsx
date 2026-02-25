@@ -14,7 +14,7 @@ import {
   View,
   Dimensions
 } from "react-native";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -84,6 +84,22 @@ function firstParam(v: unknown): string | null {
   return null;
 }
 
+function safeDecode(v: string) {
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
+}
+
+function cleanIdParam(v: string) {
+  const s = String(v ?? "").trim();
+  if (!s) return "";
+  // Defensive: strip any accidental "?..." so bigint/id stays clean
+  const head = s.split("?")[0] ?? "";
+  return head.trim();
+}
+
 function normalizeLabelList(v: any): string[] {
   const arr = Array.isArray(v) ? v : [];
   const out: string[] = [];
@@ -129,9 +145,15 @@ function normalizeIdList(v: any): string[] {
 
 export default function ViewProductScreen() {
   const router = useRouter();
+  const segments = useSegments();
   const params = useLocalSearchParams();
   const dispatch = useAppDispatch();
 
+  // buyer route is a re-export that still renders this component
+const isBuyerRoute = useMemo(() => {
+  const segs = segments as unknown as string[];
+  return segs.includes("(buyer)");
+}, [segments]);
   // (Optional) current vendor session id (safe)
   const vendorId =
     useAppSelector((s: any) => s?.vendor?.id ?? null) ??
@@ -141,12 +163,16 @@ export default function ViewProductScreen() {
   // Accept either ?id=uuid OR ?code=V15-P0010 (also tolerate product_id/product_code)
   const productId = useMemo(() => {
     const raw = firstParam((params as any)?.id ?? (params as any)?.product_id ?? null);
-    return raw ? decodeURIComponent(raw) : null;
+    if (!raw) return null;
+    const decoded = safeDecode(raw);
+    const cleaned = cleanIdParam(decoded);
+    return cleaned ? cleaned : null;
   }, [params]);
 
   const productCode = useMemo(() => {
     const raw = firstParam((params as any)?.code ?? (params as any)?.product_code ?? null);
-    return raw ? decodeURIComponent(raw) : null;
+    if (!raw) return null;
+    return safeDecode(raw);
   }, [params]);
 
   const [loading, setLoading] = useState(false);
@@ -180,6 +206,30 @@ export default function ViewProductScreen() {
 
   // video selection
   const [selectedVideoUrl, setSelectedVideoUrl] = useState<string>("");
+
+  // ✅ Dye selection returned from palette modal (buyer chooses)
+  const [selectedDyeShadeId, setSelectedDyeShadeId] = useState<string>("");
+  const [selectedDyeHex, setSelectedDyeHex] = useState<string>("");
+  const [selectedDyeLabel, setSelectedDyeLabel] = useState<string>("");
+
+  useEffect(() => {
+    const rawId = firstParam((params as any)?.dye_shade_id ?? null);
+    const rawHex = firstParam((params as any)?.dye_hex ?? null);
+    const rawLabel = firstParam((params as any)?.dye_label ?? null);
+
+    const id = rawId ? safeDecode(rawId) : "";
+    const hex = rawHex ? safeDecode(rawHex) : "";
+    const label = rawLabel ? safeDecode(rawLabel) : "";
+
+    if (id) setSelectedDyeShadeId(id);
+    if (hex) setSelectedDyeHex(hex);
+
+    // ✅ If label not provided by modal, show the actual selected color (hex) instead of only shade id
+    if (label) setSelectedDyeLabel(label);
+    else if (hex) setSelectedDyeLabel(hex);
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
 
   const resolvePublicUrl = useCallback((path: string | null | undefined) => {
     if (!path) return null;
@@ -584,6 +634,63 @@ export default function ViewProductScreen() {
   // ✅ Only show Vendor card + View button + Purchase button for non-vendor viewers
   const showBuyerActions = !isVendorSelf;
 
+  // ✅ Dyeing option: only if Unstitched + Dyeing enabled by vendor
+  const showDyeing = useMemo(() => {
+    const price = (product as any)?.price ?? {};
+    const spec = (product as any)?.spec ?? {};
+    const isUnstitched = String(price?.mode ?? "") === "unstitched_per_meter";
+    const enabled = Boolean(spec?.dyeing_enabled);
+    return Boolean(product) && isUnstitched && enabled;
+  }, [product]);
+
+  // ✅ Dyeing cost (from vendor) - tolerant to aliases but primary is spec.dyeing_cost_pkr
+  const dyeingCostPkr = useMemo(() => {
+  const price = (product as any)?.price ?? {};
+  const spec = (product as any)?.spec ?? {};
+
+  const raw =
+    price?.dyeing_cost_pkr ??
+    price?.dyeingCostPkr ??
+    spec?.dyeing_cost_pkr ?? // fallback only (old data)
+    spec?.dyeingCostPkr ??
+    spec?.dyeing_cost ??
+    spec?.dyeingCost ??
+    0;
+
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return n;
+}, [product]);
+
+  // ✅ Category shown in product view
+  const categoryText = useMemo(() => {
+    const price = (product as any)?.price ?? {};
+    const mode = String(price?.mode ?? "");
+
+    if (mode === "unstitched_per_meter") {
+      return showDyeing ? "Unstitched + Dyeable" : "Unstitched";
+    }
+
+    return "Stitched / Ready-to-wear";
+  }, [product, showDyeing]);
+
+  const onOpenDyeing = useCallback(() => {
+    if (!product) return;
+
+    router.push({
+      pathname: "/vendor/profile/(product-modals)/dyeing/dye_palette_modal",
+      params: {
+        returnPath: isBuyerRoute ? "/(buyer)/view-product" : "/vendor/profile/view-product",
+        productId: String(product.id),
+
+        productCode: String(product.product_code || ""),
+
+        dye_shade_id: selectedDyeShadeId || "",
+        dye_label: selectedDyeLabel || ""
+      }
+    });
+  }, [router, product, isBuyerRoute, selectedDyeShadeId, selectedDyeLabel]);
+
   // start purchase flow
   const onPurchase = useCallback(() => {
     if (!product) return;
@@ -602,10 +709,29 @@ export default function ViewProductScreen() {
         productName: String(product.title || ""),
         currency: "PKR",
         price: priceTotalForParams,
-        imageUrl
+        imageUrl,
+
+        // ✅ dye selection forwarded (buyer choice)
+        dye_shade_id: selectedDyeShadeId ? encodeURIComponent(selectedDyeShadeId) : "",
+        dye_hex: selectedDyeHex ? encodeURIComponent(selectedDyeHex) : "",
+        dye_label: selectedDyeLabel ? encodeURIComponent(selectedDyeLabel) : "",
+
+        // ✅ dyeing cost forwarded (vendor-set)
+        dyeing_cost_pkr: showDyeing ? encodeURIComponent(String(dyeingCostPkr)) : ""
       }
     });
-  }, [router, product, bannerUrl, imageUrls, priceTotalForParams]);
+  }, [
+    router,
+    product,
+    bannerUrl,
+    imageUrls,
+    priceTotalForParams,
+    selectedDyeShadeId,
+    selectedDyeHex,
+    selectedDyeLabel,
+    showDyeing,
+    dyeingCostPkr
+  ]);
 
   const onViewVendorProfile = useCallback(() => {
     const vId = (vendorRow as any)?.id ?? null;
@@ -701,9 +827,48 @@ export default function ViewProductScreen() {
         <View style={styles.card}>
           <Field label="Product Code" value={product?.product_code} />
           <Field label="Title" value={product?.title} />
+          <Field label="Category" value={categoryText} />
           <Field label="Inventory Qty" value={inventoryText} />
           <Field label="Price" value={priceText} />
           <Field label="Available Sizes" value={sizeText} />
+
+          {/* ✅ Dyeing: only if Unstitched + Dyeing enabled */}
+          {showBuyerActions && showDyeing ? (
+            <Pressable
+              onPress={onOpenDyeing}
+              style={({ pressed }) => [styles.linkBtnInline, pressed ? styles.pressed : null]}
+            >
+              <Text style={styles.linkText}>
+                {selectedDyeShadeId || selectedDyeHex
+                  ? `Dyeing (Change Shade) • +PKR ${dyeingCostPkr}`
+                  : `Dyeing (Select Shade) • +PKR ${dyeingCostPkr}`}
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {/* {showBuyerActions && showDyeing ? (
+            <View style={{ marginTop: 10 }}>
+              <Field label="Dyeing Cost" value={`PKR ${dyeingCostPkr}`} />
+            </View>
+          ) : null} */}
+
+          {showBuyerActions && showDyeing && selectedDyeHex ? (
+            <View style={{ marginTop: 14 }}>
+              <Text style={styles.label}>Selected Colour</Text>
+
+              <View
+                style={{
+                  marginTop: 8,
+                  width: 60,
+                  height: 60,
+                  borderRadius: 14,
+                  backgroundColor: selectedDyeHex,
+                  borderWidth: 1,
+                  borderColor: "#CBD5E1"
+                }}
+              />
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.card}>

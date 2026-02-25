@@ -116,12 +116,17 @@ export default function UpdateProductScreen() {
   const [title, setTitle] = useState("");
   const [inventoryQty, setInventoryQty] = useState<number>(0);
 
+  // ✅ IMPORTANT:
+  // This screen is "Unstitched cloth only" (fixed) -> no switching between stitched/unstitched.
   const [priceMode, setPriceMode] = useState<"stitched_total" | "unstitched_per_meter">(
-    "stitched_total"
+    "unstitched_per_meter"
   );
   const [priceTotal, setPriceTotal] = useState<number>(0);
   const [pricePerMeter, setPricePerMeter] = useState<number>(0);
   const [availableSizes, setAvailableSizes] = useState<string[]>([]);
+
+  // ✅ Dyeable fixed + dyeing cost editable (only if dyeable)
+  const [dyeingCost, setDyeingCost] = useState<number>(0);
 
   const resolvePublicUrl = useCallback((path: string | null | undefined) => {
     if (!path) return null;
@@ -141,7 +146,9 @@ export default function UpdateProductScreen() {
 
       const { data, error } = await supabase
         .from(PRODUCTS_TABLE)
-        .select("id, vendor_id, product_code, title, inventory_qty, spec, price, media, created_at, updated_at")
+        .select(
+          "id, vendor_id, product_code, title, inventory_qty, spec, price, media, created_at, updated_at"
+        )
         .eq("vendor_id", vendorId)
         .order("created_at", { ascending: false });
 
@@ -171,9 +178,9 @@ export default function UpdateProductScreen() {
     setInventoryQty(safeNumOrZero(selected.inventory_qty));
 
     const price = safeJson(selected.price);
-    const mode =
-      price?.mode === "unstitched_per_meter" ? "unstitched_per_meter" : "stitched_total";
-    setPriceMode(mode);
+
+    // ✅ Force fixed mode: Unstitched only (not editable)
+    setPriceMode("unstitched_per_meter");
 
     setPriceTotal(safeNumOrZero(price?.cost_pkr_total));
     setPricePerMeter(safeNumOrZero(price?.cost_pkr_per_meter));
@@ -182,6 +189,9 @@ export default function UpdateProductScreen() {
         ? price.available_sizes.map((x: any) => String(x).trim()).filter(Boolean)
         : []
     );
+
+    const spec = safeJson(selected.spec);
+    setDyeingCost(safeNumOrZero(spec?.dyeing_cost_pkr ?? 0));
   }, [selected]);
 
   const filtered = useMemo(() => {
@@ -228,21 +238,29 @@ export default function UpdateProductScreen() {
     [thumbPaths, resolvePublicUrl]
   );
 
+  // ✅ Dyeable is fixed (read-only). Uses spec.dyeing_enabled from Add Product.
+  const dyeable = useMemo(() => {
+    const spec = safeJson(selected?.spec);
+    return Boolean(spec?.dyeing_enabled);
+  }, [selected]);
+
   const canSave = useMemo(() => {
     if (!vendorId) return false;
     if (!selectedId) return false;
     if (!title.trim()) return false;
 
-    if (priceMode === "unstitched_per_meter") {
-      const n = Number(pricePerMeter ?? 0);
-      if (!Number.isFinite(n) || n <= 0) return false;
-    } else {
-      const n = Number(priceTotal ?? 0);
-      if (!Number.isFinite(n) || n <= 0) return false;
+    // ✅ Unstitched only
+    const n = Number(pricePerMeter ?? 0);
+    if (!Number.isFinite(n) || n <= 0) return false;
+
+    // ✅ If dyeable, require dyeing cost > 0
+    if (dyeable) {
+      const d = Number(dyeingCost ?? 0);
+      if (!Number.isFinite(d) || d <= 0) return false;
     }
 
     return true;
-  }, [vendorId, selectedId, title, priceMode, pricePerMeter, priceTotal]);
+  }, [vendorId, selectedId, title, pricePerMeter, dyeable, dyeingCost]);
 
   async function saveUpdate() {
     if (saving) return;
@@ -260,19 +278,12 @@ export default function UpdateProductScreen() {
     try {
       setSaving(true);
 
-      const price =
-        priceMode === "unstitched_per_meter"
-          ? {
-              mode: "unstitched_per_meter",
-              cost_pkr_per_meter: Number(pricePerMeter ?? 0)
-            }
-          : {
-              mode: "stitched_total",
-              cost_pkr_total: Number(priceTotal ?? 0),
-              available_sizes: (availableSizes ?? []).filter(Boolean)
-            };
+      // ✅ Unstitched only
+      const price = {
+        mode: "unstitched_per_meter",
+        cost_pkr_per_meter: Number(pricePerMeter ?? 0)
+      };
 
-      // ✅ only allowed edits: title, (inventory if not made-on-order), price (+ updated_at)
       const updatePayload: any = {
         title: title.trim(),
         price,
@@ -283,12 +294,23 @@ export default function UpdateProductScreen() {
         updatePayload.inventory_qty = Number(inventoryQty ?? 0);
       }
 
+      // ✅ Only if dyeable: allow editing dyeing_cost_pkr (dyeable itself stays fixed)
+      if (dyeable) {
+        const prevSpec = safeJson(selected?.spec);
+        updatePayload.spec = {
+          ...prevSpec,
+          dyeing_cost_pkr: Number(dyeingCost ?? 0)
+        };
+      }
+
       const { data, error } = await supabase
         .from(PRODUCTS_TABLE)
         .update(updatePayload)
         .eq("id", selectedId)
         .eq("vendor_id", vendorId)
-        .select("id, vendor_id, product_code, title, inventory_qty, spec, price, media, created_at, updated_at")
+        .select(
+          "id, vendor_id, product_code, title, inventory_qty, spec, price, media, created_at, updated_at"
+        )
         .single();
 
       if (error) {
@@ -324,7 +346,9 @@ export default function UpdateProductScreen() {
         .update(updatePayload)
         .eq("id", selectedId)
         .eq("vendor_id", vendorId)
-        .select("id, vendor_id, product_code, title, inventory_qty, spec, price, media, created_at, updated_at")
+        .select(
+          "id, vendor_id, product_code, title, inventory_qty, spec, price, media, created_at, updated_at"
+        )
         .single();
 
       if (error) {
@@ -459,7 +483,9 @@ export default function UpdateProductScreen() {
         .update(updatePayload)
         .eq("id", selectedId)
         .eq("vendor_id", vendorId)
-        .select("id, vendor_id, product_code, title, inventory_qty, spec, price, media, created_at, updated_at")
+        .select(
+          "id, vendor_id, product_code, title, inventory_qty, spec, price, media, created_at, updated_at"
+        )
         .single();
 
       if (error) {
@@ -623,89 +649,43 @@ export default function UpdateProductScreen() {
               </>
             ) : null}
 
-            <Text style={styles.label}>Cost Mode *</Text>
-            <View style={styles.segmentRow}>
-              <Pressable
-                onPress={() => setPriceMode("stitched_total")}
-                style={({ pressed }) => [
-                  styles.segment,
-                  priceMode === "stitched_total" ? styles.segmentOn : null,
-                  pressed ? styles.pressed : null
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.segmentText,
-                    priceMode === "stitched_total" ? styles.segmentTextOn : null
-                  ]}
-                >
-                  Stitched / Ready-to-wear
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => setPriceMode("unstitched_per_meter")}
-                style={({ pressed }) => [
-                  styles.segment,
-                  priceMode === "unstitched_per_meter" ? styles.segmentOn : null,
-                  pressed ? styles.pressed : null
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.segmentText,
-                    priceMode === "unstitched_per_meter" ? styles.segmentTextOn : null
-                  ]}
-                >
-                  Unstitched (PKR/meter)
-                </Text>
-              </Pressable>
+            {/* ✅ Fixed info (read-only): Unstitched + Dyeable */}
+            <Text style={styles.label}>Cost Mode</Text>
+            <View style={styles.fixedPill}>
+              <Text style={styles.fixedPillText}>Unstitched (PKR/meter)</Text>
             </View>
 
-            {priceMode === "stitched_total" ? (
-              <>
-                <Text style={styles.label}>Total Cost (PKR) *</Text>
-                <TextInput
-                  value={String(priceTotal ?? "")}
-                  onChangeText={(t) => setPriceTotal(Number(sanitizeNumber(t) || "0"))}
-                  placeholder="e.g., 25000"
-                  placeholderTextColor={stylesVars.placeholder}
-                  style={styles.input}
-                  keyboardType="decimal-pad"
-                  maxLength={12}
-                />
+            <Text style={styles.label}>Dyeable</Text>
+            <View style={styles.fixedPill}>
+              <Text style={styles.fixedPillText}>{dyeable ? "Yes" : "No"}</Text>
+            </View>
 
-                <Text style={styles.label}>Available Sizes (comma separated)</Text>
-                <TextInput
-                  value={(availableSizes ?? []).join(", ")}
-                  onChangeText={(t) =>
-                    setAvailableSizes(
-                      t
-                        .split(",")
-                        .map((x) => x.trim())
-                        .filter(Boolean)
-                    )
-                  }
-                  placeholder="e.g., XS, S, M, L"
-                  placeholderTextColor={stylesVars.placeholder}
-                  style={styles.input}
-                  maxLength={80}
-                />
-              </>
-            ) : (
+            {dyeable ? (
               <>
-                <Text style={styles.label}>Cost per Meter (PKR) *</Text>
+                <Text style={styles.label}>Dyeing Cost (PKR) *</Text>
                 <TextInput
-                  value={String(pricePerMeter ?? "")}
-                  onChangeText={(t) => setPricePerMeter(Number(sanitizeNumber(t) || "0"))}
-                  placeholder="e.g., 1800"
+                  value={String(dyeingCost ?? "")}
+                  onChangeText={(t) => setDyeingCost(Number(sanitizeNumber(t) || "0"))}
+                  placeholder="e.g., 500"
                   placeholderTextColor={stylesVars.placeholder}
                   style={styles.input}
                   keyboardType="decimal-pad"
                   maxLength={12}
                 />
               </>
-            )}
+            ) : null}
+
+            {/* ✅ Unstitched only: editable cost per meter */}
+            <Text style={styles.label}>Cost per Meter (PKR) *</Text>
+            <TextInput
+              value={String(pricePerMeter ?? "")}
+              onChangeText={(t) => setPricePerMeter(Number(sanitizeNumber(t) || "0"))}
+              placeholder="e.g., 1800"
+              placeholderTextColor={stylesVars.placeholder}
+              style={styles.input}
+              keyboardType="decimal-pad"
+              maxLength={12}
+            />
           </>
         )}
       </View>
@@ -934,6 +914,19 @@ const styles = StyleSheet.create({
     color: stylesVars.text,
     backgroundColor: "#fff"
   },
+
+  // ✅ read-only pill (for fixed fields like Unstitched/Dyeable)
+  fixedPill: {
+    marginTop: 8,
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: stylesVars.border
+  },
+  fixedPillText: { color: stylesVars.blue, fontWeight: "900", fontSize: 12 },
 
   metaLine: { marginTop: 8, color: stylesVars.subText, fontWeight: "800" },
   metaStrong: { color: stylesVars.blue, fontWeight: "900" },

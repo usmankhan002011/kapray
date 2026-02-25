@@ -1,3 +1,4 @@
+// app/purchase/size.tsx
 import React, { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -282,7 +283,18 @@ export default function SizeScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
     returnTo?: string;
+
     productId?: string;
+    productCode?: string;
+    productName?: string;
+    price?: string;
+    currency?: string;
+    imageUrl?: string;
+
+    dye_shade_id?: string;
+    dye_hex?: string;
+    dye_label?: string;
+    dyeing_cost_pkr?: string;
 
     selectedSize?: string;
     mode?: string;
@@ -354,6 +366,7 @@ export default function SizeScreen() {
     router.replace({
       pathname: returnTo as any,
       params: {
+        ...(params as any), // keep forwarded product + dye params
         productId,
         ...p
       }
