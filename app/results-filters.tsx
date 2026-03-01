@@ -55,9 +55,6 @@ export default function ResultsFiltersModal() {
   const wearStateIds: string[] = filters?.wearStateIds ?? [];
   const priceBandIds: string[] = filters?.priceBandIds ?? [];
 
-  // ✅ vendors (multi-select, empty = Any)
-  const vendorIds: string[] = filters?.vendorIds ?? [];
-
   const [fabricTypes, setFabricTypes] = useState<NameRow[]>([]);
   const [workTypes, setWorkTypes] = useState<NameRow[]>([]);
   const [workDensities, setWorkDensities] = useState<NameRow[]>([]);
@@ -145,11 +142,6 @@ export default function ResultsFiltersModal() {
     router.push({ pathname: path as any, params: { from: "results-filters" } } as any);
   }
 
-  // ✅ vendor search navigation
-  function goVendorSearch() {
-    router.push({ pathname: "/vendor-search" as any, params: { from: "results-filters" } } as any);
-  }
-
   return (
     <View style={styles.container}>
       <View style={styles.topRow}>
@@ -160,17 +152,6 @@ export default function ResultsFiltersModal() {
       </View>
 
       <Text style={styles.note}>Dress Type is fixed from the first screen.</Text>
-
-      {/* ✅ Vendors */}
-      <Pressable style={styles.row} onPress={goVendorSearch}>
-        <View style={styles.left}>
-          <Text style={styles.label}>Vendors</Text>
-          <Text style={styles.value} numberOfLines={2}>
-            {vendorIds.length ? `${vendorIds.length} selected` : "Any"}
-          </Text>
-        </View>
-        <Text style={styles.arrow}>›</Text>
-      </Pressable>
 
       <Pressable style={styles.row} onPress={() => go("/fabric")}>
         <View style={styles.left}>

@@ -109,7 +109,6 @@ kapray
 │   ├── vcs.xml
 │   └── workspace.xml
 ├── .vscode
-│   ├── .react
 │   ├── extensions.json
 │   └── settings.json
 ├── app
@@ -121,27 +120,28 @@ kapray
 │   │   ├── index.tsx
 │   │   └── shops.tsx
 │   ├── couriers
-│   │   ├── (modals)
-│   │   │   ├── _layout.tsx
-│   │   │   └── courier-list_modal.tsx
-│   │   └── index.tsx
+│   │   └── components
 │   ├── orders
 │   │   ├── [id].tsx
-│   │   └── index.tsx
+│   │   ├── index.tsx
+│   │   └── track.tsx
 │   ├── purchase
 │   │   ├── _layout.tsx
 │   │   ├── cart.tsx
 │   │   ├── payment.tsx
 │   │   ├── place-order.tsx
 │   │   └── size.tsx
+│   ├── services
 │   ├── tailors
-│   │   ├── (modals)
-│   │   │   ├── _layout.tsx
-│   │   │   └── tailor-list_modal.tsx
-│   │   └── index.tsx
+│   │   └── components
+│   │       ├── TailoringCheckoutBlock.tsx
+│   │       └── TailoringOfferCard.tsx
 │   ├── vendor
 │   │   ├── profile
 │   │   │   ├── (product-modals)
+│   │   │   │   ├── dyeing
+│   │   │   │   │   ├── dye_palette_modal.tsx
+│   │   │   │   │   └── palette.ts
 │   │   │   │   ├── _layout.tsx
 │   │   │   │   ├── color_modal.tsx
 │   │   │   │   ├── dress-type_modal.tsx
@@ -154,6 +154,7 @@ kapray
 │   │   │   ├── add-product.tsx
 │   │   │   ├── edit-vendor.tsx
 │   │   │   ├── index.tsx
+│   │   │   ├── orders.tsx
 │   │   │   ├── products.tsx
 │   │   │   ├── settings.tsx
 │   │   │   ├── update-product.tsx
@@ -269,7 +270,7 @@ kapray
 ├── tree-app.txt
 └── tsconfig.json
 PS C:\DEV\kapray\kapray>
-as on 19feb26
+as on 01Mar26
 
 -------------------------------------------------------------------------------------------------------------
 strategy

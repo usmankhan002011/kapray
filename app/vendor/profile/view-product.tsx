@@ -14,7 +14,7 @@ import {
   View,
   Dimensions
 } from "react-native";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -23,6 +23,19 @@ import { setSelectedVendor } from "@/store/vendorSlice";
 const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
 const FOOTER_H = 86;
+
+// ✅ EASY FIX: persist buyer stitching choice across dye modal round-trips (even if screen remounts)
+// In-memory cache survives navigation within the same app session.
+const BUYER_TAILORING_CHOICE_CACHE = new Map<string, boolean>();
+const BUYER_DYEING_CHOICE_CACHE = new Map<string, boolean>();
+
+function makeChoiceKey(productId: string | null, productCode: string | null) {
+  const pid = String(productId ?? "").trim();
+  if (pid) return `id:${pid}`;
+  const pc = String(productCode ?? "").trim();
+  if (pc) return `code:${pc}`;
+  return "";
+}
 
 // Assumed lookup table names (adjust if your Supabase uses different names)
 const LOOKUP = {
@@ -33,6 +46,12 @@ const LOOKUP = {
   originCities: "origin_cities",
   wearStates: "wear_states"
 } as const;
+
+type ProductCategory =
+  | "unstitched_plain"
+  | "unstitched_dyeing"
+  | "unstitched_dyeing_tailoring"
+  | "stitched_ready";
 
 type VendorRow = {
   id: string | number;
@@ -47,6 +66,9 @@ type VendorRow = {
   profile_image_path?: string | null;
   banner_path?: string | null;
   status?: string | null;
+
+  // ✅ Vendor-wide setting (no tailor list / no courier list)
+  offers_tailoring?: boolean | null;
 };
 
 type ProductRow = {
@@ -58,6 +80,9 @@ type ProductRow = {
 
   // ✅ NEW DB column
   made_on_order?: boolean;
+
+  // ✅ NEW DB column (single truth)
+  product_category?: ProductCategory | null;
 
   spec: any;
   price: any;
@@ -82,6 +107,22 @@ function firstParam(v: unknown): string | null {
   if (typeof v === "string") return v.trim() || null;
   if (Array.isArray(v) && typeof v[0] === "string") return v[0].trim() || null;
   return null;
+}
+
+function safeDecode(v: string) {
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
+}
+
+function cleanIdParam(v: string) {
+  const s = String(v ?? "").trim();
+  if (!s) return "";
+  // Defensive: strip any accidental "?..." so bigint/id stays clean
+  const head = s.split("?")[0] ?? "";
+  return head.trim();
 }
 
 function normalizeLabelList(v: any): string[] {
@@ -127,10 +168,42 @@ function normalizeIdList(v: any): string[] {
   return out;
 }
 
+function safeInt0(v: any) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.trunc(n));
+}
+
+function isProductCategory(v: any): v is ProductCategory {
+  return (
+    v === "unstitched_plain" ||
+    v === "unstitched_dyeing" ||
+    v === "unstitched_dyeing_tailoring" ||
+    v === "stitched_ready"
+  );
+}
+
+function parseBoolParam(v: unknown): boolean | null {
+  const raw = firstParam(v);
+  if (raw == null) return null;
+  const s = raw.trim().toLowerCase();
+  if (!s) return null;
+  if (s === "1" || s === "true" || s === "yes" || s === "y" || s === "on") return true;
+  if (s === "0" || s === "false" || s === "no" || s === "n" || s === "off") return false;
+  return null;
+}
+
 export default function ViewProductScreen() {
   const router = useRouter();
+  const segments = useSegments();
   const params = useLocalSearchParams();
   const dispatch = useAppDispatch();
+
+  // buyer route is a re-export that still renders this component
+  const isBuyerRoute = useMemo(() => {
+    const segs = segments as unknown as string[];
+    return segs.includes("(buyer)");
+  }, [segments]);
 
   // (Optional) current vendor session id (safe)
   const vendorId =
@@ -141,13 +214,20 @@ export default function ViewProductScreen() {
   // Accept either ?id=uuid OR ?code=V15-P0010 (also tolerate product_id/product_code)
   const productId = useMemo(() => {
     const raw = firstParam((params as any)?.id ?? (params as any)?.product_id ?? null);
-    return raw ? decodeURIComponent(raw) : null;
+    if (!raw) return null;
+    const decoded = safeDecode(raw);
+    const cleaned = cleanIdParam(decoded);
+    return cleaned ? cleaned : null;
   }, [params]);
 
   const productCode = useMemo(() => {
     const raw = firstParam((params as any)?.code ?? (params as any)?.product_code ?? null);
-    return raw ? decodeURIComponent(raw) : null;
+    if (!raw) return null;
+    return safeDecode(raw);
   }, [params]);
+
+  // ✅ stable key for caching buyer stitching/dyeing choice
+  const choiceKey = useMemo(() => makeChoiceKey(productId, productCode), [productId, productCode]);
 
   const [loading, setLoading] = useState(false);
   const [product, setProduct] = useState<ProductRow | null>(null);
@@ -180,6 +260,87 @@ export default function ViewProductScreen() {
 
   // video selection
   const [selectedVideoUrl, setSelectedVideoUrl] = useState<string>("");
+
+  // ✅ Dye selection returned from palette modal (buyer chooses)
+  const [selectedDyeShadeId, setSelectedDyeShadeId] = useState<string>("");
+  const [selectedDyeHex, setSelectedDyeHex] = useState<string>("");
+  const [selectedDyeLabel, setSelectedDyeLabel] = useState<string>("");
+
+  // ✅ Buyer choice: wants stitching/tailoring (persist via module cache)
+  const [buyerWantsTailoring, _setBuyerWantsTailoring] = useState<boolean>(false);
+
+  const setBuyerWantsTailoring = useCallback(
+    (next: boolean) => {
+      _setBuyerWantsTailoring(next);
+      if (choiceKey) BUYER_TAILORING_CHOICE_CACHE.set(choiceKey, next);
+    },
+    [choiceKey]
+  );
+
+  // ✅ Buyer choice: wants dyeing (persist via module cache)
+  const [buyerWantsDyeing, _setBuyerWantsDyeing] = useState<boolean>(false);
+
+  const setBuyerWantsDyeing = useCallback(
+    (next: boolean) => {
+      _setBuyerWantsDyeing(next);
+      if (choiceKey) BUYER_DYEING_CHOICE_CACHE.set(choiceKey, next);
+    },
+    [choiceKey]
+  );
+
+  // ✅ On entry / remount / key change: restore buyer choices from cache (does NOT rely on route params)
+  useEffect(() => {
+    if (!choiceKey) return;
+
+    const cachedTailoring = BUYER_TAILORING_CHOICE_CACHE.get(choiceKey);
+    if (typeof cachedTailoring === "boolean") _setBuyerWantsTailoring(cachedTailoring);
+
+    const cachedDyeing = BUYER_DYEING_CHOICE_CACHE.get(choiceKey);
+    if (typeof cachedDyeing === "boolean") _setBuyerWantsDyeing(cachedDyeing);
+
+    // else leave defaults false
+  }, [choiceKey]);
+
+  // ✅ Handle dye params AND explicit dyeing_selected to support NO properly
+  useEffect(() => {
+    const dyeingSelected =
+      parseBoolParam((params as any)?.dyeing_selected) ??
+      parseBoolParam((params as any)?.dye_selected) ??
+      null;
+
+    const rawId = firstParam((params as any)?.dye_shade_id ?? null);
+    const rawHex = firstParam((params as any)?.dye_hex ?? null);
+    const rawLabel = firstParam((params as any)?.dye_label ?? null);
+
+    const id = rawId ? safeDecode(rawId) : "";
+    const hex = rawHex ? safeDecode(rawHex) : "";
+    const label = rawLabel ? safeDecode(rawLabel) : "";
+
+    const hasDye = Boolean(id || hex || label);
+
+    // If explicitly set to NO, always clear and persist NO
+    if (dyeingSelected === false) {
+      setBuyerWantsDyeing(false);
+      setSelectedDyeShadeId("");
+      setSelectedDyeHex("");
+      setSelectedDyeLabel("");
+      return;
+    }
+
+    // If explicitly YES or any dye params exist, treat as YES
+    if (dyeingSelected === true || hasDye) {
+      setBuyerWantsDyeing(true);
+
+      if (id) setSelectedDyeShadeId(id);
+      if (hex) setSelectedDyeHex(hex);
+
+      // If label not provided by modal, show hex
+      if (label) setSelectedDyeLabel(label);
+      else if (hex) setSelectedDyeLabel(hex);
+    }
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
 
   const resolvePublicUrl = useCallback((path: string | null | undefined) => {
     if (!path) return null;
@@ -301,6 +462,7 @@ export default function ViewProductScreen() {
           inventory_qty,
 
           made_on_order,
+          product_category,
 
           spec,
           price,
@@ -319,7 +481,8 @@ export default function ViewProductScreen() {
             location_url,
             profile_image_path,
             banner_path,
-            status
+            status,
+            offers_tailoring
           )
         `
         );
@@ -576,13 +739,154 @@ export default function ViewProductScreen() {
 
   // ✅ Detect if current viewer is the product's own vendor
   const isVendorSelf = useMemo(() => {
+    if (isBuyerRoute) return false;
     if (!vendorId) return false;
     if (!product?.vendor_id) return false;
     return String(product.vendor_id) === String(vendorId);
-  }, [vendorId, product?.vendor_id]);
+  }, [isBuyerRoute, vendorId, product?.vendor_id]);
 
   // ✅ Only show Vendor card + View button + Purchase button for non-vendor viewers
-  const showBuyerActions = !isVendorSelf;
+  const showBuyerActions = isBuyerRoute ? true : !isVendorSelf;
+
+  // ✅ Category single truth (DB column). Fallback for old rows: spec.product_category
+  const productCategory = useMemo<ProductCategory | null>(() => {
+    const fromDb = (product as any)?.product_category;
+    if (isProductCategory(fromDb)) return fromDb;
+
+    const fromSpec = (product as any)?.spec?.product_category;
+    if (isProductCategory(fromSpec)) return fromSpec;
+
+    return null;
+  }, [product]);
+
+  const isUnstitched = useMemo(() => {
+    if (productCategory) return productCategory !== "stitched_ready";
+
+    // fallback (old data)
+    const price = (product as any)?.price ?? {};
+    return String(price?.mode ?? "") === "unstitched_per_meter";
+  }, [product, productCategory]);
+
+  // ✅ Dyeing option: category-driven (single truth). Fallback to old spec.dyeing_enabled.
+  const showDyeing = useMemo(() => {
+    if (!product) return false;
+    if (!isUnstitched) return false;
+
+    if (productCategory) {
+      return (
+        productCategory === "unstitched_dyeing" || productCategory === "unstitched_dyeing_tailoring"
+      );
+    }
+
+    const spec = (product as any)?.spec ?? {};
+    return Boolean(spec?.dyeing_enabled);
+  }, [product, isUnstitched, productCategory]);
+
+  // ✅ Dyeing cost (from vendor) - tolerant to aliases but primary is price.dyeing_cost_pkr
+  const dyeingCostPkr = useMemo(() => {
+    const price = (product as any)?.price ?? {};
+    const spec = (product as any)?.spec ?? {};
+
+    const raw =
+      price?.dyeing_cost_pkr ??
+      price?.dyeingCostPkr ??
+      spec?.dyeing_cost_pkr ?? // fallback only (old data)
+      spec?.dyeingCostPkr ??
+      spec?.dyeing_cost ??
+      spec?.dyeingCost ??
+      0;
+
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0) return 0;
+    return n;
+  }, [product]);
+
+  const vendorOffersTailoring = useMemo(() => {
+    return Boolean((vendorRow as any)?.offers_tailoring);
+  }, [vendorRow]);
+
+  // ✅ Tailoring offer: category-driven (single truth). Fallback to old spec.tailoring_enabled.
+  const productTailoringEnabled = useMemo(() => {
+    if (productCategory) return productCategory === "unstitched_dyeing_tailoring";
+    const spec = (product as any)?.spec ?? {};
+    return Boolean(spec?.tailoring_enabled);
+  }, [product, productCategory]);
+
+  const tailoringCostPkr = useMemo(() => {
+    const price = (product as any)?.price ?? {};
+    const spec = (product as any)?.spec ?? {};
+
+    const raw =
+      price?.tailoring_cost_pkr ??
+      price?.tailoringCostPkr ??
+      spec?.tailoring_cost_pkr ??
+      spec?.tailoringCostPkr ??
+      spec?.tailoring_cost ??
+      spec?.tailoringCost ??
+      0;
+
+    return safeInt0(raw);
+  }, [product]);
+
+  const tailoringTurnaroundDays = useMemo(() => {
+    const spec = (product as any)?.spec ?? {};
+    return safeInt0(spec?.tailoring_turnaround_days ?? 0);
+  }, [product]);
+
+  const tailoringEligible = useMemo(() => {
+    return (
+      Boolean(product) &&
+      vendorOffersTailoring &&
+      isUnstitched &&
+      productTailoringEnabled &&
+      tailoringCostPkr > 0
+    );
+  }, [product, vendorOffersTailoring, isUnstitched, productTailoringEnabled, tailoringCostPkr]);
+
+  // ✅ If it becomes ineligible (e.g. product changed), auto-turn OFF buyer selection + cache it
+  useEffect(() => {
+    if (!tailoringEligible && buyerWantsTailoring) setBuyerWantsTailoring(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tailoringEligible]);
+
+  // ✅ Show the tailoring section more broadly so it never "disappears"
+  const showTailoringSection = useMemo(() => {
+    return Boolean(product) && showBuyerActions && isUnstitched;
+  }, [product, showBuyerActions, isUnstitched]);
+
+  // ✅ Category shown in product view (category-first single truth)
+  const categoryText = useMemo(() => {
+    if (productCategory === "stitched_ready") return "Stitched / Ready-to-wear";
+    if (productCategory === "unstitched_dyeing_tailoring") return "Unstitched + Dyeing + Tailoring";
+    if (productCategory === "unstitched_dyeing") return "Unstitched + Dyeing";
+    if (productCategory === "unstitched_plain") return "Unstitched (Plain)";
+
+    // fallback (old data)
+    if (isUnstitched) return showDyeing ? "Unstitched + Dyeable" : "Unstitched";
+    return "Stitched / Ready-to-wear";
+  }, [productCategory, isUnstitched, showDyeing]);
+
+  const onOpenDyeing = useCallback(() => {
+    if (!product) return;
+
+    // ✅ Mark dyeing explicitly YES so later "No" can override properly
+    router.setParams({ dyeing_selected: "1" } as any);
+
+    router.push({
+      pathname: isBuyerRoute
+        ? "/(buyer)/dye_palette_modal"
+        : "/vendor/profile/(product-modals)/dyeing/dye_palette_modal",
+      params: {
+        returnPath: isBuyerRoute ? "/(buyer)/view-product" : "/vendor/profile/view-product",
+        productId: String(product.id),
+        productCode: String(product.product_code || ""),
+        dyeing_selected: "1",
+        dye_shade_id: selectedDyeShadeId || "",
+        dye_hex: selectedDyeHex || "",
+        dye_label: selectedDyeLabel || ""
+      }
+    });
+  }, [router, product, isBuyerRoute, selectedDyeShadeId, selectedDyeHex, selectedDyeLabel]);
 
   // start purchase flow
   const onPurchase = useCallback(() => {
@@ -600,12 +904,52 @@ export default function ViewProductScreen() {
         productId: String(product.id),
         productCode: String(product.product_code || ""),
         productName: String(product.title || ""),
+
+        // ✅ NEW: forward dress category (stitched/unstitched etc.)
+        product_category: productCategory ? String(productCategory) : "",
+
         currency: "PKR",
         price: priceTotalForParams,
-        imageUrl
+        imageUrl,
+
+        // ✅ dye selection forwarded ONLY if buyer wants dyeing
+        dye_shade_id:
+          buyerWantsDyeing && selectedDyeShadeId ? encodeURIComponent(selectedDyeShadeId) : "",
+        dye_hex: buyerWantsDyeing && selectedDyeHex ? encodeURIComponent(selectedDyeHex) : "",
+        dye_label: buyerWantsDyeing && selectedDyeLabel ? encodeURIComponent(selectedDyeLabel) : "",
+
+        // ✅ dyeing cost forwarded (vendor-set) only if buyer wants dyeing
+        dyeing_cost_pkr:
+          showDyeing && buyerWantsDyeing ? encodeURIComponent(String(dyeingCostPkr)) : "",
+
+        // ✅ tailoring forwarded (vendor + product gated)
+        tailoring_available: tailoringEligible ? "1" : "0",
+        tailoring_cost_pkr: tailoringEligible ? encodeURIComponent(String(tailoringCostPkr)) : "",
+        tailoring_turnaround_days: tailoringEligible
+          ? encodeURIComponent(String(tailoringTurnaroundDays))
+          : "",
+
+        // ✅ buyer choice forwarded (stable now)
+        tailoring_selected: tailoringEligible && buyerWantsTailoring ? "1" : "0"
       }
     });
-  }, [router, product, bannerUrl, imageUrls, priceTotalForParams]);
+  }, [
+    router,
+    product,
+    bannerUrl,
+    imageUrls,
+    priceTotalForParams,
+    buyerWantsDyeing,
+    selectedDyeShadeId,
+    selectedDyeHex,
+    selectedDyeLabel,
+    showDyeing,
+    dyeingCostPkr,
+    tailoringEligible,
+    tailoringCostPkr,
+    tailoringTurnaroundDays,
+    buyerWantsTailoring
+  ]);
 
   const onViewVendorProfile = useCallback(() => {
     const vId = (vendorRow as any)?.id ?? null;
@@ -701,9 +1045,125 @@ export default function ViewProductScreen() {
         <View style={styles.card}>
           <Field label="Product Code" value={product?.product_code} />
           <Field label="Title" value={product?.title} />
+          <Field label="Category" value={categoryText} />
           <Field label="Inventory Qty" value={inventoryText} />
           <Field label="Price" value={priceText} />
           <Field label="Available Sizes" value={sizeText} />
+
+          {/* ✅ Stitching (YES/NO) — same style as dyeing block */}
+          {showTailoringSection ? (
+            <View style={{ marginTop: 10 }}>
+              <Text style={styles.label}>Do you want stitching?</Text>
+
+              <View style={{ flexDirection: "row", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+                <Pressable
+                  onPress={() => {
+                    if (!tailoringEligible) {
+                      Alert.alert(
+                        "Stitching not available",
+                        "This product is not eligible for stitching."
+                      );
+                      return;
+                    }
+                    setBuyerWantsTailoring(true);
+                  }}
+                  style={({ pressed }) => [
+                    styles.linkBtnInline,
+                    buyerWantsTailoring ? { borderColor: stylesVars.blue } : null,
+                    !tailoringEligible ? { opacity: 0.5 } : null,
+                    pressed ? styles.pressed : null
+                  ]}
+                >
+                  <Text style={styles.linkText}>
+                    Yes{tailoringEligible ? ` • +PKR ${tailoringCostPkr}` : ""}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => setBuyerWantsTailoring(false)}
+                  style={({ pressed }) => [
+                    styles.linkBtnInline,
+                    !buyerWantsTailoring ? { borderColor: stylesVars.blue } : null,
+                    pressed ? styles.pressed : null
+                  ]}
+                >
+                  <Text style={styles.linkText}>No</Text>
+                </Pressable>
+              </View>
+
+              {!tailoringEligible ? (
+                <Text style={[styles.meta, { marginTop: 6 }]}>
+                  Stitching is not available for this product.
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* ✅ Dyeing (YES/NO) — if "Yes", open palette; if "No", clear selection AND clear route params */}
+          {showBuyerActions && showDyeing ? (
+            <View style={{ marginTop: 12 }}>
+              <Text style={styles.label}>Do you want dyeing?</Text>
+
+              <View style={{ flexDirection: "row", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+                <Pressable
+                  onPress={() => {
+                    setBuyerWantsDyeing(true);
+                    onOpenDyeing();
+                  }}
+                  style={({ pressed }) => [
+                    styles.linkBtnInline,
+                    buyerWantsDyeing ? { borderColor: stylesVars.blue } : null,
+                    pressed ? styles.pressed : null
+                  ]}
+                >
+                  <Text style={styles.linkText}>Yes • +PKR {dyeingCostPkr}</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    // ✅ NO must override any existing URL params by clearing them
+                    setBuyerWantsDyeing(false);
+                    setSelectedDyeShadeId("");
+                    setSelectedDyeHex("");
+                    setSelectedDyeLabel("");
+
+                    router.setParams({
+                      dyeing_selected: "0",
+                      dye_shade_id: undefined,
+                      dye_hex: undefined,
+                      dye_label: undefined
+                    } as any);
+                  }}
+                  style={({ pressed }) => [
+                    styles.linkBtnInline,
+                    !buyerWantsDyeing ? { borderColor: stylesVars.blue } : null,
+                    pressed ? styles.pressed : null
+                  ]}
+                >
+                  <Text style={styles.linkText}>No</Text>
+                </Pressable>
+              </View>
+
+              {/* If dyeing yes AND a shade is selected, show it */}
+              {buyerWantsDyeing && selectedDyeHex ? (
+                <View style={{ marginTop: 14 }}>
+                  <Text style={styles.label}>Selected Colour</Text>
+
+                  <View
+                    style={{
+                      marginTop: 8,
+                      width: 60,
+                      height: 60,
+                      borderRadius: 14,
+                      backgroundColor: selectedDyeHex,
+                      borderWidth: 1,
+                      borderColor: "#CBD5E1"
+                    }}
+                  />
+                </View>
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.card}>
@@ -946,7 +1406,7 @@ const stylesVars = {
   cardBg: "#FFFFFF",
   border: "#D9E2F2",
   borderSoft: "#E6EDF8",
-  blue: "#0B2F6B",
+  blue: "#3e6292", // ✅ lighter than before, still brand-safe
   blueSoft: "#EAF2FF",
   text: "#111111",
   subText: "#60708A",
@@ -1005,7 +1465,14 @@ const styles = StyleSheet.create({
     padding: 14
   },
 
-  sectionTitle: { fontSize: 13, fontWeight: "900", color: stylesVars.blue },
+  // ✅ CHANGE: make ALL card section headings clearly blue (Vendor / Product Description / Images / Videos / Meta / Missing product)
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: stylesVars.blue,
+    letterSpacing: 0.3
+  },
+
   meta: {
     marginTop: 6,
     fontSize: 12,
@@ -1014,12 +1481,16 @@ const styles = StyleSheet.create({
   },
 
   row: { marginTop: 10 },
+
+  // ✅ CHANGE: labels (Product Code / Title / Category / Inventory Qty / Price / etc.) clearly blue everywhere
   label: {
     fontSize: 12,
     fontWeight: "900",
     color: stylesVars.blue,
     letterSpacing: 0.2
   },
+
+  // ✅ Values remain dark for contrast
   value: {
     marginTop: 4,
     fontSize: 14,
@@ -1101,12 +1572,15 @@ const styles = StyleSheet.create({
   },
   playBadgeText: { color: "#fff", fontWeight: "900", fontSize: 12 },
 
+  // ✅ CHANGE: sub-section labels inside Product Description (Dress Type / Fabric / Work / etc.) clearly blue
   specTitle: {
-    marginTop: 6,
-    fontSize: 12,
+    marginTop: 8,
+    fontSize: 13,
     fontWeight: "900",
-    color: stylesVars.blue
+    color: stylesVars.blue,
+    letterSpacing: 0.3
   },
+
   chipsWrap: {
     marginTop: 8,
     flexDirection: "row",
@@ -1153,6 +1627,26 @@ const styles = StyleSheet.create({
     borderColor: stylesVars.dangerBorder
   },
   viewBtnText: { color: stylesVars.danger, fontWeight: "900" },
+
+  // ✅ Buyer tailoring pick pill (now truly persists across dye selection)
+  tailoringPickPill: {
+    marginTop: 10,
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 999,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: stylesVars.border
+  },
+  tailoringPickPillOn: {
+    backgroundColor: stylesVars.blueSoft,
+    borderColor: stylesVars.blue
+  },
+  tailoringPickPillDisabled: { opacity: 0.5 },
+  tailoringPickText: { color: stylesVars.text, fontWeight: "900", fontSize: 12 },
+  tailoringPickTextOn: { color: stylesVars.blue },
+  tailoringPickTextDisabled: { color: stylesVars.text },
 
   // ✅ Sticky footer
   footer: {

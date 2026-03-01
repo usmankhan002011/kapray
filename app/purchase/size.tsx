@@ -1,3 +1,4 @@
+// app/purchase/size.tsx
 import React, { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -282,7 +283,29 @@ export default function SizeScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
     returnTo?: string;
+
     productId?: string;
+    product_id?: string;
+    productCode?: string;
+    product_code?: string;
+
+    productName?: string;
+
+    // ✅ dress category passthrough (stitched/unstitched etc.)
+    product_category?: string;
+
+    price?: string;
+    currency?: string;
+    imageUrl?: string;
+
+    dye_shade_id?: string;
+    dye_hex?: string;
+    dye_label?: string;
+    dyeing_cost_pkr?: string;
+
+    // ✅ tailoring passthrough
+    tailoring_cost_pkr?: string;
+    tailoring_turnaround_days?: string;
 
     selectedSize?: string;
     mode?: string;
@@ -310,7 +333,15 @@ export default function SizeScreen() {
     [params.returnTo]
   );
 
-  const productId = useMemo(() => (params.productId ? String(params.productId) : ""), [params.productId]);
+  const productId = useMemo(() => {
+    const v = params.productId ?? params.product_id ?? "";
+    return v ? String(v) : "";
+  }, [params.productId, params.product_id]);
+
+  const productCode = useMemo(() => {
+    const v = params.productCode ?? params.product_code ?? "";
+    return v ? String(v) : "";
+  }, [params.productCode, params.product_code]);
 
   const initialMode: Mode = useMemo(() => {
     const m = params.mode ? String(params.mode) : "";
@@ -354,7 +385,13 @@ export default function SizeScreen() {
     router.replace({
       pathname: returnTo as any,
       params: {
+        ...(params as any), // keep forwarded product + dye + tailoring params
         productId,
+        productCode,
+
+        // ✅ ensure canonical key exists for place-order
+        product_category: (params as any)?.product_category ?? (params as any)?.productCategory ?? "",
+
         ...p
       }
     });
@@ -433,7 +470,11 @@ export default function SizeScreen() {
     !isValidNumberOrEmpty(o);
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
+    >
       <Text style={styles.title}>Select Size</Text>
 
       <View style={styles.toggleRow}>
@@ -441,11 +482,18 @@ export default function SizeScreen() {
           onPress={() => setMode("standard")}
           style={[styles.toggleBtn, mode === "standard" ? styles.toggleActive : null]}
         >
-          <Text style={[styles.toggleText, mode === "standard" ? styles.toggleTextActive : null]}>Standard</Text>
+          <Text style={[styles.toggleText, mode === "standard" ? styles.toggleTextActive : null]}>
+            Standard
+          </Text>
         </Pressable>
 
-        <Pressable onPress={() => setMode("exact")} style={[styles.toggleBtn, mode === "exact" ? styles.toggleActive : null]}>
-          <Text style={[styles.toggleText, mode === "exact" ? styles.toggleTextActive : null]}>Exact (A–N)</Text>
+        <Pressable
+          onPress={() => setMode("exact")}
+          style={[styles.toggleBtn, mode === "exact" ? styles.toggleActive : null]}
+        >
+          <Text style={[styles.toggleText, mode === "exact" ? styles.toggleTextActive : null]}>
+            Exact (A–N)
+          </Text>
         </Pressable>
       </View>
 
@@ -461,40 +509,126 @@ export default function SizeScreen() {
         <View style={styles.exactWrap}>
           <BodyMeasureSvg />
 
-          <Text style={styles.helper}>Enter measurements (inches or cm — just be consistent). You can fill only what you know.</Text>
+          <Text style={styles.helper}>
+            Enter measurements (inches or cm — just be consistent). You can fill only what you know.
+          </Text>
 
           <View style={styles.unitRow}>
-            <Pressable onPress={() => setUnit("cm")} style={[styles.unitPill, unit === "cm" ? styles.unitActive : null]}>
-              <Text style={[styles.unitText, unit === "cm" ? styles.unitTextActive : null]}>cm</Text>
+            <Pressable
+              onPress={() => setUnit("cm")}
+              style={[styles.unitPill, unit === "cm" ? styles.unitActive : null]}
+            >
+              <Text style={[styles.unitText, unit === "cm" ? styles.unitTextActive : null]}>
+                cm
+              </Text>
             </Pressable>
 
-            <Pressable onPress={() => setUnit("in")} style={[styles.unitPill, unit === "in" ? styles.unitActive : null]}>
-              <Text style={[styles.unitText, unit === "in" ? styles.unitTextActive : null]}>inch</Text>
+            <Pressable
+              onPress={() => setUnit("in")}
+              style={[styles.unitPill, unit === "in" ? styles.unitActive : null]}
+            >
+              <Text style={[styles.unitText, unit === "in" ? styles.unitTextActive : null]}>
+                inch
+              </Text>
             </Pressable>
           </View>
 
           <View style={styles.inputs}>
-            <MeasureRow code="A" value={a} onChange={setA} placeholder={"Neck circumference" + unitSuffix} />
-            <MeasureRow code="B" value={b} onChange={setB} placeholder={"Shoulder width" + unitSuffix} />
-            <MeasureRow code="C" value={c} onChange={setC} placeholder={"Bust / Chest circumference" + unitSuffix} />
-            <MeasureRow code="D" value={d} onChange={setD} placeholder={"Under-bust circumference" + unitSuffix} />
-            <MeasureRow code="E" value={e} onChange={setE} placeholder={"Waist circumference" + unitSuffix} />
-            <MeasureRow code="F" value={f} onChange={setF} placeholder={"Hips circumference" + unitSuffix} />
-            <MeasureRow code="O" value={o} onChange={setO} placeholder={"Thigh circumference" + unitSuffix} />
-            <MeasureRow code="G" value={g} onChange={setG} placeholder={"Shoulder to waist" + unitSuffix} />
-            <MeasureRow code="H" value={h} onChange={setH} placeholder={"Sleeve length" + unitSuffix} />
-            <MeasureRow code="I" value={i} onChange={setI} placeholder={"Bicep circumference" + unitSuffix} />
-            <MeasureRow code="J" value={j} onChange={setJ} placeholder={"Wrist circumference" + unitSuffix} />
-            <MeasureRow code="K" value={k} onChange={setK} placeholder={"Full height" + unitSuffix} />
-            <MeasureRow code="L" value={l} onChange={setL} placeholder={"Waist to floor" + unitSuffix} />
+            <MeasureRow
+              code="A"
+              value={a}
+              onChange={setA}
+              placeholder={"Neck circumference" + unitSuffix}
+            />
+            <MeasureRow
+              code="B"
+              value={b}
+              onChange={setB}
+              placeholder={"Shoulder width" + unitSuffix}
+            />
+            <MeasureRow
+              code="C"
+              value={c}
+              onChange={setC}
+              placeholder={"Bust / Chest circumference" + unitSuffix}
+            />
+            <MeasureRow
+              code="D"
+              value={d}
+              onChange={setD}
+              placeholder={"Under-bust circumference" + unitSuffix}
+            />
+            <MeasureRow
+              code="E"
+              value={e}
+              onChange={setE}
+              placeholder={"Waist circumference" + unitSuffix}
+            />
+            <MeasureRow
+              code="F"
+              value={f}
+              onChange={setF}
+              placeholder={"Hips circumference" + unitSuffix}
+            />
+            <MeasureRow
+              code="O"
+              value={o}
+              onChange={setO}
+              placeholder={"Thigh circumference" + unitSuffix}
+            />
+            <MeasureRow
+              code="G"
+              value={g}
+              onChange={setG}
+              placeholder={"Shoulder to waist" + unitSuffix}
+            />
+            <MeasureRow
+              code="H"
+              value={h}
+              onChange={setH}
+              placeholder={"Sleeve length" + unitSuffix}
+            />
+            <MeasureRow
+              code="I"
+              value={i}
+              onChange={setI}
+              placeholder={"Bicep circumference" + unitSuffix}
+            />
+            <MeasureRow
+              code="J"
+              value={j}
+              onChange={setJ}
+              placeholder={"Wrist circumference" + unitSuffix}
+            />
+            <MeasureRow
+              code="K"
+              value={k}
+              onChange={setK}
+              placeholder={"Full height" + unitSuffix}
+            />
+            <MeasureRow
+              code="L"
+              value={l}
+              onChange={setL}
+              placeholder={"Waist to floor" + unitSuffix}
+            />
             <MeasureRow code="M" value={m} onChange={setM} placeholder={"Inseam" + unitSuffix} />
-            <MeasureRow code="N" value={n} onChange={setN} placeholder={"Outseam" + unitSuffix} />
+            <MeasureRow
+              code="N"
+              value={n}
+              onChange={setN}
+              placeholder={"Outseam" + unitSuffix}
+            />
 
             <Pressable onPress={onSaveExact} style={styles.primaryBtn}>
               <Text style={styles.primaryText}>Continue</Text>
             </Pressable>
 
-            {invalid ? <Text style={styles.validation}>Please enter valid positive numbers only (or leave blank).</Text> : null}
+            {invalid ? (
+              <Text style={styles.validation}>
+                Please enter valid positive numbers only (or leave blank).
+              </Text>
+            ) : null}
           </View>
         </View>
       )}
@@ -539,7 +673,13 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: "800", color: "#111" },
 
   toggleRow: { flexDirection: "row", gap: 10, marginTop: 6, flexWrap: "wrap" },
-  toggleBtn: { paddingVertical: 10, paddingHorizontal: 12, borderWidth: 1, borderColor: "#111", borderRadius: 10 },
+  toggleBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#111",
+    borderRadius: 10
+  },
   toggleActive: { backgroundColor: "#111" },
   toggleText: { fontSize: 14, fontWeight: "800", color: "#111" },
   toggleTextActive: { color: "#fff" },
@@ -563,12 +703,24 @@ const styles = StyleSheet.create({
   helper: { fontSize: 13, color: "#333", opacity: 0.85 },
 
   unitRow: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
-  unitPill: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: "#111" },
+  unitPill: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#111"
+  },
   unitActive: { backgroundColor: "#111" },
   unitText: { fontSize: 13, fontWeight: "900", color: "#111" },
   unitTextActive: { color: "#fff" },
 
-  svgCard: { borderWidth: 1, borderColor: "#111", borderRadius: 12, padding: 12, backgroundColor: "#fff" },
+  svgCard: {
+    borderWidth: 1,
+    borderColor: "#111",
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: "#fff"
+  },
   svgTitle: { fontSize: 14, fontWeight: "900", marginBottom: 8, color: "#111" },
   legend: { marginTop: 8, gap: 4 },
   legendText: { fontSize: 12, color: "#111", opacity: 0.85 },
@@ -588,7 +740,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff"
   },
 
-  primaryBtn: { marginTop: 4, paddingVertical: 12, borderRadius: 10, backgroundColor: "#111", alignItems: "center" },
+  primaryBtn: {
+    marginTop: 4,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: "#111",
+    alignItems: "center"
+  },
   primaryText: { color: "#fff", fontWeight: "900" },
   validation: { fontSize: 12, color: "#b00020" },
 

@@ -46,6 +46,9 @@ type VendorRow = {
 
   status: string | null;
 
+  // ✅ NEW: vendor-wide tailoring offering
+  offers_tailoring?: boolean | null;
+
   // legacy
   location?: string | null;
 };
@@ -186,7 +189,8 @@ export default function VendorProfileScreen() {
             "shop_image_paths",
             "shop_video_paths",
             "status",
-            "location"
+            "location",
+            "offers_tailoring"
           ].join(",")
         )
         .eq("id", vendorId)
@@ -390,6 +394,8 @@ export default function VendorProfileScreen() {
     return videoUrls.map((v, idx) => ({ videoUrl: v, idx }));
   }, [videoUrls]);
 
+  const offersTailoring = Boolean((vendor as any)?.offers_tailoring);
+
   return (
     <View style={{ flex: 1, backgroundColor: stylesVars.bg }}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -410,9 +416,7 @@ export default function VendorProfileScreen() {
         <Text style={styles.title}>{heading}</Text>
 
         {!vendorId && (
-          <Text style={styles.hint}>
-            No vendor selected. Create a vendor first.
-          </Text>
+          <Text style={styles.hint}>No vendor selected. Create a vendor first.</Text>
         )}
 
         {!!loading && (
@@ -425,10 +429,7 @@ export default function VendorProfileScreen() {
         {!!bannerUrl && (
           <Pressable
             onPress={() => openViewerAt([bannerUrl], 0)}
-            style={({ pressed }) => [
-              styles.bannerWrap,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.bannerWrap, pressed ? styles.pressed : null]}
           >
             <Image source={{ uri: bannerUrl }} style={styles.banner} />
           </Pressable>
@@ -439,10 +440,7 @@ export default function VendorProfileScreen() {
             {!!profileUrl ? (
               <Pressable
                 onPress={() => openViewerAt([profileUrl], 0)}
-                style={({ pressed }) => [
-                  styles.avatarPress,
-                  pressed ? styles.pressed : null
-                ]}
+                style={({ pressed }) => [styles.avatarPress, pressed ? styles.pressed : null]}
               >
                 <Image source={{ uri: profileUrl }} style={styles.avatar} />
               </Pressable>
@@ -461,6 +459,16 @@ export default function VendorProfileScreen() {
           <View style={styles.headerInfo}>
             <Text style={styles.shopName}>{safeText(vendor?.shop_name)}</Text>
             <Text style={styles.ownerName}>{safeText(vendor?.name)}</Text>
+
+            {/* ✅ NEW: Tailoring / stitching facility badge */}
+            <View style={styles.tailorBadgeRow}>
+              <Text style={styles.tailorBadgeLabel}>Stitching / Tailoring</Text>
+              <View style={[styles.tailorPill, offersTailoring ? styles.tailorPillOn : null]}>
+                <Text style={[styles.tailorPillText, offersTailoring ? styles.tailorPillTextOn : null]}>
+                  {offersTailoring ? "Available" : "Not available"}
+                </Text>
+              </View>
+            </View>
           </View>
         </View>
 
@@ -492,10 +500,7 @@ export default function VendorProfileScreen() {
                     <Pressable
                       key={`${u}-${idx}`}
                       onPress={() => openViewerAt(shopImageUrls, idx)}
-                      style={({ pressed }) => [
-                        styles.thumbWrap,
-                        pressed ? styles.pressed : null
-                      ]}
+                      style={({ pressed }) => [styles.thumbWrap, pressed ? styles.pressed : null]}
                     >
                       <Image source={{ uri: u }} style={styles.thumb} />
                       {idx === 0 ? (
@@ -518,9 +523,7 @@ export default function VendorProfileScreen() {
 
           {certificateUrls.length ? (
             <>
-              <Text style={styles.meta}>
-                Tap any certificate to view full screen.
-              </Text>
+              <Text style={styles.meta}>Tap any certificate to view full screen.</Text>
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={styles.hRow}>
@@ -528,10 +531,7 @@ export default function VendorProfileScreen() {
                     <Pressable
                       key={`${u}-${idx}`}
                       onPress={() => openViewerAt(certificateUrls, idx)}
-                      style={({ pressed }) => [
-                        styles.thumbWrap,
-                        pressed ? styles.pressed : null
-                      ]}
+                      style={({ pressed }) => [styles.thumbWrap, pressed ? styles.pressed : null]}
                     >
                       <Image source={{ uri: u }} style={styles.thumb} />
                     </Pressable>
@@ -560,9 +560,7 @@ export default function VendorProfileScreen() {
                 </View>
               )}
 
-              <Text style={styles.meta}>
-                Tap a tile to play. Long-press to open externally.
-              </Text>
+              <Text style={styles.meta}>Tap a tile to play. Long-press to open externally.</Text>
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={styles.hRow}>
@@ -613,11 +611,7 @@ export default function VendorProfileScreen() {
         </View>
       </ScrollView>
 
-      <Modal
-        visible={viewerVisible}
-        transparent
-        onRequestClose={() => setViewerVisible(false)}
-      >
+      <Modal visible={viewerVisible} transparent onRequestClose={() => setViewerVisible(false)}>
         <View style={styles.viewerContainer}>
           <FlatList
             ref={flatListRef}
@@ -641,15 +635,10 @@ export default function VendorProfileScreen() {
               const next = Math.round(e.nativeEvent.contentOffset.x / width) || 0;
               setCurrentIndex(next);
             }}
-            renderItem={({ item }) => (
-              <Image source={{ uri: item }} style={styles.viewerImage} />
-            )}
+            renderItem={({ item }) => <Image source={{ uri: item }} style={styles.viewerImage} />}
           />
 
-          <Pressable
-            style={styles.closeButton}
-            onPress={() => setViewerVisible(false)}
-          >
+          <Pressable style={styles.closeButton} onPress={() => setViewerVisible(false)}>
             <Text style={styles.closeText}>✕</Text>
           </Pressable>
 
@@ -762,6 +751,35 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: stylesVars.subText
   },
+
+  // ✅ NEW: Tailoring badge
+  tailorBadgeRow: {
+    marginTop: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10
+  },
+  tailorBadgeLabel: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: stylesVars.blue,
+    letterSpacing: 0.2
+  },
+  tailorPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: "#fff"
+  },
+  tailorPillOn: {
+    borderColor: stylesVars.blue,
+    backgroundColor: stylesVars.blueSoft
+  },
+  tailorPillText: { fontSize: 12, fontWeight: "900", color: stylesVars.text },
+  tailorPillTextOn: { color: stylesVars.blue },
 
   section: {
     marginTop: 18,

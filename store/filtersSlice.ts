@@ -4,6 +4,7 @@ type Multi = string[];
 
 export type FiltersState = {
   dressTypeId: number | null;
+  dressTypeIds: Multi;
 
   fabricTypeIds: Multi;
   colorShadeIds: Multi;
@@ -19,6 +20,7 @@ export type FiltersState = {
 
 const initialState: FiltersState = {
   dressTypeId: null,
+  dressTypeIds: [],
 
   fabricTypeIds: [],
   colorShadeIds: [],
@@ -45,6 +47,23 @@ const filtersSlice = createSlice({
 
     setDressTypeId: (state, action: PayloadAction<number | null>) => {
       state.dressTypeId = action.payload;
+      state.dressTypeIds = action.payload === null ? [] : [String(action.payload)];
+
+      // Reset downstream filters when dress type changes
+      state.fabricTypeIds = [];
+      state.colorShadeIds = [];
+      state.workTypeIds = [];
+      state.workDensityIds = [];
+      state.originCityIds = [];
+      state.wearStateIds = [];
+      state.priceBandIds = [];
+
+      // ✅ vendorIds intentionally NOT reset
+    },
+
+    setDressTypeIds: (state, action: PayloadAction<string[]>) => {
+      state.dressTypeIds = action.payload ?? [];
+      state.dressTypeId = state.dressTypeIds.length ? Number(state.dressTypeIds[0]) : null;
 
       // Reset downstream filters when dress type changes
       state.fabricTypeIds = [];
@@ -123,6 +142,7 @@ const filtersSlice = createSlice({
 export const {
   resetAllFilters,
   setDressTypeId,
+  setDressTypeIds,
 
   clearFabricTypes,
   toggleFabricType,

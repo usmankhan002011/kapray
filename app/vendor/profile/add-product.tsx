@@ -36,6 +36,12 @@ const MODALS = [
 
 type ModalName = (typeof MODALS)[number];
 
+type ProductCategory =
+  | "unstitched_plain"
+  | "unstitched_dyeing"
+  | "unstitched_dyeing_tailoring"
+  | "stitched_ready";
+
 function sanitizeNumber(input: string) {
   const cleaned = input.replace(/[^\d.]/g, "");
   const parts = cleaned.split(".");
@@ -51,6 +57,12 @@ function safeInt(v: any) {
 
 function safeStr(v: any) {
   return String(v ?? "").trim();
+}
+
+function safeNumOrZero(v: any) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0;
+  return n;
 }
 
 async function uploadAssetToStorage(args: {
@@ -78,6 +90,30 @@ function formatPicked(list: any, emptyLabel: string) {
   const cleaned = arr.map((x) => safeStr(x)).filter(Boolean);
   if (!cleaned.length) return emptyLabel;
   return cleaned.join(", ");
+}
+
+function inferCategoryFromDraft(draft: any): ProductCategory {
+  const spec = draft?.spec ?? {};
+  const price = draft?.price ?? {};
+  const fromSpec = safeStr((spec as any)?.product_category ?? "");
+  if (
+    fromSpec === "unstitched_plain" ||
+    fromSpec === "unstitched_dyeing" ||
+    fromSpec === "unstitched_dyeing_tailoring" ||
+    fromSpec === "stitched_ready"
+  ) {
+    return fromSpec as ProductCategory;
+  }
+
+  const mode = safeStr(price?.mode ?? "");
+  if (mode === "stitched_total") return "stitched_ready";
+
+  const dye = Boolean(spec?.dyeing_enabled);
+  const tail = Boolean(spec?.tailoring_enabled);
+
+  if (tail) return "unstitched_dyeing_tailoring";
+  if (dye) return "unstitched_dyeing";
+  return "unstitched_plain";
 }
 
 export default function AddProductScreen() {
@@ -110,6 +146,56 @@ export default function AddProductScreen() {
 
   const [saving, setSaving] = useState(false);
 
+  // ✅ Load vendor row to know offers_tailoring
+  const [vendorOffersTailoring, setVendorOffersTailoring] = useState<boolean>(false);
+  const [vendorLoading, setVendorLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadVendor() {
+      if (!vendorId) {
+        if (alive) setVendorOffersTailoring(false);
+        return;
+      }
+
+      try {
+        if (alive) setVendorLoading(true);
+
+        const { data, error } = await supabase
+          .from("vendor")
+          .select("id, offers_tailoring")
+          .eq("id", vendorId)
+          .single();
+
+        if (!alive) return;
+
+        if (error) {
+          setVendorOffersTailoring(false);
+          return;
+        }
+
+        setVendorOffersTailoring(Boolean((data as any)?.offers_tailoring));
+      } catch {
+        if (!alive) return;
+        setVendorOffersTailoring(false);
+      } finally {
+        if (alive) setVendorLoading(false);
+      }
+    }
+
+    loadVendor();
+
+    return () => {
+      alive = false;
+    };
+  }, [vendorId]);
+
+  // ✅ Category-first single truth (stored in DB column product_category)
+  const [productCategory, setProductCategory] = useState<ProductCategory>(() =>
+    inferCategoryFromDraft(draft)
+  );
+
   // Made-on-order toggle
   const [madeOnOrder, setMadeOnOrder] = useState<boolean>(() => {
     return Boolean((draft.spec as any)?.made_on_order ?? false);
@@ -120,6 +206,37 @@ export default function AddProductScreen() {
     return safeStr((draft.spec as any)?.more_description ?? "");
   });
 
+  // Costs / turnaround (only shown when category needs them)
+  const [dyeingCostPkr, setDyeingCostPkr] = useState<number>(() => {
+    const fromPrice = safeNumOrZero((draft.price as any)?.dyeing_cost_pkr ?? 0);
+    if (fromPrice > 0) return fromPrice;
+
+    const fromSpec = safeNumOrZero((draft.spec as any)?.dyeing_cost_pkr ?? 0);
+    return fromSpec > 0 ? fromSpec : 0;
+  });
+
+  const [tailoringCostPkr, setTailoringCostPkr] = useState<number>(() => {
+    const fromPrice = safeNumOrZero((draft.price as any)?.tailoring_cost_pkr ?? 0);
+    return fromPrice > 0 ? fromPrice : 0;
+  });
+
+  const [tailoringTurnaroundDays, setTailoringTurnaroundDays] = useState<number>(() => {
+    const fromSpec = safeNumOrZero((draft.spec as any)?.tailoring_turnaround_days ?? 0);
+    return fromSpec > 0 ? fromSpec : 0;
+  });
+
+  const isUnstitched = useMemo(() => {
+    return productCategory !== "stitched_ready";
+  }, [productCategory]);
+
+  const needsDyeing = useMemo(() => {
+    return productCategory === "unstitched_dyeing" || productCategory === "unstitched_dyeing_tailoring";
+  }, [productCategory]);
+
+  const needsTailoring = useMemo(() => {
+    return productCategory === "unstitched_dyeing_tailoring";
+  }, [productCategory]);
+
   // When made on order is ON, auto-fill inventory to 0 (UI + saved payload)
   useEffect(() => {
     if (madeOnOrder) {
@@ -127,6 +244,43 @@ export default function AddProductScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [madeOnOrder]);
+
+  // ✅ Enforce price mode from category (single truth)
+  useEffect(() => {
+    if (productCategory === "stitched_ready") {
+      if (draft.price.mode !== "stitched_total") setPriceMode("stitched_total");
+
+      // Clear unstitched-only fields
+      if (dyeingCostPkr !== 0) setDyeingCostPkr(0);
+      if (tailoringCostPkr !== 0) setTailoringCostPkr(0);
+      if (tailoringTurnaroundDays !== 0) setTailoringTurnaroundDays(0);
+      return;
+    }
+
+    // unstitched categories
+    if (draft.price.mode !== "unstitched_per_meter") setPriceMode("unstitched_per_meter");
+
+    // If category does not include dyeing/tailoring, clear those costs
+    if (!needsDyeing && dyeingCostPkr !== 0) setDyeingCostPkr(0);
+
+    if (!needsTailoring) {
+      if (tailoringCostPkr !== 0) setTailoringCostPkr(0);
+      if (tailoringTurnaroundDays !== 0) setTailoringTurnaroundDays(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productCategory]);
+
+  // ✅ Gate tailoring category by vendor.offers_tailoring
+  useEffect(() => {
+    if (productCategory === "unstitched_dyeing_tailoring" && !vendorOffersTailoring) {
+      setProductCategory("unstitched_dyeing");
+      Alert.alert(
+        "Tailoring not enabled",
+        "You cannot select “Dyeing + Tailoring” because your vendor profile does not offer tailoring. Enable “Stitching / Tailoring” in your profile first."
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendorOffersTailoring]);
 
   // Video thumbs for picked videos (uri -> thumb uri)
   const [videoThumbs, setVideoThumbs] = useState<Record<string, string>>({});
@@ -168,12 +322,30 @@ export default function AddProductScreen() {
     if (!vendorId) return false;
     if (!draft.title.trim()) return false;
 
-    if (draft.price.mode === "unstitched_per_meter") {
-      const n = Number(draft.price.cost_pkr_per_meter ?? 0);
-      if (!Number.isFinite(n) || n <= 0) return false;
-    } else {
+    // Category-required pricing
+    if (productCategory === "stitched_ready") {
       const n = Number(draft.price.cost_pkr_total ?? 0);
       if (!Number.isFinite(n) || n <= 0) return false;
+    } else {
+      const n = Number(draft.price.cost_pkr_per_meter ?? 0);
+      if (!Number.isFinite(n) || n <= 0) return false;
+
+      // dyeing categories require dyeing_cost_pkr > 0
+      if (needsDyeing) {
+        const d = Number(dyeingCostPkr ?? 0);
+        if (!Number.isFinite(d) || d <= 0) return false;
+      }
+
+      // tailoring category requires vendor offers tailoring + tailoring cost > 0 + turnaround >= 0
+      if (needsTailoring) {
+        if (!vendorOffersTailoring) return false;
+
+        const t = Number(tailoringCostPkr ?? 0);
+        if (!Number.isFinite(t) || t <= 0) return false;
+
+        const days = Number(tailoringTurnaroundDays ?? 0);
+        if (!Number.isFinite(days) || days < 0) return false;
+      }
     }
 
     if ((draft.media.images ?? []).length < 1) return false;
@@ -188,14 +360,23 @@ export default function AddProductScreen() {
     }
 
     return true;
-  }, [vendorId, draft, madeOnOrder]);
+  }, [
+    vendorId,
+    draft,
+    madeOnOrder,
+    productCategory,
+    needsDyeing,
+    dyeingCostPkr,
+    needsTailoring,
+    vendorOffersTailoring,
+    tailoringCostPkr,
+    tailoringTurnaroundDays
+  ]);
 
   function goPickModal(name: ModalName) {
     // DO NOT TOUCH: navigation is already correct per your instruction.
     const encoded = encodeURIComponent(returnTo);
-    router.push(
-      `/vendor/profile/(product-modals)/${name}?returnTo=${encoded}` as any
-    );
+    router.push(`/vendor/profile/(product-modals)/${name}?returnTo=${encoded}` as any);
   }
 
   function dressTypeSummary() {
@@ -293,7 +474,7 @@ export default function AddProductScreen() {
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsMultipleSelection: true,
-      selectionLimit: 8,
+      // ✅ UNLIMITED: remove selectionLimit + no slice cap
       quality: 0.9
     });
 
@@ -305,7 +486,7 @@ export default function AddProductScreen() {
       for (const a of res.assets) {
         if (!seen.has(a.uri)) next.push(a);
       }
-      return next.slice(0, 8);
+      return next; // ✅ no cap
     });
   }
 
@@ -319,7 +500,7 @@ export default function AddProductScreen() {
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Videos,
       allowsMultipleSelection: true,
-      selectionLimit: 4,
+      // ✅ UNLIMITED: remove selectionLimit + no slice cap
       quality: 1
     });
 
@@ -331,7 +512,7 @@ export default function AddProductScreen() {
       for (const a of res.assets) {
         if (!seen.has(a.uri)) next.push(a);
       }
-      return next.slice(0, 4);
+      return next; // ✅ no cap
     });
   }
 
@@ -351,21 +532,34 @@ export default function AddProductScreen() {
     try {
       setSaving(true);
 
-      // IMPORTANT:
-      // Your DB now enforces vendor_seq + product_code via trigger: products_assign_code()
-      // So we DO NOT generate serials here. DB guarantees:
-      // - vendor-wise increasing serial (vendor_seq)
-      // - never reuse (unique vendor_id + vendor_seq)
-      // - product_code unique
-      // Just insert minimal fields and read back id/product_code.
-
       const inventoryQty = madeOnOrder ? 0 : Number(draft.inventory_qty ?? 0);
+
+      // ✅ Category is the single truth (DB column + spec mirror)
+      const finalCategory: ProductCategory = productCategory;
+
+      // ✅ Enforce category -> price mode mapping to satisfy DB constraints
+      const finalPriceMode = finalCategory === "stitched_ready" ? "stitched_total" : "unstitched_per_meter";
+
+      // ✅ Enforce category -> options
+      const unstitchedDyeingEnabled = finalCategory === "unstitched_dyeing" || finalCategory === "unstitched_dyeing_tailoring";
+      const unstitchedTailoringEnabled = finalCategory === "unstitched_dyeing_tailoring";
+
+      const unstitchedDyeingCost = unstitchedDyeingEnabled ? Math.max(0, Number(dyeingCostPkr ?? 0)) : 0;
+
+      const unstitchedTailoringCost = unstitchedTailoringEnabled ? Math.max(0, Number(tailoringCostPkr ?? 0)) : 0;
+
+      const unstitchedTailoringTurnaround = unstitchedTailoringEnabled
+        ? Math.max(0, Number(tailoringTurnaroundDays ?? 0))
+        : 0;
 
       const insertPayload: any = {
         vendor_id: vendorId,
         title: safeStr(draft.title),
 
-        // NEW: DB column
+        // ✅ NEW: DB column (single truth)
+        product_category: finalCategory,
+
+        // Existing: DB column
         made_on_order: Boolean(madeOnOrder),
 
         // Inventory: auto 0 when made_on_order=true
@@ -374,9 +568,28 @@ export default function AddProductScreen() {
         spec: {
           ...(draft.spec ?? {}),
           made_on_order: Boolean(madeOnOrder),
-          more_description: safeStr(moreDescription)
+          more_description: safeStr(moreDescription),
+
+          // ✅ Mirror category in spec (not the source of truth)
+          product_category: finalCategory,
+
+          // ✅ Category-driven options
+          dyeing_enabled: unstitchedDyeingEnabled,
+          tailoring_enabled: unstitchedTailoringEnabled,
+          tailoring_turnaround_days: unstitchedTailoringTurnaround
         },
-        price: draft.price,
+
+        price: {
+          ...(draft.price ?? {}),
+
+          // ✅ Enforce mode to match category (prevents check constraint violations)
+          mode: finalPriceMode,
+
+          // ✅ Costs stored in price JSONB
+          dyeing_cost_pkr: unstitchedDyeingCost,
+          tailoring_cost_pkr: unstitchedTailoringCost
+        },
+
         media: {
           images: [],
           videos: [],
@@ -492,11 +705,16 @@ export default function AddProductScreen() {
       // Done -> go to Products and pass new_product_id so products.tsx can insert at top
       Alert.alert("Saved", `Product created: ${finalCode}`);
       resetDraft();
+
+      // Reset local states
       setMoreDescription("");
+      setProductCategory("unstitched_plain");
+      setDyeingCostPkr(0);
+      setTailoringCostPkr(0);
+      setTailoringTurnaroundDays(0);
+
       router.replace(
-        `/vendor/profile/products?new_product_id=${encodeURIComponent(
-          productId
-        )}` as any
+        `/vendor/profile/products?new_product_id=${encodeURIComponent(productId)}` as any
       );
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not save product.");
@@ -534,10 +752,7 @@ export default function AddProductScreen() {
 
           <Pressable
             onPress={() => router.back()}
-            style={({ pressed }) => [
-              styles.linkBtn,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.linkBtn, pressed ? styles.pressed : null]}
           >
             <Text style={styles.linkText}>Close</Text>
           </Pressable>
@@ -555,10 +770,106 @@ export default function AddProductScreen() {
           maxLength={80}
         />
 
-        <View style={styles.inventoryTopRow}>
-          <Text style={[styles.label, { marginTop: 0 }]}>
-            Inventory Quantity *
+        {/* ✅ Category-first UI */}
+        <Text style={styles.label}>Category *</Text>
+        <View style={styles.segmentRow}>
+          <Pressable
+            onPress={() => setProductCategory("unstitched_plain")}
+            style={({ pressed }) => [
+              styles.segment,
+              productCategory === "unstitched_plain" ? styles.segmentOn : null,
+              pressed ? styles.pressed : null
+            ]}
+          >
+            <Text
+              style={[
+                styles.segmentText,
+                productCategory === "unstitched_plain" ? styles.segmentTextOn : null
+              ]}
+            >
+              Unstitched (Plain)
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => setProductCategory("unstitched_dyeing")}
+            style={({ pressed }) => [
+              styles.segment,
+              productCategory === "unstitched_dyeing" ? styles.segmentOn : null,
+              pressed ? styles.pressed : null
+            ]}
+          >
+            <Text
+              style={[
+                styles.segmentText,
+                productCategory === "unstitched_dyeing" ? styles.segmentTextOn : null
+              ]}
+            >
+              Unstitched + Dyeing
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => {
+              if (!vendorOffersTailoring) {
+                Alert.alert(
+                  "Tailoring not enabled",
+                  "You cannot select “Dyeing + Tailoring” because your vendor profile does not offer tailoring. Enable “Stitching / Tailoring” in your profile first."
+                );
+                return;
+              }
+              setProductCategory("unstitched_dyeing_tailoring");
+            }}
+            style={({ pressed }) => [
+              styles.segment,
+              productCategory === "unstitched_dyeing_tailoring" ? styles.segmentOn : null,
+              !vendorOffersTailoring ? styles.segmentDisabled : null,
+              pressed ? styles.pressed : null
+            ]}
+          >
+            <Text
+              style={[
+                styles.segmentText,
+                productCategory === "unstitched_dyeing_tailoring" ? styles.segmentTextOn : null,
+                !vendorOffersTailoring ? styles.segmentTextDisabled : null
+              ]}
+            >
+              Unstitched + Dyeing + Tailoring
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => setProductCategory("stitched_ready")}
+            style={({ pressed }) => [
+              styles.segment,
+              productCategory === "stitched_ready" ? styles.segmentOn : null,
+              pressed ? styles.pressed : null
+            ]}
+          >
+            <Text
+              style={[
+                styles.segmentText,
+                productCategory === "stitched_ready" ? styles.segmentTextOn : null
+              ]}
+            >
+              Stitched / Ready-to-wear
+            </Text>
+          </Pressable>
+        </View>
+
+        {vendorLoading ? (
+          <Text style={styles.metaHint}>Loading vendor settings…</Text>
+        ) : (
+          <Text style={styles.metaHint}>
+            Stitching/Tailoring in profile:{" "}
+            <Text style={{ fontWeight: "900", color: vendorOffersTailoring ? stylesVars.blue : stylesVars.text }}>
+              {vendorOffersTailoring ? "Available" : "Not available"}
+            </Text>
           </Text>
+        )}
+
+        <View style={styles.inventoryTopRow}>
+          <Text style={[styles.label, { marginTop: 0 }]}>Inventory Quantity *</Text>
 
           <Pressable
             onPress={() => setMadeOnOrder((v) => !v)}
@@ -587,9 +898,7 @@ export default function AddProductScreen() {
 
         <TextInput
           value={String(madeOnOrder ? 0 : (draft.inventory_qty ?? 0))}
-          onChangeText={(t) =>
-            setInventoryQty(Number(sanitizeNumber(t) || "0"))
-          }
+          onChangeText={(t) => setInventoryQty(Number(sanitizeNumber(t) || "0"))}
           placeholder="e.g., 10"
           placeholderTextColor={stylesVars.placeholder}
           style={[styles.input, madeOnOrder ? styles.inputDisabled : null]}
@@ -599,58 +908,14 @@ export default function AddProductScreen() {
         />
 
         <Text style={styles.label}>Cost *</Text>
-        <View style={styles.segmentRow}>
-          <Pressable
-            onPress={() => setPriceMode("stitched_total")}
-            style={({ pressed }) => [
-              styles.segment,
-              draft.price.mode === "stitched_total" ? styles.segmentOn : null,
-              pressed ? styles.pressed : null
-            ]}
-          >
-            <Text
-              style={[
-                styles.segmentText,
-                draft.price.mode === "stitched_total"
-                  ? styles.segmentTextOn
-                  : null
-              ]}
-            >
-              Stitched / Ready-to-wear
-            </Text>
-          </Pressable>
 
-          <Pressable
-            onPress={() => setPriceMode("unstitched_per_meter")}
-            style={({ pressed }) => [
-              styles.segment,
-              draft.price.mode === "unstitched_per_meter"
-                ? styles.segmentOn
-                : null,
-              pressed ? styles.pressed : null
-            ]}
-          >
-            <Text
-              style={[
-                styles.segmentText,
-                draft.price.mode === "unstitched_per_meter"
-                  ? styles.segmentTextOn
-                  : null
-              ]}
-            >
-              Unstitched (PKR/meter)
-            </Text>
-          </Pressable>
-        </View>
-
-        {draft.price.mode === "stitched_total" ? (
+        {/* Category-driven pricing */}
+        {productCategory === "stitched_ready" ? (
           <>
             <Text style={styles.label}>Total Cost (PKR) *</Text>
             <TextInput
               value={String(draft.price.cost_pkr_total ?? "")}
-              onChangeText={(t) =>
-                setPriceTotal(Number(sanitizeNumber(t) || "0"))
-              }
+              onChangeText={(t) => setPriceTotal(Number(sanitizeNumber(t) || "0"))}
               placeholder="e.g., 25000"
               placeholderTextColor={stylesVars.placeholder}
               style={styles.input}
@@ -680,15 +945,64 @@ export default function AddProductScreen() {
             <Text style={styles.label}>Cost per Meter (PKR) *</Text>
             <TextInput
               value={String(draft.price.cost_pkr_per_meter ?? "")}
-              onChangeText={(t) =>
-                setPricePerMeter(Number(sanitizeNumber(t) || "0"))
-              }
+              onChangeText={(t) => setPricePerMeter(Number(sanitizeNumber(t) || "0"))}
               placeholder="e.g., 1800"
               placeholderTextColor={stylesVars.placeholder}
               style={styles.input}
               keyboardType="decimal-pad"
               maxLength={12}
             />
+
+            {/* Dyeing categories */}
+            {needsDyeing ? (
+              <>
+                <Text style={styles.dyeHint}>
+                  Buyer will pick a dye shade at checkout (for dyeing categories).
+                </Text>
+
+                <Text style={styles.label}>Dyeing Cost (PKR) *</Text>
+                <TextInput
+                  value={String(dyeingCostPkr ?? "")}
+                  onChangeText={(t) => setDyeingCostPkr(Number(sanitizeNumber(t) || "0"))}
+                  placeholder="e.g., 800"
+                  placeholderTextColor={stylesVars.placeholder}
+                  style={styles.input}
+                  keyboardType="decimal-pad"
+                  maxLength={12}
+                />
+              </>
+            ) : null}
+
+            {/* Tailoring category */}
+            {needsTailoring ? (
+              <>
+                <Text style={styles.tailorHint}>
+                  This category requires vendor tailoring enabled in profile and a tailoring cost.
+                </Text>
+
+                <Text style={styles.label}>Tailoring Cost (PKR) *</Text>
+                <TextInput
+                  value={String(tailoringCostPkr ?? "")}
+                  onChangeText={(t) => setTailoringCostPkr(Number(sanitizeNumber(t) || "0"))}
+                  placeholder="e.g., 2500"
+                  placeholderTextColor={stylesVars.placeholder}
+                  style={styles.input}
+                  keyboardType="decimal-pad"
+                  maxLength={12}
+                />
+
+                <Text style={styles.label}>Tailoring Turnaround (days)</Text>
+                <TextInput
+                  value={String(tailoringTurnaroundDays ?? "")}
+                  onChangeText={(t) => setTailoringTurnaroundDays(Number(sanitizeNumber(t) || "0"))}
+                  placeholder="e.g., 12"
+                  placeholderTextColor={stylesVars.placeholder}
+                  style={styles.input}
+                  keyboardType="number-pad"
+                  maxLength={3}
+                />
+              </>
+            ) : null}
           </>
         )}
       </View>
@@ -698,10 +1012,7 @@ export default function AddProductScreen() {
 
         <View style={styles.btnRow}>
           <Pressable
-            style={({ pressed }) => [
-              styles.primaryBtn,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.primaryBtn, pressed ? styles.pressed : null]}
             onPress={pickImages}
             disabled={saving}
           >
@@ -729,10 +1040,7 @@ export default function AddProductScreen() {
           ) : null}
 
           <Pressable
-            style={({ pressed }) => [
-              styles.secondaryBtn,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.secondaryBtn, pressed ? styles.pressed : null]}
             onPress={pickVideos}
             disabled={saving}
           >
@@ -775,10 +1083,7 @@ export default function AddProductScreen() {
 
         <View style={styles.btnRow}>
           <Pressable
-            style={({ pressed }) => [
-              styles.pickBtn,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.pickBtn, pressed ? styles.pressed : null]}
             onPress={() => goPickModal("dress-type_modal")}
             disabled={saving}
           >
@@ -787,10 +1092,7 @@ export default function AddProductScreen() {
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [
-              styles.pickBtn,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.pickBtn, pressed ? styles.pressed : null]}
             onPress={() => goPickModal("fabric_modal")}
             disabled={saving}
           >
@@ -799,10 +1101,7 @@ export default function AddProductScreen() {
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [
-              styles.pickBtn,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.pickBtn, pressed ? styles.pressed : null]}
             onPress={() => goPickModal("color_modal")}
             disabled={saving}
           >
@@ -811,10 +1110,7 @@ export default function AddProductScreen() {
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [
-              styles.pickBtn,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.pickBtn, pressed ? styles.pressed : null]}
             onPress={() => goPickModal("work_modal")}
             disabled={saving}
           >
@@ -823,10 +1119,7 @@ export default function AddProductScreen() {
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [
-              styles.pickBtn,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.pickBtn, pressed ? styles.pressed : null]}
             onPress={() => goPickModal("work-density_modal")}
             disabled={saving}
           >
@@ -835,10 +1128,7 @@ export default function AddProductScreen() {
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [
-              styles.pickBtn,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.pickBtn, pressed ? styles.pressed : null]}
             onPress={() => goPickModal("origin-city_modal")}
             disabled={saving}
           >
@@ -847,10 +1137,7 @@ export default function AddProductScreen() {
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [
-              styles.pickBtn,
-              pressed ? styles.pressed : null
-            ]}
+            style={({ pressed }) => [styles.pickBtn, pressed ? styles.pressed : null]}
             onPress={() => goPickModal("wear-state_modal")}
             disabled={saving}
           >
@@ -956,6 +1243,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2
   },
 
+  metaHint: {
+    marginTop: 8,
+    color: stylesVars.subText,
+    fontWeight: "800",
+    fontSize: 12
+  },
+
   inventoryTopRow: {
     marginTop: 10,
     flexDirection: "row",
@@ -1014,8 +1308,10 @@ const styles = StyleSheet.create({
     backgroundColor: stylesVars.blueSoft,
     borderColor: stylesVars.blue
   },
+  segmentDisabled: { opacity: 0.45 },
   segmentText: { color: stylesVars.text, fontWeight: "900", fontSize: 12 },
   segmentTextOn: { color: stylesVars.blue },
+  segmentTextDisabled: { color: stylesVars.text },
 
   btnRow: { marginTop: 12, gap: 10 },
 
@@ -1088,6 +1384,9 @@ const styles = StyleSheet.create({
   saveText: { color: "#fff", fontWeight: "900", fontSize: 15 },
 
   warn: { marginTop: 10, color: stylesVars.subText },
+
+  dyeHint: { marginTop: 8, color: stylesVars.subText, fontWeight: "800", fontSize: 12 },
+  tailorHint: { marginTop: 8, color: stylesVars.subText, fontWeight: "800", fontSize: 12 },
 
   pressed: { opacity: 0.75 }
 });
