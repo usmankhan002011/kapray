@@ -27,8 +27,23 @@ type Params = {
   mode?: string;
   selectedSize?: string;
 
-  a?: string; b?: string; c?: string; d?: string; e?: string; f?: string; g?: string;
-  h?: string; i?: string; j?: string; k?: string; l?: string; m?: string; n?: string;
+  a?: string;
+  b?: string;
+  c?: string;
+  d?: string;
+  e?: string;
+  f?: string;
+  g?: string;
+  h?: string;
+  i?: string;
+  j?: string;
+  k?: string;
+  l?: string;
+  m?: string;
+  n?: string;
+
+  // ✅ dress category passthrough (stitched/unstitched etc.)
+  product_category?: string;
 
   // product detail params (sometimes forwarded, sometimes not)
   productName?: string;
@@ -49,8 +64,19 @@ type Params = {
   dye_label?: string;
   dyeing_cost_pkr?: string;
 
+  // ✅ NEW: explicit dyeing choice (1/0/true/false)
+  dyeing_selected?: string;
+
   // tolerate older key from modal
   dyeing_selected_shade?: string;
+
+  // ✅ tailoring (vendor-set cost + turnaround)
+  tailoring_cost_pkr?: string;
+  tailoring_turnaround_days?: string;
+
+  // ✅ NEW: explicit tailoring choice + availability
+  tailoring_selected?: string;
+  tailoring_available?: string;
 };
 
 type VendorState = {
@@ -144,6 +170,14 @@ function getPriceForDisplay(priceObj: any): { currency: string; amountText: stri
   return { currency, amountText: "—", amountParam: "" };
 }
 
+function parseBoolParam(v: unknown): boolean | null {
+  const s = norm(v).toLowerCase();
+  if (!s) return null;
+  if (s === "1" || s === "true" || s === "yes" || s === "y" || s === "on") return true;
+  if (s === "0" || s === "false" || s === "no" || s === "n" || s === "off") return false;
+  return null;
+}
+
 export default function PlaceOrderScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<Params>();
@@ -159,20 +193,37 @@ export default function PlaceOrderScreen() {
     const selectedSize = firstNonEmpty(params.selectedSize);
 
     const letters = {
-      a: norm(params.a), b: norm(params.b), c: norm(params.c), d: norm(params.d),
-      e: norm(params.e), f: norm(params.f), g: norm(params.g), h: norm(params.h),
-      i: norm(params.i), j: norm(params.j), k: norm(params.k), l: norm(params.l),
-      m: norm(params.m), n: norm(params.n)
+      a: norm(params.a),
+      b: norm(params.b),
+      c: norm(params.c),
+      d: norm(params.d),
+      e: norm(params.e),
+      f: norm(params.f),
+      g: norm(params.g),
+      h: norm(params.h),
+      i: norm(params.i),
+      j: norm(params.j),
+      k: norm(params.k),
+      l: norm(params.l),
+      m: norm(params.m),
+      n: norm(params.n)
     };
     const exactPairs: [string, string][] = [
-      ["A", letters.a], ["B", letters.b], ["C", letters.c], ["D", letters.d],
-      ["E", letters.e], ["F", letters.f], ["G", letters.g], ["H", letters.h],
-      ["I", letters.i], ["J", letters.j], ["K", letters.k], ["L", letters.l],
-      ["M", letters.m], ["N", letters.n]
-    ].filter(
-      (pair): pair is [string, string] =>
-        typeof pair[1] === "string" && pair[1].length > 0
-    );
+      ["A", letters.a],
+      ["B", letters.b],
+      ["C", letters.c],
+      ["D", letters.d],
+      ["E", letters.e],
+      ["F", letters.f],
+      ["G", letters.g],
+      ["H", letters.h],
+      ["I", letters.i],
+      ["J", letters.j],
+      ["K", letters.k],
+      ["L", letters.l],
+      ["M", letters.m],
+      ["N", letters.n]
+    ].filter((pair): pair is [string, string] => typeof pair[1] === "string" && pair[1].length > 0);
 
     const sizeLabel =
       mode === "exact"
@@ -190,10 +241,20 @@ export default function PlaceOrderScreen() {
 
     // ✅ dyeing (tolerate multiple keys)
     const dyeShadeId = safeDecode(firstNonEmpty(params.dye_shade_id));
-    const dyeHex =
-      safeDecode(firstNonEmpty(params.dye_hex, params.dyeing_selected_shade));
+    const dyeHex = safeDecode(firstNonEmpty(params.dye_hex, params.dyeing_selected_shade));
     const dyeLabel = safeDecode(firstNonEmpty(params.dye_label));
     const dyeingCostPkr = safeDecode(firstNonEmpty(params.dyeing_cost_pkr));
+
+    // ✅ explicit dyeing selected
+    const dyeingSelected = parseBoolParam(params.dyeing_selected);
+
+    // ✅ tailoring
+    const tailoringCostPkr = safeDecode(firstNonEmpty(params.tailoring_cost_pkr));
+    const tailoringTurnaroundDays = safeDecode(firstNonEmpty(params.tailoring_turnaround_days));
+
+    // ✅ explicit tailoring selected + available
+    const tailoringSelected = parseBoolParam(params.tailoring_selected);
+    const tailoringAvailable = parseBoolParam(params.tailoring_available);
 
     return {
       productId,
@@ -211,7 +272,13 @@ export default function PlaceOrderScreen() {
       dyeShadeId,
       dyeHex,
       dyeLabel,
-      dyeingCostPkr
+      dyeingCostPkr,
+      dyeingSelected,
+
+      tailoringCostPkr,
+      tailoringTurnaroundDays,
+      tailoringSelected,
+      tailoringAvailable
     };
   }, [params]);
 
@@ -221,8 +288,7 @@ export default function PlaceOrderScreen() {
 
   const loadProductIfNeeded = useCallback(async () => {
     const shouldFetch =
-      (!!base.productId || !!base.productCode) &&
-      (!base.productName || !base.imageUrl || !base.price);
+      (!!base.productId || !!base.productCode) && (!base.productName || !base.imageUrl || !base.price);
 
     if (!shouldFetch) return;
 
@@ -305,15 +371,18 @@ export default function PlaceOrderScreen() {
     const vendorMobile = firstNonEmpty(params.vendorMobile, vendor?.mobile, vJoin?.mobile);
     const vendorAddress = firstNonEmpty(params.vendorAddress, vendor?.address, vJoin?.address);
 
-    const vendorBanner =
-      norm(vendor?.banner_url) ||
-      resolvePublicUrl(vJoin?.banner_path) ||
-      "";
+    const vendorBanner = norm(vendor?.banner_url) || resolvePublicUrl(vJoin?.banner_path) || "";
 
     const vendorStatus = firstNonEmpty(vendor?.status, vJoin?.status);
 
-    const dyeText =
-      base.dyeLabel || base.dyeShadeId || base.dyeHex || "";
+    const dyeText = base.dyeLabel || base.dyeShadeId || base.dyeHex || "";
+
+    // ✅ decide whether dyeing/tailoring are selected (explicit first, else infer from presence)
+    const hasAnyDyeFields = !!base.dyeHex || !!base.dyeShadeId || !!base.dyeLabel;
+    const dyeingSelected =
+      typeof base.dyeingSelected === "boolean" ? base.dyeingSelected : hasAnyDyeFields;
+
+    const tailoringSelected = typeof base.tailoringSelected === "boolean" ? base.tailoringSelected : false;
 
     return {
       id,
@@ -334,24 +403,49 @@ export default function PlaceOrderScreen() {
       dyeShadeId: base.dyeShadeId,
       dyeHex: base.dyeHex,
       dyeLabel: base.dyeLabel,
-      dyeingCostPkr: base.dyeingCostPkr
+      dyeingCostPkr: base.dyeingCostPkr,
+      dyeingSelected,
+
+      tailoringCostPkr: base.tailoringCostPkr,
+      tailoringTurnaroundDays: base.tailoringTurnaroundDays,
+      tailoringSelected,
+
+      tailoringAvailable: typeof base.tailoringAvailable === "boolean" ? base.tailoringAvailable : null
     };
   }, [base, fetchedProduct, vendor, params.vendorName, params.vendorMobile, params.vendorAddress]);
 
-  // ✅ NEW: compute payable (base + dyeing) ONLY if a shade is selected
+  // ✅ compute payable (base + dyeing + tailoring) using explicit selected flags
   const priceCalc = useMemo(() => {
     const basePrice = Number(resolved.priceParam || 0);
-    const dyeCost = Number(resolved.dyeingCostPkr || 0);
 
-    const hasDyeing = !!resolved.dyeHex || !!resolved.dyeShadeId;
+    const dyeCost = Number(resolved.dyeingCostPkr || 0);
     const safeBase = Number.isFinite(basePrice) && basePrice > 0 ? basePrice : 0;
     const safeDye = Number.isFinite(dyeCost) && dyeCost > 0 ? dyeCost : 0;
 
-    const dyeAdd = hasDyeing ? safeDye : 0;
-    const totalPayable = safeBase + dyeAdd;
+    const tailoringCost = Number(resolved.tailoringCostPkr || 0);
+    const safeTailoring = Number.isFinite(tailoringCost) && tailoringCost > 0 ? tailoringCost : 0;
 
-    return { hasDyeing, safeBase, safeDye, dyeAdd, totalPayable };
-  }, [resolved.priceParam, resolved.dyeingCostPkr, resolved.dyeHex, resolved.dyeShadeId]);
+    const hasDyeing =
+      Boolean(resolved.dyeingSelected) &&
+      (!!resolved.dyeHex || !!resolved.dyeShadeId || !!resolved.dyeLabel);
+    const hasTailoring = Boolean(resolved.tailoringSelected) && safeTailoring > 0;
+
+    const dyeAdd = hasDyeing ? safeDye : 0;
+    const tailoringAdd = hasTailoring ? safeTailoring : 0;
+
+    const totalPayable = safeBase + dyeAdd + tailoringAdd;
+
+    return { hasDyeing, hasTailoring, safeBase, safeDye, safeTailoring, dyeAdd, tailoringAdd, totalPayable };
+  }, [
+    resolved.priceParam,
+    resolved.dyeingCostPkr,
+    resolved.dyeHex,
+    resolved.dyeShadeId,
+    resolved.dyeLabel,
+    resolved.dyeingSelected,
+    resolved.tailoringCostPkr,
+    resolved.tailoringSelected
+  ]);
 
   // buyer / delivery fields
   const [buyerName, setBuyerName] = useState("");
@@ -360,28 +454,11 @@ export default function PlaceOrderScreen() {
   const [city, setCity] = useState("");
   const [notes, setNotes] = useState("");
 
-  // ✅ debug helpers + more tolerant mobile validation (digits-only)
-  const buyerNameTrim = buyerName.trim();
-  const buyerMobileTrim = buyerMobile.trim();
-  const buyerMobileDigits = buyerMobileTrim.replace(/\D/g, "");
-  const deliveryTrim = deliveryAddress.trim();
-  const cityTrim = city.trim();
-
-  const checks = useMemo(
-    () => ({
-      buyerName_ok: buyerNameTrim.length >= 2,
-      buyerMobile_ok: buyerMobileDigits.length >= 10,
-      delivery_ok: deliveryTrim.length >= 10,
-      city_ok: cityTrim.length >= 2
-    }),
-    [buyerNameTrim, buyerMobileDigits, deliveryTrim, cityTrim]
-  );
-
   const canContinue =
-    checks.buyerName_ok &&
-    checks.buyerMobile_ok &&
-    checks.delivery_ok &&
-    checks.city_ok;
+    buyerName.trim().length >= 2 &&
+    buyerMobile.trim().replace(/\D/g, "").length >= 10 &&
+    deliveryAddress.trim().length >= 10 &&
+    city.trim().length >= 2;
 
   const goChangeSize = () => {
     router.push({
@@ -395,17 +472,30 @@ export default function PlaceOrderScreen() {
         selectedSize: base.selectedSize,
         ...base.letters,
 
+        // ✅ keep dress category flowing
+        product_category: params.product_category ? String(params.product_category) : "",
+
         // keep forwarding so it’s instant next time
         productName: resolved.title,
         price: resolved.priceParam,
         currency: resolved.currency,
         imageUrl: resolved.imageUrl,
 
-        // ✅ keep dyeing forward too
+        // ✅ keep dyeing forward too (and its selection flag)
+        dyeing_selected: resolved.dyeingSelected ? "1" : "0",
         dye_shade_id: resolved.dyeShadeId ? encodeURIComponent(resolved.dyeShadeId) : "",
         dye_hex: resolved.dyeHex ? encodeURIComponent(resolved.dyeHex) : "",
         dye_label: resolved.dyeLabel ? encodeURIComponent(resolved.dyeLabel) : "",
-        dyeing_cost_pkr: resolved.dyeingCostPkr ? encodeURIComponent(resolved.dyeingCostPkr) : ""
+        dyeing_cost_pkr: resolved.dyeingCostPkr ? encodeURIComponent(resolved.dyeingCostPkr) : "",
+
+        // ✅ keep tailoring forward too (and its selection flag)
+        tailoring_available:
+          resolved.tailoringAvailable === true ? "1" : resolved.tailoringAvailable === false ? "0" : "",
+        tailoring_selected: resolved.tailoringSelected ? "1" : "0",
+        tailoring_cost_pkr: resolved.tailoringCostPkr ? encodeURIComponent(resolved.tailoringCostPkr) : "",
+        tailoring_turnaround_days: resolved.tailoringTurnaroundDays
+          ? encodeURIComponent(resolved.tailoringTurnaroundDays)
+          : ""
       }
     });
   };
@@ -418,7 +508,10 @@ export default function PlaceOrderScreen() {
         productCode: resolved.code || base.productCode,
         productName: resolved.title,
 
-        // ✅ IMPORTANT: send payable total (base + dyeing, only if selected)
+        // ✅ keep dress category flowing
+        product_category: params.product_category ? String(params.product_category) : "",
+
+        // ✅ IMPORTANT: send payable total (base + dyeing + tailoring)
         price: String(priceCalc.totalPayable || 0),
 
         currency: resolved.currency,
@@ -433,10 +526,20 @@ export default function PlaceOrderScreen() {
         ...base.letters,
 
         // ✅ dyeing goes to payment so it can be saved into order snapshot
+        dyeing_selected: resolved.dyeingSelected ? "1" : "0",
         dye_shade_id: resolved.dyeShadeId ? encodeURIComponent(resolved.dyeShadeId) : "",
         dye_hex: resolved.dyeHex ? encodeURIComponent(resolved.dyeHex) : "",
         dye_label: resolved.dyeLabel ? encodeURIComponent(resolved.dyeLabel) : "",
         dyeing_cost_pkr: resolved.dyeingCostPkr ? encodeURIComponent(resolved.dyeingCostPkr) : "",
+
+        // ✅ tailoring goes to payment so it can be saved into order snapshot
+        tailoring_available:
+          resolved.tailoringAvailable === true ? "1" : resolved.tailoringAvailable === false ? "0" : "",
+        tailoring_selected: resolved.tailoringSelected ? "1" : "0",
+        tailoring_cost_pkr: resolved.tailoringCostPkr ? encodeURIComponent(resolved.tailoringCostPkr) : "",
+        tailoring_turnaround_days: resolved.tailoringTurnaroundDays
+          ? encodeURIComponent(resolved.tailoringTurnaroundDays)
+          : "",
 
         buyerName: buyerName.trim(),
         buyerMobile: buyerMobile.trim(),
@@ -487,19 +590,28 @@ export default function PlaceOrderScreen() {
                 Code: <Text style={styles.metaStrong}>{resolved.code || "—"}</Text>
               </Text>
 
-              {/* ✅ changed: show Dress Title instead of an ID/dressType */}
+              {/* ✅ changed: show Dress Cat */}
               <Text style={styles.meta}>
-                Dress Title: <Text style={styles.metaStrong}>{resolved.title || "—"}</Text>
+                Dress Cat:{" "}
+                <Text style={styles.metaStrong}>
+                  {params.product_category
+                    ? String(params.product_category)
+                        .replace(/_/g, " ")
+                        .replace(/\b\w/g, (c) => c.toUpperCase())
+                    : "—"}
+                </Text>
               </Text>
 
               <Text style={styles.meta}>
                 Price:{" "}
                 <Text style={styles.metaStrong}>
-                  {resolved.priceParam ? `${resolved.currency} ${resolved.priceText}` : `${resolved.currency} —`}
+                  {resolved.priceParam
+                    ? `${resolved.currency} ${resolved.priceText}`
+                    : `${resolved.currency} —`}
                 </Text>
               </Text>
 
-              {/* ✅ NEW: Dyeing cost line (only if shade selected) */}
+              {/* ✅ Dyeing cost line (only if dyeing selected) */}
               {priceCalc.hasDyeing ? (
                 <Text style={styles.meta}>
                   Dyeing:{" "}
@@ -509,7 +621,18 @@ export default function PlaceOrderScreen() {
                 </Text>
               ) : null}
 
-              {/* ✅ NEW: Total payable */}
+              {/* ✅ Tailoring cost line (only if tailoring selected) */}
+              {priceCalc.hasTailoring ? (
+                <Text style={styles.meta}>
+                  Tailoring:{" "}
+                  <Text style={styles.metaStrong}>
+                    {resolved.currency} {priceCalc.tailoringAdd}
+                    {resolved.tailoringTurnaroundDays ? ` • ${resolved.tailoringTurnaroundDays} days` : ""}
+                  </Text>
+                </Text>
+              ) : null}
+
+              {/* ✅ Total payable */}
               {resolved.priceParam ? (
                 <Text style={styles.meta}>
                   Total Payable:{" "}
@@ -520,11 +643,9 @@ export default function PlaceOrderScreen() {
               ) : null}
 
               {/* ✅ Selected Colour (preview only) */}
-              {!!resolved.dyeHex ? (
+              {!!resolved.dyeHex && priceCalc.hasDyeing ? (
                 <View style={{ marginTop: 8 }}>
-                  <Text style={styles.meta}>
-                    Selected Colour
-                  </Text>
+                  <Text style={styles.meta}>Selected Colour for Dyeing</Text>
 
                   <View
                     style={{
@@ -559,7 +680,10 @@ export default function PlaceOrderScreen() {
             </View>
           ) : null}
 
-          <Pressable onPress={goChangeSize} style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}>
+          <Pressable
+            onPress={goChangeSize}
+            style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
+          >
             <Text style={styles.secondaryText}>Change Size</Text>
           </Pressable>
         </View>
@@ -657,9 +781,7 @@ export default function PlaceOrderScreen() {
 
           <Pressable
             onPress={() => {
-              if (!canContinue) {
-                return;
-              }
+              if (!canContinue) return;
               goToPayment();
             }}
             disabled={!canContinue}
@@ -672,19 +794,15 @@ export default function PlaceOrderScreen() {
             <Text style={styles.primaryText}>Continue to Payment</Text>
           </Pressable>
 
-          {!canContinue ? <Text style={styles.helper}>Fill name, mobile, address, and city to continue.</Text> : null}
-
-          {/* ✅ debug panel */}
-          <View style={{ marginTop: 10, padding: 10, borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 12 }}>
-            <Text style={{ fontWeight: "900", marginBottom: 6 }}>Debug</Text>
-            <Text>buyerName_ok: {String(checks.buyerName_ok)}</Text>
-            <Text>buyerMobile_ok (digits&gt;=10): {String(checks.buyerMobile_ok)} ({buyerMobileDigits.length})</Text>
-            <Text>delivery_ok: {String(checks.delivery_ok)} ({deliveryTrim.length})</Text>
-            <Text>city_ok: {String(checks.city_ok)} ({cityTrim.length})</Text>
-          </View>
+          {!canContinue ? (
+            <Text style={styles.helper}>Fill name, mobile, address, and city to continue.</Text>
+          ) : null}
         </View>
 
-        <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
+        <Pressable
+          onPress={() => router.back()}
+          style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+        >
           <Text style={styles.backText}>Back</Text>
         </Pressable>
 
@@ -715,9 +833,21 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 14, fontWeight: "900", color: "#111" },
 
   productRow: { flexDirection: "row", gap: 12, alignItems: "center" },
-  imageBox: { width: 86, height: 86, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "#E5E7EB" },
+  imageBox: {
+    width: 86,
+    height: 86,
+    borderRadius: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#E5E7EB"
+  },
   image: { width: "100%", height: "100%" },
-  imagePlaceholder: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F3F4F6" },
+  imagePlaceholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F3F4F6"
+  },
   imagePlaceholderText: { fontSize: 12, color: "#6B7280", fontWeight: "800" },
 
   productName: { fontSize: 15, fontWeight: "900", color: "#111" },
@@ -763,7 +893,13 @@ const styles = StyleSheet.create({
   },
   multiline: { minHeight: 44, textAlignVertical: "top" },
 
-  primaryBtn: { backgroundColor: "#111", paddingVertical: 12, borderRadius: 12, alignItems: "center", marginTop: 6 },
+  primaryBtn: {
+    backgroundColor: "#111",
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 6
+  },
   primaryText: { color: "#fff", fontWeight: "900", fontSize: 14 },
 
   secondaryBtn: {

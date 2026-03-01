@@ -124,6 +124,9 @@ export default function CreateShopScreen() {
   const [address, setAddress] = useState("");
   const [locationUrl, setLocationUrl] = useState("");
 
+  // ✅ NEW: Vendor-wide tailoring offering
+  const [offersTailoring, setOffersTailoring] = useState<boolean>(false);
+
   const [profile, setProfile] = useState<Picked | null>(null);
   const [govPermission, setGovPermission] = useState<Picked | null>(null);
 
@@ -277,23 +280,26 @@ export default function CreateShopScreen() {
   const [videoThumbByUri, setVideoThumbByUri] = useState<Record<string, string>>({});
   const [selectedVideoUri, setSelectedVideoUri] = useState<string>("");
 
-  const ensureVideoThumb = useCallback(async (videoUri: string) => {
-    const u = String(videoUri || "").trim();
-    if (!u) return null;
-    if (videoThumbByUri[u]) return videoThumbByUri[u];
+  const ensureVideoThumb = useCallback(
+    async (videoUri: string) => {
+      const u = String(videoUri || "").trim();
+      if (!u) return null;
+      if (videoThumbByUri[u]) return videoThumbByUri[u];
 
-    try {
-      // generate at ~1s; if shorter, it will fallback internally
-      const { uri } = await VideoThumbnails.getThumbnailAsync(u, { time: 1000 });
-      if (uri) {
-        setVideoThumbByUri((prev) => ({ ...prev, [u]: uri }));
-        return uri;
+      try {
+        // generate at ~1s; if shorter, it will fallback internally
+        const { uri } = await VideoThumbnails.getThumbnailAsync(u, { time: 1000 });
+        if (uri) {
+          setVideoThumbByUri((prev) => ({ ...prev, [u]: uri }));
+          return uri;
+        }
+        return null;
+      } catch {
+        return null;
       }
-      return null;
-    } catch {
-      return null;
-    }
-  }, [videoThumbByUri]);
+    },
+    [videoThumbByUri]
+  );
 
   // When videos change, generate thumbs + set default selected video
   useEffect(() => {
@@ -334,7 +340,7 @@ export default function CreateShopScreen() {
   const shopVideoUris = useMemo(() => (videos ?? []).map((x) => x.uri).filter(Boolean), [videos]);
 
   // =========================
-  // Submit (unchanged logic)
+  // Submit (updated to include offers_tailoring)
   // =========================
   async function submit() {
     if (!canSubmit) {
@@ -357,6 +363,9 @@ export default function CreateShopScreen() {
         shop_name: shopName.trim(),
         address: address.trim(),
         location_url: locationUrl.trim() || null,
+
+        // ✅ Vendor-wide tailoring offering
+        offers_tailoring: Boolean(offersTailoring),
 
         // legacy compatibility (keep in sync)
         location: address.trim(),
@@ -434,6 +443,10 @@ export default function CreateShopScreen() {
         certificate_paths,
         shop_image_paths: imagePaths.length ? imagePaths : null,
         shop_video_paths: videoPaths.length ? videoPaths : null,
+
+        // ✅ keep stored value consistent
+        offers_tailoring: Boolean(offersTailoring),
+
         status: "pending"
       })
       .eq("id", vendor_id);
@@ -464,6 +477,9 @@ export default function CreateShopScreen() {
         certificate_paths,
         shop_image_paths: imagePaths.length ? imagePaths : null,
         shop_video_paths: videoPaths.length ? videoPaths : null,
+
+        // ✅ NEW: vendor-wide tailoring offering
+        offers_tailoring: Boolean(offersTailoring),
 
         status: "pending",
 
@@ -560,6 +576,24 @@ export default function CreateShopScreen() {
             />
           </View>
         )}
+
+        {/* ✅ NEW: Offers tailoring toggle */}
+        <View style={styles.tailoringRow}>
+          <Text style={styles.tailoringLabel}>Offers stitching / tailoring</Text>
+
+          <Pressable
+            onPress={() => setOffersTailoring((v) => !v)}
+            style={({ pressed }) => [
+              styles.tailoringPill,
+              offersTailoring ? styles.tailoringPillOn : null,
+              pressed ? styles.pressed : null
+            ]}
+          >
+            <Text style={[styles.tailoringText, offersTailoring ? styles.tailoringTextOn : null]}>
+              {offersTailoring ? "Yes" : "No"}
+            </Text>
+          </Pressable>
+        </View>
 
         <FieldHeader
           label="Landline"
@@ -864,6 +898,30 @@ const styles = StyleSheet.create({
 
   inputPlain: { fontSize: 16, color: stylesVars.text },
   multi: { minHeight: 90, textAlignVertical: "top" },
+
+  // ✅ NEW: tailoring toggle row
+  tailoringRow: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12
+  },
+  tailoringLabel: { fontSize: 14, fontWeight: "900", color: stylesVars.text },
+  tailoringPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: "#fff"
+  },
+  tailoringPillOn: {
+    borderColor: stylesVars.blue,
+    backgroundColor: stylesVars.blueSoft
+  },
+  tailoringText: { fontSize: 12, fontWeight: "900", color: stylesVars.text },
+  tailoringTextOn: { color: stylesVars.blue },
 
   blueBtn: {
     marginTop: 14,

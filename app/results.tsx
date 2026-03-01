@@ -70,15 +70,6 @@ function anyOverlap(selected: string[], productIds: any): boolean {
   return selected.some((s) => set.has(String(s)));
 }
 
-// dressType: Redux has SINGLE dressTypeId, product has spec.dressTypeIds[]
-function includesSingleId(single: number | null, productIds: any): boolean {
-  if (single === null || single === undefined) return true;
-  const p = normalizeIds(productIds);
-  if (!p.length) return false;
-  const key = String(single);
-  return p.includes(key);
-}
-
 function firstImagePath(media: any): string | null {
   try {
     const p = media?.images?.[0];
@@ -192,7 +183,8 @@ export default function ResultsScreen() {
   const router = useRouter();
   const filters = useAppSelector((s: any) => s.filters);
 
-  const dressTypeId: number | null = filters?.dressTypeId ?? null;
+  // ✅ Dress Type is now MULTI-select (empty => Any)
+  const dressTypeIds: string[] = filters?.dressTypeIds ?? [];
 
   const fabricTypeIds: string[] = filters?.fabricTypeIds ?? [];
   const colorShadeIds: string[] = filters?.colorShadeIds ?? [];
@@ -223,9 +215,9 @@ export default function ResultsScreen() {
   // ✅ local favourites (heart turns red). No DB yet.
   const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
 
-  // ✅ sort (default: cost)
+  // ✅ sort (default: cost ascending)
   const [sortOpen, setSortOpen] = useState(false);
-  const [sortMode, setSortMode] = useState<"cost" | "date">("cost");
+  const [sortMode, setSortMode] = useState<"cost_asc" | "cost_desc" | "date">("cost_asc");
 
   function toggleFavorite(productId: number) {
     setFavoriteIds((prev) => {
@@ -378,12 +370,13 @@ export default function ResultsScreen() {
 
       // ✅ vendor filter (multi-select). Empty => ANY
       if (vendorIds.length) {
-        const vid =
-          p?.vendor_id === null || p?.vendor_id === undefined ? "" : String(p.vendor_id);
+        const vid = p?.vendor_id === null || p?.vendor_id === undefined ? "" : String(p.vendor_id);
         if (!vid || !vendorIds.includes(vid)) return false;
       }
 
-      if (!includesSingleId(dressTypeId, spec?.dressTypeIds)) return false;
+      // ✅ dress type MULTI-select (empty => ANY)
+      if (!anyOverlap(dressTypeIds, spec?.dressTypeIds)) return false;
+
       if (!anyOverlap(fabricTypeIds, spec?.fabricTypeIds)) return false;
       if (!anyOverlap(colorShadeIds, spec?.colorShadeIds)) return false;
       if (!anyOverlap(workTypeIds, spec?.workTypeIds)) return false;
@@ -399,7 +392,7 @@ export default function ResultsScreen() {
   }, [
     products,
     vendorIds,
-    dressTypeId,
+    dressTypeIds,
     fabricTypeIds,
     colorShadeIds,
     workTypeIds,
@@ -410,11 +403,13 @@ export default function ResultsScreen() {
     bandsById
   ]);
 
-  // ✅ apply sort (cost or date)
+  // ✅ apply sort (cost asc/desc or date)
   const sorted = useMemo(() => {
     const arr = [...(filtered ?? [])];
 
-    if (sortMode === "cost") {
+    if (sortMode === "cost_asc" || sortMode === "cost_desc") {
+      const dir = sortMode === "cost_asc" ? 1 : -1;
+
       arr.sort((a, b) => {
         const ap = getComparablePkr(a?.price);
         const bp = getComparablePkr(b?.price);
@@ -424,11 +419,11 @@ export default function ResultsScreen() {
         if (ap === null) return 1;
         if (bp === null) return -1;
 
-        // ascending (low -> high)
-        if (ap < bp) return -1;
-        if (ap > bp) return 1;
+        if (ap < bp) return -1 * dir;
+        if (ap > bp) return 1 * dir;
         return 0;
       });
+
       return arr;
     }
 
@@ -455,16 +450,7 @@ export default function ResultsScreen() {
 
   // ✅ summary = NAMES ONLY (and "Loading…" if selection exists but names not loaded yet)
   const filtersSummary = useMemo(() => {
-    const dressSelected = dressTypeId !== null && dressTypeId !== undefined;
-
-    const dressName = dressSelected ? (dressMap.get(String(dressTypeId)) ?? "").trim() : "";
-
-    const dressPart = !dressSelected
-      ? "Dress: Any"
-      : dressName
-      ? `Dress: ${dressName}`
-      : "Dress: Loading…";
-
+    const dressNames = idsToNames(dressTypeIds, dressMap);
     const fabricNames = idsToNames(fabricTypeIds, fabricMap);
     const workNames = idsToNames(workTypeIds, workMap);
     const densityNames = idsToNames(workDensityIds, densityMap);
@@ -485,7 +471,7 @@ export default function ResultsScreen() {
             .filter((x) => x.length > 0);
 
     return [
-      dressPart,
+      namesOrLoading("Dress", dressTypeIds, dressNames),
       namesOrLoading("Fabric", fabricTypeIds, fabricNames),
       namesOrLoading("Color", colorShadeIds, colorNames),
       namesOrLoading("Work", workTypeIds, workNames),
@@ -495,7 +481,7 @@ export default function ResultsScreen() {
       namesOrLoading("Price", priceBandIds, priceNames)
     ].join("  |  ");
   }, [
-    dressTypeId,
+    dressTypeIds,
     dressMap,
     fabricTypeIds,
     fabricMap,
@@ -528,40 +514,50 @@ export default function ResultsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.topRow}>
-        <Text style={styles.link} onPress={() => router.back()}>
-          Back
-        </Text>
-
         <Text style={styles.title} numberOfLines={1}>
           Products ({sorted.length})
         </Text>
 
-        <View style={{ flexDirection: "row", gap: 14, alignItems: "center" }}>
-          {/* ✅ sort button (emoji) */}
+        <View style={styles.topActions}>
           <Pressable
             onPress={() => setSortOpen(true)}
-            style={({ pressed }) => [styles.sortBtn, pressed ? { opacity: 0.7 } : null]}
+            style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
           >
-            <Text style={styles.sortBtnText}>↕️ Sort</Text>
+            <Text style={styles.iconText}>↕️</Text>
           </Pressable>
 
-          <Text style={styles.link} onPress={() => router.push("/results-filters")}>
-            🔍Filters
-          </Text>
+          <Pressable
+            onPress={() => router.push("/results-filters")}
+            style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
+          >
+            <Text style={styles.iconText}>🔍</Text>
+          </Pressable>
 
-          <Text style={styles.link} onPress={() => router.replace("/wizard")}>
-            Restart
-          </Text>
+          <Pressable
+            onPress={() => router.push("/vendor-search")}
+            style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
+          >
+            <Text style={styles.iconText}>🛍️</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.replace("/wizard")}
+            style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
+          >
+            <Text style={styles.iconText}>↩️</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push("/orders/track")}
+            style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
+          >
+            <Text style={styles.iconText}>📦</Text>
+          </Pressable>
         </View>
       </View>
 
       {/* ✅ Sort Modal (dark background) */}
-      <Modal
-        visible={sortOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSortOpen(false)}
-      >
+      <Modal visible={sortOpen} transparent animationType="fade" onRequestClose={() => setSortOpen(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setSortOpen(false)}>
           <Pressable style={styles.modalCard} onPress={() => {}}>
             <Text style={styles.modalTitle}>Sort</Text>
@@ -569,18 +565,18 @@ export default function ResultsScreen() {
             <Pressable
               style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
               onPress={() => {
-                setSortMode("cost");
+                setSortMode("cost_asc");
                 setSortOpen(false);
               }}
             >
               <View style={styles.modalLeft}>
                 <Text style={styles.modalEmoji}>💰</Text>
                 <View>
-                  <Text style={styles.modalItemTitle}>Cost</Text>
+                  <Text style={styles.modalItemTitle}>Price</Text>
                   <Text style={styles.modalItemSub}>Low to high</Text>
                 </View>
               </View>
-              <Text style={styles.modalRight}>{sortMode === "cost" ? "✅" : ""}</Text>
+              <Text style={styles.modalRight}>{sortMode === "cost_asc" ? "✅" : ""}</Text>
             </Pressable>
 
             <View style={styles.divider} />
@@ -588,7 +584,26 @@ export default function ResultsScreen() {
             <Pressable
               style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
               onPress={() => {
-                setSortMode("date"); // ✅ new
+                setSortMode("cost_desc");
+                setSortOpen(false);
+              }}
+            >
+              <View style={styles.modalLeft}>
+                <Text style={styles.modalEmoji}>💸</Text>
+                <View>
+                  <Text style={styles.modalItemTitle}>Price</Text>
+                  <Text style={styles.modalItemSub}>High to low</Text>
+                </View>
+              </View>
+              <Text style={styles.modalRight}>{sortMode === "cost_desc" ? "✅" : ""}</Text>
+            </Pressable>
+
+            <View style={styles.divider} />
+
+            <Pressable
+              style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
+              onPress={() => {
+                setSortMode("date");
                 setSortOpen(false);
               }}
             >
@@ -628,19 +643,10 @@ export default function ResultsScreen() {
         </Pressable>
       </Modal>
 
-      {/* quick windup line — names only */}
-      <View style={styles.summaryWrap}>
-        <Text style={styles.summaryText} numberOfLines={3}>
-          {filtersSummary}
-        </Text>
-      </View>
-
       {sorted.length === 0 ? (
         <View style={styles.center}>
           <Text style={styles.emptyTitle}>No matching products (loaded so far)</Text>
-          <Text style={styles.muted}>
-            Tip: press “Load more” to search more products, or broaden filters.
-          </Text>
+          <Text style={styles.muted}>Tip: press “Load more” to search more products, or broaden filters.</Text>
         </View>
       ) : (
         <FlatList
@@ -679,16 +685,15 @@ export default function ResultsScreen() {
                 <Text style={styles.cardSub} numberOfLines={1}>
                   {item?.price?.mode === "unstitched_per_meter"
                     ? item?.spec?.dyeing_enabled
-                      ? "Unstitched • Dyeable"
+                      ? "Unstitched • Tailored"
                       : "Unstitched"
                     : ""}
                 </Text>
 
-                {/* ✅ Favourite only (Purchase removed) */}
                 <View style={styles.actionRow}>
                   <Pressable onPress={() => toggleFavorite(item.id)} style={styles.actionBtn}>
                     <Text style={[styles.actionText, isFav ? styles.heartOn : null]}>
-                      {isFav ? "❤️" : "🤍"} Favourite
+                      {isFav ? "❤️" : "🤍"}
                     </Text>
                   </Pressable>
                 </View>
@@ -727,36 +732,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between"
   },
-  link: { fontSize: 16, color: "#111", fontWeight: "700" },
+  link: { fontSize: 15, color: "#111", fontWeight: "700" },
   title: {
     flex: 1,
     textAlign: "center",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
     color: "#111",
     paddingHorizontal: 10
   },
 
-  summaryWrap: {
-    paddingHorizontal: 16,
-    paddingBottom: 6
-  },
-  summaryText: {
-    fontSize: 12,
-    color: "#666",
-    lineHeight: 16
-  },
-
-  // ✅ sort button
-  sortBtn: {
+  topActions: { flexDirection: "row", gap: 8, alignItems: "center" },
+  iconBtn: {
+    width: 34,
+    height: 34,
     borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: "#F4F4F5",
     borderWidth: 1,
     borderColor: "rgba(0,0,0,0.08)"
   },
-  sortBtnText: { fontSize: 13, fontWeight: "900", color: "#111" },
+  iconText: { fontSize: 15, fontWeight: "900", color: "#111" },
 
   // ✅ modal (dark background)
   modalBackdrop: {

@@ -17,6 +17,7 @@ import { useAppSelector } from "@/store/hooks";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
 import { decode } from "base64-arraybuffer";
+import * as VideoThumbnails from "expo-video-thumbnails";
 
 const PRODUCTS_TABLE = "products";
 const BUCKET_VENDOR = "vendor_images";
@@ -116,8 +117,7 @@ export default function UpdateProductScreen() {
   const [title, setTitle] = useState("");
   const [inventoryQty, setInventoryQty] = useState<number>(0);
 
-  // ✅ IMPORTANT:
-  // This screen is "Unstitched cloth only" (fixed) -> no switching between stitched/unstitched.
+  // ✅ Cost mode is read-only (comes from DB), but costs are editable.
   const [priceMode, setPriceMode] = useState<"stitched_total" | "unstitched_per_meter">(
     "unstitched_per_meter"
   );
@@ -125,8 +125,17 @@ export default function UpdateProductScreen() {
   const [pricePerMeter, setPricePerMeter] = useState<number>(0);
   const [availableSizes, setAvailableSizes] = useState<string[]>([]);
 
-  // ✅ Dyeable fixed + dyeing cost editable (only if dyeable)
+  // ✅ Dyeing (unstitched): vendor can update toggle + cost
+  const [dyeingEnabled, setDyeingEnabled] = useState<boolean>(false);
   const [dyeingCost, setDyeingCost] = useState<number>(0);
+
+  // ✅ Tailoring (unstitched): vendor can update toggle + cost + turnaround
+  const [tailoringEnabled, setTailoringEnabled] = useState<boolean>(false);
+  const [tailoringCost, setTailoringCost] = useState<number>(0);
+  const [tailoringTurnaroundDays, setTailoringTurnaroundDays] = useState<number>(0);
+
+  // ✅ NEW: video thumbs (best-effort) so multi-select videos still render nice tiles
+  const [videoThumbs, setVideoThumbs] = useState<Record<string, string>>({});
 
   const resolvePublicUrl = useCallback((path: string | null | undefined) => {
     if (!path) return null;
@@ -178,21 +187,55 @@ export default function UpdateProductScreen() {
     setInventoryQty(safeNumOrZero(selected.inventory_qty));
 
     const price = safeJson(selected.price);
+    const spec = safeJson(selected.spec);
 
-    // ✅ Force fixed mode: Unstitched only (not editable)
-    setPriceMode("unstitched_per_meter");
+    const modeRaw = String(price?.mode ?? "").trim();
+    const mode: "stitched_total" | "unstitched_per_meter" =
+      modeRaw === "stitched_total" ? "stitched_total" : "unstitched_per_meter";
+
+    setPriceMode(mode);
 
     setPriceTotal(safeNumOrZero(price?.cost_pkr_total));
     setPricePerMeter(safeNumOrZero(price?.cost_pkr_per_meter));
+
     setAvailableSizes(
       Array.isArray(price?.available_sizes)
         ? price.available_sizes.map((x: any) => String(x).trim()).filter(Boolean)
         : []
     );
 
-    const spec = safeJson(selected.spec);
-    setDyeingCost(safeNumOrZero(spec?.dyeing_cost_pkr ?? 0));
+    // ✅ Dyeing
+    const dyeOn = Boolean(spec?.dyeing_enabled);
+    setDyeingEnabled(dyeOn);
+
+    const dyeCostFromPrice = safeNumOrZero(price?.dyeing_cost_pkr ?? 0);
+    const dyeCostFromSpec = safeNumOrZero(spec?.dyeing_cost_pkr ?? 0);
+    setDyeingCost(dyeCostFromPrice > 0 ? dyeCostFromPrice : dyeCostFromSpec);
+
+    // ✅ Tailoring
+    const tailorOn = Boolean(spec?.tailoring_enabled);
+    setTailoringEnabled(tailorOn);
+
+    const tailorCostFromPrice = safeNumOrZero(price?.tailoring_cost_pkr ?? 0);
+    setTailoringCost(tailorCostFromPrice);
+
+    const daysFromSpec = safeNumOrZero(spec?.tailoring_turnaround_days ?? 0);
+    setTailoringTurnaroundDays(daysFromSpec);
   }, [selected]);
+
+  // ✅ If toggled OFF, clear associated values (best UX, and matches Add Product behavior)
+  useEffect(() => {
+    if (!dyeingEnabled && dyeingCost !== 0) setDyeingCost(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dyeingEnabled]);
+
+  useEffect(() => {
+    if (!tailoringEnabled) {
+      if (tailoringCost !== 0) setTailoringCost(0);
+      if (tailoringTurnaroundDays !== 0) setTailoringTurnaroundDays(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tailoringEnabled]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -238,29 +281,88 @@ export default function UpdateProductScreen() {
     [thumbPaths, resolvePublicUrl]
   );
 
-  // ✅ Dyeable is fixed (read-only). Uses spec.dyeing_enabled from Add Product.
-  const dyeable = useMemo(() => {
-    const spec = safeJson(selected?.spec);
-    return Boolean(spec?.dyeing_enabled);
-  }, [selected]);
+  // ✅ Best-effort thumbs for videos when DB thumbs are missing
+  useEffect(() => {
+    let cancelled = false;
+
+    async function ensureThumb(url: string) {
+      const u = String(url || "").trim();
+      if (!u) return;
+      if (videoThumbs[u]) return;
+
+      try {
+        const { uri } = await VideoThumbnails.getThumbnailAsync(u, { time: 1500 });
+        if (cancelled) return;
+        if (uri) {
+          setVideoThumbs((prev) => (prev[u] ? prev : { ...prev, [u]: uri }));
+          try {
+            Image.prefetch(uri);
+          } catch {
+            // ignore
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    const list = (videoUrls ?? []).slice(0, 20);
+    (async () => {
+      for (let i = 0; i < list.length; i++) {
+        // eslint-disable-next-line no-await-in-loop
+        await ensureThumb(list[i]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(videoUrls)]);
+
+  const isUnstitched = priceMode === "unstitched_per_meter";
 
   const canSave = useMemo(() => {
     if (!vendorId) return false;
     if (!selectedId) return false;
     if (!title.trim()) return false;
 
-    // ✅ Unstitched only
-    const n = Number(pricePerMeter ?? 0);
-    if (!Number.isFinite(n) || n <= 0) return false;
+    if (priceMode === "unstitched_per_meter") {
+      const n = Number(pricePerMeter ?? 0);
+      if (!Number.isFinite(n) || n <= 0) return false;
 
-    // ✅ If dyeable, require dyeing cost > 0
-    if (dyeable) {
-      const d = Number(dyeingCost ?? 0);
-      if (!Number.isFinite(d) || d <= 0) return false;
+      if (dyeingEnabled) {
+        const d = Number(dyeingCost ?? 0);
+        if (!Number.isFinite(d) || d <= 0) return false;
+      }
+
+      if (tailoringEnabled) {
+        const t = Number(tailoringCost ?? 0);
+        if (!Number.isFinite(t) || t <= 0) return false;
+
+        const days = Number(tailoringTurnaroundDays ?? 0);
+        if (!Number.isFinite(days) || days < 0) return false;
+      }
+    } else {
+      const n = Number(priceTotal ?? 0);
+      if (!Number.isFinite(n) || n <= 0) return false;
+      // availableSizes optional
     }
 
     return true;
-  }, [vendorId, selectedId, title, pricePerMeter, dyeable, dyeingCost]);
+  }, [
+    vendorId,
+    selectedId,
+    title,
+    priceMode,
+    pricePerMeter,
+    priceTotal,
+    dyeingEnabled,
+    dyeingCost,
+    tailoringEnabled,
+    tailoringCost,
+    tailoringTurnaroundDays
+  ]);
 
   async function saveUpdate() {
     if (saving) return;
@@ -278,29 +380,68 @@ export default function UpdateProductScreen() {
     try {
       setSaving(true);
 
-      // ✅ Unstitched only
-      const price = {
-        mode: "unstitched_per_meter",
-        cost_pkr_per_meter: Number(pricePerMeter ?? 0)
+      const prevSpec = safeJson(selected?.spec);
+      const prevPrice = safeJson(selected?.price);
+
+      // ✅ Keep mode read-only, update only the costs and related options
+      let nextPrice: any = {
+        ...(prevPrice ?? {}),
+        mode: priceMode
       };
+
+      if (priceMode === "unstitched_per_meter") {
+        nextPrice = {
+          ...nextPrice,
+          cost_pkr_per_meter: Number(pricePerMeter ?? 0),
+          // store dyeing + tailoring costs in price JSONB (matches Add Product)
+          dyeing_cost_pkr: dyeingEnabled ? Number(dyeingCost ?? 0) : 0,
+          tailoring_cost_pkr: tailoringEnabled ? Number(tailoringCost ?? 0) : 0
+        };
+
+        // optional: clear stitched fields if present
+        if ("cost_pkr_total" in nextPrice) {
+          nextPrice.cost_pkr_total = nextPrice.cost_pkr_total ?? undefined;
+        }
+      } else {
+        nextPrice = {
+          ...nextPrice,
+          cost_pkr_total: Number(priceTotal ?? 0),
+          available_sizes: (availableSizes ?? [])
+            .map((x) => String(x).trim())
+            .filter(Boolean)
+        };
+
+        // if stitched, force dyeing/tailoring off in snapshots
+        nextPrice.dyeing_cost_pkr = 0;
+        nextPrice.tailoring_cost_pkr = 0;
+      }
+
+      const nextSpec: any = {
+        ...(prevSpec ?? {})
+      };
+
+      if (priceMode === "unstitched_per_meter") {
+        nextSpec.dyeing_enabled = Boolean(dyeingEnabled);
+        nextSpec.tailoring_enabled = Boolean(tailoringEnabled);
+        nextSpec.tailoring_turnaround_days = tailoringEnabled
+          ? Math.max(0, Number(tailoringTurnaroundDays ?? 0))
+          : 0;
+      } else {
+        // stitched => disable these service flags
+        nextSpec.dyeing_enabled = false;
+        nextSpec.tailoring_enabled = false;
+        nextSpec.tailoring_turnaround_days = 0;
+      }
 
       const updatePayload: any = {
         title: title.trim(),
-        price,
+        price: nextPrice,
+        spec: nextSpec,
         updated_at: new Date().toISOString()
       };
 
       if (inventoryEditable) {
         updatePayload.inventory_qty = Number(inventoryQty ?? 0);
-      }
-
-      // ✅ Only if dyeable: allow editing dyeing_cost_pkr (dyeable itself stays fixed)
-      if (dyeable) {
-        const prevSpec = safeJson(selected?.spec);
-        updatePayload.spec = {
-          ...prevSpec,
-          dyeing_cost_pkr: Number(dyeingCost ?? 0)
-        };
       }
 
       const { data, error } = await supabase
@@ -401,6 +542,36 @@ export default function UpdateProductScreen() {
     await saveMedia(next);
   }
 
+  async function uploadOneAsset(args: {
+    kind: "image" | "video";
+    uri: string;
+    vendorId: number;
+    productCode: string;
+    index: number;
+  }) {
+    const ext = extFromUri(args.uri) || (args.kind === "image" ? "jpg" : "mp4");
+    const contentType = guessContentTypeFromExt(ext);
+
+    const base64 = await FileSystem.readAsStringAsync(args.uri, {
+      encoding: FileSystem.EncodingType.Base64
+    });
+    const arrayBuffer = decode(base64);
+
+    const folder = args.kind === "image" ? "images" : "videos";
+    const filename = `${Date.now()}_${args.index}_${Math.random().toString(16).slice(2)}.${ext}`;
+    const storagePath = `vendors/${args.vendorId}/products/${args.productCode}/${folder}/${filename}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_VENDOR)
+      .upload(storagePath, arrayBuffer, {
+        contentType,
+        upsert: false
+      });
+
+    if (uploadError) throw new Error(uploadError.message);
+    return storagePath;
+  }
+
   async function pickAndUpload(kind: "image" | "video") {
     if (!vendorId || !selectedId || !selected?.product_code) {
       Alert.alert("Missing", "Select a product first.");
@@ -420,51 +591,75 @@ export default function UpdateProductScreen() {
           ? ImagePicker.MediaTypeOptions.Images
           : ImagePicker.MediaTypeOptions.Videos,
       quality: kind === "image" ? 0.9 : undefined,
-      allowsEditing: false
+      allowsEditing: false,
+
+      // ✅ MULTI-SELECT + NO LIMIT (same as Add Product)
+      allowsMultipleSelection: true
+      // selectionLimit removed => unlimited
     });
 
     if (result.canceled) return;
-    const asset = result.assets?.[0];
-    if (!asset?.uri) return;
+
+    const assets = (result.assets ?? []).filter((a: any) => !!a?.uri);
+    if (!assets.length) return;
 
     try {
       setSavingMedia(true);
 
-      const uri = asset.uri;
-      const ext = extFromUri(uri) || (kind === "image" ? "jpg" : "mp4");
-      const contentType = guessContentTypeFromExt(ext);
-
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64
-      });
-      const arrayBuffer = decode(base64);
-
       const productCode = String(selected.product_code);
-      const folder = kind === "image" ? "images" : "videos";
-      const filename = `${Date.now()}_${Math.random().toString(16).slice(2)}.${ext}`;
-      const storagePath = `vendors/${vendorId}/products/${productCode}/${folder}/${filename}`;
 
-      const { error: uploadError } = await supabase.storage.from(BUCKET_VENDOR).upload(
-        storagePath,
-        arrayBuffer,
-        {
-          contentType,
-          upsert: false
-        }
-      );
-
-      if (uploadError) {
-        Alert.alert("Upload failed", uploadError.message);
-        return;
-      }
-
+      // start from current media
       const m = safeJson(selected.media);
       const nextImages = Array.isArray(m.images) ? [...m.images] : [];
       const nextVideos = Array.isArray(m.videos) ? [...m.videos] : [];
       const nextThumbs = Array.isArray(m.thumbs) ? [...m.thumbs] : [];
 
-      if (kind === "image") nextImages.push(storagePath);
-      else nextVideos.push(storagePath);
+      // prevent duplicates by filename/path? (we can only dedupe by uri before upload)
+      const seenUri = new Set<string>();
+
+      for (let i = 0; i < assets.length; i++) {
+        const uri = String(assets[i]?.uri || "").trim();
+        if (!uri) continue;
+        if (seenUri.has(uri)) continue;
+        seenUri.add(uri);
+
+        // eslint-disable-next-line no-await-in-loop
+        const storagePath = await uploadOneAsset({
+          kind,
+          uri,
+          vendorId,
+          productCode,
+          index: i
+        });
+
+        if (kind === "image") {
+          nextImages.push(storagePath);
+        } else {
+          nextVideos.push(storagePath);
+
+          // ✅ create thumb and upload (optional, best-effort)
+          try {
+            const { uri: thumbUri } = await VideoThumbnails.getThumbnailAsync(uri, {
+              time: 1500
+            });
+
+            if (thumbUri) {
+              // eslint-disable-next-line no-await-in-loop
+              const thumbPath = await uploadOneAsset({
+                kind: "image",
+                uri: thumbUri,
+                vendorId,
+                productCode,
+                index: i
+              });
+
+              nextThumbs.push(thumbPath);
+            }
+          } catch {
+            // thumb optional
+          }
+        }
+      }
 
       const next = {
         ...m,
@@ -649,43 +844,168 @@ export default function UpdateProductScreen() {
               </>
             ) : null}
 
-            {/* ✅ Fixed info (read-only): Unstitched + Dyeable */}
+            {/* ✅ Fixed info (read-only): Cost Mode */}
             <Text style={styles.label}>Cost Mode</Text>
             <View style={styles.fixedPill}>
-              <Text style={styles.fixedPillText}>Unstitched (PKR/meter)</Text>
+              <Text style={styles.fixedPillText}>
+                {priceMode === "unstitched_per_meter"
+                  ? "Unstitched (PKR/meter)"
+                  : "Stitched / Ready-to-wear"}
+              </Text>
             </View>
 
-            <Text style={styles.label}>Dyeable</Text>
-            <View style={styles.fixedPill}>
-              <Text style={styles.fixedPillText}>{dyeable ? "Yes" : "No"}</Text>
-            </View>
-
-            {dyeable ? (
+            {priceMode === "stitched_total" ? (
               <>
-                <Text style={styles.label}>Dyeing Cost (PKR) *</Text>
+                <Text style={styles.label}>Total Cost (PKR) *</Text>
                 <TextInput
-                  value={String(dyeingCost ?? "")}
-                  onChangeText={(t) => setDyeingCost(Number(sanitizeNumber(t) || "0"))}
-                  placeholder="e.g., 500"
+                  value={String(priceTotal ?? "")}
+                  onChangeText={(t) => setPriceTotal(Number(sanitizeNumber(t) || "0"))}
+                  placeholder="e.g., 25000"
                   placeholderTextColor={stylesVars.placeholder}
                   style={styles.input}
                   keyboardType="decimal-pad"
                   maxLength={12}
                 />
-              </>
-            ) : null}
 
-            {/* ✅ Unstitched only: editable cost per meter */}
-            <Text style={styles.label}>Cost per Meter (PKR) *</Text>
-            <TextInput
-              value={String(pricePerMeter ?? "")}
-              onChangeText={(t) => setPricePerMeter(Number(sanitizeNumber(t) || "0"))}
-              placeholder="e.g., 1800"
-              placeholderTextColor={stylesVars.placeholder}
-              style={styles.input}
-              keyboardType="decimal-pad"
-              maxLength={12}
-            />
+                <Text style={styles.label}>Available Sizes (comma separated)</Text>
+                <TextInput
+                  value={(availableSizes ?? []).join(", ")}
+                  onChangeText={(t) =>
+                    setAvailableSizes(
+                      t
+                        .split(",")
+                        .map((x) => x.trim())
+                        .filter(Boolean)
+                    )
+                  }
+                  placeholder="e.g., XS, S, M, L, XL, XXL, All"
+                  placeholderTextColor={stylesVars.placeholder}
+                  style={styles.input}
+                  maxLength={80}
+                />
+
+                <Text style={styles.hint}>
+                  Dyeing & stitching services apply only to unstitched products.
+                </Text>
+              </>
+            ) : (
+              <>
+                {/* ✅ Unstitched only: editable cost per meter */}
+                <Text style={styles.label}>Cost per Meter (PKR) *</Text>
+                <TextInput
+                  value={String(pricePerMeter ?? "")}
+                  onChangeText={(t) => setPricePerMeter(Number(sanitizeNumber(t) || "0"))}
+                  placeholder="e.g., 1800"
+                  placeholderTextColor={stylesVars.placeholder}
+                  style={styles.input}
+                  keyboardType="decimal-pad"
+                  maxLength={12}
+                />
+
+                {/* ✅ Dyeing toggle + cost */}
+                <View style={styles.dyeRow}>
+                  <Text style={[styles.label, { marginTop: 0 }]}>Dyeable</Text>
+
+                  <Pressable
+                    onPress={() => {
+                      if (!isUnstitched) return;
+                      setDyeingEnabled((v) => !v);
+                    }}
+                    style={({ pressed }) => [
+                      styles.dyePill,
+                      dyeingEnabled ? styles.dyePillOn : null,
+                      pressed ? styles.pressed : null
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.dyePillText,
+                        dyeingEnabled ? styles.dyePillTextOn : null
+                      ]}
+                    >
+                      {dyeingEnabled ? "Yes" : "No"}
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {dyeingEnabled ? (
+                  <>
+                    <Text style={styles.dyeHint}>
+                      Buyer will pick a dye shade at checkout (only for dyeable unstitched cloth).
+                    </Text>
+
+                    <Text style={styles.label}>Dyeing Cost (PKR) *</Text>
+                    <TextInput
+                      value={String(dyeingCost ?? "")}
+                      onChangeText={(t) => setDyeingCost(Number(sanitizeNumber(t) || "0"))}
+                      placeholder="e.g., 800"
+                      placeholderTextColor={stylesVars.placeholder}
+                      style={styles.input}
+                      keyboardType="decimal-pad"
+                      maxLength={12}
+                    />
+                  </>
+                ) : null}
+
+                {/* ✅ Tailoring toggle + cost + turnaround */}
+                <View style={styles.tailorRow}>
+                  <Text style={[styles.label, { marginTop: 0 }]}>Stitching available</Text>
+
+                  <Pressable
+                    onPress={() => {
+                      if (!isUnstitched) return;
+                      setTailoringEnabled((v) => !v);
+                    }}
+                    style={({ pressed }) => [
+                      styles.tailorPill,
+                      tailoringEnabled ? styles.tailorPillOn : null,
+                      pressed ? styles.pressed : null
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.tailorPillText,
+                        tailoringEnabled ? styles.tailorPillTextOn : null
+                      ]}
+                    >
+                      {tailoringEnabled ? "Yes" : "No"}
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {tailoringEnabled ? (
+                  <>
+                    <Text style={styles.tailorHint}>
+                      Buyer will choose “Yes/No” for stitching at checkout (unstitched only).
+                    </Text>
+
+                    <Text style={styles.label}>Tailoring Cost (PKR) *</Text>
+                    <TextInput
+                      value={String(tailoringCost ?? "")}
+                      onChangeText={(t) => setTailoringCost(Number(sanitizeNumber(t) || "0"))}
+                      placeholder="e.g., 2500"
+                      placeholderTextColor={stylesVars.placeholder}
+                      style={styles.input}
+                      keyboardType="decimal-pad"
+                      maxLength={12}
+                    />
+
+                    <Text style={styles.label}>Tailoring Turnaround (days)</Text>
+                    <TextInput
+                      value={String(tailoringTurnaroundDays ?? "")}
+                      onChangeText={(t) =>
+                        setTailoringTurnaroundDays(Number(sanitizeNumber(t) || "0"))
+                      }
+                      placeholder="e.g., 12"
+                      placeholderTextColor={stylesVars.placeholder}
+                      style={styles.input}
+                      keyboardType="number-pad"
+                      maxLength={3}
+                    />
+                  </>
+                ) : null}
+              </>
+            )}
           </>
         )}
       </View>
@@ -762,10 +1082,14 @@ export default function UpdateProductScreen() {
                 <View style={styles.thumbRow}>
                   {videoUrls.map((u, idx) => {
                     const t = thumbUrls[idx] ?? null;
+                    const fallback = videoThumbs[u] ?? null;
+
                     return (
                       <View key={`${u}-${idx}`} style={styles.thumbWrap}>
                         {t ? (
                           <Image source={{ uri: t }} style={styles.thumb} />
+                        ) : fallback ? (
+                          <Image source={{ uri: fallback }} style={styles.thumb} />
                         ) : (
                           <View style={styles.videoPlaceholder}>
                             <Text style={styles.videoPlaceholderText}>Video {idx + 1}</Text>
@@ -915,7 +1239,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff"
   },
 
-  // ✅ read-only pill (for fixed fields like Unstitched/Dyeable)
+  // ✅ read-only pill (for fixed fields like mode)
   fixedPill: {
     marginTop: 8,
     alignSelf: "flex-start",
@@ -973,22 +1297,6 @@ const styles = StyleSheet.create({
   loadingText: { color: stylesVars.subText, fontWeight: "800" },
 
   hint: { marginTop: 10, color: stylesVars.subText, fontWeight: "800" },
-
-  segmentRow: { flexDirection: "row", gap: 10, marginTop: 8, flexWrap: "wrap" },
-  segment: {
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: "#fff"
-  },
-  segmentOn: {
-    backgroundColor: stylesVars.blueSoft,
-    borderColor: stylesVars.blue
-  },
-  segmentText: { color: stylesVars.text, fontWeight: "900", fontSize: 12 },
-  segmentTextOn: { color: stylesVars.blue },
 
   thumbRow: { flexDirection: "row", gap: 10, paddingTop: 10, paddingBottom: 4 },
 
@@ -1056,6 +1364,54 @@ const styles = StyleSheet.create({
   warn: { marginTop: 10, color: stylesVars.subText, fontWeight: "800" },
   empty: { marginTop: 10, color: stylesVars.subText, fontWeight: "800" },
   emptyInline: { marginTop: 8, color: stylesVars.subText, fontWeight: "800" },
+
+  // ✅ Dyeing styles
+  dyeRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10
+  },
+  dyePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: "#fff"
+  },
+  dyePillOn: {
+    borderColor: stylesVars.blue,
+    backgroundColor: stylesVars.blueSoft
+  },
+  dyePillText: { fontSize: 12, fontWeight: "900", color: stylesVars.text },
+  dyePillTextOn: { color: stylesVars.blue },
+  dyeHint: { marginTop: 8, color: stylesVars.subText, fontWeight: "800", fontSize: 12 },
+
+  // ✅ Tailoring styles
+  tailorRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10
+  },
+  tailorPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: "#fff"
+  },
+  tailorPillOn: {
+    borderColor: stylesVars.blue,
+    backgroundColor: stylesVars.blueSoft
+  },
+  tailorPillText: { fontSize: 12, fontWeight: "900", color: stylesVars.text },
+  tailorPillTextOn: { color: stylesVars.blue },
+  tailorHint: { marginTop: 8, color: stylesVars.subText, fontWeight: "800", fontSize: 12 },
 
   pressed: { opacity: 0.75 }
 });

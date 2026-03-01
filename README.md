@@ -109,7 +109,6 @@ kapray
 │   ├── vcs.xml
 │   └── workspace.xml
 ├── .vscode
-│   ├── .react
 │   ├── extensions.json
 │   └── settings.json
 ├── app
@@ -121,24 +120,22 @@ kapray
 │   │   ├── index.tsx
 │   │   └── shops.tsx
 │   ├── couriers
-│   │   ├── (modals)
-│   │   │   ├── _layout.tsx
-│   │   │   └── courier-list_modal.tsx
-│   │   └── index.tsx
+│   │   └── components
 │   ├── orders
 │   │   ├── [id].tsx
-│   │   └── index.tsx
+│   │   ├── index.tsx
+│   │   └── track.tsx
 │   ├── purchase
 │   │   ├── _layout.tsx
 │   │   ├── cart.tsx
 │   │   ├── payment.tsx
 │   │   ├── place-order.tsx
 │   │   └── size.tsx
+│   ├── services
 │   ├── tailors
-│   │   ├── (modals)
-│   │   │   ├── _layout.tsx
-│   │   │   └── tailor-list_modal.tsx
-│   │   └── index.tsx
+│   │   └── components
+│   │       ├── TailoringCheckoutBlock.tsx
+│   │       └── TailoringOfferCard.tsx
 │   ├── vendor
 │   │   ├── profile
 │   │   │   ├── (product-modals)
@@ -273,7 +270,7 @@ kapray
 ├── tree-app.txt
 └── tsconfig.json
 PS C:\DEV\kapray\kapray>
-as on 24feb26
+as on 01Mar26
 
 -------------------------------------------------------------------------------------------------------------
 strategy
