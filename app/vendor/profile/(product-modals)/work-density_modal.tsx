@@ -8,7 +8,7 @@ import {
   Text,
   View
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { getWorkDensities, WorkDensityItem } from "@/utils/supabase/workDensity";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 
@@ -31,8 +31,17 @@ function safeStr(v: any) {
   return String(v ?? "").trim();
 }
 
+function pickFirstString(v: unknown): string | null {
+  if (typeof v === "string") return v.trim() || null;
+  if (Array.isArray(v) && typeof v[0] === "string") return v[0].trim() || null;
+  return null;
+}
+
 export default function ProductWorkDensityModal() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const returnTo = pickFirstString((params as any)?.returnTo);
+
   const { draft, setWorkDensityIds } = useProductDraft();
 
   const [items, setItems] = useState<WorkDensityItem[]>([]);
@@ -76,8 +85,12 @@ export default function ProductWorkDensityModal() {
     };
   }, []);
 
-  function closeToAddProduct() {
-    router.replace("/vendor/profile/add-product" as any);
+  function close() {
+    if (returnTo) {
+      router.replace(returnTo as any);
+      return;
+    }
+    router.back();
   }
 
   function toggle(id: string) {
@@ -101,7 +114,7 @@ export default function ProductWorkDensityModal() {
     (draft.spec as any).workDensityNames = pickedNames;
 
     setWorkDensityIds(selected);
-    closeToAddProduct();
+    close();
   }
 
   return (
@@ -109,7 +122,7 @@ export default function ProductWorkDensityModal() {
       {/* HEADER */}
       <View style={styles.header}>
         <Pressable
-          onPress={closeToAddProduct}
+          onPress={close}
           style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
         >
           <Text style={styles.headerBtnText}>Close</Text>

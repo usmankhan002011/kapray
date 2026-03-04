@@ -8,7 +8,7 @@ import {
   Text,
   View
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { getOriginCities, OriginCityItem } from "@/utils/supabase/originCity";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 
@@ -35,8 +35,17 @@ function safeStr(v: any) {
   return String(v ?? "").trim();
 }
 
+function pickFirstString(v: unknown): string | null {
+  if (typeof v === "string") return v.trim() || null;
+  if (Array.isArray(v) && typeof v[0] === "string") return v[0].trim() || null;
+  return null;
+}
+
 export default function ProductOriginCityModal() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const returnTo = pickFirstString((params as any)?.returnTo);
+
   const { draft, setOriginCityIds } = useProductDraft();
 
   const [items, setItems] = useState<OriginCityItem[]>([]);
@@ -80,8 +89,12 @@ export default function ProductOriginCityModal() {
     };
   }, []);
 
-  function closeToAddProduct() {
-    router.replace("/vendor/profile/add-product" as any);
+  function close() {
+    if (returnTo) {
+      router.replace(returnTo as any);
+      return;
+    }
+    router.back();
   }
 
   function toggle(id: string) {
@@ -105,7 +118,7 @@ export default function ProductOriginCityModal() {
     (draft.spec as any).originCityNames = pickedNames;
 
     setOriginCityIds(selected);
-    closeToAddProduct();
+    close();
   }
 
   return (
@@ -113,7 +126,7 @@ export default function ProductOriginCityModal() {
       {/* HEADER */}
       <View style={styles.header}>
         <Pressable
-          onPress={closeToAddProduct}
+          onPress={close}
           style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
         >
           <Text style={styles.headerBtnText}>Close</Text>

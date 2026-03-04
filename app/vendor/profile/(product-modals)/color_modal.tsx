@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 
 type ColorShadeItem = {
@@ -29,6 +29,9 @@ function safeStr(v: any) {
 
 export default function ProductColorModal() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const returnTo = typeof params?.returnTo === "string" ? params.returnTo : "";
+
   const { draft, setColorShadeIds } = useProductDraft();
 
   const [selected, setSelected] = useState<string[]>(
@@ -44,7 +47,11 @@ export default function ProductColorModal() {
   }, []);
 
   function closeToAddProduct() {
-    router.replace("/vendor/profile/add-product" as any);
+    if (returnTo) {
+      router.replace(returnTo as any);
+      return;
+    }
+    router.back();
   }
 
   function toggle(id: string) {

@@ -98,7 +98,7 @@ npx expo run:android
 
   Show-CustomTree -Path "." -MaxDepth 8 | Tee-Object -FilePath ".\tree.txt"
 }
-
+>> 
 kapray
 ├── .idea
 │   ├── caches
@@ -109,10 +109,12 @@ kapray
 │   ├── vcs.xml
 │   └── workspace.xml
 ├── .vscode
+│   ├── .react
 │   ├── extensions.json
 │   └── settings.json
 ├── app
 │   ├── (buyer)
+│   │   ├── dye_palette_modal.tsx
 │   │   ├── view-product.tsx
 │   │   └── view-profile.tsx
 │   ├── (tabs)
@@ -142,6 +144,15 @@ kapray
 │   │   │   │   ├── dyeing
 │   │   │   │   │   ├── dye_palette_modal.tsx
 │   │   │   │   │   └── palette.ts
+│   │   │   │   ├── more-description
+│   │   │   │   │   ├── disclaimer.tsx
+│   │   │   │   │   ├── dupatta.tsx
+│   │   │   │   │   ├── fabric-work.tsx
+│   │   │   │   │   ├── hook.tsx
+│   │   │   │   │   ├── index.tsx
+│   │   │   │   │   ├── occasion.tsx
+│   │   │   │   │   ├── replica.tsx
+│   │   │   │   │   └── trouser.tsx
 │   │   │   │   ├── _layout.tsx
 │   │   │   │   ├── color_modal.tsx
 │   │   │   │   ├── dress-type_modal.tsx
@@ -150,8 +161,24 @@ kapray
 │   │   │   │   ├── wear-state_modal.tsx
 │   │   │   │   ├── work_modal.tsx
 │   │   │   │   └── work-density_modal.tsx
+│   │   │   ├── add-product
+│   │   │   │   ├── _layout.tsx
+│   │   │   │   ├── index.tsx
+│   │   │   │   ├── q02-category.tsx
+│   │   │   │   ├── q03-made-on-order.tsx
+│   │   │   │   ├── q04-inventory.tsx
+│   │   │   │   ├── q05a-stitched-total-cost.tsx
+│   │   │   │   ├── q05b-unstitched-cost-per-meter.tsx
+│   │   │   │   ├── q06a-sizes.tsx
+│   │   │   │   ├── q06b-services-costs.tsx
+│   │   │   │   ├── q09-images.tsx
+│   │   │   │   ├── q10-videos.tsx
+│   │   │   │   ├── q11-description.tsx
+│   │   │   │   ├── q12-more-description.tsx
+│   │   │   │   ├── review.tsx
+│   │   │   │   └── submit.tsx
 │   │   │   ├── _layout.tsx
-│   │   │   ├── add-product.tsx
+│   │   │   ├── add-product_legacy.tsx
 │   │   │   ├── edit-vendor.tsx
 │   │   │   ├── index.tsx
 │   │   │   ├── orders.tsx
@@ -170,6 +197,7 @@ kapray
 │   ├── modal.tsx
 │   ├── origin-city.tsx
 │   ├── price-band.tsx
+│   ├── price-band_legacy.tsx
 │   ├── results.tsx
 │   ├── results-filters.tsx
 │   ├── vendor-search.tsx
@@ -216,7 +244,9 @@ kapray
 │   └── sizes outline.jpg
 ├── components
 │   ├── product
-│   │   └── ProductDraftContext.tsx
+│   │   ├── addProductStyles.ts
+│   │   ├── ProductDraftContext.tsx
+│   │   └── useAutoFocus.ts
 │   ├── ui
 │   │   ├── collapsible.tsx
 │   │   ├── icon-symbol.ios.tsx
@@ -270,7 +300,7 @@ kapray
 ├── tree-app.txt
 └── tsconfig.json
 PS C:\DEV\kapray\kapray>
-as on 01Mar26
+as on 03Mar26
 
 -------------------------------------------------------------------------------------------------------------
 strategy

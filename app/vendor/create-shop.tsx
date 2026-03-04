@@ -256,6 +256,11 @@ export default function CreateShopScreen() {
     return () => clearTimeout(t);
   }, [viewerVisible, currentIndex, gallery.length]);
 
+  // Certificates are single in create-shop (govPermission). Keep helper list for viewer.
+  const certificatesPreviewUris = useMemo(() => {
+    return govPermission?.uri ? [govPermission.uri] : [];
+  }, [govPermission?.uri]);
+
   // Prefetch picked images for snappy thumbs
   useEffect(() => {
     const all = [
@@ -330,11 +335,6 @@ export default function CreateShopScreen() {
       // ignore
     }
   }, [player]);
-
-  // Certificates are single in create-shop (govPermission). Keep helper list for viewer.
-  const certificatesPreviewUris = useMemo(() => {
-    return govPermission?.uri ? [govPermission.uri] : [];
-  }, [govPermission?.uri]);
 
   const shopImageUris = useMemo(() => (images ?? []).map((x) => x.uri).filter(Boolean), [images]);
   const shopVideoUris = useMemo(() => (videos ?? []).map((x) => x.uri).filter(Boolean), [videos]);
@@ -579,7 +579,7 @@ export default function CreateShopScreen() {
 
         {/* ✅ NEW: Offers tailoring toggle */}
         <View style={styles.tailoringRow}>
-          <Text style={styles.tailoringLabel}>Offers stitching / tailoring</Text>
+          <Text style={styles.fieldBtnBlue}>Offers stitching / tailoring</Text>
 
           <Pressable
             onPress={() => setOffersTailoring((v) => !v)}
@@ -629,45 +629,27 @@ export default function CreateShopScreen() {
           </View>
         )}
 
-        <FieldHeader
-          label="Location URL"
-          open={openLocation}
-          onPress={openAndFocusLocation}
-        />
-        {openLocation && (
-          <View style={optionStyles.card}>
-            <TextInput
-              ref={locationRef}
-              style={styles.inputPlain}
-              value={locationUrl}
-              onChangeText={setLocationUrl}
-              keyboardType="url"
-              autoCapitalize="none"
-              placeholder="Optional"
-              placeholderTextColor={stylesVars.placeholder}
-            />
-          </View>
-        )}
+        <>
+          <Text
+            style={[styles.fieldBtnBlue, locLoading && styles.disabledText]}
+            onPress={locLoading ? undefined : setCurrentLocation}
+          >
+            {locLoading ? "Setting current location..." : "Set current location"}
+          </Text>
 
-        {showSetCurrentLocation && (
-          <>
-            <Text style={styles.orText}>-----OR------</Text>
-
-            <Text
-              style={[styles.blueBtn, locLoading && styles.disabledText]}
-              onPress={locLoading ? undefined : setCurrentLocation}
-            >
-              {locLoading ? "Setting current location..." : "Set current location"}
+          {(locationUrl || "").trim().length ? (
+            <Text style={styles.locationUrlPreview} numberOfLines={2}>
+              {(locationUrl || "").trim()}
             </Text>
-          </>
-        )}
+          ) : null}
+        </>
 
         {/* MEDIA (improved previews) */}
-        <Text style={styles.section}>Media</Text>
+        {/* <Text style={styles.fieldBtnBlue}>Media</Text> */}
 
         {/* Profile */}
         <Text
-          style={styles.blueBtn}
+          style={styles.fieldBtnBlue}
           onPress={async () => setProfile((await pickImages(false))[0] ?? null)}
         >
           Vendor profile / logo
@@ -683,7 +665,7 @@ export default function CreateShopScreen() {
 
         {/* Authorities permission (certificate) */}
         <Text
-          style={styles.blueBtn}
+          style={styles.fieldBtnBlue}
           onPress={async () => setGovPermission((await pickImages(false))[0] ?? null)}
         >
           Authorities permission
@@ -699,7 +681,7 @@ export default function CreateShopScreen() {
 
         {/* Banner */}
         <Text
-          style={styles.blueBtn}
+          style={styles.fieldBtnBlue}
           onPress={async () => setBanner((await pickImages(false))[0] ?? null)}
         >
           Shop banner
@@ -715,7 +697,7 @@ export default function CreateShopScreen() {
 
         {/* Shop images (thumb row + fullscreen viewer) */}
         <Text
-          style={styles.blueBtn}
+          style={styles.fieldBtnBlue}
           onPress={async () => setImages(await pickImages(true))}
         >
           Shop images
@@ -723,7 +705,7 @@ export default function CreateShopScreen() {
 
         {shopImageUris.length ? (
           <>
-            <Text style={styles.metaHint}>Tap any image to view full screen.</Text>
+            {/* <Text style={styles.metaHint}>Tap any image to view full screen.</Text> */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.hRow}>
                 {shopImageUris.map((u, idx) => (
@@ -749,7 +731,7 @@ export default function CreateShopScreen() {
 
         {/* Shop videos (thumbnail tiles + inline player) */}
         <Text
-          style={styles.blueBtn}
+          style={styles.fieldBtnBlue}
           onPress={async () => {
             const picked = await pickVideos(true);
             setVideos(picked);
@@ -771,7 +753,7 @@ export default function CreateShopScreen() {
               </View>
             ) : null}
 
-            <Text style={styles.metaHint}>Tap a tile to play.</Text>
+            {/* <Text style={styles.metaHint}>Tap a tile to play.</Text> */}
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.hRow}>
@@ -793,9 +775,7 @@ export default function CreateShopScreen() {
                         <Image source={{ uri: thumbUri }} style={styles.thumb} />
                       ) : (
                         <View style={styles.videoPlaceholder}>
-                          <Text style={styles.videoPlaceholderText}>
-                            Video {idx + 1}
-                          </Text>
+                          <Text style={styles.videoPlaceholderText}>Video {idx + 1}</Text>
                         </View>
                       )}
 
@@ -808,7 +788,7 @@ export default function CreateShopScreen() {
               </View>
             </ScrollView>
 
-            <View style={styles.videoNames}>
+            {/* <View style={styles.videoNames}>
               {videos.slice(0, 5).map((v, idx) => (
                 <Text key={`${v.uri}-${idx}`} style={styles.videoItem} numberOfLines={1}>
                   {idx + 1}. {prettyNameFromPicked(v, `video-${idx + 1}`)}
@@ -817,7 +797,7 @@ export default function CreateShopScreen() {
               {videos.length > 5 ? (
                 <Text style={styles.moreText}>+{videos.length - 5} more</Text>
               ) : null}
-            </View>
+            </View> */}
           </>
         ) : (
           <Text style={styles.empty}>—</Text>
@@ -1058,5 +1038,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999
   },
-  indexText: { color: "#fff", fontWeight: "900" }
+  indexText: { color: "#fff", fontWeight: "900" },
+  locationUrlPreview: {
+  marginTop: 6,
+  fontSize: 12,
+  fontWeight: "800",
+  color: stylesVars.subText
+},
 });

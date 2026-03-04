@@ -24,7 +24,6 @@ const TABLE_WORK_TYPES = "work_types";
 const TABLE_WORK_DENSITIES = "work_densities";
 const TABLE_ORIGIN_CITIES = "origin_cities";
 const TABLE_WEAR_STATES = "wear_states";
-const TABLE_PRICE_BANDS = "price_bands";
 
 const PAGE_SIZE = 30;
 
@@ -37,14 +36,6 @@ type ProductRow = {
   spec?: any;
   price?: any;
   media?: any;
-};
-
-type PriceBandRow = {
-  id: string;
-  name: string;
-  min_pkr: number | null;
-  max_pkr: number | null;
-  sort_order: number;
 };
 
 type NameRow = { id: any; name: string };
@@ -88,7 +79,7 @@ function publicUrlForStoragePath(path: string | null): string | null {
 }
 
 /**
- * Numeric PKR value for band comparison:
+ * Numeric PKR value for filtering:
  * - stitched_total => cost_pkr_total
  * - unstitched_per_meter => cost_pkr_per_meter
  * Prefer total if present.
@@ -121,36 +112,10 @@ function formatPrice(price: any): string {
   }
 
   if (typeof total === "number") return `PKR ${total.toLocaleString()}`;
-  if (typeof perMeter === "number") return `PKR ${perMeter.toLocaleString()} / meter`;
+  if (typeof perMeter === "number")
+    return `PKR ${perMeter.toLocaleString()} / meter`;
 
   return "Price not set";
-}
-
-function withinBand(v: number, band: PriceBandRow): boolean {
-  const min = band.min_pkr;
-  const max = band.max_pkr;
-
-  if (typeof min === "number" && v < min) return false;
-  if (typeof max === "number" && v > max) return false;
-
-  return true;
-}
-
-// empty selection => ANY
-function matchesAnySelectedBand(
-  selectedBandIds: string[],
-  bandsById: Map<string, PriceBandRow>,
-  valuePkr: number | null
-): boolean {
-  if (!selectedBandIds.length) return true;
-  if (valuePkr === null) return false;
-
-  for (const id of selectedBandIds) {
-    const b = bandsById.get(String(id));
-    if (!b) continue;
-    if (withinBand(valuePkr, b)) return true;
-  }
-  return false;
 }
 
 function buildNameMap(rows: NameRow[]): Map<string, string> {
@@ -172,11 +137,27 @@ function idsToNames(ids: string[], map: Map<string, string>): string[] {
 }
 
 // ✅ if user selected IDs but names not loaded yet, show Loading… (not Any)
-function namesOrLoading(label: string, selectedIds: any[], names: string[]): string {
+function namesOrLoading(
+  label: string,
+  selectedIds: any[],
+  names: string[]
+): string {
   const hasSelection = Array.isArray(selectedIds) && selectedIds.length > 0;
   if (!hasSelection) return `${label}: Any`;
   if (!names.length) return `${label}: Loading…`;
   return `${label}: ${names.join(", ")}`;
+}
+
+function formatPKR(n: number) {
+  return `PKR ${Math.round(n).toLocaleString()}`;
+}
+
+function priceRangeSummary(minCostPkr: number | null, maxCostPkr: number | null) {
+  if (minCostPkr === null && maxCostPkr === null) return "Price: Any";
+  if (minCostPkr !== null && maxCostPkr === null) return `Price: ${formatPKR(minCostPkr)}+`;
+  if (minCostPkr === null && maxCostPkr !== null)
+    return `Price: Up to ${formatPKR(maxCostPkr)}`;
+  return `Price: ${formatPKR(minCostPkr as number)} – ${formatPKR(maxCostPkr as number)}`;
 }
 
 export default function ResultsScreen() {
@@ -192,7 +173,10 @@ export default function ResultsScreen() {
   const workDensityIds: string[] = filters?.workDensityIds ?? [];
   const originCityIds: string[] = filters?.originCityIds ?? [];
   const wearStateIds: string[] = filters?.wearStateIds ?? [];
-  const priceBandIds: string[] = filters?.priceBandIds ?? [];
+
+  // ✅ cost range (nulls => Any)
+  const minCostPkr: number | null = filters?.minCostPkr ?? null;
+  const maxCostPkr: number | null = filters?.maxCostPkr ?? null;
 
   // ✅ vendors (multi-select, empty = Any)
   const vendorIds: string[] = filters?.vendorIds ?? [];
@@ -202,7 +186,6 @@ export default function ResultsScreen() {
   const [hasMore, setHasMore] = useState(true);
 
   const [products, setProducts] = useState<ProductRow[]>([]);
-  const [priceBands, setPriceBands] = useState<PriceBandRow[]>([]);
 
   // lookups (names only)
   const [dressTypes, setDressTypes] = useState<NameRow[]>([]);
@@ -217,7 +200,9 @@ export default function ResultsScreen() {
 
   // ✅ sort (default: cost ascending)
   const [sortOpen, setSortOpen] = useState(false);
-  const [sortMode, setSortMode] = useState<"cost_asc" | "cost_desc" | "date">("cost_asc");
+  const [sortMode, setSortMode] = useState<"cost_asc" | "cost_desc" | "date">(
+    "cost_asc"
+  );
 
   function toggleFavorite(productId: number) {
     setFavoriteIds((prev) => {
@@ -245,7 +230,6 @@ export default function ResultsScreen() {
         setHasMore(true);
 
         const [
-          bandsRes,
           prodRes,
           dressRes,
           fabricRes,
@@ -254,30 +238,35 @@ export default function ResultsScreen() {
           originRes,
           wearRes
         ] = await Promise.all([
-          supabase
-            .from(TABLE_PRICE_BANDS)
-            .select("id, name, min_pkr, max_pkr, sort_order")
-            .order("sort_order", { ascending: true }),
-
           fetchPage(0, PAGE_SIZE - 1),
 
-          supabase.from(TABLE_DRESS_TYPE).select("id, name").order("id", { ascending: true }),
-          supabase.from(TABLE_FABRIC_TYPES).select("id, name").order("sort_order", { ascending: true }),
-          supabase.from(TABLE_WORK_TYPES).select("id, name").order("name", { ascending: true }),
-          supabase.from(TABLE_WORK_DENSITIES).select("id, name").order("name", { ascending: true }),
-          supabase.from(TABLE_ORIGIN_CITIES).select("id, name").order("name", { ascending: true }),
-          supabase.from(TABLE_WEAR_STATES).select("id, name").order("name", { ascending: true })
+          supabase
+            .from(TABLE_DRESS_TYPE)
+            .select("id, name")
+            .order("id", { ascending: true }),
+          supabase
+            .from(TABLE_FABRIC_TYPES)
+            .select("id, name")
+            .order("sort_order", { ascending: true }),
+          supabase
+            .from(TABLE_WORK_TYPES)
+            .select("id, name")
+            .order("name", { ascending: true }),
+          supabase
+            .from(TABLE_WORK_DENSITIES)
+            .select("id, name")
+            .order("name", { ascending: true }),
+          supabase
+            .from(TABLE_ORIGIN_CITIES)
+            .select("id, name")
+            .order("name", { ascending: true }),
+          supabase
+            .from(TABLE_WEAR_STATES)
+            .select("id, name")
+            .order("name", { ascending: true })
         ]);
 
         if (!alive) return;
-
-        // price bands
-        if ((bandsRes as any).error) {
-          console.log("Price bands load error:", (bandsRes as any).error?.message);
-          setPriceBands([]);
-        } else {
-          setPriceBands(((bandsRes as any).data as any) ?? []);
-        }
 
         // products (first page only)
         if ((prodRes as any).error) {
@@ -301,7 +290,6 @@ export default function ResultsScreen() {
         if (!alive) return;
         Alert.alert("Load error", e?.message ?? "Unknown error");
         setProducts([]);
-        setPriceBands([]);
         setDressTypes([]);
         setFabricTypes([]);
         setWorkTypes([]);
@@ -349,17 +337,14 @@ export default function ResultsScreen() {
     }
   }
 
-  const bandsById = useMemo(() => {
-    const m = new Map<string, PriceBandRow>();
-    for (const b of priceBands) m.set(String(b.id), b);
-    return m;
-  }, [priceBands]);
-
   // lookup maps
   const dressMap = useMemo(() => buildNameMap(dressTypes), [dressTypes]);
   const fabricMap = useMemo(() => buildNameMap(fabricTypes), [fabricTypes]);
   const workMap = useMemo(() => buildNameMap(workTypes), [workTypes]);
-  const densityMap = useMemo(() => buildNameMap(workDensities), [workDensities]);
+  const densityMap = useMemo(
+    () => buildNameMap(workDensities),
+    [workDensities]
+  );
   const originMap = useMemo(() => buildNameMap(originCities), [originCities]);
   const wearMap = useMemo(() => buildNameMap(wearStates), [wearStates]);
 
@@ -370,7 +355,10 @@ export default function ResultsScreen() {
 
       // ✅ vendor filter (multi-select). Empty => ANY
       if (vendorIds.length) {
-        const vid = p?.vendor_id === null || p?.vendor_id === undefined ? "" : String(p.vendor_id);
+        const vid =
+          p?.vendor_id === null || p?.vendor_id === undefined
+            ? ""
+            : String(p.vendor_id);
         if (!vid || !vendorIds.includes(vid)) return false;
       }
 
@@ -384,8 +372,14 @@ export default function ResultsScreen() {
       if (!anyOverlap(originCityIds, spec?.originCityIds)) return false;
       if (!anyOverlap(wearStateIds, spec?.wearStateIds)) return false;
 
-      const pkr = getComparablePkr(price);
-      if (!matchesAnySelectedBand(priceBandIds, bandsById, pkr)) return false;
+      // ✅ Redux-only cost range filtering
+      const anyBound = minCostPkr !== null || maxCostPkr !== null;
+      if (anyBound) {
+        const pkr = getComparablePkr(price);
+        if (pkr === null) return false;
+        if (minCostPkr !== null && pkr < minCostPkr) return false;
+        if (maxCostPkr !== null && pkr > maxCostPkr) return false;
+      }
 
       return true;
     });
@@ -399,8 +393,8 @@ export default function ResultsScreen() {
     workDensityIds,
     originCityIds,
     wearStateIds,
-    priceBandIds,
-    bandsById
+    minCostPkr,
+    maxCostPkr
   ]);
 
   // ✅ apply sort (cost asc/desc or date)
@@ -462,14 +456,6 @@ export default function ResultsScreen() {
       .map((x) => String(x).trim())
       .filter((x) => x.length > 0);
 
-    const priceNames =
-      !priceBandIds.length
-        ? []
-        : priceBandIds
-            .map((id) => bandsById.get(String(id))?.name ?? "")
-            .map((x) => String(x).trim())
-            .filter((x) => x.length > 0);
-
     return [
       namesOrLoading("Dress", dressTypeIds, dressNames),
       namesOrLoading("Fabric", fabricTypeIds, fabricNames),
@@ -478,7 +464,7 @@ export default function ResultsScreen() {
       namesOrLoading("Density", workDensityIds, densityNames),
       namesOrLoading("Origin", originCityIds, originNames),
       namesOrLoading("Wear", wearStateIds, wearNames),
-      namesOrLoading("Price", priceBandIds, priceNames)
+      priceRangeSummary(minCostPkr, maxCostPkr)
     ].join("  |  ");
   }, [
     dressTypeIds,
@@ -494,8 +480,8 @@ export default function ResultsScreen() {
     originMap,
     wearStateIds,
     wearMap,
-    priceBandIds,
-    bandsById
+    minCostPkr,
+    maxCostPkr
   ]);
 
   function openProduct(p: ProductRow) {
@@ -519,51 +505,64 @@ export default function ResultsScreen() {
         </Text>
 
         <View style={styles.topActions}>
-          <Pressable
-            onPress={() => setSortOpen(true)}
-            style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
-          >
-            <Text style={styles.iconText}>↕️</Text>
-          </Pressable>
+        <Pressable
+          onPress={() => setSortOpen(true)}
+          style={({ pressed }) => [
+            styles.iconBtn,
+            pressed ? { opacity: 0.7 } : null
+          ]}
+        >
+          <Text style={styles.iconText}>↕️</Text>
+        </Pressable>
 
-          <Pressable
-            onPress={() => router.push("/results-filters")}
-            style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
-          >
-            <Text style={styles.iconText}>🔍</Text>
-          </Pressable>
+        <Pressable
+          onPress={() => router.push("/results-filters")}
+          style={({ pressed }) => [
+            styles.iconBtn,
+            pressed ? { opacity: 0.7 } : null
+          ]}
+        >
+          <Text style={styles.iconText}>🔍</Text>
+        </Pressable>
 
-          <Pressable
-            onPress={() => router.push("/vendor-search")}
-            style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
-          >
-            <Text style={styles.iconText}>🛍️</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => router.replace("/wizard")}
-            style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
-          >
-            <Text style={styles.iconText}>↩️</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => router.push("/orders/track")}
-            style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
-          >
-            <Text style={styles.iconText}>📦</Text>
-          </Pressable>
-        </View>
+        <Pressable
+          onPress={() => router.push("/orders/track")}
+          style={({ pressed }) => [
+            styles.iconBtn,
+            pressed ? { opacity: 0.7 } : null
+          ]}
+        >
+          <Text style={styles.iconText}>📦</Text>
+        </Pressable>
+      </View>
       </View>
 
+      {/* ✅ Summary line (includes Redux-only price range) */}
+      {/* <View style={styles.summaryBar}>
+        <Text style={styles.summaryText} numberOfLines={2}>
+          {filtersSummary}
+        </Text>
+      </View> */}
+
       {/* ✅ Sort Modal (dark background) */}
-      <Modal visible={sortOpen} transparent animationType="fade" onRequestClose={() => setSortOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setSortOpen(false)}>
+      <Modal
+        visible={sortOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSortOpen(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setSortOpen(false)}
+        >
           <Pressable style={styles.modalCard} onPress={() => {}}>
             <Text style={styles.modalTitle}>Sort</Text>
 
             <Pressable
-              style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
+              style={({ pressed }) => [
+                styles.modalItem,
+                pressed ? { opacity: 0.7 } : null
+              ]}
               onPress={() => {
                 setSortMode("cost_asc");
                 setSortOpen(false);
@@ -576,13 +575,18 @@ export default function ResultsScreen() {
                   <Text style={styles.modalItemSub}>Low to high</Text>
                 </View>
               </View>
-              <Text style={styles.modalRight}>{sortMode === "cost_asc" ? "✅" : ""}</Text>
+              <Text style={styles.modalRight}>
+                {sortMode === "cost_asc" ? "✅" : ""}
+              </Text>
             </Pressable>
 
             <View style={styles.divider} />
 
             <Pressable
-              style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
+              style={({ pressed }) => [
+                styles.modalItem,
+                pressed ? { opacity: 0.7 } : null
+              ]}
               onPress={() => {
                 setSortMode("cost_desc");
                 setSortOpen(false);
@@ -595,13 +599,18 @@ export default function ResultsScreen() {
                   <Text style={styles.modalItemSub}>High to low</Text>
                 </View>
               </View>
-              <Text style={styles.modalRight}>{sortMode === "cost_desc" ? "✅" : ""}</Text>
+              <Text style={styles.modalRight}>
+                {sortMode === "cost_desc" ? "✅" : ""}
+              </Text>
             </Pressable>
 
             <View style={styles.divider} />
 
             <Pressable
-              style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
+              style={({ pressed }) => [
+                styles.modalItem,
+                pressed ? { opacity: 0.7 } : null
+              ]}
               onPress={() => {
                 setSortMode("date");
                 setSortOpen(false);
@@ -614,16 +623,24 @@ export default function ResultsScreen() {
                   <Text style={styles.modalItemSub}>Newest first</Text>
                 </View>
               </View>
-              <Text style={styles.modalRight}>{sortMode === "date" ? "✅" : ""}</Text>
+              <Text style={styles.modalRight}>
+                {sortMode === "date" ? "✅" : ""}
+              </Text>
             </Pressable>
 
             <View style={styles.divider} />
 
             <Pressable
-              style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
+              style={({ pressed }) => [
+                styles.modalItem,
+                pressed ? { opacity: 0.7 } : null
+              ]}
               onPress={() => {
                 setSortOpen(false);
-                Alert.alert("Coming soon", "⭐ Sort by vendor rating is a feature coming soon.");
+                Alert.alert(
+                  "Coming soon",
+                  "⭐ Sort by vendor rating is a feature coming soon."
+                );
               }}
             >
               <View style={styles.modalLeft}>
@@ -636,7 +653,10 @@ export default function ResultsScreen() {
               <Text style={styles.soonPill}>Soon</Text>
             </Pressable>
 
-            <Pressable style={styles.modalCloseBtn} onPress={() => setSortOpen(false)}>
+            <Pressable
+              style={styles.modalCloseBtn}
+              onPress={() => setSortOpen(false)}
+            >
               <Text style={styles.modalCloseText}>Close</Text>
             </Pressable>
           </Pressable>
@@ -646,7 +666,9 @@ export default function ResultsScreen() {
       {sorted.length === 0 ? (
         <View style={styles.center}>
           <Text style={styles.emptyTitle}>No matching products (loaded so far)</Text>
-          <Text style={styles.muted}>Tip: press “Load more” to search more products, or broaden filters.</Text>
+          <Text style={styles.muted}>
+            Tip: press “Load more” to search more products, or broaden filters.
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -691,7 +713,10 @@ export default function ResultsScreen() {
                 </Text>
 
                 <View style={styles.actionRow}>
-                  <Pressable onPress={() => toggleFavorite(item.id)} style={styles.actionBtn}>
+                  <Pressable
+                    onPress={() => toggleFavorite(item.id)}
+                    style={styles.actionBtn}
+                  >
                     <Text style={[styles.actionText, isFav ? styles.heartOn : null]}>
                       {isFav ? "❤️" : "🤍"}
                     </Text>
@@ -754,6 +779,17 @@ const styles = StyleSheet.create({
     borderColor: "rgba(0,0,0,0.08)"
   },
   iconText: { fontSize: 15, fontWeight: "900", color: "#111" },
+
+  // ✅ summary bar
+  summaryBar: {
+    paddingHorizontal: 16,
+    paddingBottom: 10
+  },
+  summaryText: {
+    fontSize: 12,
+    color: "#60708A",
+    fontWeight: "700"
+  },
 
   // ✅ modal (dark background)
   modalBackdrop: {
@@ -866,7 +902,12 @@ const styles = StyleSheet.create({
   actionText: { fontSize: 13, fontWeight: "800", color: "#111" },
   heartOn: { color: "#D11A2A" },
 
-  loadingRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10 },
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10
+  },
   loadMoreBtn: {
     marginTop: 8,
     borderRadius: 12,
@@ -878,5 +919,10 @@ const styles = StyleSheet.create({
     alignItems: "center"
   },
   loadMoreText: { color: "#0B2F6B", fontWeight: "900" },
-  endText: { marginTop: 10, textAlign: "center", color: "#60708A", fontWeight: "800" }
+  endText: {
+    marginTop: 10,
+    textAlign: "center",
+    color: "#60708A",
+    fontWeight: "800"
+  }
 });

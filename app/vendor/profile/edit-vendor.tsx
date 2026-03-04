@@ -26,6 +26,7 @@ import { decode } from "base64-arraybuffer";
 import { optionStyles } from "@/components/ui/StandardFilterDisplay";
 import * as Location from "expo-location";
 import * as VideoThumbnails from "expo-video-thumbnails";
+import { VideoView, useVideoPlayer } from "expo-video";
 
 const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
@@ -336,6 +337,33 @@ export default function EditVendorScreen() {
     };
   }, [ensureVideoThumb, JSON.stringify(shopVideoUrls)]);
 
+  // ✅ NEW: Play videos like View Profile (embedded player + selectable tiles)
+  const [selectedVideoUrl, setSelectedVideoUrl] = useState<string>("");
+
+  useEffect(() => {
+    if (!shopVideoUrls.length) {
+      setSelectedVideoUrl("");
+      return;
+    }
+    if (!selectedVideoUrl || !shopVideoUrls.includes(selectedVideoUrl)) {
+      setSelectedVideoUrl(shopVideoUrls[0]);
+    }
+  }, [JSON.stringify(shopVideoUrls), selectedVideoUrl]);
+
+  const player = useVideoPlayer(selectedVideoUrl || "");
+
+  useEffect(() => {
+    try {
+      if (player) player.loop = false;
+    } catch {
+      // ignore
+    }
+  }, [player]);
+
+  const videoTiles = useMemo(() => {
+    return (shopVideoUrls ?? []).map((v, idx) => ({ videoUrl: v, idx }));
+  }, [shopVideoUrls]);
+
   // Compact UI: tap to expand each input (create-shop pattern)
   const [openOwner, setOpenOwner] = useState(true);
   const [openEmail, setOpenEmail] = useState(false);
@@ -510,11 +538,8 @@ export default function EditVendorScreen() {
     }
 
     const isVideo = kind === "shop_video";
-    const isMultiImage =
-      kind === "certificate" || kind === "shop_image";
+    const isMultiImage = kind === "certificate" || kind === "shop_image";
 
-    // For update-product parity: single pick + append (no multi picker)
-    // (We keep “append” behavior by calling this multiple times.)
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: isVideo
         ? ImagePicker.MediaTypeOptions.Videos
@@ -622,8 +647,22 @@ export default function EditVendorScreen() {
   async function removeShopVideoAt(idx: number) {
     const list = Array.isArray(shopVideoPaths) ? [...shopVideoPaths] : [];
     if (idx < 0 || idx >= list.length) return;
+
+    const removedUrl = shopVideoUrls[idx] || "";
     list.splice(idx, 1);
+
     await saveVendorMedia({ shop_video_paths: list.length ? list : null });
+
+    // if removed is currently selected, select first remaining
+    try {
+      const removed = String(removedUrl || "").trim();
+      if (removed && removed === String(selectedVideoUrl || "").trim()) {
+        const nextList = list.map((p) => resolvePublicUrl(p)).filter(Boolean) as string[];
+        setSelectedVideoUrl(nextList[0] || "");
+      }
+    } catch {
+      // ignore
+    }
   }
 
   async function submit() {
@@ -721,14 +760,6 @@ export default function EditVendorScreen() {
   }
 
   const showSetCurrentLocation = (locationUrl || "").trim().length === 0;
-
-  // Existing display lists (images only) for viewer
-  const existingProfileBannerGallery = useMemo(() => {
-    const list: string[] = [];
-    if (profileUrl) list.push(profileUrl);
-    if (bannerUrl) list.push(bannerUrl);
-    return list;
-  }, [profileUrl, bannerUrl]);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>
@@ -889,42 +920,24 @@ export default function EditVendorScreen() {
           ) : null}
         </View>
 
-        {/* Profile / Banner (single replace) */}
+        {/* ✅ Profile (segregated) */}
         <View style={styles.existingBox}>
           <View style={styles.mediaSectionHeaderRow}>
-            <Text style={styles.existingTitle}>Profile / Banner</Text>
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <Pressable
-                onPress={() => pickAndUpload("profile")}
-                disabled={savingMedia}
-                style={({ pressed }) => [
-                  styles.smallBtn,
-                  savingMedia ? styles.smallBtnDisabled : null,
-                  pressed ? styles.pressed : null
-                ]}
-              >
-                <Text style={styles.smallBtnText}>Update Profile</Text>
-              </Pressable>
+            <Text style={styles.existingTitle}>Profile / Logo</Text>
 
-              <Pressable
-                onPress={() => pickAndUpload("banner")}
-                disabled={savingMedia}
-                style={({ pressed }) => [
-                  styles.smallBtn,
-                  savingMedia ? styles.smallBtnDisabled : null,
-                  pressed ? styles.pressed : null
-                ]}
-              >
-                <Text style={styles.smallBtnText}>Update Banner</Text>
-              </Pressable>
-            </View>
+            <Pressable
+              onPress={() => pickAndUpload("profile")}
+              disabled={savingMedia}
+              style={({ pressed }) => [
+                styles.smallBtn,
+                savingMedia ? styles.smallBtnDisabled : null,
+                pressed ? styles.pressed : null
+              ]}
+            >
+              <Text style={styles.smallBtnText}>Update Profile</Text>
+            </Pressable>
           </View>
 
-          <Text style={styles.meta}>
-            Tap images to view full screen. Videos open in browser/player.
-          </Text>
-
-          <Text style={styles.subHead}>Profile / Logo</Text>
           {profileUrl ? (
             <Pressable
               onPress={() => openViewerAt([profileUrl], 0)}
@@ -935,8 +948,26 @@ export default function EditVendorScreen() {
           ) : (
             <Text style={styles.empty}>—</Text>
           )}
+        </View>
 
-          <Text style={styles.subHead}>Shop Banner</Text>
+        {/* ✅ Banner (segregated) */}
+        <View style={styles.existingBox}>
+          <View style={styles.mediaSectionHeaderRow}>
+            <Text style={styles.existingTitle}>Shop Banner</Text>
+
+            <Pressable
+              onPress={() => pickAndUpload("banner")}
+              disabled={savingMedia}
+              style={({ pressed }) => [
+                styles.smallBtn,
+                savingMedia ? styles.smallBtnDisabled : null,
+                pressed ? styles.pressed : null
+              ]}
+            >
+              <Text style={styles.smallBtnText}>Update Banner</Text>
+            </Pressable>
+          </View>
+
           {bannerUrl ? (
             <Pressable
               onPress={() => openViewerAt([bannerUrl], 0)}
@@ -947,8 +978,6 @@ export default function EditVendorScreen() {
           ) : (
             <Text style={styles.empty}>—</Text>
           )}
-
-          {existingProfileBannerGallery.length ? null : null}
         </View>
 
         {/* Certificates (add/remove) */}
@@ -1043,7 +1072,7 @@ export default function EditVendorScreen() {
           )}
         </View>
 
-        {/* Shop Videos (add/remove + thumbs) */}
+        {/* ✅ Shop Videos (add/remove + thumbs + embedded player like View Profile) */}
         <View style={styles.existingBox}>
           <View style={styles.mediaSectionHeaderRow}>
             <Text style={styles.existingTitle}>Shop Videos</Text>
@@ -1062,52 +1091,71 @@ export default function EditVendorScreen() {
           </View>
 
           {shopVideoUrls.length ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.hRow}>
-                {shopVideoUrls.map((u, idx) => {
-                  const t = videoThumbs[u] || "";
-                  const loadingThumb = !!thumbLoading[u];
+            <>
+              {!!selectedVideoUrl && (
+                <View style={styles.videoBox}>
+                  <VideoView
+                    player={player}
+                    style={styles.video}
+                    allowsFullscreen
+                    allowsPictureInPicture
+                  />
+                </View>
+              )}
 
-                  return (
-                    <View key={`${u}-${idx}`} style={styles.thumbWrap}>
-                      <Pressable
-                        onPress={() => openExternal(u)}
-                        style={({ pressed }) => [styles.thumbPress, pressed ? styles.pressed : null]}
-                      >
-                        {t ? (
-                          <Image source={{ uri: t }} style={styles.thumb} />
-                        ) : (
-                          <View style={styles.videoPlaceholder}>
-                            <Text style={styles.videoPlaceholderText}>
-                              {loadingThumb ? "Loading…" : `Video ${idx + 1}`}
-                            </Text>
+              <Text style={styles.videoMeta}>
+                Tap a tile to play. Long-press to open externally.
+              </Text>
+
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.hRow}>
+                  {videoTiles.map((t) => {
+                    const thumbUri = videoThumbs[t.videoUrl] || "";
+                    const isOn = selectedVideoUrl === t.videoUrl;
+                    const isLoading = !!thumbLoading[t.videoUrl];
+
+                    return (
+                      <View key={`${t.videoUrl}-${t.idx}`} style={styles.thumbWrap}>
+                        <Pressable
+                          onPress={() => setSelectedVideoUrl(t.videoUrl)}
+                          onLongPress={() => openExternal(t.videoUrl)}
+                          style={({ pressed }) => [
+                            styles.thumbPress,
+                            isOn ? styles.videoThumbOn : null,
+                            pressed ? styles.pressed : null
+                          ]}
+                        >
+                          {thumbUri ? (
+                            <Image source={{ uri: thumbUri }} style={styles.thumb} />
+                          ) : (
+                            <View style={styles.videoPlaceholder}>
+                              <Text style={styles.videoPlaceholderText}>
+                                {isLoading ? "Loading…" : `Video ${t.idx + 1}`}
+                              </Text>
+                            </View>
+                          )}
+
+                          <View style={styles.playBadge}>
+                            <Text style={styles.playBadgeText}>▶</Text>
                           </View>
-                        )}
+                        </Pressable>
 
-                        <View style={styles.playBadge}>
-                          <Text style={styles.playBadgeText}>▶</Text>
-                        </View>
-                      </Pressable>
-
-                      <Pressable
-                        onPress={() => removeShopVideoAt(idx)}
-                        disabled={savingMedia}
-                        style={({ pressed }) => [styles.thumbX, pressed ? styles.pressed : null]}
-                      >
-                        <Text style={styles.thumbXText}>✕</Text>
-                      </Pressable>
-                    </View>
-                  );
-                })}
-              </View>
-            </ScrollView>
+                        <Pressable
+                          onPress={() => removeShopVideoAt(t.idx)}
+                          disabled={savingMedia}
+                          style={({ pressed }) => [styles.thumbX, pressed ? styles.pressed : null]}
+                        >
+                          <Text style={styles.thumbXText}>✕</Text>
+                        </Pressable>
+                      </View>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            </>
           ) : (
             <Text style={styles.emptyInline}>—</Text>
           )}
-
-          <Text style={styles.hint}>
-            Tip: Use ✕ to remove a media item. Use “Add” to upload and attach new files.
-          </Text>
         </View>
 
         <Text
@@ -1115,10 +1163,6 @@ export default function EditVendorScreen() {
           onPress={canSubmit ? submit : undefined}
         >
           {saving ? "Saving..." : "Save Changes"}
-        </Text>
-
-        <Text style={styles.meta}>
-          Note: Media updates apply instantly when you add/remove items. “Save Changes” updates profile details.
         </Text>
       </ScrollView>
 
@@ -1345,6 +1389,18 @@ const styles = StyleSheet.create({
     justifyContent: "center"
   },
   playBadgeText: { color: "#fff", fontWeight: "900" },
+
+  // ✅ embedded video box (like view profile)
+  videoBox: {
+    marginTop: 10,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#D9E2F2"
+  },
+  video: { width: "100%", height: 220 },
+  videoMeta: { marginTop: 8, color: "#60708A", fontWeight: "800" },
+  videoThumbOn: { borderColor: "#0B2F6B", borderWidth: 2 },
 
   hint: { marginTop: 10, color: "#60708A", fontWeight: "800" },
 
