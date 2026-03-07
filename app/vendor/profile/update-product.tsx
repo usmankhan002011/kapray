@@ -1134,9 +1134,9 @@ export default function UpdateProductScreen() {
               <Text style={styles.emptyInline}>—</Text>
             )}
 
-            <Text style={styles.hint}>
+            {/* <Text style={styles.hint}>
               Tip: Use ✕ to remove a media item. Use “Add” to upload and attach new files.
-            </Text>
+            </Text> */}
 
             <Text style={styles.label}>More Description</Text>
             <TextInput
@@ -1253,7 +1253,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 12,
     fontWeight: "900",
-    color: stylesVars.blue,
+    color: "#005ea6",
     letterSpacing: 0.2
   },
 

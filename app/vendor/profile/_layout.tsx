@@ -56,16 +56,18 @@ export default function VendorProfileTabsLayout() {
         {/* HIDE NON-TAB SCREENS */}
         <Tabs.Screen name="index" options={{ href: null }} />
         <Tabs.Screen name="update-product" options={{ href: null }} />
-        <Tabs.Screen name="view-product" options={{ href: null }} />
         <Tabs.Screen name="view-profile" options={{ href: null }} />
         <Tabs.Screen name="add-product_legacy" options={{ href: null }} />
         <Tabs.Screen name="edit-vendor" options={{ href: null }} />
+        <Tabs.Screen name="view-product_legacy" options={{ href: null }} />
+        <Tabs.Screen name="view-product_legacy_2" options={{ href: null }} />
 
-        {/* IMPORTANT: HIDE THE add-product FOLDER ROUTE (prevents the extra "X" tab) */}
+        {/* HIDE FOLDER/GROUP ROUTES */}
         <Tabs.Screen name="add-product" options={{ href: null }} />
-
-        {/* HIDE MODALS GROUP */}
         <Tabs.Screen name="(product-modals)" options={{ href: null }} />
+
+        {/* HIDE VIEW-PRODUCT ROUTE */}
+        <Tabs.Screen name="view-product/index" options={{ href: null }} />
       </Tabs>
     </ProductDraftProvider>
   );

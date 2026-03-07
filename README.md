@@ -99,6 +99,8 @@ npx expo run:android
   Show-CustomTree -Path "." -MaxDepth 8 | Tee-Object -FilePath ".\tree.txt"
 }
 >> 
+>> }
+
 kapray
 ├── .idea
 │   ├── caches
@@ -177,6 +179,8 @@ kapray
 │   │   │   │   ├── q12-more-description.tsx
 │   │   │   │   ├── review.tsx
 │   │   │   │   └── submit.tsx
+│   │   │   ├── view-product
+│   │   │   │   └── index.tsx
 │   │   │   ├── _layout.tsx
 │   │   │   ├── add-product_legacy.tsx
 │   │   │   ├── edit-vendor.tsx
@@ -185,7 +189,8 @@ kapray
 │   │   │   ├── products.tsx
 │   │   │   ├── settings.tsx
 │   │   │   ├── update-product.tsx
-│   │   │   ├── view-product.tsx
+│   │   │   ├── view-product_legacy.tsx
+│   │   │   ├── view-product_legacy_2.tsx
 │   │   │   └── view-profile.tsx
 │   │   ├── confirmation.tsx
 │   │   ├── create-shop.tsx
@@ -244,6 +249,10 @@ kapray
 │   └── sizes outline.jpg
 ├── components
 │   ├── product
+│   │   ├── view-product
+│   │   │   ├── ViewProduct.media.tsx
+│   │   │   ├── ViewProduct.screen.tsx
+│   │   │   └── ViewProduct.styles.ts
 │   │   ├── addProductStyles.ts
 │   │   ├── ProductDraftContext.tsx
 │   │   └── useAutoFocus.ts
@@ -300,7 +309,7 @@ kapray
 ├── tree-app.txt
 └── tsconfig.json
 PS C:\DEV\kapray\kapray>
-as on 03Mar26
+as on 07Mar26
 
 -------------------------------------------------------------------------------------------------------------
 strategy

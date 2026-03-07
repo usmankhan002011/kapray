@@ -1,5 +1,3 @@
-// app/vendor/profile/(product-modals)/dyeing/dye_palette_modal.tsx
-
 import React, { useMemo, useState } from "react";
 import { View, ScrollView, Pressable, Text } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
@@ -11,19 +9,55 @@ type Shade = {
   label?: string;
 };
 
+type CachedDyeSelection = {
+  id: string;
+  hex: string;
+  label: string;
+};
+
+const BUYER_DYE_SELECTION_CACHE = new Map<string, CachedDyeSelection>();
+
+function makeDyeSelectionKey(productId?: string | null, productCode?: string | null) {
+  const pid = String(productId ?? "").trim();
+  if (pid) return `id:${pid}`;
+
+  const pc = String(productCode ?? "").trim();
+  if (pc) return `code:${pc}`;
+
+  return "";
+}
+
+export function getCachedDyeSelection(productId?: string | null, productCode?: string | null) {
+  const key = makeDyeSelectionKey(productId, productCode);
+  if (!key) return null;
+  return BUYER_DYE_SELECTION_CACHE.get(key) ?? null;
+}
+
+export function clearCachedDyeSelection(productId?: string | null, productCode?: string | null) {
+  const key = makeDyeSelectionKey(productId, productCode);
+  if (!key) return;
+  BUYER_DYE_SELECTION_CACHE.delete(key);
+}
+
+function setCachedDyeSelection(
+  productId: string | null | undefined,
+  productCode: string | null | undefined,
+  selection: CachedDyeSelection
+) {
+  const key = makeDyeSelectionKey(productId, productCode);
+  if (!key) return;
+  BUYER_DYE_SELECTION_CACHE.set(key, selection);
+}
+
 export default function DyePaletteModal() {
   const shades = useMemo(() => generateDyePalette() as Shade[], []);
   const [selectedId, setSelectedId] = useState<string>("");
 
   const params = useLocalSearchParams<{
-    // ✅ NEW: robust return mechanism
     returnPath?: string;
     productId?: string;
-
-    // keep passthrough if you still pass it
+    productCode?: string;
     dyeing_cost_pkr?: string;
-
-    // optional preselected (if you pass these)
     dye_shade_id?: string;
   }>();
 
@@ -36,29 +70,16 @@ export default function DyePaletteModal() {
   function handleDone() {
     if (!selectedShade) return;
 
-    const returnPath = String(params.returnPath ?? "/").trim() || "/";
-    const productId = String(params.productId ?? "").trim();
+    const productId = String(params.productId ?? "").trim() || null;
+    const productCode = String(params.productCode ?? "").trim() || null;
 
-    router.replace({
-      pathname: returnPath as any,
-      params: {
-        // ✅ critical: keep id clean (bigint safe)
-        ...(productId ? { id: productId } : {}),
-
-        // ✅ match what view-product expects
-        dye_shade_id: String(selectedShade.id),
-
-        // NOTE: view-product currently reads dye_hex too; we keep passing it,
-        // but you can stop displaying it on the screen by preferring label.
-        dye_hex: String(selectedShade.hex),
-
-        // ✅ friendly label (not hex)
-        dye_label: String(selectedShade.label ?? selectedShade.id),
-
-        // keep passing cost through
-        dyeing_cost_pkr: String(params.dyeing_cost_pkr ?? "")
-      }
+    setCachedDyeSelection(productId, productCode, {
+      id: String(selectedShade.id),
+      hex: String(selectedShade.hex),
+      label: String(selectedShade.label ?? selectedShade.id)
     });
+
+    router.back();
   }
 
   return (

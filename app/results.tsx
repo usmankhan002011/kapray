@@ -40,6 +40,19 @@ type ProductRow = {
 
 type NameRow = { id: any; name: string };
 
+type ResultsCacheShape = {
+  products: ProductRow[];
+  dressTypes: NameRow[];
+  fabricTypes: NameRow[];
+  workTypes: NameRow[];
+  workDensities: NameRow[];
+  originCities: NameRow[];
+  wearStates: NameRow[];
+  hasMore: boolean;
+};
+
+let RESULTS_CACHE: ResultsCacheShape | null = null;
+
 function safeText(v: any) {
   const t = String(v ?? "").trim();
   return t.length ? t : "—";
@@ -112,8 +125,7 @@ function formatPrice(price: any): string {
   }
 
   if (typeof total === "number") return `PKR ${total.toLocaleString()}`;
-  if (typeof perMeter === "number")
-    return `PKR ${perMeter.toLocaleString()} / meter`;
+  if (typeof perMeter === "number") return `PKR ${perMeter.toLocaleString()} / meter`;
 
   return "Price not set";
 }
@@ -137,11 +149,7 @@ function idsToNames(ids: string[], map: Map<string, string>): string[] {
 }
 
 // ✅ if user selected IDs but names not loaded yet, show Loading… (not Any)
-function namesOrLoading(
-  label: string,
-  selectedIds: any[],
-  names: string[]
-): string {
+function namesOrLoading(label: string, selectedIds: any[], names: string[]): string {
   const hasSelection = Array.isArray(selectedIds) && selectedIds.length > 0;
   if (!hasSelection) return `${label}: Any`;
   if (!names.length) return `${label}: Loading…`;
@@ -155,8 +163,7 @@ function formatPKR(n: number) {
 function priceRangeSummary(minCostPkr: number | null, maxCostPkr: number | null) {
   if (minCostPkr === null && maxCostPkr === null) return "Price: Any";
   if (minCostPkr !== null && maxCostPkr === null) return `Price: ${formatPKR(minCostPkr)}+`;
-  if (minCostPkr === null && maxCostPkr !== null)
-    return `Price: Up to ${formatPKR(maxCostPkr)}`;
+  if (minCostPkr === null && maxCostPkr !== null) return `Price: Up to ${formatPKR(maxCostPkr)}`;
   return `Price: ${formatPKR(minCostPkr as number)} – ${formatPKR(maxCostPkr as number)}`;
 }
 
@@ -181,28 +188,30 @@ export default function ResultsScreen() {
   // ✅ vendors (multi-select, empty = Any)
   const vendorIds: string[] = filters?.vendorIds ?? [];
 
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
+  const hasWarmCache = Boolean(RESULTS_CACHE);
 
-  const [products, setProducts] = useState<ProductRow[]>([]);
+  const [loading, setLoading] = useState(!hasWarmCache);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(RESULTS_CACHE?.hasMore ?? true);
+
+  const [products, setProducts] = useState<ProductRow[]>(RESULTS_CACHE?.products ?? []);
 
   // lookups (names only)
-  const [dressTypes, setDressTypes] = useState<NameRow[]>([]);
-  const [fabricTypes, setFabricTypes] = useState<NameRow[]>([]);
-  const [workTypes, setWorkTypes] = useState<NameRow[]>([]);
-  const [workDensities, setWorkDensities] = useState<NameRow[]>([]);
-  const [originCities, setOriginCities] = useState<NameRow[]>([]);
-  const [wearStates, setWearStates] = useState<NameRow[]>([]);
+  const [dressTypes, setDressTypes] = useState<NameRow[]>(RESULTS_CACHE?.dressTypes ?? []);
+  const [fabricTypes, setFabricTypes] = useState<NameRow[]>(RESULTS_CACHE?.fabricTypes ?? []);
+  const [workTypes, setWorkTypes] = useState<NameRow[]>(RESULTS_CACHE?.workTypes ?? []);
+  const [workDensities, setWorkDensities] = useState<NameRow[]>(
+    RESULTS_CACHE?.workDensities ?? []
+  );
+  const [originCities, setOriginCities] = useState<NameRow[]>(RESULTS_CACHE?.originCities ?? []);
+  const [wearStates, setWearStates] = useState<NameRow[]>(RESULTS_CACHE?.wearStates ?? []);
 
   // ✅ local favourites (heart turns red). No DB yet.
   const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
 
   // ✅ sort (default: cost ascending)
   const [sortOpen, setSortOpen] = useState(false);
-  const [sortMode, setSortMode] = useState<"cost_asc" | "cost_desc" | "date">(
-    "cost_asc"
-  );
+  const [sortMode, setSortMode] = useState<"cost_asc" | "cost_desc" | "date">("cost_asc");
 
   function toggleFavorite(productId: number) {
     setFavoriteIds((prev) => {
@@ -226,8 +235,10 @@ export default function ResultsScreen() {
 
     async function loadAll() {
       try {
-        setLoading(true);
-        setHasMore(true);
+        if (!RESULTS_CACHE) {
+          setLoading(true);
+          setHasMore(true);
+        }
 
         const [
           prodRes,
@@ -240,18 +251,12 @@ export default function ResultsScreen() {
         ] = await Promise.all([
           fetchPage(0, PAGE_SIZE - 1),
 
-          supabase
-            .from(TABLE_DRESS_TYPE)
-            .select("id, name")
-            .order("id", { ascending: true }),
+          supabase.from(TABLE_DRESS_TYPE).select("id, name").order("id", { ascending: true }),
           supabase
             .from(TABLE_FABRIC_TYPES)
             .select("id, name")
             .order("sort_order", { ascending: true }),
-          supabase
-            .from(TABLE_WORK_TYPES)
-            .select("id, name")
-            .order("name", { ascending: true }),
+          supabase.from(TABLE_WORK_TYPES).select("id, name").order("name", { ascending: true }),
           supabase
             .from(TABLE_WORK_DENSITIES)
             .select("id, name")
@@ -260,10 +265,7 @@ export default function ResultsScreen() {
             .from(TABLE_ORIGIN_CITIES)
             .select("id, name")
             .order("name", { ascending: true }),
-          supabase
-            .from(TABLE_WEAR_STATES)
-            .select("id, name")
-            .order("name", { ascending: true })
+          supabase.from(TABLE_WEAR_STATES).select("id, name").order("name", { ascending: true })
         ]);
 
         if (!alive) return;
@@ -273,19 +275,57 @@ export default function ResultsScreen() {
           Alert.alert("Load error", (prodRes as any).error.message);
           setProducts([]);
           setHasMore(false);
-        } else {
-          const rows = ((((prodRes as any).data as any) ?? []) as ProductRow[]);
+          RESULTS_CACHE = {
+            products: [],
+            dressTypes: (((dressRes as any).data as any) ?? []) as any,
+            fabricTypes: (((fabricRes as any).data as any) ?? []) as any,
+            workTypes: (((workRes as any).data as any) ?? []) as any,
+            workDensities: (((densityRes as any).data as any) ?? []) as any,
+            originCities: (((originRes as any).data as any) ?? []) as any,
+            wearStates: (((wearRes as any).data as any) ?? []) as any,
+            hasMore: false
+          };
+                } else {
+          const rows = (((prodRes as any).data as any) ?? []) as ProductRow[];
+          const nextDress = (((dressRes as any).data as any) ?? []) as any[];
+          const nextFabric = (((fabricRes as any).data as any) ?? []) as any[];
+          const nextWork = (((workRes as any).data as any) ?? []) as any[];
+          const nextDensity = (((densityRes as any).data as any) ?? []) as any[];
+          const nextOrigin = (((originRes as any).data as any) ?? []) as any[];
+          const nextWear = (((wearRes as any).data as any) ?? []) as any[];
+          const nextHasMore = rows.length === PAGE_SIZE;
+
           setProducts(rows);
-          setHasMore(rows.length === PAGE_SIZE);
+          setHasMore(nextHasMore);
+
+          // lookups
+          setDressTypes(nextDress);
+          setFabricTypes(nextFabric);
+          setWorkTypes(nextWork);
+          setWorkDensities(nextDensity);
+          setOriginCities(nextOrigin);
+          setWearStates(nextWear);
+
+          RESULTS_CACHE = {
+            products: rows,
+            dressTypes: nextDress,
+            fabricTypes: nextFabric,
+            workTypes: nextWork,
+            workDensities: nextDensity,
+            originCities: nextOrigin,
+            wearStates: nextWear,
+            hasMore: nextHasMore
+          };
         }
 
-        // lookups
-        setDressTypes((((dressRes as any).data as any) ?? []) as any);
-        setFabricTypes((((fabricRes as any).data as any) ?? []) as any);
-        setWorkTypes((((workRes as any).data as any) ?? []) as any);
-        setWorkDensities((((densityRes as any).data as any) ?? []) as any);
-        setOriginCities((((originRes as any).data as any) ?? []) as any);
-        setWearStates((((wearRes as any).data as any) ?? []) as any);
+        if ((prodRes as any).error) {
+          setDressTypes((((dressRes as any).data as any) ?? []) as any);
+          setFabricTypes((((fabricRes as any).data as any) ?? []) as any);
+          setWorkTypes((((workRes as any).data as any) ?? []) as any);
+          setWorkDensities((((densityRes as any).data as any) ?? []) as any);
+          setOriginCities((((originRes as any).data as any) ?? []) as any);
+          setWearStates((((wearRes as any).data as any) ?? []) as any);
+        }
       } catch (e: any) {
         if (!alive) return;
         Alert.alert("Load error", e?.message ?? "Unknown error");
@@ -303,7 +343,19 @@ export default function ResultsScreen() {
       }
     }
 
-    loadAll();
+    if (!RESULTS_CACHE) {
+      loadAll();
+    } else {
+      setLoading(false);
+      setProducts(RESULTS_CACHE.products);
+      setDressTypes(RESULTS_CACHE.dressTypes);
+      setFabricTypes(RESULTS_CACHE.fabricTypes);
+      setWorkTypes(RESULTS_CACHE.workTypes);
+      setWorkDensities(RESULTS_CACHE.workDensities);
+      setOriginCities(RESULTS_CACHE.originCities);
+      setWearStates(RESULTS_CACHE.wearStates);
+      setHasMore(RESULTS_CACHE.hasMore);
+    }
 
     return () => {
       alive = false;
@@ -328,7 +380,28 @@ export default function ResultsScreen() {
       setProducts((prev) => {
         const seen = new Set(prev.map((p) => p.id));
         const add = rows.filter((r) => !seen.has(r.id));
-        return [...prev, ...add];
+        const next = [...prev, ...add];
+
+        if (RESULTS_CACHE) {
+          RESULTS_CACHE = {
+            ...RESULTS_CACHE,
+            products: next,
+            hasMore: rows.length === PAGE_SIZE
+          };
+        } else {
+          RESULTS_CACHE = {
+            products: next,
+            dressTypes,
+            fabricTypes,
+            workTypes,
+            workDensities,
+            originCities,
+            wearStates,
+            hasMore: rows.length === PAGE_SIZE
+          };
+        }
+
+        return next;
       });
 
       setHasMore(rows.length === PAGE_SIZE);
@@ -341,10 +414,7 @@ export default function ResultsScreen() {
   const dressMap = useMemo(() => buildNameMap(dressTypes), [dressTypes]);
   const fabricMap = useMemo(() => buildNameMap(fabricTypes), [fabricTypes]);
   const workMap = useMemo(() => buildNameMap(workTypes), [workTypes]);
-  const densityMap = useMemo(
-    () => buildNameMap(workDensities),
-    [workDensities]
-  );
+  const densityMap = useMemo(() => buildNameMap(workDensities), [workDensities]);
   const originMap = useMemo(() => buildNameMap(originCities), [originCities]);
   const wearMap = useMemo(() => buildNameMap(wearStates), [wearStates]);
 
@@ -356,9 +426,7 @@ export default function ResultsScreen() {
       // ✅ vendor filter (multi-select). Empty => ANY
       if (vendorIds.length) {
         const vid =
-          p?.vendor_id === null || p?.vendor_id === undefined
-            ? ""
-            : String(p.vendor_id);
+          p?.vendor_id === null || p?.vendor_id === undefined ? "" : String(p.vendor_id);
         if (!vid || !vendorIds.includes(vid)) return false;
       }
 
@@ -452,9 +520,7 @@ export default function ResultsScreen() {
     const wearNames = idsToNames(wearStateIds, wearMap);
 
     // colors are already names in Redux/spec
-    const colorNames = (colorShadeIds ?? [])
-      .map((x) => String(x).trim())
-      .filter((x) => x.length > 0);
+    const colorNames = (colorShadeIds ?? []).map((x) => String(x).trim()).filter((x) => x.length > 0);
 
     return [
       namesOrLoading("Dress", dressTypeIds, dressNames),
@@ -490,7 +556,7 @@ export default function ResultsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, styles.loadingScreen]}>
         <ActivityIndicator />
         <Text style={styles.muted}>Loading products…</Text>
       </View>
@@ -505,36 +571,27 @@ export default function ResultsScreen() {
         </Text>
 
         <View style={styles.topActions}>
-        <Pressable
-          onPress={() => setSortOpen(true)}
-          style={({ pressed }) => [
-            styles.iconBtn,
-            pressed ? { opacity: 0.7 } : null
-          ]}
-        >
-          <Text style={styles.iconText}>↕️</Text>
-        </Pressable>
+          <Pressable
+            onPress={() => setSortOpen(true)}
+            style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
+          >
+            <Text style={styles.iconText}>↕️</Text>
+          </Pressable>
 
-        <Pressable
-          onPress={() => router.push("/results-filters")}
-          style={({ pressed }) => [
-            styles.iconBtn,
-            pressed ? { opacity: 0.7 } : null
-          ]}
-        >
-          <Text style={styles.iconText}>🔍</Text>
-        </Pressable>
+          <Pressable
+            onPress={() => router.push("/results-filters")}
+            style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
+          >
+            <Text style={styles.iconText}>🔍</Text>
+          </Pressable>
 
-        <Pressable
-          onPress={() => router.push("/orders/track")}
-          style={({ pressed }) => [
-            styles.iconBtn,
-            pressed ? { opacity: 0.7 } : null
-          ]}
-        >
-          <Text style={styles.iconText}>📦</Text>
-        </Pressable>
-      </View>
+          <Pressable
+            onPress={() => router.push("/orders/track")}
+            style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
+          >
+            <Text style={styles.iconText}>📦</Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* ✅ Summary line (includes Redux-only price range) */}
@@ -551,18 +608,12 @@ export default function ResultsScreen() {
         animationType="fade"
         onRequestClose={() => setSortOpen(false)}
       >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setSortOpen(false)}
-        >
+        <Pressable style={styles.modalBackdrop} onPress={() => setSortOpen(false)}>
           <Pressable style={styles.modalCard} onPress={() => {}}>
             <Text style={styles.modalTitle}>Sort</Text>
 
             <Pressable
-              style={({ pressed }) => [
-                styles.modalItem,
-                pressed ? { opacity: 0.7 } : null
-              ]}
+              style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
               onPress={() => {
                 setSortMode("cost_asc");
                 setSortOpen(false);
@@ -575,18 +626,13 @@ export default function ResultsScreen() {
                   <Text style={styles.modalItemSub}>Low to high</Text>
                 </View>
               </View>
-              <Text style={styles.modalRight}>
-                {sortMode === "cost_asc" ? "✅" : ""}
-              </Text>
+              <Text style={styles.modalRight}>{sortMode === "cost_asc" ? "✅" : ""}</Text>
             </Pressable>
 
             <View style={styles.divider} />
 
             <Pressable
-              style={({ pressed }) => [
-                styles.modalItem,
-                pressed ? { opacity: 0.7 } : null
-              ]}
+              style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
               onPress={() => {
                 setSortMode("cost_desc");
                 setSortOpen(false);
@@ -599,18 +645,13 @@ export default function ResultsScreen() {
                   <Text style={styles.modalItemSub}>High to low</Text>
                 </View>
               </View>
-              <Text style={styles.modalRight}>
-                {sortMode === "cost_desc" ? "✅" : ""}
-              </Text>
+              <Text style={styles.modalRight}>{sortMode === "cost_desc" ? "✅" : ""}</Text>
             </Pressable>
 
             <View style={styles.divider} />
 
             <Pressable
-              style={({ pressed }) => [
-                styles.modalItem,
-                pressed ? { opacity: 0.7 } : null
-              ]}
+              style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
               onPress={() => {
                 setSortMode("date");
                 setSortOpen(false);
@@ -623,18 +664,13 @@ export default function ResultsScreen() {
                   <Text style={styles.modalItemSub}>Newest first</Text>
                 </View>
               </View>
-              <Text style={styles.modalRight}>
-                {sortMode === "date" ? "✅" : ""}
-              </Text>
+              <Text style={styles.modalRight}>{sortMode === "date" ? "✅" : ""}</Text>
             </Pressable>
 
             <View style={styles.divider} />
 
             <Pressable
-              style={({ pressed }) => [
-                styles.modalItem,
-                pressed ? { opacity: 0.7 } : null
-              ]}
+              style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
               onPress={() => {
                 setSortOpen(false);
                 Alert.alert(
@@ -653,10 +689,7 @@ export default function ResultsScreen() {
               <Text style={styles.soonPill}>Soon</Text>
             </Pressable>
 
-            <Pressable
-              style={styles.modalCloseBtn}
-              onPress={() => setSortOpen(false)}
-            >
+            <Pressable style={styles.modalCloseBtn} onPress={() => setSortOpen(false)}>
               <Text style={styles.modalCloseText}>Close</Text>
             </Pressable>
           </Pressable>
@@ -713,10 +746,7 @@ export default function ResultsScreen() {
                 </Text>
 
                 <View style={styles.actionRow}>
-                  <Pressable
-                    onPress={() => toggleFavorite(item.id)}
-                    style={styles.actionBtn}
-                  >
+                  <Pressable onPress={() => toggleFavorite(item.id)} style={styles.actionBtn}>
                     <Text style={[styles.actionText, isFav ? styles.heartOn : null]}>
                       {isFav ? "❤️" : "🤍"}
                     </Text>
@@ -849,6 +879,7 @@ const styles = StyleSheet.create({
   modalCloseText: { color: "#0B2F6B", fontWeight: "900" },
 
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20 },
+  loadingScreen: { backgroundColor: "#fff" },
   emptyTitle: { fontSize: 18, fontWeight: "700", color: "#111", marginBottom: 8 },
   muted: { fontSize: 14, color: "#666" },
 
