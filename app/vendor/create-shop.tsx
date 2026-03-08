@@ -1,7 +1,19 @@
-// C:\DEV\kapray\kapray\app\vendor\create-shop.tsx
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+// File: app/vendor/create-shop.tsx
+
+import * as Location from "expo-location";
+import { useRouter } from "expo-router";
+import { VideoView, useVideoPlayer } from "expo-video";
+import * as VideoThumbnails from "expo-video-thumbnails";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Alert,
+  BackHandler,
   Dimensions,
   FlatList,
   Image,
@@ -11,221 +23,333 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View
+  View,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { supabase } from "@/utils/supabase/client";
+
+import GradientInputCard from "@/components/Wizard/GradientInputCard";
+import VendorReviewSummary from "@/components/Wizard/VendorReviewSummary";
+import WizardScaffold from "@/components/Wizard/WizardScraffold";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setSelectedVendor } from "@/store/vendorSlice";
-import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system";
-import { decode } from "base64-arraybuffer";
-import { optionStyles } from "@/components/ui/StandardFilterDisplay";
-import * as Location from "expo-location";
-import { VideoView, useVideoPlayer } from "expo-video";
-// Requires: npx expo install expo-video-thumbnails
-import * as VideoThumbnails from "expo-video-thumbnails";
+import {
+  STEPS,
+  StepId,
+  VendorWizardData,
+  pickImages,
+  pickVideos,
+  uploadToBucket,
+} from "@/utils/helpers/wizardHelpers";
+import { supabase } from "@/utils/supabase/client";
 
 const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
 
-type Picked = { uri: string; mimeType?: string; fileName?: string };
-
-function prettyNameFromPicked(p: Picked, fallback: string) {
-  if (p.fileName && p.fileName.trim()) return p.fileName.trim();
-  const parts = (p.uri || "").split("/");
-  const last = parts[parts.length - 1];
-  return last || fallback;
-}
-
-async function pickImages(multiple: boolean) {
-  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (status !== "granted") {
-    Alert.alert("Permission denied", "Allow gallery access.");
-    return [] as Picked[];
-  }
-  const res = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ["images"] as any,
-    allowsMultipleSelection: multiple,
-    quality: 0.85
-  });
-  if (res.canceled) return [] as Picked[];
-  return (res.assets ?? []).map((a: any) => ({
-    uri: a.uri,
-    mimeType: a.mimeType,
-    fileName: a.fileName
-  })) as Picked[];
-}
-
-async function pickVideos(multiple: boolean) {
-  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (status !== "granted") {
-    Alert.alert("Permission denied", "Allow gallery access.");
-    return [] as Picked[];
-  }
-  const res = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ["videos"] as any,
-    allowsMultipleSelection: multiple
-  });
-  if (res.canceled) return [] as Picked[];
-  return (res.assets ?? []).map((a: any) => ({
-    uri: a.uri,
-    mimeType: a.mimeType,
-    fileName: a.fileName
-  })) as Picked[];
-}
-
-async function uploadToBucket(
-  bucket: string,
-  path: string,
-  file: Picked,
-  fallbackContentType: string
-): Promise<string | null> {
-  try {
-    const contentType = file.mimeType || fallbackContentType;
-
-    const base64 = await FileSystem.readAsStringAsync(file.uri, {
-      encoding: FileSystem.EncodingType.Base64
-    });
-    const buffer = decode(base64);
-
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(path, buffer, { contentType, upsert: true });
-
-    if (error) {
-      Alert.alert("Upload failed", error.message);
-      return null;
-    }
-
-    return data?.path ?? null;
-  } catch (e: any) {
-    Alert.alert("Upload error", e?.message ?? String(e));
-    return null;
-  }
-}
+const initialForm: VendorWizardData = {
+  ownerName: "",
+  email: "",
+  mobile: "",
+  landline: "",
+  shopName: "",
+  address: "",
+  locationUrl: "",
+  offersTailoring: false,
+  profile: null,
+  govPermission: null,
+  banner: null,
+  images: [],
+  videos: [],
+};
 
 export default function CreateShopScreen() {
   const router = useRouter();
   const dispatch = useAppDispatch();
 
-  // Login not active yet → we will not rely on vendorId.
-  // Keeping this read for future use (no functional dependency).
   const authUserId = useAppSelector((s) => s.user?.userDetails?.userId);
+  const selectedVendor = useAppSelector((s) => s.vendor);
 
-  // kept (no functional dependency)
-  const selectedVendor = useAppSelector((s) => s.vendor as any);
-
-  const [shopName, setShopName] = useState("");
-  const [ownerName, setOwnerName] = useState("");
-  const [email, setEmail] = useState("");
-  const [mobile, setMobile] = useState("");
-  const [landline, setLandline] = useState("");
-  const [address, setAddress] = useState("");
-  const [locationUrl, setLocationUrl] = useState("");
-
-  // ✅ NEW: Vendor-wide tailoring offering
-  const [offersTailoring, setOffersTailoring] = useState<boolean>(false);
-
-  const [profile, setProfile] = useState<Picked | null>(null);
-  const [govPermission, setGovPermission] = useState<Picked | null>(null);
-
-  const [banner, setBanner] = useState<Picked | null>(null);
-  const [images, setImages] = useState<Picked[]>([]);
-  const [videos, setVideos] = useState<Picked[]>([]);
-
+  const [stepIndex, setStepIndex] = useState(0);
+  const [form, setForm] = useState<VendorWizardData>(initialForm);
   const [saving, setSaving] = useState(false);
   const [locLoading, setLocLoading] = useState(false);
+  const [editingStepIndex, setEditingStepIndex] = useState<number | null>(null);
 
-  // Compact UI: tap to expand each input
-  const [openOwner, setOpenOwner] = useState(true);
-  const [openEmail, setOpenEmail] = useState(false);
-  const [openMobile, setOpenMobile] = useState(false);
-  const [openShop, setOpenShop] = useState(false);
-  const [openLandline, setOpenLandline] = useState(false);
-  const [openAddress, setOpenAddress] = useState(false);
-  const [openLocation, setOpenLocation] = useState(false);
+  const currentStep = STEPS[stepIndex];
+  const isLastStep = stepIndex === STEPS.length - 1;
 
-  // Refs for proactive focus
   const ownerRef = useRef<TextInput>(null);
   const emailRef = useRef<TextInput>(null);
   const mobileRef = useRef<TextInput>(null);
-  const shopRef = useRef<TextInput>(null);
   const landlineRef = useRef<TextInput>(null);
+  const shopRef = useRef<TextInput>(null);
   const addressRef = useRef<TextInput>(null);
   const locationRef = useRef<TextInput>(null);
 
-  const focusSoon = (ref: React.RefObject<TextInput>) => {
-    setTimeout(() => ref.current?.focus(), 50);
-  };
+  useEffect(() => {
+    const onBackPress = () => {
+      if (stepIndex > 0) {
+        setStepIndex((prev) => prev - 1);
+        return true; // prevent default navigation
+      }
 
-  const openAndFocusOwner = () => {
-    if (!openOwner) setOpenOwner(true);
-    focusSoon(ownerRef);
-  };
-  const openAndFocusEmail = () => {
-    if (!openEmail) setOpenEmail(true);
-    focusSoon(emailRef);
-  };
-  const openAndFocusMobile = () => {
-    if (!openMobile) setOpenMobile(true);
-    focusSoon(mobileRef);
-  };
-  const openAndFocusShop = () => {
-    if (!openShop) setOpenShop(true);
-    focusSoon(shopRef);
-  };
-  const openAndFocusLandline = () => {
-    if (!openLandline) setOpenLandline(true);
-    focusSoon(landlineRef);
-  };
-  const openAndFocusAddress = () => {
-    if (!openAddress) setOpenAddress(true);
-    focusSoon(addressRef);
-  };
-  const openAndFocusLocation = () => {
-    if (!openLocation) setOpenLocation(true);
-    focusSoon(locationRef);
-  };
+      return false; // allow navigation if first step
+    };
 
-  const canSubmit = useMemo(() => {
-    return (
-      shopName.trim().length > 0 &&
-      ownerName.trim().length > 0 &&
-      email.trim().length > 0 &&
-      mobile.trim().length > 0 &&
-      address.trim().length > 0 &&
-      !saving
-    );
-  }, [shopName, ownerName, email, mobile, address, saving]);
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
 
-  const setCurrentLocation = async () => {
+    return () => sub.remove();
+  }, [stepIndex]);
+
+  const updateForm = useCallback(
+    <K extends keyof VendorWizardData>(key: K, value: VendorWizardData[K]) => {
+      setForm((prev) => ({ ...prev, [key]: value }));
+    },
+    [],
+  );
+
+  const setCurrentLocation = useCallback(async () => {
     try {
       setLocLoading(true);
+
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         Alert.alert("Permission required", "Enable location to autofill.");
         return;
       }
+
       const pos = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced
+        accuracy: Location.Accuracy.Balanced,
       });
+
       const lat = pos.coords.latitude.toFixed(6);
       const lng = pos.coords.longitude.toFixed(6);
-      setLocationUrl(`https://maps.google.com/?q=${lat},${lng}`);
-      openAndFocusLocation();
+      updateForm("locationUrl", `https://maps.google.com/?q=${lat},${lng}`);
+
+      setTimeout(() => {
+        locationRef.current?.focus();
+      }, 80);
     } catch (e: any) {
       Alert.alert("Location Error", e?.message ?? "Could not get location.");
     } finally {
       setLocLoading(false);
     }
-  };
+  }, [updateForm]);
 
-  // =========================
-  // Media UX (ditto style)
-  // =========================
+  const validateStep = useCallback(
+    (id: StepId) => {
+      switch (id) {
+        case "owner":
+          if (!form.ownerName.trim()) {
+            Alert.alert("Missing", "Enter vendor / owner name.");
+            return false;
+          }
+          return true;
 
-  // Fullscreen image viewer (for banner/profile/certs/images)
+        case "email":
+          if (!form.email.trim()) {
+            Alert.alert("Missing", "Enter email.");
+            return false;
+          }
+          return true;
+
+        case "mobile":
+          if (!form.mobile.trim()) {
+            Alert.alert("Missing", "Enter mobile number.");
+            return false;
+          }
+          return true;
+
+        case "shop":
+          if (!form.shopName.trim()) {
+            Alert.alert("Missing", "Enter shop name.");
+            return false;
+          }
+          return true;
+
+        case "address":
+          if (!form.address.trim()) {
+            Alert.alert("Missing", "Enter address.");
+            return false;
+          }
+          return true;
+
+        default:
+          return true;
+      }
+    },
+    [form],
+  );
+
+  const canGoNext = useMemo(() => {
+    if (saving) return false;
+
+    switch (currentStep.id) {
+      case "owner":
+        return form.ownerName.trim().length > 0;
+      case "email":
+        return form.email.trim().length > 0;
+      case "mobile":
+        return form.mobile.trim().length > 0;
+      case "shop":
+        return form.shopName.trim().length > 0;
+      case "address":
+        return form.address.trim().length > 0;
+      default:
+        return true;
+    }
+  }, [currentStep.id, form, saving]);
+
+  const goBack = useCallback(() => {
+    if (stepIndex === 0) {
+      router.back();
+      return;
+    }
+    setStepIndex((prev) => prev - 1);
+  }, [router, stepIndex]);
+
+  const submitVendor = useCallback(async () => {
+    setSaving(true);
+
+    const { data: vendorRow, error: insErr } = await supabase
+      .from("vendor")
+      .insert({
+        name: form.ownerName.trim(),
+        email: form.email.trim(),
+        mobile: form.mobile.trim(),
+        landline: form.landline.trim() || null,
+        shop_name: form.shopName.trim(),
+        address: form.address.trim(),
+        location_url: form.locationUrl.trim() || null,
+        offers_tailoring: Boolean(form.offersTailoring),
+        location: form.address.trim(),
+        status: "pending",
+      })
+      .select("id")
+      .single();
+
+    if (insErr || !vendorRow?.id) {
+      setSaving(false);
+      Alert.alert("Error", insErr?.message ?? "Could not register vendor.");
+      return;
+    }
+
+    const vendor_id = vendorRow.id as string;
+    const ts = Date.now();
+
+    const profilePath = form.profile
+      ? await uploadToBucket(
+          BUCKET_VENDOR,
+          `vendors/${vendor_id}/profile/${ts}-${form.profile.fileName || "profile"}`,
+          form.profile,
+          "image/jpeg",
+        )
+      : null;
+
+    const certPath = form.govPermission
+      ? await uploadToBucket(
+          BUCKET_VENDOR,
+          `vendors/${vendor_id}/certificates/${ts}-${form.govPermission.fileName || "file"}`,
+          form.govPermission,
+          "image/jpeg",
+        )
+      : null;
+
+    const bannerPath = form.banner
+      ? await uploadToBucket(
+          BUCKET_VENDOR,
+          `vendors/${vendor_id}/banner/${ts}-${form.banner.fileName || "banner"}`,
+          form.banner,
+          "image/jpeg",
+        )
+      : null;
+
+    const imagePaths: string[] = [];
+    for (let i = 0; i < form.images.length; i++) {
+      const p = await uploadToBucket(
+        BUCKET_VENDOR,
+        `vendors/${vendor_id}/shop-images/${ts}-${i}-${form.images[i].fileName || "image"}`,
+        form.images[i],
+        "image/jpeg",
+      );
+      if (p) imagePaths.push(p);
+    }
+
+    const videoPaths: string[] = [];
+    for (let i = 0; i < form.videos.length; i++) {
+      const p = await uploadToBucket(
+        BUCKET_VENDOR,
+        `vendors/${vendor_id}/shop-videos/${ts}-${i}-${form.videos[i].fileName || "video"}`,
+        form.videos[i],
+        "video/mp4",
+      );
+      if (p) videoPaths.push(p);
+    }
+
+    const certificate_paths = certPath ? [certPath] : null;
+
+    const { error: upErr } = await supabase
+      .from("vendor")
+      .update({
+        profile_image_path: profilePath,
+        banner_path: bannerPath,
+        certificate_paths,
+        shop_image_paths: imagePaths.length ? imagePaths : null,
+        shop_video_paths: videoPaths.length ? videoPaths : null,
+        offers_tailoring: Boolean(form.offersTailoring),
+        status: "pending",
+      })
+      .eq("id", vendor_id);
+
+    setSaving(false);
+
+    if (upErr) {
+      Alert.alert("Error", upErr.message);
+      return;
+    }
+
+    dispatch(
+      setSelectedVendor({
+        id: vendor_id,
+        created_at: null,
+        name: form.ownerName.trim(),
+        email: form.email.trim(),
+        mobile: form.mobile.trim(),
+        landline: form.landline.trim() || null,
+        shop_name: form.shopName.trim(),
+        address: form.address.trim(),
+        location_url: form.locationUrl.trim() || null,
+        profile_image_path: profilePath,
+        banner_path: bannerPath,
+        certificate_paths,
+        shop_image_paths: imagePaths.length ? imagePaths : null,
+        shop_video_paths: videoPaths.length ? videoPaths : null,
+        offers_tailoring: Boolean(form.offersTailoring),
+        status: "pending",
+        location: form.address.trim(),
+        image: null,
+      }),
+    );
+
+    router.replace("/vendor/confirmation");
+  }, [dispatch, form, router]);
+
+  const goNext = useCallback(async () => {
+    if (!validateStep(currentStep.id)) return;
+
+    if (editingStepIndex !== null) {
+      // user came from review
+      setStepIndex(STEPS.length - 1); // go back to review
+      setEditingStepIndex(null);
+      return;
+    }
+
+    if (isLastStep) {
+      await submitVendor();
+      return;
+    }
+
+    setStepIndex((prev) => prev + 1);
+  }, [currentStep.id, isLastStep, submitVendor, validateStep]);
+
   const [viewerVisible, setViewerVisible] = useState(false);
   const [gallery, setGallery] = useState<string[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -247,7 +371,10 @@ export default function CreateShopScreen() {
 
     const t = setTimeout(() => {
       try {
-        flatListRef.current?.scrollToIndex({ index: currentIndex, animated: false });
+        flatListRef.current?.scrollToIndex({
+          index: currentIndex,
+          animated: false,
+        });
       } catch {
         // ignore
       }
@@ -256,19 +383,12 @@ export default function CreateShopScreen() {
     return () => clearTimeout(t);
   }, [viewerVisible, currentIndex, gallery.length]);
 
-  // Certificates are single in create-shop (govPermission). Keep helper list for viewer.
-  const certificatesPreviewUris = useMemo(() => {
-    return govPermission?.uri ? [govPermission.uri] : [];
-  }, [govPermission?.uri]);
-
-  // Prefetch picked images for snappy thumbs
   useEffect(() => {
     const all = [
-      ...(profile?.uri ? [profile.uri] : []),
-      ...(govPermission?.uri ? [govPermission.uri] : []),
-      ...(banner?.uri ? [banner.uri] : []),
-      ...(images ?? []).map((x) => x.uri),
-      ...(certificatesPreviewUris ?? [])
+      ...(form.profile?.uri ? [form.profile.uri] : []),
+      ...(form.govPermission?.uri ? [form.govPermission.uri] : []),
+      ...(form.banner?.uri ? [form.banner.uri] : []),
+      ...form.images.map((x) => x.uri),
     ].filter(Boolean);
 
     all.forEach((u) => {
@@ -278,11 +398,16 @@ export default function CreateShopScreen() {
         // ignore
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.uri, govPermission?.uri, banner?.uri, JSON.stringify(images.map((x) => x.uri))]);
+  }, [
+    form.banner?.uri,
+    form.govPermission?.uri,
+    form.images,
+    form.profile?.uri,
+  ]);
 
-  // Video thumbnails for picked videos
-  const [videoThumbByUri, setVideoThumbByUri] = useState<Record<string, string>>({});
+  const [videoThumbByUri, setVideoThumbByUri] = useState<
+    Record<string, string>
+  >({});
   const [selectedVideoUri, setSelectedVideoUri] = useState<string>("");
 
   const ensureVideoThumb = useCallback(
@@ -292,8 +417,9 @@ export default function CreateShopScreen() {
       if (videoThumbByUri[u]) return videoThumbByUri[u];
 
       try {
-        // generate at ~1s; if shorter, it will fallback internally
-        const { uri } = await VideoThumbnails.getThumbnailAsync(u, { time: 1000 });
+        const { uri } = await VideoThumbnails.getThumbnailAsync(u, {
+          time: 1000,
+        });
         if (uri) {
           setVideoThumbByUri((prev) => ({ ...prev, [u]: uri }));
           return uri;
@@ -303,28 +429,26 @@ export default function CreateShopScreen() {
         return null;
       }
     },
-    [videoThumbByUri]
+    [videoThumbByUri],
   );
 
-  // When videos change, generate thumbs + set default selected video
   useEffect(() => {
-    const list = (videos ?? []).map((v) => v.uri).filter(Boolean);
+    const list = form.videos.map((v) => v.uri).filter(Boolean);
     if (!list.length) {
       setSelectedVideoUri("");
       return;
     }
+
     if (!selectedVideoUri || !list.includes(selectedVideoUri)) {
       setSelectedVideoUri(list[0]);
     }
 
     (async () => {
       for (let i = 0; i < list.length; i++) {
-        // sequential to avoid spikes
-        // eslint-disable-next-line no-await-in-loop
         await ensureVideoThumb(list[i]);
       }
     })();
-  }, [videos, selectedVideoUri, ensureVideoThumb]);
+  }, [ensureVideoThumb, form.videos, selectedVideoUri]);
 
   const player = useVideoPlayer(selectedVideoUri || "");
 
@@ -336,487 +460,369 @@ export default function CreateShopScreen() {
     }
   }, [player]);
 
-  const shopImageUris = useMemo(() => (images ?? []).map((x) => x.uri).filter(Boolean), [images]);
-  const shopVideoUris = useMemo(() => (videos ?? []).map((x) => x.uri).filter(Boolean), [videos]);
-
-  // =========================
-  // Submit (updated to include offers_tailoring)
-  // =========================
-  async function submit() {
-    if (!canSubmit) {
-      Alert.alert("Missing", "Fill required fields.");
-      return;
-    }
-
-    setSaving(true);
-
-    const { data: vendorRow, error: insErr } = await supabase
-      .from("vendor")
-      .insert({
-        // Vendor identity
-        name: ownerName.trim(),
-        email: email.trim(),
-        mobile: mobile.trim(),
-        landline: landline.trim() || null,
-
-        // Vendor-owned shop details
-        shop_name: shopName.trim(),
-        address: address.trim(),
-        location_url: locationUrl.trim() || null,
-
-        // ✅ Vendor-wide tailoring offering
-        offers_tailoring: Boolean(offersTailoring),
-
-        // legacy compatibility (keep in sync)
-        location: address.trim(),
-
-        status: "pending"
-      })
-      .select("id")
-      .single();
-
-    if (insErr || !vendorRow?.id) {
-      setSaving(false);
-      Alert.alert("Error", insErr?.message ?? "Could not register vendor.");
-      return;
-    }
-
-    const vendor_id = vendorRow.id as string;
-    const ts = Date.now();
-
-    const profilePath = profile
-      ? await uploadToBucket(
-          BUCKET_VENDOR,
-          `vendors/${vendor_id}/profile/${ts}-${profile.fileName || "profile"}`,
-          profile,
-          "image/jpeg"
-        )
-      : null;
-
-    const certPath = govPermission
-      ? await uploadToBucket(
-          BUCKET_VENDOR,
-          `vendors/${vendor_id}/certificates/${ts}-${govPermission.fileName || "file"}`,
-          govPermission,
-          "image/jpeg"
-        )
-      : null;
-
-    const bannerPath = banner
-      ? await uploadToBucket(
-          BUCKET_VENDOR,
-          `vendors/${vendor_id}/banner/${ts}-${banner.fileName || "banner"}`,
-          banner,
-          "image/jpeg"
-        )
-      : null;
-
-    const imagePaths: string[] = [];
-    for (let i = 0; i < images.length; i++) {
-      const p = await uploadToBucket(
-        BUCKET_VENDOR,
-        `vendors/${vendor_id}/shop-images/${ts}-${i}-${images[i].fileName || "image"}`,
-        images[i],
-        "image/jpeg"
-      );
-      if (p) imagePaths.push(p);
-    }
-
-    const videoPaths: string[] = [];
-    for (let i = 0; i < videos.length; i++) {
-      const p = await uploadToBucket(
-        BUCKET_VENDOR,
-        `vendors/${vendor_id}/shop-videos/${ts}-${i}-${videos[i].fileName || "video"}`,
-        videos[i],
-        "video/mp4"
-      );
-      if (p) videoPaths.push(p);
-    }
-
-    const certificate_paths = certPath ? [certPath] : null;
-
-    const { error: upErr } = await supabase
-      .from("vendor")
-      .update({
-        profile_image_path: profilePath,
-        banner_path: bannerPath,
-        certificate_paths,
-        shop_image_paths: imagePaths.length ? imagePaths : null,
-        shop_video_paths: videoPaths.length ? videoPaths : null,
-
-        // ✅ keep stored value consistent
-        offers_tailoring: Boolean(offersTailoring),
-
-        status: "pending"
-      })
-      .eq("id", vendor_id);
-
-    setSaving(false);
-
-    if (upErr) {
-      Alert.alert("Error", upErr.message);
-      return;
-    }
-
-    dispatch(
-      setSelectedVendor({
-        id: vendor_id,
-        created_at: null as any,
-
-        name: ownerName.trim(),
-        email: email.trim(),
-        mobile: mobile.trim(),
-        landline: landline.trim() || null,
-
-        shop_name: shopName.trim(),
-        address: address.trim(),
-        location_url: locationUrl.trim() || null,
-
-        profile_image_path: profilePath,
-        banner_path: bannerPath,
-        certificate_paths,
-        shop_image_paths: imagePaths.length ? imagePaths : null,
-        shop_video_paths: videoPaths.length ? videoPaths : null,
-
-        // ✅ NEW: vendor-wide tailoring offering
-        offers_tailoring: Boolean(offersTailoring),
-
-        status: "pending",
-
-        location: address.trim(),
-        image: null as any
-      } as any)
-    );
-
-    router.replace("/vendor/confirmation");
-  }
-
-  const FieldHeader = ({
-    label,
-    open,
-    onPress
-  }: {
-    label: string;
-    open: boolean;
-    onPress: () => void;
-  }) => (
-    <Text style={styles.fieldBtnBlue} onPress={onPress}>
-      {label}
-    </Text>
+  const shopImageUris = useMemo(
+    () => form.images.map((x) => x.uri).filter(Boolean),
+    [form.images],
   );
 
-  const showSetCurrentLocation = (locationUrl || "").trim().length === 0;
+  const shopVideoUris = useMemo(
+    () => form.videos.map((x) => x.uri).filter(Boolean),
+    [form.videos],
+  );
+
+  const renderStepContent = () => {
+    switch (currentStep.id) {
+      case "owner":
+        return (
+          <GradientInputCard
+            ref={ownerRef}
+            placeholder="Enter owner name"
+            value={form.ownerName}
+            onChangeText={(v) => updateForm("ownerName", v)}
+            autoCapitalize="words"
+            returnKeyType="next"
+            onSubmitEditing={goNext}
+          />
+        );
+
+      case "email":
+        return (
+          <GradientInputCard
+            ref={emailRef}
+            placeholder="Enter email"
+            value={form.email}
+            onChangeText={(v) => updateForm("email", v)}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="next"
+            onSubmitEditing={goNext}
+          />
+        );
+
+      case "mobile":
+        return (
+          <GradientInputCard
+            ref={mobileRef}
+            placeholder="Enter mobile number"
+            value={form.mobile}
+            onChangeText={(v) => updateForm("mobile", v)}
+            keyboardType="phone-pad"
+            returnKeyType="next"
+            onSubmitEditing={goNext}
+          />
+        );
+
+      case "shop":
+        return (
+          <GradientInputCard
+            ref={shopRef}
+            placeholder="Enter shop name"
+            value={form.shopName}
+            onChangeText={(v) => updateForm("shopName", v)}
+            autoCapitalize="words"
+            returnKeyType="next"
+            onSubmitEditing={goNext}
+          />
+        );
+
+      case "address":
+        return (
+          <GradientInputCard
+            ref={addressRef}
+            placeholder="Enter full address"
+            value={form.address}
+            onChangeText={(v) => updateForm("address", v)}
+            multiline
+          />
+        );
+
+      case "location":
+        return (
+          <>
+            <View style={styles.previewCard}>
+              <Text style={styles.previewLabel}>Map location</Text>
+              <Text style={styles.previewSubtext}>
+                Paste a Google Maps link, or use the current device location.
+              </Text>
+
+              <GradientInputCard
+                ref={locationRef}
+                placeholder="Paste Google Maps link"
+                value={form.locationUrl}
+                onChangeText={(v) => updateForm("locationUrl", v)}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                returnKeyType="next"
+                onSubmitEditing={goNext}
+              />
+
+              <Pressable
+                onPress={locLoading ? undefined : setCurrentLocation}
+                disabled={locLoading}
+                style={({ pressed }) => [
+                  styles.secondaryActionButton,
+                  locLoading ? styles.secondaryActionButtonDisabled : null,
+                  pressed && !locLoading ? styles.pressed : null,
+                ]}
+              >
+                <Text style={styles.secondaryActionButtonText}>
+                  {locLoading ? "Getting location..." : "Use current location"}
+                </Text>
+              </Pressable>
+            </View>
+
+            {!!form.locationUrl.trim() && (
+              <View style={styles.previewCard}>
+                <Text style={styles.previewLabel}>Current location URL</Text>
+                <Text style={styles.previewValue}>
+                  {form.locationUrl.trim()}
+                </Text>
+              </View>
+            )}
+          </>
+        );
+
+      case "tailoring":
+        return (
+          <View style={styles.choiceGrid}>
+            <Pressable
+              onPress={() => {
+                updateForm("offersTailoring", true);
+                goNext();
+              }}
+              style={({ pressed }) => [
+                styles.choiceCard,
+                pressed && styles.choiceCardPressed,
+              ]}
+            >
+              <Text style={styles.choiceCardTitle}>Yes</Text>
+              <Text style={styles.choiceCardSubtitle}>
+                This shop offers stitching or tailoring services
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                updateForm("offersTailoring", false);
+                goNext();
+              }}
+              style={({ pressed }) => [
+                styles.choiceCard,
+                pressed && styles.choiceCardPressed,
+              ]}
+            >
+              <Text style={styles.choiceCardTitle}>No</Text>
+              <Text style={styles.choiceCardSubtitle}>
+                The shop only sells unstitched or ready-made items
+              </Text>
+            </Pressable>
+          </View>
+        );
+
+      case "media":
+        return (
+          <>
+            {/* PROFILE */}
+            <View style={styles.mediaCard}>
+              <Text style={styles.mediaTitle}>Vendor profile / logo</Text>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.uploadButton,
+                  pressed && styles.pressed,
+                ]}
+                onPress={async () => {
+                  const picked = await pickImages(false);
+                  updateForm("profile", picked[0] ?? null);
+                }}
+              >
+                <Text style={styles.uploadButtonText}>
+                  {form.profile ? "Change image" : "Upload image"}
+                </Text>
+              </Pressable>
+
+              {!!form.profile?.uri && (
+                <Pressable onPress={() => openViewerAt([form.profile!.uri], 0)}>
+                  <Image
+                    source={{ uri: form.profile.uri }}
+                    style={styles.largePreviewImage}
+                  />
+                </Pressable>
+              )}
+            </View>
+
+            {/* PERMISSION */}
+            <View style={styles.mediaCard}>
+              <Text style={styles.mediaTitle}>Authority permission</Text>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.uploadButton,
+                  pressed && styles.pressed,
+                ]}
+                onPress={async () => {
+                  const picked = await pickImages(false);
+                  updateForm("govPermission", picked[0] ?? null);
+                }}
+              >
+                <Text style={styles.uploadButtonText}>
+                  {form.govPermission ? "Change image" : "Upload permission"}
+                </Text>
+              </Pressable>
+
+              {!!form.govPermission?.uri && (
+                <Pressable
+                  onPress={() => openViewerAt([form.govPermission!.uri], 0)}
+                >
+                  <Image
+                    source={{ uri: form.govPermission.uri }}
+                    style={styles.largePreviewImage}
+                  />
+                </Pressable>
+              )}
+            </View>
+
+            {/* BANNER */}
+            <View style={styles.mediaCard}>
+              <Text style={styles.mediaTitle}>Shop banner</Text>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.uploadButton,
+                  pressed && styles.pressed,
+                ]}
+                onPress={async () => {
+                  const picked = await pickImages(false);
+                  updateForm("banner", picked[0] ?? null);
+                }}
+              >
+                <Text style={styles.uploadButtonText}>
+                  {form.banner ? "Change banner" : "Upload banner"}
+                </Text>
+              </Pressable>
+
+              {!!form.banner?.uri && (
+                <Pressable onPress={() => openViewerAt([form.banner!.uri], 0)}>
+                  <Image
+                    source={{ uri: form.banner.uri }}
+                    style={styles.largePreviewImage}
+                  />
+                </Pressable>
+              )}
+            </View>
+
+            {/* SHOP IMAGES */}
+            <View style={styles.mediaCard}>
+              <Text style={styles.mediaTitle}>Shop photos</Text>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.uploadButton,
+                  pressed && styles.pressed,
+                ]}
+                onPress={async () => {
+                  const picked = await pickImages(true);
+                  updateForm("images", picked);
+                }}
+              >
+                <Text style={styles.uploadButtonText}>
+                  {form.images.length
+                    ? `${form.images.length} image${form.images.length > 1 ? "s" : ""} selected`
+                    : "Upload shop photos"}
+                </Text>
+              </Pressable>
+
+              {shopImageUris.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={styles.thumbRow}>
+                    {shopImageUris.map((u, idx) => (
+                      <Pressable
+                        key={`${u}-${idx}`}
+                        onPress={() => openViewerAt(shopImageUris, idx)}
+                      >
+                        <Image source={{ uri: u }} style={styles.thumb} />
+                      </Pressable>
+                    ))}
+                  </View>
+                </ScrollView>
+              )}
+            </View>
+
+            {/* SHOP VIDEOS */}
+            <View style={styles.mediaCard}>
+              <Text style={styles.mediaTitle}>Shop videos</Text>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.uploadButton,
+                  pressed && styles.pressed,
+                ]}
+                onPress={async () => {
+                  const picked = await pickVideos(true);
+                  updateForm("videos", picked);
+                }}
+              >
+                <Text style={styles.uploadButtonText}>
+                  {form.videos.length
+                    ? `${form.videos.length} video${form.videos.length > 1 ? "s" : ""} selected`
+                    : "Upload shop videos"}
+                </Text>
+              </Pressable>
+
+              {!!selectedVideoUri && (
+                <View style={styles.videoBox}>
+                  <VideoView
+                    player={player}
+                    style={styles.video}
+                    allowsFullscreen
+                    allowsPictureInPicture
+                  />
+                </View>
+              )}
+            </View>
+          </>
+        );
+
+      case "review":
+        return (
+          <VendorReviewSummary
+            form={form}
+            jumpToStep={(index) => {
+              setEditingStepIndex(index);
+              setStepIndex(index);
+            }}
+          />
+        );
+
+      default:
+        return null;
+    }
+  };
 
   return (
-    <View style={{ flex: 1, backgroundColor: stylesVars.bg }}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Register Vendor</Text>
+    <>
+      <WizardScaffold
+        title={currentStep.title}
+        subtitle={currentStep.subtitle}
+        stepIndex={stepIndex}
+        totalSteps={STEPS.length}
+        onBack={goBack}
+        onNext={goNext}
+        nextLabel={
+          isLastStep ? (saving ? "Submitting..." : "Submit vendor") : "Continue"
+        }
+        nextDisabled={!canGoNext}
+      >
+        {renderStepContent()}
+      </WizardScaffold>
 
-        <FieldHeader
-          label="Vendor / owner name *"
-          open={openOwner}
-          onPress={openAndFocusOwner}
-        />
-        {openOwner && (
-          <View style={optionStyles.card}>
-            <TextInput
-              ref={ownerRef}
-              style={styles.inputPlain}
-              value={ownerName}
-              onChangeText={setOwnerName}
-              autoCapitalize="words"
-              placeholder="Enter name"
-              placeholderTextColor={stylesVars.placeholder}
-            />
-          </View>
-        )}
-
-        <FieldHeader label="Email *" open={openEmail} onPress={openAndFocusEmail} />
-        {openEmail && (
-          <View style={optionStyles.card}>
-            <TextInput
-              ref={emailRef}
-              style={styles.inputPlain}
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              placeholder="Enter email"
-              placeholderTextColor={stylesVars.placeholder}
-            />
-          </View>
-        )}
-
-        <FieldHeader label="Mobile *" open={openMobile} onPress={openAndFocusMobile} />
-        {openMobile && (
-          <View style={optionStyles.card}>
-            <TextInput
-              ref={mobileRef}
-              style={styles.inputPlain}
-              value={mobile}
-              onChangeText={setMobile}
-              keyboardType="phone-pad"
-              placeholder="Enter mobile"
-              placeholderTextColor={stylesVars.placeholder}
-            />
-          </View>
-        )}
-
-        <FieldHeader label="Shop name *" open={openShop} onPress={openAndFocusShop} />
-        {openShop && (
-          <View style={optionStyles.card}>
-            <TextInput
-              ref={shopRef}
-              style={styles.inputPlain}
-              value={shopName}
-              onChangeText={setShopName}
-              autoCapitalize="words"
-              placeholder="Enter shop name"
-              placeholderTextColor={stylesVars.placeholder}
-            />
-          </View>
-        )}
-
-        {/* ✅ NEW: Offers tailoring toggle */}
-        <View style={styles.tailoringRow}>
-          <Text style={styles.fieldBtnBlue}>Offers stitching / tailoring</Text>
-
-          <Pressable
-            onPress={() => setOffersTailoring((v) => !v)}
-            style={({ pressed }) => [
-              styles.tailoringPill,
-              offersTailoring ? styles.tailoringPillOn : null,
-              pressed ? styles.pressed : null
-            ]}
-          >
-            <Text style={[styles.tailoringText, offersTailoring ? styles.tailoringTextOn : null]}>
-              {offersTailoring ? "Yes" : "No"}
-            </Text>
-          </Pressable>
-        </View>
-
-        <FieldHeader
-          label="Landline"
-          open={openLandline}
-          onPress={openAndFocusLandline}
-        />
-        {openLandline && (
-          <View style={optionStyles.card}>
-            <TextInput
-              ref={landlineRef}
-              style={styles.inputPlain}
-              value={landline}
-              onChangeText={setLandline}
-              keyboardType="phone-pad"
-              placeholder="Enter landline (optional)"
-              placeholderTextColor={stylesVars.placeholder}
-            />
-          </View>
-        )}
-
-        <FieldHeader label="Address *" open={openAddress} onPress={openAndFocusAddress} />
-        {openAddress && (
-          <View style={optionStyles.card}>
-            <TextInput
-              ref={addressRef}
-              style={[styles.inputPlain, styles.multi]}
-              value={address}
-              onChangeText={setAddress}
-              multiline
-              placeholder="Enter address"
-              placeholderTextColor={stylesVars.placeholder}
-            />
-          </View>
-        )}
-
-        <>
-          <Text
-            style={[styles.fieldBtnBlue, locLoading && styles.disabledText]}
-            onPress={locLoading ? undefined : setCurrentLocation}
-          >
-            {locLoading ? "Setting current location..." : "Set current location"}
-          </Text>
-
-          {(locationUrl || "").trim().length ? (
-            <Text style={styles.locationUrlPreview} numberOfLines={2}>
-              {(locationUrl || "").trim()}
-            </Text>
-          ) : null}
-        </>
-
-        {/* MEDIA (improved previews) */}
-        {/* <Text style={styles.fieldBtnBlue}>Media</Text> */}
-
-        {/* Profile */}
-        <Text
-          style={styles.fieldBtnBlue}
-          onPress={async () => setProfile((await pickImages(false))[0] ?? null)}
-        >
-          Vendor profile / logo
-        </Text>
-        {!!profile?.uri ? (
-          <Pressable
-            onPress={() => openViewerAt([profile.uri], 0)}
-            style={({ pressed }) => [styles.bigPreviewWrap, pressed ? styles.pressed : null]}
-          >
-            <Image source={{ uri: profile.uri }} style={styles.preview} />
-          </Pressable>
-        ) : null}
-
-        {/* Authorities permission (certificate) */}
-        <Text
-          style={styles.fieldBtnBlue}
-          onPress={async () => setGovPermission((await pickImages(false))[0] ?? null)}
-        >
-          Authorities permission
-        </Text>
-        {!!govPermission?.uri ? (
-          <Pressable
-            onPress={() => openViewerAt([govPermission.uri], 0)}
-            style={({ pressed }) => [styles.bigPreviewWrap, pressed ? styles.pressed : null]}
-          >
-            <Image source={{ uri: govPermission.uri }} style={styles.preview} />
-          </Pressable>
-        ) : null}
-
-        {/* Banner */}
-        <Text
-          style={styles.fieldBtnBlue}
-          onPress={async () => setBanner((await pickImages(false))[0] ?? null)}
-        >
-          Shop banner
-        </Text>
-        {!!banner?.uri ? (
-          <Pressable
-            onPress={() => openViewerAt([banner.uri], 0)}
-            style={({ pressed }) => [styles.bigPreviewWrap, pressed ? styles.pressed : null]}
-          >
-            <Image source={{ uri: banner.uri }} style={styles.preview} />
-          </Pressable>
-        ) : null}
-
-        {/* Shop images (thumb row + fullscreen viewer) */}
-        <Text
-          style={styles.fieldBtnBlue}
-          onPress={async () => setImages(await pickImages(true))}
-        >
-          Shop images
-        </Text>
-
-        {shopImageUris.length ? (
-          <>
-            {/* <Text style={styles.metaHint}>Tap any image to view full screen.</Text> */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.hRow}>
-                {shopImageUris.map((u, idx) => (
-                  <Pressable
-                    key={`${u}-${idx}`}
-                    onPress={() => openViewerAt(shopImageUris, idx)}
-                    style={({ pressed }) => [styles.thumbWrap, pressed ? styles.pressed : null]}
-                  >
-                    <Image source={{ uri: u }} style={styles.thumb} />
-                    {idx === 0 ? (
-                      <View style={styles.badge}>
-                        <Text style={styles.badgeText}>First</Text>
-                      </View>
-                    ) : null}
-                  </Pressable>
-                ))}
-              </View>
-            </ScrollView>
-          </>
-        ) : (
-          <Text style={styles.empty}>—</Text>
-        )}
-
-        {/* Shop videos (thumbnail tiles + inline player) */}
-        <Text
-          style={styles.fieldBtnBlue}
-          onPress={async () => {
-            const picked = await pickVideos(true);
-            setVideos(picked);
-          }}
-        >
-          Shop videos
-        </Text>
-
-        {shopVideoUris.length ? (
-          <>
-            {!!selectedVideoUri ? (
-              <View style={styles.videoBox}>
-                <VideoView
-                  player={player}
-                  style={styles.video}
-                  allowsFullscreen
-                  allowsPictureInPicture
-                />
-              </View>
-            ) : null}
-
-            {/* <Text style={styles.metaHint}>Tap a tile to play.</Text> */}
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.hRow}>
-                {shopVideoUris.map((vUri, idx) => {
-                  const thumbUri = videoThumbByUri[vUri] || "";
-                  const isOn = selectedVideoUri === vUri;
-
-                  return (
-                    <Pressable
-                      key={`${vUri}-${idx}`}
-                      onPress={() => setSelectedVideoUri(vUri)}
-                      style={({ pressed }) => [
-                        styles.thumbWrap,
-                        isOn ? styles.videoThumbOn : null,
-                        pressed ? styles.pressed : null
-                      ]}
-                    >
-                      {thumbUri ? (
-                        <Image source={{ uri: thumbUri }} style={styles.thumb} />
-                      ) : (
-                        <View style={styles.videoPlaceholder}>
-                          <Text style={styles.videoPlaceholderText}>Video {idx + 1}</Text>
-                        </View>
-                      )}
-
-                      <View style={styles.playBadge}>
-                        <Text style={styles.playBadgeText}>▶</Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </ScrollView>
-
-            {/* <View style={styles.videoNames}>
-              {videos.slice(0, 5).map((v, idx) => (
-                <Text key={`${v.uri}-${idx}`} style={styles.videoItem} numberOfLines={1}>
-                  {idx + 1}. {prettyNameFromPicked(v, `video-${idx + 1}`)}
-                </Text>
-              ))}
-              {videos.length > 5 ? (
-                <Text style={styles.moreText}>+{videos.length - 5} more</Text>
-              ) : null}
-            </View> */}
-          </>
-        ) : (
-          <Text style={styles.empty}>—</Text>
-        )}
-
-        <Text
-          style={[styles.submitBtn, !canSubmit && styles.disabledBtn]}
-          onPress={canSubmit ? submit : undefined}
-        >
-          {saving ? "Saving..." : "Submit"}
-        </Text>
-
-        {false && !!authUserId && (
-          <Text style={styles.metaHint}>Auth user detected: {String(authUserId)}</Text>
-        )}
-      </ScrollView>
-
-      {/* Fullscreen Viewer (images only) */}
-      <Modal visible={viewerVisible} transparent onRequestClose={() => setViewerVisible(false)}>
+      <Modal
+        visible={viewerVisible}
+        transparent
+        onRequestClose={() => setViewerVisible(false)}
+      >
         <View style={styles.viewerContainer}>
           <FlatList
             ref={flatListRef}
@@ -824,19 +830,32 @@ export default function CreateShopScreen() {
             horizontal
             pagingEnabled
             keyExtractor={(_, i) => i.toString()}
-            getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
-            initialScrollIndex={Math.max(0, Math.min(currentIndex, Math.max(0, gallery.length - 1)))}
+            getItemLayout={(_, i) => ({
+              length: width,
+              offset: width * i,
+              index: i,
+            })}
+            initialScrollIndex={Math.max(
+              0,
+              Math.min(currentIndex, Math.max(0, gallery.length - 1)),
+            )}
             onScrollToIndexFailed={() => {
               // ignore
             }}
             onMomentumScrollEnd={(e) => {
-              const next = Math.round(e.nativeEvent.contentOffset.x / width) || 0;
+              const next =
+                Math.round(e.nativeEvent.contentOffset.x / width) || 0;
               setCurrentIndex(next);
             }}
-            renderItem={({ item }) => <Image source={{ uri: item }} style={styles.viewerImage} />}
+            renderItem={({ item }) => (
+              <Image source={{ uri: item }} style={styles.viewerImage} />
+            )}
           />
 
-          <Pressable style={styles.closeButton} onPress={() => setViewerVisible(false)}>
+          <Pressable
+            style={styles.closeButton}
+            onPress={() => setViewerVisible(false)}
+          >
             <Text style={styles.closeText}>✕</Text>
           </Pressable>
 
@@ -847,134 +866,198 @@ export default function CreateShopScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </>
   );
 }
 
-const stylesVars = {
-  bg: "#F5F7FB",
-  border: "#D9E2F2",
-  borderSoft: "#E6EDF8",
-  blue: "#0B2F6B",
-  blueSoft: "#EAF2FF",
-  text: "#111111",
-  subText: "#60708A",
-  placeholder: "#94A3B8"
-};
-
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 24, backgroundColor: stylesVars.bg },
-
-  title: { fontSize: 20, fontWeight: "900", color: stylesVars.blue, marginBottom: 6 },
-
-  section: { marginTop: 18, fontSize: 16, fontWeight: "900", color: stylesVars.blue },
-
-  fieldBtnBlue: {
-    marginTop: 12,
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#005ea6"
+  previewCard: {
+    marginBottom: 16,
+    padding: 18,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  previewLabel: {
+    color: "#0F172A",
+    fontSize: 15,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  previewValue: {
+    color: "#475569",
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "500",
+  },
+  reviewValue: {
+    color: "rgba(255,255,255,0.86)",
+    fontSize: 14,
+    lineHeight: 22,
+    fontWeight: "700",
+    marginTop: 4,
+  },
+  previewSubtext: {
+    color: "#64748B",
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "500",
+    marginBottom: 14,
   },
 
-  inputPlain: { fontSize: 16, color: stylesVars.text },
-  multi: { minHeight: 90, textAlignVertical: "top" },
-
-  // ✅ NEW: tailoring toggle row
-  tailoringRow: {
+  secondaryActionButton: {
     marginTop: 14,
-    flexDirection: "row",
+    minHeight: 48,
+    borderRadius: 14,
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12
-  },
-  tailoringLabel: { fontSize: 14, fontWeight: "900", color: stylesVars.text },
-  tailoringPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
+    justifyContent: "center",
+    backgroundColor: "#EEF4FF",
     borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: "#fff"
+    borderColor: "#D7E3FF",
   },
-  tailoringPillOn: {
-    borderColor: stylesVars.blue,
-    backgroundColor: stylesVars.blueSoft
-  },
-  tailoringText: { fontSize: 12, fontWeight: "900", color: stylesVars.text },
-  tailoringTextOn: { color: stylesVars.blue },
 
-  blueBtn: {
-    marginTop: 14,
-    fontSize: 16,
-    fontWeight: "900",
-    color: stylesVars.blue
+  secondaryActionButtonDisabled: {
+    opacity: 0.6,
   },
-  disabledText: { opacity: 0.6 },
 
-  orText: {
-    marginTop: 14,
-    textAlign: "center",
+  secondaryActionButtonText: {
+    color: "#2563EB",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  choiceGrid: {
+    flexDirection: "row",
+    gap: 16,
+  },
+
+  choiceCard: {
+    flex: 1,
+    minHeight: 140,
+    borderRadius: 18,
+    padding: 20,
+
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+
+    justifyContent: "center",
+
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+
+    elevation: 2,
+  },
+
+  choiceCardPressed: {
+    transform: [{ scale: 0.97 }],
+  },
+
+  choiceCardTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#0F172A",
+    marginBottom: 6,
+  },
+
+  choiceCardSubtitle: {
     fontSize: 13,
-    fontWeight: "900",
-    color: stylesVars.text,
-    opacity: 0.75
+    lineHeight: 18,
+    color: "#64748B",
   },
-
-  metaHint: { marginTop: 8, fontSize: 12, color: stylesVars.subText, fontWeight: "800" },
-  empty: { marginTop: 10, color: stylesVars.subText, fontWeight: "800" },
-
-  bigPreviewWrap: { marginTop: 10, borderRadius: 12, overflow: "hidden" },
-  preview: {
-    width: "100%",
-    height: 160,
-    borderRadius: 12,
+  mediaCard: {
+    marginBottom: 20,
+    padding: 18,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: "#E5E7EB",
   },
 
-  hRow: { flexDirection: "row", gap: 10, paddingTop: 10, paddingBottom: 4 },
+  mediaTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A",
+    marginBottom: 12,
+  },
 
+  uploadButton: {
+    minHeight: 48,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EEF4FF",
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+  },
+
+  uploadButtonText: {
+    color: "#2563EB",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+
+  thumbRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 14,
+  },
+
+  thumb: {
+    width: 88,
+    height: 88,
+    borderRadius: 12,
+  },
+  largePreviewImage: {
+    width: "100%",
+    height: 190,
+    borderRadius: 16,
+    marginTop: 14,
+  },
   thumbWrap: {
     width: 92,
     height: 92,
     borderRadius: 16,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: stylesVars.blueSoft
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.12)",
   },
-  thumb: { width: "100%", height: "100%" },
-
-  badge: {
-    position: "absolute",
-    bottom: 6,
-    left: 6,
-    backgroundColor: "rgba(11,47,107,0.85)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999
+  emptyText: {
+    marginTop: 12,
+    color: "rgba(255,255,255,0.68)",
+    fontSize: 13,
+    fontWeight: "700",
   },
-  badgeText: { color: "#fff", fontWeight: "900", fontSize: 10 },
-
   videoBox: {
-    marginTop: 10,
-    borderRadius: 16,
+    marginTop: 14,
+    borderRadius: 18,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: "rgba(255,255,255,0.14)",
   },
-  video: { width: "100%", height: 220 },
-  videoThumbOn: { borderColor: stylesVars.blue, borderWidth: 2 },
-
+  video: {
+    width: "100%",
+    height: 220,
+  },
+  videoThumbActive: {
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+  },
   videoPlaceholder: {
     width: "100%",
     height: "100%",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: stylesVars.blueSoft
+    backgroundColor: "rgba(255,255,255,0.12)",
   },
-  videoPlaceholderText: { color: stylesVars.blue, fontWeight: "900", fontSize: 12 },
-
+  videoPlaceholderText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "900",
+  },
   playBadge: {
     position: "absolute",
     right: 8,
@@ -982,40 +1065,29 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 999,
-    backgroundColor: "rgba(11,47,107,0.85)",
+    backgroundColor: "rgba(0,0,0,0.58)",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
-  playBadgeText: { color: "#fff", fontWeight: "900" },
-
-  videoNames: { marginTop: 8 },
-  videoItem: { marginTop: 6, fontSize: 12, color: stylesVars.text, opacity: 0.85 },
-  moreText: { marginTop: 10, fontSize: 12, color: stylesVars.subText, fontWeight: "800" },
-
-  submitBtn: {
-    marginTop: 18,
-    backgroundColor: stylesVars.blue,
-    color: "#fff",
-    fontSize: 16,
+  playBadgeText: {
+    color: "#FFFFFF",
     fontWeight: "900",
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    overflow: "hidden",
-    textAlign: "center"
+    fontSize: 12,
   },
-  disabledBtn: { opacity: 0.5 },
+  pressed: {
+    opacity: 0.82,
+  },
 
-  pressed: { opacity: 0.75 },
-
-  // fullscreen viewer
   viewerContainer: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.95)",
-    justifyContent: "center"
+    justifyContent: "center",
   },
-  viewerImage: { width, height: "100%", resizeMode: "contain" },
-
+  viewerImage: {
+    width,
+    height: "100%",
+    resizeMode: "contain",
+  },
   closeButton: {
     position: "absolute",
     top: 40,
@@ -1023,26 +1095,26 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.14)",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
-  closeText: { color: "#fff", fontSize: 20, fontWeight: "900" },
-
+  closeText: {
+    color: "#FFFFFF",
+    fontSize: 20,
+    fontWeight: "900",
+  },
   indexCaption: {
     position: "absolute",
     bottom: 34,
     alignSelf: "center",
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.14)",
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 999
+    borderRadius: 999,
   },
-  indexText: { color: "#fff", fontWeight: "900" },
-  locationUrlPreview: {
-  marginTop: 6,
-  fontSize: 12,
-  fontWeight: "800",
-  color: stylesVars.subText
-},
+  indexText: {
+    color: "#FFFFFF",
+    fontWeight: "900",
+  },
 });
