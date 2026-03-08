@@ -1,0 +1,57 @@
+# Node & dependencies
+node_modules/
+
+# Expo & build artifacts
+.expo/
+.expo-shared/
+dist/
+web-build/
+build/
+.cache/
+babel-cache/
+metro-cache/
+
+# Debug / system files
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.log
+.DS_Store
+*.pem
+*.tsbuildinfo
+
+# Env / private files
+.env*
+.env.local
+.env.development
+.env.production
+.env.test
+
+# IDE / misc
+.vscode/
+.idea/
+*.iml
+
+# Temporary / exports
+tmp/
+temp/
+exports/
+artifacts/
+screenshots/
+recordings/
+
+# Optional: very large design or media sources (keep only runtime assets)
+*.psd
+*.ai
+*.xd
+*.sketch
+*.zip
+*.tar
+*.mov
+*.mp4
+*.wav
+*.aiff
+*.aif
+
+# Keep assets
+!assets/
