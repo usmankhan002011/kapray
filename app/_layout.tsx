@@ -1,19 +1,20 @@
 import {
   DarkTheme,
   DefaultTheme,
-  ThemeProvider
+  ThemeProvider,
 } from "@react-navigation/native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
 
-import { Provider } from "react-redux";
 import { store } from "@/store";
+import { Provider } from "react-redux";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 export const unstable_settings = {
-  anchor: "(tabs)"
+  anchor: "(tabs)",
 };
 
 export default function RootLayout() {
@@ -21,23 +22,33 @@ export default function RootLayout() {
 
   return (
     <Provider store={store}>
-      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-        <Stack>
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="modal"
-            options={{ presentation: "modal", title: "Modal" }}
-          />
+      <SafeAreaProvider>
+        <ThemeProvider
+          value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
+        >
+          <SafeAreaView style={{ flex: 1 }}>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+              }}
+            >
+              <Stack.Screen name="index" options={{ headerShown: false }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="modal"
+                options={{ presentation: "modal", title: "Modal" }}
+              />
 
-          {/* ✅ consumer filters modal */}
-          <Stack.Screen
-            name="results-filters"
-            options={{ presentation: "modal", title: "Filters" }}
-          />
-        </Stack>
-        <StatusBar style="auto" />
-      </ThemeProvider>
+              {/* ✅ consumer filters modal */}
+              <Stack.Screen
+                name="results-filters"
+                options={{ presentation: "modal", title: "Filters" }}
+              />
+            </Stack>
+            <StatusBar style="auto" />
+          </SafeAreaView>
+        </ThemeProvider>
+      </SafeAreaProvider>
     </Provider>
   );
 }

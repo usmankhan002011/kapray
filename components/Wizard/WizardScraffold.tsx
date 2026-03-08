@@ -1,7 +1,5 @@
 import React from "react";
 import {
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -9,6 +7,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
 interface WizardScaffoldProps {
   title: string;
@@ -39,9 +38,11 @@ export default function WizardScaffold({
 
   return (
     <SafeAreaView style={styles.root}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      <KeyboardAwareScrollView
+        contentContainerStyle={styles.flex}
+        keyboardShouldPersistTaps="handled"
+        enableOnAndroid
+        extraScrollHeight={10}
       >
         {/* Header */}
         <View style={styles.header}>
@@ -88,7 +89,7 @@ export default function WizardScaffold({
             <Text style={styles.nextButtonText}>{nextLabel}</Text>
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

@@ -19,6 +19,7 @@ import {
   Image,
   Modal,
   Pressable,
+  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -232,7 +233,7 @@ export default function CreateShopScreen() {
       return;
     }
 
-    const vendor_id = vendorRow.id as string;
+    const vendor_id = vendorRow.id;
     const ts = Date.now();
 
     const profilePath = form.profile
@@ -802,7 +803,7 @@ export default function CreateShopScreen() {
   };
 
   return (
-    <>
+    <SafeAreaView style={styles.root}>
       <WizardScaffold
         title={currentStep.title}
         subtitle={currentStep.subtitle}
@@ -866,11 +867,15 @@ export default function CreateShopScreen() {
           </View>
         </View>
       </Modal>
-    </>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+  },
   previewCard: {
     marginBottom: 16,
     padding: 18,
