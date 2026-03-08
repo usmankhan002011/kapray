@@ -830,7 +830,8 @@ const styles = StyleSheet.create({
     gap: 10
   },
 
-  sectionTitle: { fontSize: 14, fontWeight: "900", color: "#111" },
+  // ✅ labels in blue
+  sectionTitle: { fontSize: 14, fontWeight: "900", color: "#3e6292" },
 
   productRow: { flexDirection: "row", gap: 12, alignItems: "center" },
   imageBox: {
@@ -879,7 +880,8 @@ const styles = StyleSheet.create({
   },
   vendorBanner: { width: "100%", height: "100%" },
 
-  fieldLabel: { fontSize: 12, color: "#6B7280", fontWeight: "900", marginTop: 2 },
+  // ✅ labels in blue
+  fieldLabel: { fontSize: 12, color: "#3e6292", fontWeight: "900", marginTop: 2 },
   input: {
     borderWidth: 1,
     borderColor: "#E5E7EB",

@@ -28,6 +28,7 @@ type ProductRow = {
   product_code: string | null;
   title: string | null;
   inventory_qty: number | null;
+  made_on_order?: boolean | null;
   spec: any;
   price: any;
   media: any;
@@ -115,6 +116,7 @@ export default function UpdateProductScreen() {
 
   // ✅ Allowed edits only
   const [title, setTitle] = useState("");
+  const [moreDescription, setMoreDescription] = useState("");
   const [inventoryQty, setInventoryQty] = useState<number>(0);
 
   // ✅ Cost mode is read-only (comes from DB), but costs are editable.
@@ -156,7 +158,7 @@ export default function UpdateProductScreen() {
       const { data, error } = await supabase
         .from(PRODUCTS_TABLE)
         .select(
-          "id, vendor_id, product_code, title, inventory_qty, spec, price, media, created_at, updated_at"
+          "id, vendor_id, product_code, title, inventory_qty, made_on_order, spec, price, media, created_at, updated_at"
         )
         .eq("vendor_id", vendorId)
         .order("created_at", { ascending: false });
@@ -184,7 +186,10 @@ export default function UpdateProductScreen() {
     if (!selected) return;
 
     setTitle(safeText(selected.title));
-    setInventoryQty(safeNumOrZero(selected.inventory_qty));
+    setMoreDescription(safeText(safeJson(selected.spec)?.more_description ?? ""));
+
+    const isMadeOnOrder = Boolean(selected.made_on_order);
+    setInventoryQty(isMadeOnOrder ? 0 : safeNumOrZero(selected.inventory_qty));
 
     const price = safeJson(selected.price);
     const spec = safeJson(selected.spec);
@@ -241,7 +246,7 @@ export default function UpdateProductScreen() {
     const q = query.trim().toLowerCase();
     if (!q) return products;
 
-    return products.filter((p) => {
+    return products.filter((p: ProductRow) => {
       const code = String(p.product_code ?? "").toLowerCase();
       const t = String(p.title ?? "").toLowerCase();
       return code.includes(q) || t.includes(q);
@@ -249,9 +254,8 @@ export default function UpdateProductScreen() {
   }, [products, query]);
 
   const inventoryEditable = useMemo(() => {
-    // ✅ If inventory_qty is null => made-on-order => hide inventory + do not update it
     if (!selected) return false;
-    return selected.inventory_qty !== null && selected.inventory_qty !== undefined;
+    return !Boolean(selected.made_on_order);
   }, [selected]);
 
   const media = useMemo(() => safeJson(selected?.media), [selected]);
@@ -269,15 +273,17 @@ export default function UpdateProductScreen() {
   );
 
   const imageUrls = useMemo(
-    () => imagePaths.map((p) => resolvePublicUrl(p)).filter(Boolean) as string[],
+    () => imagePaths.map((p: string) => resolvePublicUrl(p)).filter(Boolean) as string[],
     [imagePaths, resolvePublicUrl]
   );
+
   const videoUrls = useMemo(
-    () => videoPaths.map((p) => resolvePublicUrl(p)).filter(Boolean) as string[],
+    () => videoPaths.map((p: string) => resolvePublicUrl(p)).filter(Boolean) as string[],
     [videoPaths, resolvePublicUrl]
   );
+
   const thumbUrls = useMemo(
-    () => thumbPaths.map((p) => resolvePublicUrl(p)).filter(Boolean) as string[],
+    () => thumbPaths.map((p: string) => resolvePublicUrl(p)).filter(Boolean) as string[],
     [thumbPaths, resolvePublicUrl]
   );
 
@@ -420,6 +426,8 @@ export default function UpdateProductScreen() {
         ...(prevSpec ?? {})
       };
 
+      nextSpec.more_description = String(moreDescription ?? "").trim();
+
       if (priceMode === "unstitched_per_meter") {
         nextSpec.dyeing_enabled = Boolean(dyeingEnabled);
         nextSpec.tailoring_enabled = Boolean(tailoringEnabled);
@@ -440,7 +448,10 @@ export default function UpdateProductScreen() {
         updated_at: new Date().toISOString()
       };
 
-      if (inventoryEditable) {
+      // ✅ Force inventory to 0 when made_on_order is true
+      if (Boolean(selected?.made_on_order)) {
+        updatePayload.inventory_qty = 0;
+      } else if (inventoryEditable) {
         updatePayload.inventory_qty = Number(inventoryQty ?? 0);
       }
 
@@ -450,7 +461,7 @@ export default function UpdateProductScreen() {
         .eq("id", selectedId)
         .eq("vendor_id", vendorId)
         .select(
-          "id, vendor_id, product_code, title, inventory_qty, spec, price, media, created_at, updated_at"
+          "id, vendor_id, product_code, title, inventory_qty, made_on_order, spec, price, media, created_at, updated_at"
         )
         .single();
 
@@ -488,7 +499,7 @@ export default function UpdateProductScreen() {
         .eq("id", selectedId)
         .eq("vendor_id", vendorId)
         .select(
-          "id, vendor_id, product_code, title, inventory_qty, spec, price, media, created_at, updated_at"
+          "id, vendor_id, product_code, title, inventory_qty, made_on_order, spec, price, media, created_at, updated_at"
         )
         .single();
 
@@ -679,7 +690,7 @@ export default function UpdateProductScreen() {
         .eq("id", selectedId)
         .eq("vendor_id", vendorId)
         .select(
-          "id, vendor_id, product_code, title, inventory_qty, spec, price, media, created_at, updated_at"
+          "id, vendor_id, product_code, title, inventory_qty, made_on_order, spec, price, media, created_at, updated_at"
         )
         .single();
 
@@ -767,7 +778,7 @@ export default function UpdateProductScreen() {
               </View>
             ) : filtered.length ? (
               <View style={styles.list}>
-                {filtered.slice(0, 30).map((p) => {
+                {filtered.slice(0, 30).map((p: ProductRow) => {
                   const isOn = p.id === selectedId;
                   const code = safeText(p.product_code);
                   const t = safeText(p.title);
@@ -829,18 +840,25 @@ export default function UpdateProductScreen() {
               maxLength={80}
             />
 
-            {inventoryEditable ? (
+            {selected ? (
               <>
                 <Text style={styles.label}>Inventory Quantity *</Text>
-                <TextInput
-                  value={String(inventoryQty ?? 0)}
-                  onChangeText={(t) => setInventoryQty(Number(sanitizeNumber(t) || "0"))}
-                  placeholder="e.g., 10"
-                  placeholderTextColor={stylesVars.placeholder}
-                  style={styles.input}
-                  keyboardType="number-pad"
-                  maxLength={10}
-                />
+
+                {Boolean(selected.made_on_order) ? (
+                  <View style={styles.madeOnOrderPill}>
+                    <Text style={styles.madeOnOrderText}>Made on Order</Text>
+                  </View>
+                ) : (
+                  <TextInput
+                    value={String(inventoryQty ?? 0)}
+                    onChangeText={(t) => setInventoryQty(Number(sanitizeNumber(t) || "0"))}
+                    placeholder="e.g., 10"
+                    placeholderTextColor={stylesVars.placeholder}
+                    style={styles.input}
+                    keyboardType="number-pad"
+                    maxLength={10}
+                  />
+                )}
               </>
             ) : null}
 
@@ -1116,9 +1134,21 @@ export default function UpdateProductScreen() {
               <Text style={styles.emptyInline}>—</Text>
             )}
 
-            <Text style={styles.hint}>
+            {/* <Text style={styles.hint}>
               Tip: Use ✕ to remove a media item. Use “Add” to upload and attach new files.
-            </Text>
+            </Text> */}
+
+            <Text style={styles.label}>More Description</Text>
+            <TextInput
+              value={moreDescription}
+              onChangeText={setMoreDescription}
+              placeholder="Add more details: work, fabric, lining, measurements, delivery notes, etc."
+              placeholderTextColor={stylesVars.placeholder}
+              style={[styles.input, styles.textArea]}
+              multiline
+              textAlignVertical="top"
+              maxLength={1200}
+            />
           </>
         )}
       </View>
@@ -1223,7 +1253,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 12,
     fontWeight: "900",
-    color: stylesVars.blue,
+    color: "#005ea6",
     letterSpacing: 0.2
   },
 
@@ -1239,6 +1269,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff"
   },
 
+  textArea: {
+    minHeight: 120,
+    paddingTop: 12
+  },
+
   // ✅ read-only pill (for fixed fields like mode)
   fixedPill: {
     marginTop: 8,
@@ -1252,9 +1287,21 @@ const styles = StyleSheet.create({
   },
   fixedPillText: { color: stylesVars.blue, fontWeight: "900", fontSize: 12 },
 
+  madeOnOrderPill: {
+    marginTop: 8,
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: stylesVars.border
+  },
+  madeOnOrderText: { color: stylesVars.blue, fontWeight: "900", fontSize: 12 },
+
   metaLine: { marginTop: 8, color: stylesVars.subText, fontWeight: "800" },
   metaStrong: { color: stylesVars.blue, fontWeight: "900" },
-  metaSmall: { marginTop: 10, color: stylesVars.subText, fontWeight: "900", fontSize: 12 },
+  metaSmall: { marginTop: 10, color: stylesVars.blue, fontWeight: "900", fontSize: 12 },
 
   topActionsRow: {
     marginTop: 10,

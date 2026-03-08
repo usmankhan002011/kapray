@@ -7,7 +7,7 @@ import {
   Text,
   View
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { getWorkTypes, WorkTypeItem } from "@/utils/supabase/workType";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 
@@ -29,8 +29,17 @@ function safeStr(v: any) {
   return String(v ?? "").trim();
 }
 
+function pickFirstString(v: unknown): string | null {
+  if (typeof v === "string") return v.trim() || null;
+  if (Array.isArray(v) && typeof v[0] === "string") return v[0].trim() || null;
+  return null;
+}
+
 export default function ProductWorkModal() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const returnTo = pickFirstString((params as any)?.returnTo);
+
   const { draft, setWorkTypeIds } = useProductDraft();
 
   const [items, setItems] = useState<WorkTypeItem[]>([]);
@@ -74,8 +83,12 @@ export default function ProductWorkModal() {
     };
   }, []);
 
-  function closeToAddProduct() {
-    router.replace("/vendor/profile/add-product" as any);
+  function close() {
+    if (returnTo) {
+      router.replace(returnTo as any);
+      return;
+    }
+    router.back();
   }
 
   function toggle(id: string) {
@@ -99,7 +112,7 @@ export default function ProductWorkModal() {
     (draft.spec as any).workTypeNames = pickedNames;
 
     setWorkTypeIds(selected);
-    closeToAddProduct();
+    close();
   }
 
   return (
@@ -107,7 +120,7 @@ export default function ProductWorkModal() {
       {/* HEADER */}
       <View style={styles.header}>
         <Pressable
-          onPress={closeToAddProduct}
+          onPress={close}
           style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
         >
           <Text style={styles.headerBtnText}>Close</Text>

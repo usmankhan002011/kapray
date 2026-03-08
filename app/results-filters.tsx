@@ -10,13 +10,15 @@ const TABLE_WORK_TYPES = "work_types";
 const TABLE_WORK_DENSITIES = "work_densities";
 const TABLE_ORIGIN_CITIES = "origin_cities";
 const TABLE_WEAR_STATES = "wear_states";
-const TABLE_PRICE_BANDS = "price_bands";
 
 type NameRow = { id: any; name: string };
-type PriceBandRow = { id: string; name: string; sort_order: number };
 
 function safeStr(v: any) {
   return String(v ?? "").trim();
+}
+
+function formatPKR(n: number) {
+  return `PKR ${Math.round(n).toLocaleString()}`;
 }
 
 function buildNameMap(rows: NameRow[]): Map<string, string> {
@@ -42,6 +44,13 @@ function summary(names: string[]) {
   return names.join(", ");
 }
 
+function priceSummary(minCostPkr: number | null, maxCostPkr: number | null) {
+  if (minCostPkr === null && maxCostPkr === null) return "Any";
+  if (minCostPkr !== null && maxCostPkr === null) return `${formatPKR(minCostPkr)}+`;
+  if (minCostPkr === null && maxCostPkr !== null) return `Up to ${formatPKR(maxCostPkr)}`;
+  return `${formatPKR(minCostPkr as number)} – ${formatPKR(maxCostPkr as number)}`;
+}
+
 export default function ResultsFiltersModal() {
   const router = useRouter();
 
@@ -53,27 +62,31 @@ export default function ResultsFiltersModal() {
   const workDensityIds: string[] = filters?.workDensityIds ?? [];
   const originCityIds: string[] = filters?.originCityIds ?? [];
   const wearStateIds: string[] = filters?.wearStateIds ?? [];
-  const priceBandIds: string[] = filters?.priceBandIds ?? [];
+
+  const minCostPkr: number | null = filters?.minCostPkr ?? null;
+  const maxCostPkr: number | null = filters?.maxCostPkr ?? null;
 
   const [fabricTypes, setFabricTypes] = useState<NameRow[]>([]);
   const [workTypes, setWorkTypes] = useState<NameRow[]>([]);
   const [workDensities, setWorkDensities] = useState<NameRow[]>([]);
   const [originCities, setOriginCities] = useState<NameRow[]>([]);
   const [wearStates, setWearStates] = useState<NameRow[]>([]);
-  const [priceBands, setPriceBands] = useState<PriceBandRow[]>([]);
 
   useEffect(() => {
     let alive = true;
 
     (async () => {
       try {
-        const [fabricRes, workRes, densityRes, originRes, wearRes, bandsRes] =
+        const [fabricRes, workRes, densityRes, originRes, wearRes] =
           await Promise.all([
             supabase
               .from(TABLE_FABRIC_TYPES)
               .select("id, name")
               .order("sort_order", { ascending: true }),
-            supabase.from(TABLE_WORK_TYPES).select("id, name").order("name", { ascending: true }),
+            supabase
+              .from(TABLE_WORK_TYPES)
+              .select("id, name")
+              .order("name", { ascending: true }),
             supabase
               .from(TABLE_WORK_DENSITIES)
               .select("id, name")
@@ -82,11 +95,10 @@ export default function ResultsFiltersModal() {
               .from(TABLE_ORIGIN_CITIES)
               .select("id, name")
               .order("name", { ascending: true }),
-            supabase.from(TABLE_WEAR_STATES).select("id, name").order("name", { ascending: true }),
             supabase
-              .from(TABLE_PRICE_BANDS)
-              .select("id, name, sort_order")
-              .order("sort_order", { ascending: true })
+              .from(TABLE_WEAR_STATES)
+              .select("id, name")
+              .order("name", { ascending: true })
           ]);
 
         if (!alive) return;
@@ -96,7 +108,6 @@ export default function ResultsFiltersModal() {
         setWorkDensities(((densityRes as any).data as any) ?? []);
         setOriginCities(((originRes as any).data as any) ?? []);
         setWearStates(((wearRes as any).data as any) ?? []);
-        setPriceBands(((bandsRes as any).data as any) ?? []);
       } catch {
         if (!alive) return;
         setFabricTypes([]);
@@ -104,7 +115,6 @@ export default function ResultsFiltersModal() {
         setWorkDensities([]);
         setOriginCities([]);
         setWearStates([]);
-        setPriceBands([]);
       }
     })();
 
@@ -119,12 +129,6 @@ export default function ResultsFiltersModal() {
   const originMap = useMemo(() => buildNameMap(originCities), [originCities]);
   const wearMap = useMemo(() => buildNameMap(wearStates), [wearStates]);
 
-  const bandsById = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const b of priceBands ?? []) m.set(String(b.id), safeStr(b.name));
-    return m;
-  }, [priceBands]);
-
   const fabricNames = idsToNames(fabricTypeIds, fabricMap);
   const workNames = idsToNames(workTypeIds, workMap);
   const densityNames = idsToNames(workDensityIds, densityMap);
@@ -133,12 +137,10 @@ export default function ResultsFiltersModal() {
 
   const colorNames = (colorShadeIds ?? []).map(safeStr).filter(Boolean);
 
-  const priceNames = (priceBandIds ?? [])
-    .map((id) => bandsById.get(String(id)) ?? "")
-    .map(safeStr)
-    .filter(Boolean);
+  const priceValue = priceSummary(minCostPkr, maxCostPkr);
 
   function go(path: string) {
+    // No route params for price. This "from" param is only for back navigation behavior.
     router.push({ pathname: path as any, params: { from: "results-filters" } } as any);
   }
 
@@ -151,7 +153,7 @@ export default function ResultsFiltersModal() {
         </Text>
       </View>
 
-      <Text style={styles.note}>Dress Type is fixed from the first screen.</Text>
+      {/* <Text style={styles.note}>Dress Type is fixed from the first screen.</Text> */}
 
       <Pressable style={styles.row} onPress={() => go("/fabric")}>
         <View style={styles.left}>
@@ -217,7 +219,7 @@ export default function ResultsFiltersModal() {
         <View style={styles.left}>
           <Text style={styles.label}>Price</Text>
           <Text style={styles.value} numberOfLines={2}>
-            {summary(priceNames)}
+            {priceValue}
           </Text>
         </View>
         <Text style={styles.arrow}>›</Text>

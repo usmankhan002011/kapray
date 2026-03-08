@@ -7,7 +7,7 @@ import {
   Text,
   View
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { getFabricTypes, FabricTypeItem } from "@/utils/supabase/fabricType";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 
@@ -31,6 +31,9 @@ function safeStr(v: any) {
 
 export default function ProductFabricModal() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const returnTo = typeof params?.returnTo === "string" ? params.returnTo : "";
+
   const { draft, setFabricTypeIds } = useProductDraft();
 
   const [items, setItems] = useState<FabricTypeItem[]>([]);
@@ -74,7 +77,11 @@ export default function ProductFabricModal() {
   }, []);
 
   function closeToAddProduct() {
-    router.replace("/vendor/profile/add-product" as any);
+    if (returnTo) {
+      router.replace(returnTo as any);
+      return;
+    }
+    router.back();
   }
 
   function toggle(id: string) {

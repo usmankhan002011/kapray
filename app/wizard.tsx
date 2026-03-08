@@ -117,7 +117,13 @@ export default function Wizard({ onClose }: Props) {
         onPress={() => {
           dispatch(setDressTypeIds(selectedTypes));
 
-          if (onClose) onClose();
+          // ✅ Home modal flow: close and show results on Home (no navigation)
+          if (onClose) {
+            onClose();
+            return;
+          }
+
+          // ✅ Route flow: keep existing behavior
           router.replace("/results");
         }}
       >

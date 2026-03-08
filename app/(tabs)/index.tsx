@@ -1,10 +1,18 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Wizard from "../wizard";
+import ResultsScreen from "../results";
+import { useAppSelector } from "@/store/hooks";
 
 export default function HomeScreen() {
   const [wizardVisible, setWizardVisible] = useState(false);
+
+  const filters = useAppSelector((s: any) => s.filters);
+  const hasDressTypeSelection = useMemo(() => {
+    const ids = filters?.dressTypeIds;
+    return Array.isArray(ids) && ids.length > 0;
+  }, [filters?.dressTypeIds]);
 
   return (
     <View style={styles.container}>
@@ -19,9 +27,15 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
-        <Text>Use search to select filters.</Text>
-      </View>
+      {!hasDressTypeSelection ? (
+        <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
+          <Text>Use search to select filters.</Text>
+        </View>
+      ) : (
+        <View style={styles.resultsWrap}>
+          <ResultsScreen />
+        </View>
+      )}
 
       {/* Wizard Modal */}
       <Modal
@@ -62,6 +76,9 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: 20,
     backgroundColor: "#e0e0e0"
+  },
+  resultsWrap: {
+    flex: 1
   },
   modalOverlay: {
     flex: 1,

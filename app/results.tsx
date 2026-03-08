@@ -24,7 +24,6 @@ const TABLE_WORK_TYPES = "work_types";
 const TABLE_WORK_DENSITIES = "work_densities";
 const TABLE_ORIGIN_CITIES = "origin_cities";
 const TABLE_WEAR_STATES = "wear_states";
-const TABLE_PRICE_BANDS = "price_bands";
 
 const PAGE_SIZE = 30;
 
@@ -39,15 +38,20 @@ type ProductRow = {
   media?: any;
 };
 
-type PriceBandRow = {
-  id: string;
-  name: string;
-  min_pkr: number | null;
-  max_pkr: number | null;
-  sort_order: number;
+type NameRow = { id: any; name: string };
+
+type ResultsCacheShape = {
+  products: ProductRow[];
+  dressTypes: NameRow[];
+  fabricTypes: NameRow[];
+  workTypes: NameRow[];
+  workDensities: NameRow[];
+  originCities: NameRow[];
+  wearStates: NameRow[];
+  hasMore: boolean;
 };
 
-type NameRow = { id: any; name: string };
+let RESULTS_CACHE: ResultsCacheShape | null = null;
 
 function safeText(v: any) {
   const t = String(v ?? "").trim();
@@ -88,7 +92,7 @@ function publicUrlForStoragePath(path: string | null): string | null {
 }
 
 /**
- * Numeric PKR value for band comparison:
+ * Numeric PKR value for filtering:
  * - stitched_total => cost_pkr_total
  * - unstitched_per_meter => cost_pkr_per_meter
  * Prefer total if present.
@@ -126,33 +130,6 @@ function formatPrice(price: any): string {
   return "Price not set";
 }
 
-function withinBand(v: number, band: PriceBandRow): boolean {
-  const min = band.min_pkr;
-  const max = band.max_pkr;
-
-  if (typeof min === "number" && v < min) return false;
-  if (typeof max === "number" && v > max) return false;
-
-  return true;
-}
-
-// empty selection => ANY
-function matchesAnySelectedBand(
-  selectedBandIds: string[],
-  bandsById: Map<string, PriceBandRow>,
-  valuePkr: number | null
-): boolean {
-  if (!selectedBandIds.length) return true;
-  if (valuePkr === null) return false;
-
-  for (const id of selectedBandIds) {
-    const b = bandsById.get(String(id));
-    if (!b) continue;
-    if (withinBand(valuePkr, b)) return true;
-  }
-  return false;
-}
-
 function buildNameMap(rows: NameRow[]): Map<string, string> {
   const m = new Map<string, string>();
   for (const r of rows ?? []) {
@@ -179,6 +156,17 @@ function namesOrLoading(label: string, selectedIds: any[], names: string[]): str
   return `${label}: ${names.join(", ")}`;
 }
 
+function formatPKR(n: number) {
+  return `PKR ${Math.round(n).toLocaleString()}`;
+}
+
+function priceRangeSummary(minCostPkr: number | null, maxCostPkr: number | null) {
+  if (minCostPkr === null && maxCostPkr === null) return "Price: Any";
+  if (minCostPkr !== null && maxCostPkr === null) return `Price: ${formatPKR(minCostPkr)}+`;
+  if (minCostPkr === null && maxCostPkr !== null) return `Price: Up to ${formatPKR(maxCostPkr)}`;
+  return `Price: ${formatPKR(minCostPkr as number)} – ${formatPKR(maxCostPkr as number)}`;
+}
+
 export default function ResultsScreen() {
   const router = useRouter();
   const filters = useAppSelector((s: any) => s.filters);
@@ -192,25 +180,31 @@ export default function ResultsScreen() {
   const workDensityIds: string[] = filters?.workDensityIds ?? [];
   const originCityIds: string[] = filters?.originCityIds ?? [];
   const wearStateIds: string[] = filters?.wearStateIds ?? [];
-  const priceBandIds: string[] = filters?.priceBandIds ?? [];
+
+  // ✅ cost range (nulls => Any)
+  const minCostPkr: number | null = filters?.minCostPkr ?? null;
+  const maxCostPkr: number | null = filters?.maxCostPkr ?? null;
 
   // ✅ vendors (multi-select, empty = Any)
   const vendorIds: string[] = filters?.vendorIds ?? [];
 
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
+  const hasWarmCache = Boolean(RESULTS_CACHE);
 
-  const [products, setProducts] = useState<ProductRow[]>([]);
-  const [priceBands, setPriceBands] = useState<PriceBandRow[]>([]);
+  const [loading, setLoading] = useState(!hasWarmCache);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(RESULTS_CACHE?.hasMore ?? true);
+
+  const [products, setProducts] = useState<ProductRow[]>(RESULTS_CACHE?.products ?? []);
 
   // lookups (names only)
-  const [dressTypes, setDressTypes] = useState<NameRow[]>([]);
-  const [fabricTypes, setFabricTypes] = useState<NameRow[]>([]);
-  const [workTypes, setWorkTypes] = useState<NameRow[]>([]);
-  const [workDensities, setWorkDensities] = useState<NameRow[]>([]);
-  const [originCities, setOriginCities] = useState<NameRow[]>([]);
-  const [wearStates, setWearStates] = useState<NameRow[]>([]);
+  const [dressTypes, setDressTypes] = useState<NameRow[]>(RESULTS_CACHE?.dressTypes ?? []);
+  const [fabricTypes, setFabricTypes] = useState<NameRow[]>(RESULTS_CACHE?.fabricTypes ?? []);
+  const [workTypes, setWorkTypes] = useState<NameRow[]>(RESULTS_CACHE?.workTypes ?? []);
+  const [workDensities, setWorkDensities] = useState<NameRow[]>(
+    RESULTS_CACHE?.workDensities ?? []
+  );
+  const [originCities, setOriginCities] = useState<NameRow[]>(RESULTS_CACHE?.originCities ?? []);
+  const [wearStates, setWearStates] = useState<NameRow[]>(RESULTS_CACHE?.wearStates ?? []);
 
   // ✅ local favourites (heart turns red). No DB yet.
   const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
@@ -241,11 +235,12 @@ export default function ResultsScreen() {
 
     async function loadAll() {
       try {
-        setLoading(true);
-        setHasMore(true);
+        if (!RESULTS_CACHE) {
+          setLoading(true);
+          setHasMore(true);
+        }
 
         const [
-          bandsRes,
           prodRes,
           dressRes,
           fabricRes,
@@ -254,54 +249,87 @@ export default function ResultsScreen() {
           originRes,
           wearRes
         ] = await Promise.all([
-          supabase
-            .from(TABLE_PRICE_BANDS)
-            .select("id, name, min_pkr, max_pkr, sort_order")
-            .order("sort_order", { ascending: true }),
-
           fetchPage(0, PAGE_SIZE - 1),
 
           supabase.from(TABLE_DRESS_TYPE).select("id, name").order("id", { ascending: true }),
-          supabase.from(TABLE_FABRIC_TYPES).select("id, name").order("sort_order", { ascending: true }),
+          supabase
+            .from(TABLE_FABRIC_TYPES)
+            .select("id, name")
+            .order("sort_order", { ascending: true }),
           supabase.from(TABLE_WORK_TYPES).select("id, name").order("name", { ascending: true }),
-          supabase.from(TABLE_WORK_DENSITIES).select("id, name").order("name", { ascending: true }),
-          supabase.from(TABLE_ORIGIN_CITIES).select("id, name").order("name", { ascending: true }),
+          supabase
+            .from(TABLE_WORK_DENSITIES)
+            .select("id, name")
+            .order("name", { ascending: true }),
+          supabase
+            .from(TABLE_ORIGIN_CITIES)
+            .select("id, name")
+            .order("name", { ascending: true }),
           supabase.from(TABLE_WEAR_STATES).select("id, name").order("name", { ascending: true })
         ]);
 
         if (!alive) return;
-
-        // price bands
-        if ((bandsRes as any).error) {
-          console.log("Price bands load error:", (bandsRes as any).error?.message);
-          setPriceBands([]);
-        } else {
-          setPriceBands(((bandsRes as any).data as any) ?? []);
-        }
 
         // products (first page only)
         if ((prodRes as any).error) {
           Alert.alert("Load error", (prodRes as any).error.message);
           setProducts([]);
           setHasMore(false);
-        } else {
-          const rows = ((((prodRes as any).data as any) ?? []) as ProductRow[]);
+          RESULTS_CACHE = {
+            products: [],
+            dressTypes: (((dressRes as any).data as any) ?? []) as any,
+            fabricTypes: (((fabricRes as any).data as any) ?? []) as any,
+            workTypes: (((workRes as any).data as any) ?? []) as any,
+            workDensities: (((densityRes as any).data as any) ?? []) as any,
+            originCities: (((originRes as any).data as any) ?? []) as any,
+            wearStates: (((wearRes as any).data as any) ?? []) as any,
+            hasMore: false
+          };
+                } else {
+          const rows = (((prodRes as any).data as any) ?? []) as ProductRow[];
+          const nextDress = (((dressRes as any).data as any) ?? []) as any[];
+          const nextFabric = (((fabricRes as any).data as any) ?? []) as any[];
+          const nextWork = (((workRes as any).data as any) ?? []) as any[];
+          const nextDensity = (((densityRes as any).data as any) ?? []) as any[];
+          const nextOrigin = (((originRes as any).data as any) ?? []) as any[];
+          const nextWear = (((wearRes as any).data as any) ?? []) as any[];
+          const nextHasMore = rows.length === PAGE_SIZE;
+
           setProducts(rows);
-          setHasMore(rows.length === PAGE_SIZE);
+          setHasMore(nextHasMore);
+
+          // lookups
+          setDressTypes(nextDress);
+          setFabricTypes(nextFabric);
+          setWorkTypes(nextWork);
+          setWorkDensities(nextDensity);
+          setOriginCities(nextOrigin);
+          setWearStates(nextWear);
+
+          RESULTS_CACHE = {
+            products: rows,
+            dressTypes: nextDress,
+            fabricTypes: nextFabric,
+            workTypes: nextWork,
+            workDensities: nextDensity,
+            originCities: nextOrigin,
+            wearStates: nextWear,
+            hasMore: nextHasMore
+          };
         }
 
-        // lookups
-        setDressTypes((((dressRes as any).data as any) ?? []) as any);
-        setFabricTypes((((fabricRes as any).data as any) ?? []) as any);
-        setWorkTypes((((workRes as any).data as any) ?? []) as any);
-        setWorkDensities((((densityRes as any).data as any) ?? []) as any);
-        setOriginCities((((originRes as any).data as any) ?? []) as any);
-        setWearStates((((wearRes as any).data as any) ?? []) as any);
+        if ((prodRes as any).error) {
+          setDressTypes((((dressRes as any).data as any) ?? []) as any);
+          setFabricTypes((((fabricRes as any).data as any) ?? []) as any);
+          setWorkTypes((((workRes as any).data as any) ?? []) as any);
+          setWorkDensities((((densityRes as any).data as any) ?? []) as any);
+          setOriginCities((((originRes as any).data as any) ?? []) as any);
+          setWearStates((((wearRes as any).data as any) ?? []) as any);
+        }
       } catch (e: any) {
         if (!alive) return;
         Alert.alert("Load error", e?.message ?? "Unknown error");
         setProducts([]);
-        setPriceBands([]);
         setDressTypes([]);
         setFabricTypes([]);
         setWorkTypes([]);
@@ -315,7 +343,19 @@ export default function ResultsScreen() {
       }
     }
 
-    loadAll();
+    if (!RESULTS_CACHE) {
+      loadAll();
+    } else {
+      setLoading(false);
+      setProducts(RESULTS_CACHE.products);
+      setDressTypes(RESULTS_CACHE.dressTypes);
+      setFabricTypes(RESULTS_CACHE.fabricTypes);
+      setWorkTypes(RESULTS_CACHE.workTypes);
+      setWorkDensities(RESULTS_CACHE.workDensities);
+      setOriginCities(RESULTS_CACHE.originCities);
+      setWearStates(RESULTS_CACHE.wearStates);
+      setHasMore(RESULTS_CACHE.hasMore);
+    }
 
     return () => {
       alive = false;
@@ -340,7 +380,28 @@ export default function ResultsScreen() {
       setProducts((prev) => {
         const seen = new Set(prev.map((p) => p.id));
         const add = rows.filter((r) => !seen.has(r.id));
-        return [...prev, ...add];
+        const next = [...prev, ...add];
+
+        if (RESULTS_CACHE) {
+          RESULTS_CACHE = {
+            ...RESULTS_CACHE,
+            products: next,
+            hasMore: rows.length === PAGE_SIZE
+          };
+        } else {
+          RESULTS_CACHE = {
+            products: next,
+            dressTypes,
+            fabricTypes,
+            workTypes,
+            workDensities,
+            originCities,
+            wearStates,
+            hasMore: rows.length === PAGE_SIZE
+          };
+        }
+
+        return next;
       });
 
       setHasMore(rows.length === PAGE_SIZE);
@@ -348,12 +409,6 @@ export default function ResultsScreen() {
       setLoadingMore(false);
     }
   }
-
-  const bandsById = useMemo(() => {
-    const m = new Map<string, PriceBandRow>();
-    for (const b of priceBands) m.set(String(b.id), b);
-    return m;
-  }, [priceBands]);
 
   // lookup maps
   const dressMap = useMemo(() => buildNameMap(dressTypes), [dressTypes]);
@@ -370,7 +425,8 @@ export default function ResultsScreen() {
 
       // ✅ vendor filter (multi-select). Empty => ANY
       if (vendorIds.length) {
-        const vid = p?.vendor_id === null || p?.vendor_id === undefined ? "" : String(p.vendor_id);
+        const vid =
+          p?.vendor_id === null || p?.vendor_id === undefined ? "" : String(p.vendor_id);
         if (!vid || !vendorIds.includes(vid)) return false;
       }
 
@@ -384,8 +440,14 @@ export default function ResultsScreen() {
       if (!anyOverlap(originCityIds, spec?.originCityIds)) return false;
       if (!anyOverlap(wearStateIds, spec?.wearStateIds)) return false;
 
-      const pkr = getComparablePkr(price);
-      if (!matchesAnySelectedBand(priceBandIds, bandsById, pkr)) return false;
+      // ✅ Redux-only cost range filtering
+      const anyBound = minCostPkr !== null || maxCostPkr !== null;
+      if (anyBound) {
+        const pkr = getComparablePkr(price);
+        if (pkr === null) return false;
+        if (minCostPkr !== null && pkr < minCostPkr) return false;
+        if (maxCostPkr !== null && pkr > maxCostPkr) return false;
+      }
 
       return true;
     });
@@ -399,8 +461,8 @@ export default function ResultsScreen() {
     workDensityIds,
     originCityIds,
     wearStateIds,
-    priceBandIds,
-    bandsById
+    minCostPkr,
+    maxCostPkr
   ]);
 
   // ✅ apply sort (cost asc/desc or date)
@@ -458,17 +520,7 @@ export default function ResultsScreen() {
     const wearNames = idsToNames(wearStateIds, wearMap);
 
     // colors are already names in Redux/spec
-    const colorNames = (colorShadeIds ?? [])
-      .map((x) => String(x).trim())
-      .filter((x) => x.length > 0);
-
-    const priceNames =
-      !priceBandIds.length
-        ? []
-        : priceBandIds
-            .map((id) => bandsById.get(String(id))?.name ?? "")
-            .map((x) => String(x).trim())
-            .filter((x) => x.length > 0);
+    const colorNames = (colorShadeIds ?? []).map((x) => String(x).trim()).filter((x) => x.length > 0);
 
     return [
       namesOrLoading("Dress", dressTypeIds, dressNames),
@@ -478,7 +530,7 @@ export default function ResultsScreen() {
       namesOrLoading("Density", workDensityIds, densityNames),
       namesOrLoading("Origin", originCityIds, originNames),
       namesOrLoading("Wear", wearStateIds, wearNames),
-      namesOrLoading("Price", priceBandIds, priceNames)
+      priceRangeSummary(minCostPkr, maxCostPkr)
     ].join("  |  ");
   }, [
     dressTypeIds,
@@ -494,8 +546,8 @@ export default function ResultsScreen() {
     originMap,
     wearStateIds,
     wearMap,
-    priceBandIds,
-    bandsById
+    minCostPkr,
+    maxCostPkr
   ]);
 
   function openProduct(p: ProductRow) {
@@ -504,7 +556,7 @@ export default function ResultsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, styles.loadingScreen]}>
         <ActivityIndicator />
         <Text style={styles.muted}>Loading products…</Text>
       </View>
@@ -534,20 +586,6 @@ export default function ResultsScreen() {
           </Pressable>
 
           <Pressable
-            onPress={() => router.push("/vendor-search")}
-            style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
-          >
-            <Text style={styles.iconText}>🛍️</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => router.replace("/wizard")}
-            style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
-          >
-            <Text style={styles.iconText}>↩️</Text>
-          </Pressable>
-
-          <Pressable
             onPress={() => router.push("/orders/track")}
             style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
           >
@@ -556,8 +594,20 @@ export default function ResultsScreen() {
         </View>
       </View>
 
+      {/* ✅ Summary line (includes Redux-only price range) */}
+      {/* <View style={styles.summaryBar}>
+        <Text style={styles.summaryText} numberOfLines={2}>
+          {filtersSummary}
+        </Text>
+      </View> */}
+
       {/* ✅ Sort Modal (dark background) */}
-      <Modal visible={sortOpen} transparent animationType="fade" onRequestClose={() => setSortOpen(false)}>
+      <Modal
+        visible={sortOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSortOpen(false)}
+      >
         <Pressable style={styles.modalBackdrop} onPress={() => setSortOpen(false)}>
           <Pressable style={styles.modalCard} onPress={() => {}}>
             <Text style={styles.modalTitle}>Sort</Text>
@@ -623,7 +673,10 @@ export default function ResultsScreen() {
               style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
               onPress={() => {
                 setSortOpen(false);
-                Alert.alert("Coming soon", "⭐ Sort by vendor rating is a feature coming soon.");
+                Alert.alert(
+                  "Coming soon",
+                  "⭐ Sort by vendor rating is a feature coming soon."
+                );
               }}
             >
               <View style={styles.modalLeft}>
@@ -646,7 +699,9 @@ export default function ResultsScreen() {
       {sorted.length === 0 ? (
         <View style={styles.center}>
           <Text style={styles.emptyTitle}>No matching products (loaded so far)</Text>
-          <Text style={styles.muted}>Tip: press “Load more” to search more products, or broaden filters.</Text>
+          <Text style={styles.muted}>
+            Tip: press “Load more” to search more products, or broaden filters.
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -755,6 +810,17 @@ const styles = StyleSheet.create({
   },
   iconText: { fontSize: 15, fontWeight: "900", color: "#111" },
 
+  // ✅ summary bar
+  summaryBar: {
+    paddingHorizontal: 16,
+    paddingBottom: 10
+  },
+  summaryText: {
+    fontSize: 12,
+    color: "#60708A",
+    fontWeight: "700"
+  },
+
   // ✅ modal (dark background)
   modalBackdrop: {
     flex: 1,
@@ -813,6 +879,7 @@ const styles = StyleSheet.create({
   modalCloseText: { color: "#0B2F6B", fontWeight: "900" },
 
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20 },
+  loadingScreen: { backgroundColor: "#fff" },
   emptyTitle: { fontSize: 18, fontWeight: "700", color: "#111", marginBottom: 8 },
   muted: { fontSize: 14, color: "#666" },
 
@@ -866,7 +933,12 @@ const styles = StyleSheet.create({
   actionText: { fontSize: 13, fontWeight: "800", color: "#111" },
   heartOn: { color: "#D11A2A" },
 
-  loadingRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10 },
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10
+  },
   loadMoreBtn: {
     marginTop: 8,
     borderRadius: 12,
@@ -878,5 +950,10 @@ const styles = StyleSheet.create({
     alignItems: "center"
   },
   loadMoreText: { color: "#0B2F6B", fontWeight: "900" },
-  endText: { marginTop: 10, textAlign: "center", color: "#60708A", fontWeight: "800" }
+  endText: {
+    marginTop: 10,
+    textAlign: "center",
+    color: "#60708A",
+    fontWeight: "800"
+  }
 });

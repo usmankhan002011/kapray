@@ -63,7 +63,7 @@ export default function VendorIndexScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Vendor Login</Text>
 
       <View style={styles.card}>
@@ -97,7 +97,15 @@ export default function VendorIndexScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 24, backgroundColor: "#fff" },
+  container: {
+    flex: 1,
+    backgroundColor: "#fff"
+  },
+
+  content: {
+    padding: 16,
+    paddingBottom: 24
+  },
 
   title: { fontSize: 20, fontWeight: "900", color: "#111" },
 

@@ -1,3 +1,4 @@
+// app/vendor/profile/_layout.tsx
 import { Tabs } from "expo-router";
 import { View, Text, StyleSheet } from "react-native";
 import { ProductDraftProvider } from "@/components/product/ProductDraftContext";
@@ -52,16 +53,21 @@ export default function VendorProfileTabsLayout() {
           }}
         />
 
-        {/* HIDE ALL OTHER FILES IN THIS FOLDER */}
+        {/* HIDE NON-TAB SCREENS */}
         <Tabs.Screen name="index" options={{ href: null }} />
         <Tabs.Screen name="update-product" options={{ href: null }} />
-        <Tabs.Screen name="view-product" options={{ href: null }} />
         <Tabs.Screen name="view-profile" options={{ href: null }} />
-        <Tabs.Screen name="add-product" options={{ href: null }} />
+        <Tabs.Screen name="add-product_legacy" options={{ href: null }} />
         <Tabs.Screen name="edit-vendor" options={{ href: null }} />
+        <Tabs.Screen name="view-product_legacy" options={{ href: null }} />
+        <Tabs.Screen name="view-product_legacy_2" options={{ href: null }} />
 
-        {/* HIDE PRODUCT MODALS GROUP */}
+        {/* HIDE FOLDER/GROUP ROUTES */}
+        <Tabs.Screen name="add-product" options={{ href: null }} />
         <Tabs.Screen name="(product-modals)" options={{ href: null }} />
+
+        {/* HIDE VIEW-PRODUCT ROUTE */}
+        <Tabs.Screen name="view-product/index" options={{ href: null }} />
       </Tabs>
     </ProductDraftProvider>
   );
@@ -69,15 +75,15 @@ export default function VendorProfileTabsLayout() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    height: 80,
-    paddingBottom: 15,
-    paddingTop: 10
+    height: 66,
+    paddingBottom: 0,
+    paddingTop: 0
   },
 
   circle: {
-    width: 130,
-    height: 46,
-    borderRadius: 30,
+    width: 112,
+    height: 40,
+    borderRadius: 24,
     backgroundColor: "#eee",
     alignItems: "center",
     justifyContent: "center"
@@ -88,7 +94,7 @@ const styles = StyleSheet.create({
   },
 
   circleText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "900",
     color: "#333"
   },
