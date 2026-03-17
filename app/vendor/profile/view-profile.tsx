@@ -26,7 +26,7 @@ const { width } = Dimensions.get("window");
 const SETTINGS_ROUTE = "/vendor/profile/settings";
 
 type VendorRow = {
-  id: string;
+  id: number;
   created_at?: string | null;
 
   name: string | null;
@@ -201,7 +201,7 @@ export default function VendorProfileScreen() {
         return;
       }
 
-      const row = data as VendorRow;
+     const row = data as unknown as VendorRow;
       setVendor(row);
 
       dispatch(
@@ -654,46 +654,78 @@ export default function VendorProfileScreen() {
 }
 
 const stylesVars = {
-  bg: "#F5F7FB",
+  bg: "#F8FAFC",
   cardBg: "#FFFFFF",
-  border: "#D9E2F2",
-  borderSoft: "#E6EDF8",
-  blue: "#0B2F6B",
-  blueSoft: "#EAF2FF",
-  text: "#111111",
-  subText: "#60708A",
-  placeholder: "#94A3B8"
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
+  overlayDark: "rgba(0,0,0,0.58)",
+  overlaySoft: "rgba(255,255,255,0.14)",
+  white: "#FFFFFF",
+  black: "#000000"
 };
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 24, backgroundColor: stylesVars.bg },
+  content: {
+    padding: 16,
+    paddingBottom: 24,
+    backgroundColor: stylesVars.bg
+  },
 
   topBar: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center"
+    alignItems: "center",
+    gap: 12
   },
+
   back: {
+    minHeight: 40,
     fontSize: 14,
-    fontWeight: "900",
+    fontWeight: "700",
     color: stylesVars.blue,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: "#D7E3FF",
+    textAlignVertical: "center",
+    overflow: "hidden"
   },
-  refresh: { fontSize: 14, fontWeight: "900", color: stylesVars.blue },
-  disabledText: { opacity: 0.6 },
+
+  refresh: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: stylesVars.blue
+  },
+
+  disabledText: {
+    opacity: 0.6
+  },
 
   title: {
     marginTop: 12,
-    fontSize: 20,
-    fontWeight: "900",
-    color: stylesVars.blue
+    fontSize: 18,
+    fontWeight: "700",
+    color: stylesVars.text
   },
-  hint: { marginTop: 10, fontSize: 12, color: stylesVars.subText },
+
+  hint: {
+    marginTop: 10,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
 
   loadingRow: {
     marginTop: 12,
@@ -701,24 +733,34 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10
   },
-  loadingText: { fontSize: 12, color: stylesVars.subText, fontWeight: "800" },
 
-  bannerWrap: { marginTop: 12, borderRadius: 16, overflow: "hidden" },
+  loadingText: {
+    fontSize: 13,
+    color: stylesVars.mutedText,
+    fontWeight: "600"
+  },
+
+  bannerWrap: {
+    marginTop: 12,
+    borderRadius: 18,
+    overflow: "hidden"
+  },
+
   banner: {
     width: "100%",
     height: 170,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: stylesVars.border
   },
 
   headerCard: {
     marginTop: 12,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
-    padding: 12,
+    padding: 18,
     flexDirection: "row",
     gap: 12,
     alignItems: "center"
@@ -732,8 +774,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: stylesVars.border
   },
-  avatarPress: { width: "100%", height: "100%" },
-  avatar: { width: "100%", height: "100%" },
+
+  avatarPress: {
+    width: "100%",
+    height: "100%"
+  },
+
+  avatar: {
+    width: "100%",
+    height: "100%"
+  },
+
   avatarFallback: {
     width: "100%",
     height: "100%",
@@ -741,18 +792,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center"
   },
-  avatarFallbackText: { fontSize: 28, fontWeight: "900", color: "#fff" },
 
-  headerInfo: { flex: 1 },
-  shopName: { fontSize: 16, fontWeight: "900", color: stylesVars.text },
+  avatarFallbackText: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: stylesVars.white
+  },
+
+  headerInfo: {
+    flex: 1
+  },
+
+  shopName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
   ownerName: {
     marginTop: 2,
     fontSize: 13,
-    fontWeight: "800",
-    color: stylesVars.subText
+    fontWeight: "500",
+    lineHeight: 18,
+    color: stylesVars.mutedText
   },
 
-  // ✅ NEW: Tailoring badge
   tailorBadgeRow: {
     marginTop: 10,
     flexDirection: "row",
@@ -760,69 +824,111 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 10
   },
+
   tailorBadgeLabel: {
-    fontSize: 12,
-    fontWeight: "900",
-    color: stylesVars.blue,
+    fontSize: 13,
+    fontWeight: "700",
+    color: stylesVars.text,
     letterSpacing: 0.2
   },
+
   tailorPill: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: stylesVars.border,
-    backgroundColor: "#fff"
+    backgroundColor: stylesVars.cardBg
   },
+
   tailorPillOn: {
-    borderColor: stylesVars.blue,
+    borderColor: "#D7E3FF",
     backgroundColor: stylesVars.blueSoft
   },
-  tailorPillText: { fontSize: 12, fontWeight: "900", color: stylesVars.text },
-  tailorPillTextOn: { color: stylesVars.blue },
+
+  tailorPillText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  tailorPillTextOn: {
+    color: stylesVars.blue
+  },
 
   section: {
     marginTop: 18,
-    fontSize: 16,
-    fontWeight: "900",
-    color: stylesVars.blue
+    fontSize: 15,
+    fontWeight: "700",
+    color: stylesVars.text
   },
 
   card: {
     marginTop: 10,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
-    padding: 12
+    padding: 18
   },
 
-  row: { marginTop: 10 },
+  row: {
+    marginTop: 10
+  },
+
   label: {
-    fontSize: 12,
-    fontWeight: "900",
-    color: stylesVars.blue,
+    fontSize: 13,
+    fontWeight: "700",
+    color: stylesVars.text,
     letterSpacing: 0.2
   },
+
   value: {
     marginTop: 4,
     fontSize: 14,
-    fontWeight: "800",
-    color: stylesVars.text
+    lineHeight: 20,
+    fontWeight: "500",
+    color: stylesVars.subText
   },
+
   link: {
     marginTop: 4,
     fontSize: 14,
-    fontWeight: "900",
+    lineHeight: 20,
+    fontWeight: "700",
     color: stylesVars.blue,
     textDecorationLine: "underline"
   },
 
-  sectionTitle: { fontSize: 13, fontWeight: "900", color: stylesVars.blue },
-  meta: { marginTop: 8, color: stylesVars.subText, fontWeight: "800" },
-  empty: { marginTop: 10, color: stylesVars.subText, fontWeight: "800" },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: stylesVars.text,
+    marginBottom: 2
+  },
 
-  hRow: { flexDirection: "row", gap: 10, paddingTop: 10, paddingBottom: 4 },
+  meta: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
+
+  empty: {
+    marginTop: 10,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
+
+  hRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingTop: 10,
+    paddingBottom: 4
+  },
 
   thumbWrap: {
     width: 92,
@@ -831,31 +937,47 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
     borderColor: stylesVars.border,
-    backgroundColor: stylesVars.blueSoft
+    backgroundColor: stylesVars.cardBg
   },
-  thumb: { width: "100%", height: "100%" },
+
+  thumb: {
+    width: "100%",
+    height: "100%"
+  },
 
   bannerTag: {
     position: "absolute",
     bottom: 6,
     left: 6,
-    backgroundColor: "rgba(11,47,107,0.85)",
+    backgroundColor: stylesVars.overlayDark,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999
   },
-  bannerTagText: { color: "#fff", fontWeight: "900", fontSize: 10 },
+
+  bannerTagText: {
+    color: stylesVars.white,
+    fontWeight: "700",
+    fontSize: 10
+  },
 
   videoBox: {
     marginTop: 10,
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: stylesVars.border
   },
-  video: { width: "100%", height: 220 },
 
-  videoThumbOn: { borderColor: stylesVars.blue, borderWidth: 2 },
+  video: {
+    width: "100%",
+    height: 220
+  },
+
+  videoThumbOn: {
+    borderColor: stylesVars.blue,
+    borderWidth: 2
+  },
 
   videoPlaceholder: {
     width: "100%",
@@ -864,9 +986,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: stylesVars.blueSoft
   },
+
   videoPlaceholderText: {
     color: stylesVars.blue,
-    fontWeight: "900",
+    fontWeight: "700",
     fontSize: 12
   },
 
@@ -877,20 +1000,32 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 999,
-    backgroundColor: "rgba(11,47,107,0.85)",
+    backgroundColor: stylesVars.overlayDark,
     alignItems: "center",
     justifyContent: "center"
   },
-  playBadgeText: { color: "#fff", fontWeight: "900" },
 
-  pressed: { opacity: 0.75 },
+  playBadgeText: {
+    color: stylesVars.white,
+    fontWeight: "700",
+    fontSize: 12
+  },
+
+  pressed: {
+    opacity: 0.82
+  },
 
   viewerContainer: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.95)",
     justifyContent: "center"
   },
-  viewerImage: { width, height: "100%", resizeMode: "contain" },
+
+  viewerImage: {
+    width,
+    height: "100%",
+    resizeMode: "contain"
+  },
 
   closeButton: {
     position: "absolute",
@@ -899,20 +1034,30 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: stylesVars.overlaySoft,
     alignItems: "center",
     justifyContent: "center"
   },
-  closeText: { color: "#fff", fontSize: 20, fontWeight: "900" },
+
+  closeText: {
+    color: stylesVars.white,
+    fontSize: 20,
+    fontWeight: "900"
+  },
 
   indexCaption: {
     position: "absolute",
     bottom: 34,
     alignSelf: "center",
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: stylesVars.overlaySoft,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999
   },
-  indexText: { color: "#fff", fontWeight: "900" }
+
+  indexText: {
+    color: stylesVars.white,
+    fontWeight: "900",
+    fontSize: 14
+  }
 });

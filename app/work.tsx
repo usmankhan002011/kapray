@@ -17,11 +17,11 @@ const WORK_LOCAL_IMAGES: Record<string, any> = {
   designer: require("@/assets/work-images/designer.jpg"),
   gotta: require("@/assets/work-images/gotta.jpg"),
   machine: require("@/assets/work-images/machine.jpg"),
+ metallic: require("@/assets/work-images/metallic.jpg"),
   mirror: require("@/assets/work-images/mirror.jpg"),
   sequin: require("@/assets/work-images/sequin.jpg"),
   stone: require("@/assets/work-images/stone.jpg"),
-  thread: require("@/assets/work-images/thread.jpg"),
-  zardozi: require("@/assets/work-images/zardozi.jpg")
+  thread: require("@/assets/work-images/thread.jpg")
 };
 
 const GRID_GAP = 8;

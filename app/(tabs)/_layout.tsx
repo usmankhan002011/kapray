@@ -7,13 +7,13 @@ import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const colorScheme = useColorScheme() ?? "light";
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
         headerShown: false,
+        tabBarActiveTintColor: Colors[colorScheme].tint,
         tabBarButton: HapticTab,
       }}
     >
@@ -26,6 +26,7 @@ export default function TabLayout() {
           ),
         }}
       />
+
       <Tabs.Screen
         name="shops"
         options={{
@@ -33,6 +34,13 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => (
             <IconSymbol size={28} name="magnifyingglass" color={color} />
           ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="flow"
+        options={{
+          tabBarButton: () => null,
         }}
       />
     </Tabs>

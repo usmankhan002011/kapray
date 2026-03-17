@@ -61,20 +61,12 @@ export default function Q03MadeOnOrder() {
       Alert.alert("Vendor not loaded", "Please ensure vendorSlice has vendor.id.");
       return;
     }
-    if (returnTo) {
-      router.replace(returnTo as any);
-      return;
-    }
 
-    const category = safeStr((draft?.spec as any)?.product_category ?? "");
-
-    // ✅ Ready-to-wear: skip inventory and go to stitched total cost
-    if (category === "stitched_ready") {
-      router.push("/vendor/profile/add-product/q05a-stitched-total-cost" as any);
-      return;
-    }
-
-    router.push("/vendor/profile/add-product/q04-inventory" as any);
+    router.push(
+      returnTo
+        ? (`/vendor/profile/add-product/q04-inventory?returnTo=${encodeURIComponent(returnTo)}` as any)
+        : ("/vendor/profile/add-product/q04-inventory" as any)
+    );
   }
 
   const category = safeStr((draft?.spec as any)?.product_category ?? "");

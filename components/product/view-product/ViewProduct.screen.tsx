@@ -1,15 +1,18 @@
+// File: components/product/view-product/ViewProduct.screen.tsx
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   BackHandler,
+  Dimensions,
   Pressable,
   ScrollView,
   Text,
   View,
-  Dimensions
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from "expo-router";
+
 import { supabase } from "@/utils/supabase/client";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setSelectedVendor } from "@/store/vendorSlice";
@@ -17,34 +20,37 @@ import { FooterBar, MediaBlock, useProductMedia } from "./ViewProduct.media";
 import { makeViewProductStyles, stylesVars } from "./ViewProduct.styles";
 import {
   clearCachedDyeSelection,
-  getCachedDyeSelection
+  getCachedDyeSelection,
 } from "@/app/vendor/profile/(product-modals)/dyeing/dye_palette_modal";
 
 const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
 const FOOTER_H = 86;
 
-// ✅ persist buyer stitching choice across dye modal round-trips (even if screen remounts)
+// persist buyer choices across dye modal round-trips
 const BUYER_TAILORING_CHOICE_CACHE = new Map<string, boolean>();
 const BUYER_DYEING_CHOICE_CACHE = new Map<string, boolean>();
 
-function makeChoiceKey(productId: string | null, productCode: string | null) {
+function makeChoiceKey(productId: number | null, productCode: string | null) {
   const pid = String(productId ?? "").trim();
   if (pid) return `id:${pid}`;
+
   const pc = String(productCode ?? "").trim();
   if (pc) return `code:${pc}`;
+
   return "";
 }
 
-// Assumed lookup table names (adjust if your Supabase uses different names)
 const LOOKUP = {
-  dressTypes: "dress_types",
+  dressTypes: "dress_typeslet us ",
   fabricTypes: "fabric_types",
   workTypes: "work_types",
   workDensities: "work_densities",
   originCities: "origin_cities",
-  wearStates: "wear_states"
+  wearStates: "wear_states",
 } as const;
+
+type LookupTable = (typeof LOOKUP)[keyof typeof LOOKUP];
 
 type ProductCategory =
   | "unstitched_plain"
@@ -53,7 +59,7 @@ type ProductCategory =
   | "stitched_ready";
 
 type VendorRow = {
-  id: string | number;
+  id: number;
   name?: string | null;
   shop_name?: string | null;
   address?: string | null;
@@ -69,8 +75,8 @@ type VendorRow = {
 };
 
 type ProductRow = {
-  id: string;
-  vendor_id: string | number;
+  id: number;
+  vendor_id: number;
   product_code: string;
   title: string;
   inventory_qty: number;
@@ -84,12 +90,12 @@ type ProductRow = {
   vendor?: VendorRow | null;
 };
 
-function safeText(v: any) {
+function safeText(v: unknown) {
   const t = String(v ?? "").trim();
   return t.length ? t : "—";
 }
 
-function isHttpUrl(v: any) {
+function isHttpUrl(v: unknown) {
   return typeof v === "string" && /^https?:\/\//i.test(v);
 }
 
@@ -114,7 +120,7 @@ function cleanIdParam(v: string) {
   return head.trim();
 }
 
-function normalizeLabelList(v: any): string[] {
+function normalizeLabelList(v: unknown): string[] {
   const arr = Array.isArray(v) ? v : [];
   const out: string[] = [];
 
@@ -128,42 +134,45 @@ function normalizeLabelList(v: any): string[] {
     }
 
     if (typeof item === "object") {
+      const obj = item as Record<string, unknown>;
       const s =
         String(
-          (item as any)?.label ??
-            (item as any)?.name ??
-            (item as any)?.title ??
-            (item as any)?.text ??
-            (item as any)?.value ??
-            (item as any)?.id ??
-            ""
+          obj.label ??
+            obj.name ??
+            obj.title ??
+            obj.text ??
+            obj.value ??
+            obj.id ??
+            "",
         ).trim() || "";
+
       if (s) out.push(s);
-      continue;
     }
   }
 
   return out;
 }
 
-function normalizeIdList(v: any): string[] {
+function normalizeIdList(v: unknown): string[] {
   const arr = Array.isArray(v) ? v : [];
   const out: string[] = [];
+
   for (const item of arr) {
     if (item == null) continue;
     const s = String(item).trim();
     if (s) out.push(s);
   }
+
   return out;
 }
 
-function safeInt0(v: any) {
+function safeInt0(v: unknown) {
   const n = Number(v);
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.trunc(n));
 }
 
-function isProductCategory(v: any): v is ProductCategory {
+function isProductCategory(v: unknown): v is ProductCategory {
   return (
     v === "unstitched_plain" ||
     v === "unstitched_dyeing" ||
@@ -175,25 +184,33 @@ function isProductCategory(v: any): v is ProductCategory {
 function parseBoolParam(v: unknown): boolean | null {
   const raw = firstParam(v);
   if (raw == null) return null;
+
   const s = raw.trim().toLowerCase();
   if (!s) return null;
-  if (s === "1" || s === "true" || s === "yes" || s === "y" || s === "on") return true;
-  if (s === "0" || s === "false" || s === "no" || s === "n" || s === "off") return false;
+
+  if (s === "1" || s === "true" || s === "yes" || s === "y" || s === "on") {
+    return true;
+  }
+  if (s === "0" || s === "false" || s === "no" || s === "n" || s === "off") {
+    return false;
+  }
+
   return null;
 }
 
-function compactLineValue(v: any): string | null {
+function compactLineValue(v: unknown): string | null {
   const s = String(v ?? "").trim();
-  if (!s) return null;
-  if (s === "—") return null;
+  if (!s || s === "—") return null;
   return s;
 }
 
-function formatDateOnly(isoLike: any): string | null {
+function formatDateOnly(isoLike: unknown): string | null {
   const s = String(isoLike ?? "").trim();
   if (!s) return null;
+
   const d = new Date(s);
   if (!Number.isFinite(d.getTime())) return null;
+
   return d.toISOString().slice(0, 10);
 }
 
@@ -206,29 +223,42 @@ export default function ViewProductScreen() {
 
   const isBuyerRoute = useMemo(() => {
     const segs = segments as unknown as string[];
-    return segs.includes("(buyer)");
+    return segs.includes("(buyer)") || segs.includes("flow");
   }, [segments]);
 
-  const vendorId =
-    useAppSelector((s: any) => s?.vendor?.id ?? null) ??
-    useAppSelector((s: any) => s?.vendorSlice?.id ?? null) ??
-    useAppSelector((s: any) => s?.vendorSlice?.vendor?.id ?? null);
+  // Rule 1: never chain hooks conditionally; call each hook unconditionally first.
+  const vendorIdFromVendor = useAppSelector((s: any) => s?.vendor?.id ?? null);
+  const vendorIdFromVendorSlice = useAppSelector((s: any) => s?.vendorSlice?.id ?? null);
+  const vendorIdFromVendorSliceVendor = useAppSelector(
+    (s: any) => s?.vendorSlice?.vendor?.id ?? null,
+  );
 
-  const productId = useMemo(() => {
+  const vendorId =
+    vendorIdFromVendor ??
+    vendorIdFromVendorSlice ??
+    vendorIdFromVendorSliceVendor;
+
+  const productId = useMemo<number | null>(() => {
     const raw = firstParam((params as any)?.id ?? (params as any)?.product_id ?? null);
     if (!raw) return null;
+
     const decoded = safeDecode(raw);
     const cleaned = cleanIdParam(decoded);
-    return cleaned ? cleaned : null;
+    const n = Number(cleaned);
+
+    return Number.isFinite(n) ? n : null;
   }, [params]);
 
-  const productCode = useMemo(() => {
+  const productCode = useMemo<string | null>(() => {
     const raw = firstParam((params as any)?.code ?? (params as any)?.product_code ?? null);
     if (!raw) return null;
     return safeDecode(raw);
   }, [params]);
 
-  const choiceKey = useMemo(() => makeChoiceKey(productId, productCode), [productId, productCode]);
+  const choiceKey = useMemo(
+    () => makeChoiceKey(productId, productCode),
+    [productId, productCode],
+  );
 
   const [loading, setLoading] = useState(false);
   const [product, setProduct] = useState<ProductRow | null>(null);
@@ -250,54 +280,63 @@ export default function ViewProductScreen() {
     density: [],
     origin: [],
     wear: [],
-    color: []
+    color: [],
   });
 
   const [mediaViewerVisible, setMediaViewerVisible] = useState(false);
   const [mediaViewerIndex, setMediaViewerIndex] = useState(0);
 
-  const [selectedMediaIndex, setSelectedMediaIndex] = useState<number>(0);
-  const [activeVideoUrl, setActiveVideoUrl] = useState<string>("");
+  const [selectedMediaIndex, setSelectedMediaIndex] = useState(0);
+  const [activeVideoUrl, setActiveVideoUrl] = useState("");
 
-  // ✅ cover state to eliminate black flash (keep thumb visible until video is playing)
-  const [videoCoverVisible, setVideoCoverVisible] = useState<boolean>(true);
-
-  // ✅ tap-to-show minimal controls
+  const [videoCoverVisible, setVideoCoverVisible] = useState(true);
   const [videoControlsVisible, setVideoControlsVisible] = useState(false);
-  const controlsTimerRef = useRef<any>(null);
+  const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showControlsBriefly = useCallback(() => {
     setVideoControlsVisible(true);
-    if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
-    controlsTimerRef.current = setTimeout(() => setVideoControlsVisible(false), 1800);
+
+    if (controlsTimerRef.current) {
+      clearTimeout(controlsTimerRef.current);
+    }
+
+    controlsTimerRef.current = setTimeout(() => {
+      setVideoControlsVisible(false);
+    }, 1800);
   }, []);
 
   useEffect(() => {
     return () => {
-      if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
+      if (controlsTimerRef.current) {
+        clearTimeout(controlsTimerRef.current);
+      }
     };
   }, []);
 
-  const [selectedDyeShadeId, setSelectedDyeShadeId] = useState<string>("");
-  const [selectedDyeHex, setSelectedDyeHex] = useState<string>("");
-  const [selectedDyeLabel, setSelectedDyeLabel] = useState<string>("");
+  const [selectedDyeShadeId, setSelectedDyeShadeId] = useState("");
+  const [selectedDyeHex, setSelectedDyeHex] = useState("");
+  const [selectedDyeLabel, setSelectedDyeLabel] = useState("");
 
-  const [buyerWantsTailoring, _setBuyerWantsTailoring] = useState<boolean>(false);
+  const [buyerWantsTailoring, _setBuyerWantsTailoring] = useState(false);
   const setBuyerWantsTailoring = useCallback(
     (next: boolean) => {
       _setBuyerWantsTailoring(next);
-      if (choiceKey) BUYER_TAILORING_CHOICE_CACHE.set(choiceKey, next);
+      if (choiceKey) {
+        BUYER_TAILORING_CHOICE_CACHE.set(choiceKey, next);
+      }
     },
-    [choiceKey]
+    [choiceKey],
   );
 
-  const [buyerWantsDyeing, _setBuyerWantsDyeing] = useState<boolean>(false);
+  const [buyerWantsDyeing, _setBuyerWantsDyeing] = useState(false);
   const setBuyerWantsDyeing = useCallback(
     (next: boolean) => {
       _setBuyerWantsDyeing(next);
-      if (choiceKey) BUYER_DYEING_CHOICE_CACHE.set(choiceKey, next);
+      if (choiceKey) {
+        BUYER_DYEING_CHOICE_CACHE.set(choiceKey, next);
+      }
     },
-    [choiceKey]
+    [choiceKey],
   );
 
   const resetBuyerSelections = useCallback(() => {
@@ -312,41 +351,51 @@ export default function ViewProductScreen() {
       BUYER_DYEING_CHOICE_CACHE.delete(choiceKey);
     }
 
-    clearCachedDyeSelection(productId, productCode);
+    clearCachedDyeSelection(
+      productId != null ? String(productId) : null,
+      productCode ?? "",
+    );
 
     router.setParams({
       dyeing_selected: "0",
       dye_shade_id: undefined,
       dye_hex: undefined,
-      dye_label: undefined
+      dye_label: undefined,
     } as any);
   }, [choiceKey, productId, productCode, router]);
 
   const exitBuyerToResults = useCallback(() => {
     resetBuyerSelections();
-    router.replace("/results");
+    router.replace("/(tabs)");
   }, [resetBuyerSelections, router]);
 
   useEffect(() => {
     if (!choiceKey) return;
 
     const cachedTailoring = BUYER_TAILORING_CHOICE_CACHE.get(choiceKey);
-    if (typeof cachedTailoring === "boolean") _setBuyerWantsTailoring(cachedTailoring);
+    if (typeof cachedTailoring === "boolean") {
+      _setBuyerWantsTailoring(cachedTailoring);
+    }
 
     const cachedDyeing = BUYER_DYEING_CHOICE_CACHE.get(choiceKey);
-    if (typeof cachedDyeing === "boolean") _setBuyerWantsDyeing(cachedDyeing);
+    if (typeof cachedDyeing === "boolean") {
+      _setBuyerWantsDyeing(cachedDyeing);
+    }
   }, [choiceKey]);
 
   useFocusEffect(
     useCallback(() => {
-      const cachedShade = getCachedDyeSelection(productId, productCode);
+      const cachedShade = getCachedDyeSelection(
+        productId != null ? String(productId) : null,
+        productCode ?? "",
+      );
       if (!cachedShade) return;
 
       setBuyerWantsDyeing(true);
       setSelectedDyeShadeId(String(cachedShade.id));
       setSelectedDyeHex(String(cachedShade.hex));
       setSelectedDyeLabel(String(cachedShade.label));
-    }, [productId, productCode, setBuyerWantsDyeing])
+    }, [productId, productCode, setBuyerWantsDyeing]),
   );
 
   useEffect(() => {
@@ -378,7 +427,6 @@ export default function ViewProductScreen() {
 
       if (id) setSelectedDyeShadeId(id);
       if (hex) setSelectedDyeHex(hex);
-
       if (label) setSelectedDyeLabel(label);
       else if (hex) setSelectedDyeLabel(hex);
     }
@@ -394,19 +442,28 @@ export default function ViewProductScreen() {
   }, []);
 
   const resolveManyPublic = useCallback(
-    (paths: any): string[] => {
+    (paths: unknown): string[] => {
       const list = Array.isArray(paths) ? paths : [];
-      return list.map((p) => resolvePublicUrl(String(p || "").trim())).filter(Boolean) as string[];
+      return list
+        .map((p) => resolvePublicUrl(String(p || "").trim()))
+        .filter(Boolean) as string[];
     },
-    [resolvePublicUrl]
+    [resolvePublicUrl],
   );
 
-  const { imageUrls, mediaItems } = useProductMedia({
+  const productMediaState = useProductMedia({
     product,
-    resolveManyPublic
+    resolveManyPublic,
   });
 
-  // ✅ ensure activeVideoUrl set if selection is a video (hero)
+  const imageUrls = Array.isArray(productMediaState?.imageUrls)
+    ? productMediaState.imageUrls
+    : [];
+
+  const mediaItems = Array.isArray(productMediaState?.mediaItems)
+    ? productMediaState.mediaItems
+    : [];
+
   useEffect(() => {
     if (!mediaItems.length) {
       setActiveVideoUrl("");
@@ -416,16 +473,14 @@ export default function ViewProductScreen() {
     const safeIdx = Math.max(0, Math.min(selectedMediaIndex, mediaItems.length - 1));
     const it = mediaItems[safeIdx];
 
-    if (it?.kind === "video") {
-      if (activeVideoUrl !== it.url) {
-        setActiveVideoUrl(it.url);
-        setVideoCoverVisible(true);
-      }
+    if (it?.kind === "video" && activeVideoUrl !== it.url) {
+      setActiveVideoUrl(it.url);
+      setVideoCoverVisible(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mediaItems, selectedMediaIndex]);
 
-  async function fetchProduct() {
+  const fetchProduct = useCallback(async () => {
     if (!productId && !productCode) {
       setMissingParam(true);
       setProduct(null);
@@ -439,8 +494,7 @@ export default function ViewProductScreen() {
 
       let q = supabase
         .from("products")
-        .select(
-          `
+        .select(`
           id,
           vendor_id,
           product_code,
@@ -468,11 +522,13 @@ export default function ViewProductScreen() {
             status,
             offers_tailoring
           )
-        `
-        );
+        `);
 
-      if (productId) q = q.eq("id", productId);
-      else q = q.eq("product_code", productCode);
+      if (productId != null) {
+        q = q.eq("id", productId);
+      } else if (productCode) {
+        q = q.eq("product_code", productCode);
+      }
 
       const { data, error } = await q.single();
 
@@ -483,7 +539,7 @@ export default function ViewProductScreen() {
         return;
       }
 
-      const row = data as ProductRow;
+      const row = data as unknown as ProductRow;
       setProduct(row);
 
       const v = (row as any)?.vendor ?? null;
@@ -494,18 +550,25 @@ export default function ViewProductScreen() {
 
         dispatch(
           setSelectedVendor({
+            id: Number((v as any).id),
             shop_name: (v as any).shop_name ?? null,
             owner_name: (v as any).name ?? null,
+            name: (v as any).name ?? null,
             mobile: (v as any).mobile ?? null,
             landline: (v as any).landline ?? null,
+            email: (v as any).email ?? null,
             address: (v as any).address ?? null,
+            location: (v as any).location ?? null,
             location_url: (v as any).location_url ?? null,
+            profile_image_path: (v as any).profile_image_path ?? null,
+            banner_path: (v as any).banner_path ?? null,
             banner_url: banner_url ?? null,
+            offers_tailoring: (v as any).offers_tailoring ?? null,
             government_permission_url: null,
             images: null,
             videos: null,
-            status: (v as any).status ?? null
-          } as any)
+            status: (v as any).status ?? null,
+          }),
         );
       }
     } catch (e: any) {
@@ -515,26 +578,34 @@ export default function ViewProductScreen() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [dispatch, productCode, productId, resolvePublicUrl]);
 
-  const resolveNamesByIds = useCallback(async (table: string, ids: string[]): Promise<string[]> => {
-    const clean = ids.map((x) => String(x).trim()).filter(Boolean);
-    if (!clean.length) return [];
+  const resolveNamesByIds = useCallback(
+    async (table: LookupTable, ids: string[]): Promise<string[]> => {
+      const clean = ids.map((x) => String(x).trim()).filter(Boolean);
+      if (!clean.length) return [];
 
-    const { data, error } = await supabase.from(table).select("id, name").in("id", clean);
-    if (error || !data) return [];
+      const { data, error } = await (supabase as any)
+        .from(table)
+        .select("id, name")
+        .in("id", clean);
+      if (error || !data) return [];
 
-    const map = new Map<string, string>();
-    for (const r of data as any[]) {
-      const id = String(r?.id ?? "").trim();
-      const name = String(r?.name ?? "").trim();
-      if (id && name) map.set(id, name);
-    }
+      const map = new Map<string, string>();
+      for (const r of data as any[]) {
+        const id = String(r?.id ?? "").trim();
+        const name = String(r?.name ?? "").trim();
+        if (id && name) {
+          map.set(id, name);
+        }
+      }
 
-    return clean.map((id) => map.get(id) ?? id);
-  }, []);
+      return clean.map((id) => map.get(id) ?? id);
+    },
+    [],
+  );
 
-  const resolveColorNames = useCallback((ids: any): string[] => {
+  const resolveColorNames = useCallback((ids: unknown): string[] => {
     const list = normalizeIdList(ids);
     if (!list.length) return [];
 
@@ -546,7 +617,7 @@ export default function ViewProductScreen() {
       golden: "Golden",
       silver: "Silver",
       white: "White",
-      black: "Black"
+      black: "Black",
     };
 
     return list.map((id) => map[String(id).toLowerCase()] ?? String(id));
@@ -555,8 +626,9 @@ export default function ViewProductScreen() {
   useEffect(() => {
     let alive = true;
 
-    (async () => {
+    void (async () => {
       const spec = (product as any)?.spec ?? {};
+
       if (!product) {
         if (alive) {
           setSpecNames({
@@ -566,7 +638,7 @@ export default function ViewProductScreen() {
             density: [],
             origin: [],
             wear: [],
-            color: []
+            color: [],
           });
         }
         return;
@@ -587,7 +659,7 @@ export default function ViewProductScreen() {
           resolveNamesByIds(LOOKUP.workTypes, workTypeIds),
           resolveNamesByIds(LOOKUP.workDensities, densityIds),
           resolveNamesByIds(LOOKUP.originCities, originIds),
-          resolveNamesByIds(LOOKUP.wearStates, wearIds)
+          resolveNamesByIds(LOOKUP.wearStates, wearIds),
         ]);
 
         const color = resolveColorNames(colorIds);
@@ -601,10 +673,11 @@ export default function ViewProductScreen() {
           density,
           origin,
           wear,
-          color
+          color,
         });
       } catch {
         if (!alive) return;
+
         setSpecNames({
           dressType: [],
           fabric: [],
@@ -612,7 +685,7 @@ export default function ViewProductScreen() {
           density: [],
           origin: [],
           wear: [],
-          color: resolveColorNames(colorIds)
+          color: resolveColorNames(colorIds),
         });
       }
     })();
@@ -620,13 +693,12 @@ export default function ViewProductScreen() {
     return () => {
       alive = false;
     };
-  }, [product, resolveNamesByIds, resolveColorNames]);
+  }, [product, resolveColorNames, resolveNamesByIds]);
 
   useFocusEffect(
     useCallback(() => {
-      fetchProduct();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [productId, productCode])
+      void fetchProduct();
+    }, [fetchProduct]),
   );
 
   useFocusEffect(
@@ -640,25 +712,17 @@ export default function ViewProductScreen() {
 
       const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
       return () => sub.remove();
-    }, [exitBuyerToResults, isBuyerRoute])
+    }, [exitBuyerToResults, isBuyerRoute]),
   );
 
-  const ChipRow = ({ title, items }: { title: string; items: any }) => {
-    const list = useMemo(() => normalizeLabelList(items), [items]);
+  const ChipRow = ({ title, items }: { title: string; items: unknown }) => {
+    const list = useMemo(() => normalizeLabelList(items ?? []), [items]);
     if (!list.length) return null;
 
     return (
-      <View style={{ marginTop: 10 }}>
-        <Text style={styles.specTitle}>{title}</Text>
-        <View style={styles.chipsWrap}>
-          {list.map((t, idx) => (
-            <View key={`${title}-${t}-${idx}`} style={styles.chip}>
-              <Text style={styles.chipText} numberOfLines={1}>
-                {t}
-              </Text>
-            </View>
-          ))}
-        </View>
+      <View style={styles.specRow}>
+        <Text style={styles.specLabel}>{title}:</Text>
+        <Text style={styles.specValue}>{list.join(", ")}</Text>
       </View>
     );
   };
@@ -679,10 +743,12 @@ export default function ViewProductScreen() {
   const priceTotalForParams = useMemo(() => {
     const price = (product as any)?.price ?? {};
     const mode = String(price?.mode ?? "");
+
     if (mode === "unstitched_per_meter") {
       const v = price?.cost_pkr_per_meter;
       return v ? String(v) : "";
     }
+
     const t = price?.cost_pkr_total;
     return t ? String(t) : "";
   }, [product]);
@@ -695,12 +761,14 @@ export default function ViewProductScreen() {
 
   const inventoryText = useMemo(() => {
     const made =
-      Boolean((product as any)?.made_on_order) || Boolean((product as any)?.spec?.made_on_order);
+      Boolean((product as any)?.made_on_order) ||
+      Boolean((product as any)?.spec?.made_on_order);
 
     if (made) return "Made on order";
 
     const n = Number((product as any)?.inventory_qty ?? 0);
     if (!Number.isFinite(n)) return "—";
+
     return String(n);
   }, [product]);
 
@@ -713,8 +781,9 @@ export default function ViewProductScreen() {
     if (isBuyerRoute) return false;
     if (!vendorId) return false;
     if (!product?.vendor_id) return false;
+
     return String(product.vendor_id) === String(vendorId);
-  }, [isBuyerRoute, vendorId, product?.vendor_id]);
+  }, [isBuyerRoute, product?.vendor_id, vendorId]);
 
   const showBuyerActions = isBuyerRoute ? true : !isVendorSelf;
 
@@ -730,23 +799,24 @@ export default function ViewProductScreen() {
 
   const isUnstitched = useMemo(() => {
     if (productCategory) return productCategory !== "stitched_ready";
+
     const price = (product as any)?.price ?? {};
     return String(price?.mode ?? "") === "unstitched_per_meter";
   }, [product, productCategory]);
 
   const showDyeing = useMemo(() => {
-    if (!product) return false;
-    if (!isUnstitched) return false;
+    if (!product || !isUnstitched) return false;
 
     if (productCategory) {
       return (
-        productCategory === "unstitched_dyeing" || productCategory === "unstitched_dyeing_tailoring"
+        productCategory === "unstitched_dyeing" ||
+        productCategory === "unstitched_dyeing_tailoring"
       );
     }
 
     const spec = (product as any)?.spec ?? {};
     return Boolean(spec?.dyeing_enabled);
-  }, [product, isUnstitched, productCategory]);
+  }, [isUnstitched, product, productCategory]);
 
   const dyeingCostPkr = useMemo(() => {
     const price = (product as any)?.price ?? {};
@@ -763,6 +833,7 @@ export default function ViewProductScreen() {
 
     const n = Number(raw);
     if (!Number.isFinite(n) || n < 0) return 0;
+
     return n;
   }, [product]);
 
@@ -771,7 +842,10 @@ export default function ViewProductScreen() {
   }, [vendorRow]);
 
   const productTailoringEnabled = useMemo(() => {
-    if (productCategory) return productCategory === "unstitched_dyeing_tailoring";
+    if (productCategory) {
+      return productCategory === "unstitched_dyeing_tailoring";
+    }
+
     const spec = (product as any)?.spec ?? {};
     return Boolean(spec?.tailoring_enabled);
   }, [product, productCategory]);
@@ -805,26 +879,38 @@ export default function ViewProductScreen() {
       productTailoringEnabled &&
       tailoringCostPkr > 0
     );
-  }, [product, vendorOffersTailoring, isUnstitched, productTailoringEnabled, tailoringCostPkr]);
+  }, [
+    isUnstitched,
+    product,
+    productTailoringEnabled,
+    tailoringCostPkr,
+    vendorOffersTailoring,
+  ]);
 
   useEffect(() => {
-    if (!tailoringEligible && buyerWantsTailoring) setBuyerWantsTailoring(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tailoringEligible]);
+    if (!tailoringEligible && buyerWantsTailoring) {
+      setBuyerWantsTailoring(false);
+    }
+  }, [buyerWantsTailoring, setBuyerWantsTailoring, tailoringEligible]);
 
   const showTailoringSection = useMemo(() => {
     return Boolean(product) && showBuyerActions && isUnstitched;
-  }, [product, showBuyerActions, isUnstitched]);
+  }, [isUnstitched, product, showBuyerActions]);
 
   const categoryText = useMemo(() => {
     if (productCategory === "stitched_ready") return "Stitched / Ready-to-wear";
-    if (productCategory === "unstitched_dyeing_tailoring") return "Unstitched + Dyeing + Tailoring";
+    if (productCategory === "unstitched_dyeing_tailoring") {
+      return "Unstitched + Dyeing + Tailoring";
+    }
     if (productCategory === "unstitched_dyeing") return "Unstitched + Dyeing";
     if (productCategory === "unstitched_plain") return "Unstitched (Plain)";
 
-    if (isUnstitched) return showDyeing ? "Unstitched + Dyeable" : "Unstitched";
+    if (isUnstitched) {
+      return showDyeing ? "Unstitched + Dyeable" : "Unstitched";
+    }
+
     return "Stitched / Ready-to-wear";
-  }, [productCategory, isUnstitched, showDyeing]);
+  }, [isUnstitched, productCategory, showDyeing]);
 
   const onOpenDyeing = useCallback(() => {
     if (!product) return;
@@ -836,16 +922,23 @@ export default function ViewProductScreen() {
         ? "/(buyer)/dye_palette_modal"
         : "/vendor/profile/(product-modals)/dyeing/dye_palette_modal",
       params: {
-        returnPath: isBuyerRoute ? "/(buyer)/view-product" : "/vendor/profile/view-product",
+        returnPath: isBuyerRoute ? "/flow/view-product" : "/vendor/profile/view-product",
         productId: String(product.id),
         productCode: String(product.product_code || ""),
         dyeing_selected: "1",
         dye_shade_id: selectedDyeShadeId || "",
         dye_hex: selectedDyeHex || "",
-        dye_label: selectedDyeLabel || ""
-      }
+        dye_label: selectedDyeLabel || "",
+      },
     });
-  }, [router, product, isBuyerRoute, selectedDyeShadeId, selectedDyeHex, selectedDyeLabel]);
+  }, [
+    isBuyerRoute,
+    product,
+    router,
+    selectedDyeHex,
+    selectedDyeLabel,
+    selectedDyeShadeId,
+  ]);
 
   const onPurchase = useCallback(() => {
     if (!product) return;
@@ -853,9 +946,9 @@ export default function ViewProductScreen() {
     const imageUrl = imageUrls.length ? imageUrls[0] : "";
 
     router.push({
-      pathname: "/purchase/size",
+      pathname: "/flow/purchase/size" as any,
       params: {
-        returnTo: "/purchase/place-order",
+        returnTo: "/flow/purchase/place-order",
         productId: String(product.id),
         productCode: String(product.product_code || ""),
         productName: String(product.title || ""),
@@ -864,35 +957,45 @@ export default function ViewProductScreen() {
         price: priceTotalForParams,
         imageUrl,
         dye_shade_id:
-          buyerWantsDyeing && selectedDyeShadeId ? encodeURIComponent(selectedDyeShadeId) : "",
-        dye_hex: buyerWantsDyeing && selectedDyeHex ? encodeURIComponent(selectedDyeHex) : "",
-        dye_label: buyerWantsDyeing && selectedDyeLabel ? encodeURIComponent(selectedDyeLabel) : "",
+          buyerWantsDyeing && selectedDyeShadeId
+            ? encodeURIComponent(selectedDyeShadeId)
+            : "",
+        dye_hex:
+          buyerWantsDyeing && selectedDyeHex ? encodeURIComponent(selectedDyeHex) : "",
+        dye_label:
+          buyerWantsDyeing && selectedDyeLabel
+            ? encodeURIComponent(selectedDyeLabel)
+            : "",
         dyeing_cost_pkr:
-          showDyeing && buyerWantsDyeing ? encodeURIComponent(String(dyeingCostPkr)) : "",
+          showDyeing && buyerWantsDyeing
+            ? encodeURIComponent(String(dyeingCostPkr))
+            : "",
         tailoring_available: tailoringEligible ? "1" : "0",
-        tailoring_cost_pkr: tailoringEligible ? encodeURIComponent(String(tailoringCostPkr)) : "",
+        tailoring_cost_pkr: tailoringEligible
+          ? encodeURIComponent(String(tailoringCostPkr))
+          : "",
         tailoring_turnaround_days: tailoringEligible
           ? encodeURIComponent(String(tailoringTurnaroundDays))
           : "",
-        tailoring_selected: tailoringEligible && buyerWantsTailoring ? "1" : "0"
-      }
+        tailoring_selected: tailoringEligible && buyerWantsTailoring ? "1" : "0",
+      },
     });
   }, [
-    router,
-    product,
-    imageUrls,
-    productCategory,
-    priceTotalForParams,
     buyerWantsDyeing,
-    selectedDyeShadeId,
+    buyerWantsTailoring,
+    dyeingCostPkr,
+    imageUrls,
+    priceTotalForParams,
+    product,
+    productCategory,
+    router,
     selectedDyeHex,
     selectedDyeLabel,
+    selectedDyeShadeId,
     showDyeing,
-    dyeingCostPkr,
-    tailoringEligible,
     tailoringCostPkr,
+    tailoringEligible,
     tailoringTurnaroundDays,
-    buyerWantsTailoring
   ]);
 
   const onViewVendorProfile = useCallback(() => {
@@ -904,7 +1007,7 @@ export default function ViewProductScreen() {
 
     router.push({
       pathname: "/(buyer)/view-profile",
-      params: { vendorId: String(vId) }
+      params: { vendorId: String(vId) },
     });
   }, [router, vendorRow]);
 
@@ -912,6 +1015,7 @@ export default function ViewProductScreen() {
 
   const CompactLine = ({ text }: { text: string | null }) => {
     if (!text) return null;
+
     return (
       <Text style={styles.compactLine} numberOfLines={2}>
         {text}
@@ -922,8 +1026,7 @@ export default function ViewProductScreen() {
   const titleLine = useMemo(() => compactLineValue(product?.title), [product?.title]);
 
   const categoryLine = useMemo(() => {
-    const s = compactLineValue(categoryText);
-    return s ? s : null;
+    return compactLineValue(categoryText);
   }, [categoryText]);
 
   const inventoryLine = useMemo(() => {
@@ -934,13 +1037,12 @@ export default function ViewProductScreen() {
   }, [inventoryText]);
 
   const priceLine = useMemo(() => {
-    const s = compactLineValue(priceText);
-    return s ? s : null;
+    return compactLineValue(priceText);
   }, [priceText]);
 
   const sizesLine = useMemo(() => {
     const s = compactLineValue(sizeText);
-    if (!s || s === "—") return null;
+    if (!s) return null;
     return `Sizes: ${s}`;
   }, [sizeText]);
 
@@ -956,11 +1058,12 @@ export default function ViewProductScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: 24 + (showBuyerActions ? FOOTER_H : 0) }
+          { paddingBottom: 24 + (showBuyerActions ? FOOTER_H : 0) },
         ]}
       >
         <View style={styles.headerRow}>
           <Text style={styles.title}>Product</Text>
+
           <Pressable
             onPress={() => {
               if (isBuyerRoute) {
@@ -980,7 +1083,7 @@ export default function ViewProductScreen() {
             <Text style={styles.sectionTitle}>Missing product</Text>
             <Text style={styles.meta} selectable>
               Provide route params as either:
-              {"\n"}• /vendor/profile/view-product?id=UUID
+              {"\n"}• /vendor/profile/view-product?id=123
               {"\n"}• /vendor/profile/view-product?code=V15-P0010
             </Text>
           </View>
@@ -993,9 +1096,12 @@ export default function ViewProductScreen() {
           </View>
         )}
 
-        {!!vendorId && !!product?.vendor_id && String(product.vendor_id) !== String(vendorId) ? (
+        {!!vendorId &&
+        !!product?.vendor_id &&
+        String(product.vendor_id) !== String(vendorId) ? (
           <Text style={styles.warn}>
-            Note: This product belongs to a different vendor_id than the current vendor session.
+            Note: This product belongs to a different vendor_id than the current vendor
+            session.
           </Text>
         ) : null}
 
@@ -1035,7 +1141,7 @@ export default function ViewProductScreen() {
                     if (!tailoringEligible) {
                       Alert.alert(
                         "Stitching not available",
-                        "This product is not eligible for stitching."
+                        "This product is not eligible for stitching.",
                       );
                       return;
                     }
@@ -1045,7 +1151,7 @@ export default function ViewProductScreen() {
                     styles.linkBtnInline,
                     buyerWantsTailoring ? { borderColor: stylesVars.blue } : null,
                     !tailoringEligible ? { opacity: 0.5 } : null,
-                    pressed ? styles.pressed : null
+                    pressed ? styles.pressed : null,
                   ]}
                 >
                   <Text style={styles.linkText}>
@@ -1058,7 +1164,7 @@ export default function ViewProductScreen() {
                   style={({ pressed }) => [
                     styles.linkBtnInline,
                     !buyerWantsTailoring ? { borderColor: stylesVars.blue } : null,
-                    pressed ? styles.pressed : null
+                    pressed ? styles.pressed : null,
                   ]}
                 >
                   <Text style={styles.linkText}>No</Text>
@@ -1086,7 +1192,7 @@ export default function ViewProductScreen() {
                   style={({ pressed }) => [
                     styles.linkBtnInline,
                     buyerWantsDyeing ? { borderColor: stylesVars.blue } : null,
-                    pressed ? styles.pressed : null
+                    pressed ? styles.pressed : null,
                   ]}
                 >
                   <Text style={styles.linkText}>Yes • +PKR {dyeingCostPkr}</Text>
@@ -1098,19 +1204,22 @@ export default function ViewProductScreen() {
                     setSelectedDyeShadeId("");
                     setSelectedDyeHex("");
                     setSelectedDyeLabel("");
-                    clearCachedDyeSelection(productId, productCode);
+                    clearCachedDyeSelection(
+                      productId != null ? String(productId) : null,
+                      productCode ?? "",
+                    );
 
                     router.setParams({
                       dyeing_selected: "0",
                       dye_shade_id: undefined,
                       dye_hex: undefined,
-                      dye_label: undefined
+                      dye_label: undefined,
                     } as any);
                   }}
                   style={({ pressed }) => [
                     styles.linkBtnInline,
                     !buyerWantsDyeing ? { borderColor: stylesVars.blue } : null,
-                    pressed ? styles.pressed : null
+                    pressed ? styles.pressed : null,
                   ]}
                 >
                   <Text style={styles.linkText}>No</Text>
@@ -1129,7 +1238,7 @@ export default function ViewProductScreen() {
                       borderRadius: 14,
                       backgroundColor: selectedDyeHex,
                       borderWidth: 1,
-                      borderColor: "#CBD5E1"
+                      borderColor: "#CBD5E1",
                     }}
                   />
                 </View>
@@ -1139,7 +1248,7 @@ export default function ViewProductScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Product Description</Text>
+         <Text style={styles.sectionTitle}>Product Details</Text>
 
           <ChipRow
             title="Dress Type"
@@ -1174,13 +1283,16 @@ export default function ViewProductScreen() {
           <ChipRow
             title="Work"
             items={
-              specNames.work.length
-                ? specNames.work
-                : (product as any)?.spec?.workTypeNames ??
-                  (product as any)?.spec?.workTypeLabels ??
-                  (product as any)?.spec?.workTypeIds
+              (product as any)?.spec?.workSubTypeNames?.length
+                ? (product as any)?.spec?.workSubTypeNames
+                : specNames.work.length
+                  ? specNames.work
+                  : (product as any)?.spec?.workTypeNames ??
+                    (product as any)?.spec?.workTypeLabels ??
+                    (product as any)?.spec?.workTypeIds
             }
           />
+         
           <ChipRow
             title="Density"
             items={
@@ -1222,8 +1334,12 @@ export default function ViewProductScreen() {
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Meta</Text>
-          {uploadedDate ? <Text style={styles.metaLine}>Date uploaded: {uploadedDate}</Text> : null}
-          {modifiedDate ? <Text style={styles.metaLine}>Date modified: {modifiedDate}</Text> : null}
+          {uploadedDate ? (
+            <Text style={styles.metaLine}>Date uploaded: {uploadedDate}</Text>
+          ) : null}
+          {modifiedDate ? (
+            <Text style={styles.metaLine}>Date modified: {modifiedDate}</Text>
+          ) : null}
         </View>
       </ScrollView>
 
@@ -1232,7 +1348,7 @@ export default function ViewProductScreen() {
           onPress={onViewVendorProfile}
           style={({ pressed }) => [styles.fabVendor, pressed ? styles.pressed : null]}
         >
-          <Text style={styles.fabVendorText}>View Vendor</Text>
+          <Text style={styles.fabVendorText}>Vendor</Text>
         </Pressable>
       ) : null}
 

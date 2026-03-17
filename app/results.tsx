@@ -18,7 +18,7 @@ import { supabase } from "@/utils/supabase/client";
 const PRODUCTS_TABLE = "products";
 const BUCKET_VENDOR = "vendor_images";
 
-const TABLE_DRESS_TYPE = "dress_type";
+const TABLE_DRESS_TYPE = "dress_types";
 const TABLE_FABRIC_TYPES = "fabric_types";
 const TABLE_WORK_TYPES = "work_types";
 const TABLE_WORK_DENSITIES = "work_densities";
@@ -33,6 +33,13 @@ type ProductRow = {
   product_code?: string | null;
   title?: string | null;
   created_at?: string | null;
+  made_on_order?: boolean;
+  product_category?:
+    | "unstitched_plain"
+    | "unstitched_dyeing"
+    | "unstitched_dyeing_tailoring"
+    | "stitched_ready"
+    | null;
   spec?: any;
   price?: any;
   media?: any;
@@ -225,7 +232,9 @@ export default function ResultsScreen() {
   async function fetchPage(from: number, to: number) {
     return supabase
       .from(PRODUCTS_TABLE)
-      .select("id, vendor_id, product_code, title, created_at, spec, price, media")
+      .select(
+        "id, vendor_id, product_code, title, created_at, made_on_order, product_category, spec, price, media"
+      )
       .order("created_at", { ascending: false })
       .range(from, to);
   }
@@ -251,7 +260,7 @@ export default function ResultsScreen() {
         ] = await Promise.all([
           fetchPage(0, PAGE_SIZE - 1),
 
-          supabase.from(TABLE_DRESS_TYPE).select("id, name").order("id", { ascending: true }),
+          (supabase as any).from(TABLE_DRESS_TYPE).select("id, name").order("id", { ascending: true }),
           supabase
             .from(TABLE_FABRIC_TYPES)
             .select("id, name")
@@ -551,7 +560,10 @@ export default function ResultsScreen() {
   ]);
 
   function openProduct(p: ProductRow) {
-    router.push(`/view-product?id=${encodeURIComponent(String(p.id))}`);
+    router.push({
+      pathname: "/flow/view-product" as any,
+      params: { id: String(p.id) },
+    });
   }
 
   if (loading) {
@@ -579,14 +591,22 @@ export default function ResultsScreen() {
           </Pressable>
 
           <Pressable
-            onPress={() => router.push("/results-filters")}
+            onPress={() =>
+            router.push({
+              pathname: "/flow/results-filters" as any,
+            })
+          }
             style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
           >
             <Text style={styles.iconText}>🔍</Text>
           </Pressable>
 
           <Pressable
-            onPress={() => router.push("/orders/track")}
+            onPress={() =>
+            router.push({
+              pathname: "/flow/orders/track" as any,
+            })
+          }
             style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
           >
             <Text style={styles.iconText}>📦</Text>
@@ -737,14 +757,33 @@ export default function ResultsScreen() {
                   {formatPrice(item.price)}
                 </Text>
 
-                <Text style={styles.cardSub} numberOfLines={1}>
-                  {item?.price?.mode === "unstitched_per_meter"
-                    ? item?.spec?.dyeing_enabled
-                      ? "Unstitched • Tailored"
-                      : "Unstitched"
-                    : ""}
-                </Text>
+                <View style={{ marginTop: 0, paddingTop: 0, paddingBottom: 0 }}>
+                  {item?.made_on_order ? (
+                    <Text style={styles.cardSub} numberOfLines={1}>
+                      Made on order
+                    </Text>
+                  ) : (
+                    <>
+                      <Text style={styles.cardSub} numberOfLines={1}>
+                        {item?.product_category === "stitched_ready"
+                          ? "Ready-to-wear"
+                          : "Unstitched"}
+                      </Text>
 
+                      {item?.product_category === "unstitched_dyeing_tailoring" ? (
+                        <Text style={styles.cardSub} numberOfLines={1}>
+                          Tailoring available
+                        </Text>
+                      ) : null}
+
+                      {item?.product_category === "unstitched_dyeing" ? (
+                        <Text style={styles.cardSub} numberOfLines={1}>
+                          Dyeing available
+                        </Text>
+                      ) : null}
+                    </>
+                  )}
+                </View>
                 <View style={styles.actionRow}>
                   <Pressable onPress={() => toggleFavorite(item.id)} style={styles.actionBtn}>
                     <Text style={[styles.actionText, isFav ? styles.heartOn : null]}>
@@ -777,149 +816,260 @@ export default function ResultsScreen() {
   );
 }
 
+const stylesVars = {
+  bg: "#F8FAFC",
+  cardBg: "#FFFFFF",
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
+  overlayDark: "rgba(0,0,0,0.58)",
+  overlaySoft: "rgba(255,255,255,0.14)",
+  white: "#FFFFFF",
+  black: "#000000"
+};
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: {
+    flex: 1,
+    backgroundColor: stylesVars.bg
+  },
+
   topRow: {
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 10,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
+    gap: 12
   },
-  link: { fontSize: 15, color: "#111", fontWeight: "700" },
+
+  link: {
+    fontSize: 14,
+    color: stylesVars.blue,
+    fontWeight: "700"
+  },
+
   title: {
     flex: 1,
     textAlign: "center",
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "700",
-    color: "#111",
+    color: stylesVars.text,
     paddingHorizontal: 10
   },
 
-  topActions: { flexDirection: "row", gap: 8, alignItems: "center" },
+  topActions: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center"
+  },
+
   iconBtn: {
     width: 34,
     height: 34,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F4F4F5",
+    backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.08)"
+    borderColor: "#D7E3FF"
   },
-  iconText: { fontSize: 15, fontWeight: "900", color: "#111" },
 
-  // ✅ summary bar
+  iconText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: stylesVars.blue
+  },
+
   summaryBar: {
     paddingHorizontal: 16,
     paddingBottom: 10
   },
+
   summaryText: {
     fontSize: 12,
-    color: "#60708A",
-    fontWeight: "700"
+    color: stylesVars.mutedText,
+    fontWeight: "600"
   },
 
-  // ✅ modal (dark background)
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.55)",
     padding: 20,
     justifyContent: "center"
   },
+
   modalCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
+    backgroundColor: stylesVars.cardBg,
+    borderRadius: 18,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.10)"
+    borderColor: stylesVars.border
   },
+
   modalTitle: {
-    paddingHorizontal: 14,
-    paddingTop: 14,
+    paddingHorizontal: 18,
+    paddingTop: 16,
     paddingBottom: 10,
-    fontSize: 16,
-    fontWeight: "900",
-    color: "#111"
+    fontSize: 18,
+    fontWeight: "700",
+    color: stylesVars.text
   },
+
   modalItem: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 18,
     paddingVertical: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between"
   },
-  modalLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
-  modalEmoji: { fontSize: 18 },
-  modalItemTitle: { fontSize: 14, fontWeight: "900", color: "#111" },
-  modalItemSub: { fontSize: 12, fontWeight: "700", color: "#60708A", marginTop: 2 },
-  modalRight: { fontSize: 14, fontWeight: "900", color: "#0B2F6B" },
-  divider: { height: 1, backgroundColor: "rgba(0,0,0,0.08)" },
+
+  modalLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+
+  modalEmoji: {
+    fontSize: 18
+  },
+
+  modalItemTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  modalItemSub: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: stylesVars.mutedText,
+    marginTop: 2
+  },
+
+  modalRight: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: stylesVars.blue
+  },
+
+  divider: {
+    height: 1,
+    backgroundColor: stylesVars.border
+  },
+
   soonPill: {
     fontSize: 12,
-    fontWeight: "900",
-    color: "#60708A",
+    fontWeight: "700",
+    color: stylesVars.mutedText,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: "#F4F4F5",
+    backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.08)"
+    borderColor: "#D7E3FF"
   },
+
   modalCloseBtn: {
     margin: 14,
-    borderRadius: 12,
+    minHeight: 48,
+    borderRadius: 14,
     paddingVertical: 12,
     alignItems: "center",
-    backgroundColor: "#EAF2FF",
+    justifyContent: "center",
+    backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: "#D9E2F2"
+    borderColor: "#D7E3FF"
   },
-  modalCloseText: { color: "#0B2F6B", fontWeight: "900" },
 
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20 },
-  loadingScreen: { backgroundColor: "#fff" },
-  emptyTitle: { fontSize: 18, fontWeight: "700", color: "#111", marginBottom: 8 },
-  muted: { fontSize: 14, color: "#666" },
+  modalCloseText: {
+    color: stylesVars.blue,
+    fontWeight: "700",
+    fontSize: 14
+  },
+
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20
+  },
+
+  loadingScreen: {
+    backgroundColor: stylesVars.bg
+  },
+
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: stylesVars.text,
+    marginBottom: 8
+  },
+
+  muted: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
 
   card: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.08)",
-    borderRadius: 12,
+    borderColor: stylesVars.border,
+    borderRadius: 18,
     overflow: "hidden",
-    backgroundColor: "#fff",
+    backgroundColor: stylesVars.cardBg,
     marginBottom: 10
   },
-  image: { width: "100%", height: 140, backgroundColor: "#f3f4f6" },
+
+  image: {
+    width: "100%",
+    height: 140,
+    backgroundColor: "#F1F5F9"
+  },
+
   imagePlaceholder: {
     width: "100%",
     height: 140,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#f3f4f6"
+    backgroundColor: "#F1F5F9"
   },
+
   cardTitle: {
     paddingHorizontal: 10,
     paddingTop: 10,
     fontSize: 15,
     fontWeight: "700",
-    color: "#111"
+    color: stylesVars.text
   },
+
   cardPrice: {
     paddingHorizontal: 10,
     paddingTop: 6,
     fontSize: 13,
     fontWeight: "700",
-    color: "#111"
+    color: stylesVars.text
   },
+
   cardSub: {
     paddingHorizontal: 10,
-    paddingTop: 4,
-    paddingBottom: 10,
+    paddingTop: 2,
+    paddingBottom: 0,
     fontSize: 12,
-    color: "#666"
+    lineHeight: 14,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
   },
 
   actionRow: {
@@ -929,9 +1079,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "flex-start"
   },
-  actionBtn: { flex: 1 },
-  actionText: { fontSize: 13, fontWeight: "800", color: "#111" },
-  heartOn: { color: "#D11A2A" },
+
+  actionBtn: {
+    flex: 1
+  },
+
+  actionText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  heartOn: {
+    color: "#D11A2A"
+  },
 
   loadingRow: {
     flexDirection: "row",
@@ -939,21 +1100,32 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 10
   },
+
   loadMoreBtn: {
     marginTop: 8,
-    borderRadius: 12,
+    minHeight: 48,
+    borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    backgroundColor: "#EAF2FF",
+    backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: "#D9E2F2",
-    alignItems: "center"
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center"
   },
-  loadMoreText: { color: "#0B2F6B", fontWeight: "900" },
+
+  loadMoreText: {
+    color: stylesVars.blue,
+    fontWeight: "700",
+    fontSize: 14
+  },
+
   endText: {
     marginTop: 10,
     textAlign: "center",
-    color: "#60708A",
-    fontWeight: "800"
+    color: stylesVars.mutedText,
+    fontWeight: "500",
+    fontSize: 13,
+    lineHeight: 18
   }
 });

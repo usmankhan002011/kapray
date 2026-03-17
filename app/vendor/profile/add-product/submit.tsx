@@ -291,7 +291,7 @@ export default function AddProductSubmitScreen() {
         return;
       }
 
-      const productId = created?.id as string | undefined;
+      const productId = created?.id as number | undefined;
       const finalCode = created?.product_code as string | undefined;
 
       if (!productId || !finalCode) {
@@ -387,7 +387,9 @@ export default function AddProductSubmitScreen() {
       Alert.alert("Saved", `Product created: ${finalCode}`);
       resetDraft();
 
-      router.replace(`/vendor/profile/products?new_product_id=${encodeURIComponent(productId)}` as any);
+      router.replace(
+        `/vendor/profile/products?new_product_id=${encodeURIComponent(String(productId))}` as any
+      );
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not save product.");
     } finally {
@@ -458,60 +460,109 @@ export default function AddProductSubmitScreen() {
 }
 
 const stylesVars = {
-  bg: "#F5F7FB",
+  bg: "#F8FAFC",
   cardBg: "#FFFFFF",
-  border: "#D9E2F2",
-  borderSoft: "#E6EDF8",
-  blue: "#0B2F6B",
-  blueSoft: "#EAF2FF",
-  text: "#111111",
-  subText: "#60708A",
-  placeholder: "#94A3B8"
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
+  placeholder: "#94A3B8",
+  white: "#FFFFFF"
 };
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 24, backgroundColor: stylesVars.bg },
+  content: {
+    padding: 16,
+    paddingBottom: 24,
+    backgroundColor: stylesVars.bg
+  },
 
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
+    gap: 12
   },
-  title: { fontSize: 20, fontWeight: "900", color: stylesVars.blue },
+
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
 
   card: {
     marginTop: 14,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
-    padding: 14
+    padding: 18
   },
 
-  sectionTitle: { fontSize: 13, fontWeight: "900", color: stylesVars.blue },
-  meta: { marginTop: 8, color: stylesVars.subText, fontWeight: "800", fontSize: 12 },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: stylesVars.text,
+    marginBottom: 2
+  },
 
-  inlineRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 },
+  meta: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
+
+  inlineRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 10
+  },
 
   linkBtn: {
-    paddingHorizontal: 10,
+    minHeight: 40,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center"
   },
-  linkText: { color: stylesVars.blue, fontWeight: "900" },
+
+  linkText: {
+    color: stylesVars.blue,
+    fontSize: 14,
+    fontWeight: "700"
+  },
 
   saveBtn: {
     marginTop: 14,
-    borderRadius: 16,
-    paddingVertical: 14,
+    minHeight: 48,
+    borderRadius: 14,
+    paddingVertical: 12,
     alignItems: "center",
+    justifyContent: "center",
     backgroundColor: stylesVars.blue
   },
-  saveBtnDisabled: { opacity: 0.4 },
-  saveText: { color: "#fff", fontWeight: "900", fontSize: 15 },
 
-  pressed: { opacity: 0.75 }
+  saveBtnDisabled: {
+    opacity: 0.6
+  },
+
+  saveText: {
+    color: stylesVars.white,
+    fontWeight: "700",
+    fontSize: 14
+  },
+
+  pressed: {
+    opacity: 0.82
+  }
 });

@@ -1,4 +1,4 @@
-import { getDressTypes } from "@/utils/supabase/dressType";
+import { getDressTypes, DressTypeItem } from "@/utils/supabase/dressType";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Image,
@@ -12,9 +12,22 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 
 type DressTypeOption = {
-  key: string; // numeric id as string
+  key: string;
   label: string;
-  icon?: string | null;
+  code: string;
+};
+
+const DRESS_TYPE_LOCAL_IMAGES: Record<string, any> = {
+  lehnga_set: require("@/assets/dress-types-images/LEHNGA_SET.png"),
+  maxi_gown: require("@/assets/dress-types-images/MAXI_GOWN.png"),
+  peshwas_frock: require("@/assets/dress-types-images/PESHWAS_FROCK.png"),
+  saree: require("@/assets/dress-types-images/SAREE.png"),
+  sharara: require("@/assets/dress-types-images/SHARARA.png"),
+  shirt_and_bottom_set: require("@/assets/dress-types-images/SHIRT_AND_BOTTOM_SET.png"),
+  dupatta: require("@/assets/dress-types-images/DUPATTA.png"),
+  farchi_lehnga: require("@/assets/dress-types-images/FARCHI_LEHNGA.png"),
+  gharara: require("@/assets/dress-types-images/GHARARA.png"),
+  blouse: require("@/assets/dress-types-images/BLOUSE.png")
 };
 
 export default function ProductDressTypeModal() {
@@ -44,20 +57,15 @@ export default function ProductDressTypeModal() {
     setLoading(true);
 
     getDressTypes()
-      .then((types) => {
+      .then((types: DressTypeItem[]) => {
         if (!alive) return;
 
-        const mapped =
-          (types ?? []).map((type: any) => {
-            const key = String(type.id);
-            const name = String(type.name ?? "");
-
-            return {
-              key,
-              label: name,
-              icon: type?.iconURL ?? null
-            } as DressTypeOption;
-          }) ?? [];
+        const mapped: DressTypeOption[] =
+          (types ?? []).map((type) => ({
+            key: String(type.id),
+            label: String(type.name ?? ""),
+            code: String(type.code ?? "")
+          })) ?? [];
 
         setOptions(mapped);
       })
@@ -91,8 +99,8 @@ export default function ProductDressTypeModal() {
 
   function onDone() {
     const ids = selected
-      .map((k) => Number(k))
-      .filter((n) => Number.isFinite(n));
+      .map((k) => String(k).trim())
+      .filter(Boolean);
 
     const pickedNames = selected
       .map((k) => labelByKey.get(k) ?? "")
@@ -152,6 +160,7 @@ export default function ProductDressTypeModal() {
       >
         {options.map((opt) => {
           const isOn = selectedSet.has(opt.key);
+          const localImage = DRESS_TYPE_LOCAL_IMAGES[opt.code] ?? null;
 
           return (
             <Pressable
@@ -160,9 +169,9 @@ export default function ProductDressTypeModal() {
               onPress={() => toggle(opt.key)}
             >
               <View style={styles.imageWrap}>
-                {opt.icon ? (
+                {localImage ? (
                   <Image
-                    source={{ uri: opt.icon }}
+                    source={localImage}
                     style={styles.image}
                     resizeMode="cover"
                   />
@@ -187,8 +196,31 @@ export default function ProductDressTypeModal() {
   );
 }
 
+const stylesVars = {
+  bg: "#F8FAFC",
+  cardBg: "#FFFFFF",
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
+  overlayDark: "rgba(0,0,0,0.58)",
+  overlaySoft: "rgba(255,255,255,0.14)",
+  white: "#FFFFFF",
+  black: "#000000"
+};
+
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#fff" },
+  screen: {
+    flex: 1,
+    backgroundColor: stylesVars.bg
+  },
 
   header: {
     paddingHorizontal: 14,
@@ -196,11 +228,33 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
+    gap: 12
   },
-  headerTitle: { fontSize: 18, fontWeight: "900", color: "#111" },
-  headerBtn: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10 },
-  headerBtnText: { fontSize: 14, fontWeight: "900", color: "#0b2f6b" },
+
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  headerBtn: {
+    minHeight: 40,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+
+  headerBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: stylesVars.blue
+  },
 
   subHeader: {
     paddingHorizontal: 14,
@@ -210,17 +264,41 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 10
   },
-  subText: { flex: 1, color: "#111", opacity: 0.7 },
-  clearBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#e7e7e7"
-  },
-  clearBtnText: { fontSize: 12, fontWeight: "900", color: "#111" },
 
-  info: { paddingHorizontal: 14, paddingBottom: 8, color: "#111", opacity: 0.8 },
+  subText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
+
+  clearBtn: {
+    minHeight: 40,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.cardBg,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+
+  clearBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  info: {
+    paddingHorizontal: 14,
+    paddingBottom: 8,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
 
   grid: {
     paddingHorizontal: 12,
@@ -233,34 +311,57 @@ const styles = StyleSheet.create({
   card: {
     width: "47%",
     borderWidth: 1,
-    borderColor: "#e7e7e7",
-    borderRadius: 16,
-    padding: 10
+    borderColor: stylesVars.border,
+    borderRadius: 18,
+    padding: 10,
+    backgroundColor: stylesVars.cardBg
   },
+
   cardOn: {
-    borderColor: "#0b2f6b",
+    borderColor: stylesVars.blue,
     borderWidth: 2,
-    backgroundColor: "#F3F7FF"
+    backgroundColor: stylesVars.blueSoft
   },
 
   imageWrap: {
     width: "100%",
-    height: 150,
+    height: 185,
     borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#eee",
+    backgroundColor: "#F1F5F9",
     marginBottom: 10
   },
-  image: { width: "100%", height: 150 },
+
+  image: {
+    width: "100%",
+    height: 185
+  },
+
   imageFallback: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center"
   },
-  imageFallbackText: { color: "#111", opacity: 0.6, fontWeight: "800" },
 
-  label: { fontSize: 13, fontWeight: "800", color: "#111", textAlign: "center" },
-  labelOn: { color: "#0b2f6b" },
+  imageFallbackText: {
+    color: stylesVars.mutedText,
+    fontSize: 12,
+    fontWeight: "600"
+  },
 
-  pressed: { opacity: 0.75 }
+  label: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "700",
+    color: stylesVars.text,
+    textAlign: "center"
+  },
+
+  labelOn: {
+    color: stylesVars.blue
+  },
+
+  pressed: {
+    opacity: 0.82
+  }
 });

@@ -1,8 +1,11 @@
+// File: store/vendorSlice.ts
+
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 export type VendorState = {
   // Core identifiers
   id: number | null;
+  created_at: string | null;
   owner_user_id: string | null;
   auth_user_id: string | null;
 
@@ -22,6 +25,7 @@ export type VendorState = {
   shop_image_paths: string[] | null;
   shop_video_paths: string[] | null;
 
+  offers_tailoring: boolean | null;
   status: string | null;
 
   // Optional/legacy / UI aliases (keep so other screens don’t break)
@@ -30,6 +34,7 @@ export type VendorState = {
   banner_url: string | null;
   images: string[] | null;
   videos: string[] | null;
+  image: string | null;
 
   // legacy
   location: string | null;
@@ -37,6 +42,7 @@ export type VendorState = {
 
 const initialState: VendorState = {
   id: null,
+  created_at: null,
   owner_user_id: null,
   auth_user_id: null,
 
@@ -55,6 +61,7 @@ const initialState: VendorState = {
   shop_image_paths: null,
   shop_video_paths: null,
 
+  offers_tailoring: null,
   status: null,
 
   // aliases
@@ -63,9 +70,10 @@ const initialState: VendorState = {
   banner_url: null,
   images: null,
   videos: null,
+  image: null,
 
   // legacy
-  location: null
+  location: null,
 };
 
 const vendorSlice = createSlice({
@@ -76,17 +84,28 @@ const vendorSlice = createSlice({
       const next = { ...state, ...action.payload };
 
       // Keep aliases in sync (so old UI code keeps working)
-      if (next.owner_name == null && next.name != null) next.owner_name = next.name;
-      if (next.banner_url == null && next.banner_path != null) next.banner_url = next.banner_path;
-      if (next.images == null && next.shop_image_paths != null) next.images = next.shop_image_paths;
-      if (next.videos == null && next.shop_video_paths != null) next.videos = next.shop_video_paths;
+      if (next.owner_name == null && next.name != null) {
+        next.owner_name = next.name;
+      }
+      if (next.banner_url == null && next.banner_path != null) {
+        next.banner_url = next.banner_path;
+      }
+      if (next.images == null && next.shop_image_paths != null) {
+        next.images = next.shop_image_paths;
+      }
+      if (next.videos == null && next.shop_video_paths != null) {
+        next.videos = next.shop_video_paths;
+      }
+      if (next.image == null && next.profile_image_path != null) {
+        next.image = next.profile_image_path;
+      }
 
       return next;
     },
     clearSelectedVendor() {
       return initialState;
-    }
-  }
+    },
+  },
 });
 
 export const { setSelectedVendor, clearSelectedVendor } = vendorSlice.actions;

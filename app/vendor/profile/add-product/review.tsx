@@ -140,8 +140,12 @@ export default function AddProductReviewScreen() {
   }
 
   function workSummary() {
+    const subNames = (draft.spec as any)?.workSubTypeNames as any[] | undefined;
+    if (Array.isArray(subNames) && subNames.length) return formatPicked(subNames, "Any");
+
     const names = (draft.spec as any)?.workTypeNames as any[] | undefined;
     if (Array.isArray(names) && names.length) return formatPicked(names, "Any");
+
     const list = (draft.spec.workTypeIds ?? []) as any[];
     return list.length ? `${list.length} selected` : "Any";
   }
@@ -168,7 +172,6 @@ export default function AddProductReviewScreen() {
   }
 
   function goEdit(path: string) {
-    // ✅ Ensure Continue/Close returns to Review after editing any screen (including index route)
     router.push({ pathname: path as any, params: { returnTo: "/vendor/profile/add-product/review" } } as any);
   }
 
@@ -203,9 +206,9 @@ export default function AddProductReviewScreen() {
       </View>
 
       {!vendorId ? (
-        <View style={[styles.card, { borderColor: "#FCA5A5", backgroundColor: "#FFF1F2" }]}>
-          <Text style={[styles.sectionTitle, { color: "#991B1B" }]}>Vendor not loaded</Text>
-          <Text style={[styles.meta, { color: "#991B1B" }]}>
+        <View style={[styles.card, styles.errorCard]}>
+          <Text style={[styles.sectionTitle, styles.errorTitle]}>Vendor not loaded</Text>
+          <Text style={[styles.meta, styles.errorMeta]}>
             Please ensure vendorSlice has vendor.id (bigint).
           </Text>
         </View>
@@ -215,7 +218,6 @@ export default function AddProductReviewScreen() {
         <Text style={styles.sectionTitle}>Basics</Text>
 
         <Pressable
-          // ✅ index.tsx maps to /vendor/profile/add-product (NOT .../index)
           onPress={() => goEdit("/vendor/profile/add-product")}
           style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
         >
@@ -392,73 +394,139 @@ export default function AddProductReviewScreen() {
 }
 
 const stylesVars = {
-  bg: "#F5F7FB",
+  bg: "#F8FAFC",
   cardBg: "#FFFFFF",
-  border: "#D9E2F2",
-  borderSoft: "#E6EDF8",
-  blue: "#0B2F6B",
-  blueSoft: "#EAF2FF",
-  text: "#111111",
-  subText: "#60708A",
-  placeholder: "#94A3B8"
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
+  white: "#FFFFFF"
 };
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 24, backgroundColor: stylesVars.bg },
+  content: {
+    padding: 16,
+    paddingBottom: 24,
+    backgroundColor: stylesVars.bg
+  },
 
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
+    gap: 12
   },
-  title: { fontSize: 20, fontWeight: "900", color: stylesVars.blue },
+
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
 
   card: {
     marginTop: 14,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
-    padding: 14
+    padding: 18
   },
 
-  sectionTitle: { fontSize: 13, fontWeight: "900", color: stylesVars.blue },
-  meta: { marginTop: 8, color: stylesVars.subText, fontWeight: "800", fontSize: 12 },
+  errorCard: {
+    borderColor: stylesVars.dangerBorder,
+    backgroundColor: stylesVars.dangerSoft
+  },
+
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: stylesVars.text,
+    marginBottom: 2
+  },
+
+  errorTitle: {
+    color: stylesVars.danger
+  },
+
+  meta: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
+
+  errorMeta: {
+    color: stylesVars.danger
+  },
 
   rowBtn: {
     marginTop: 10,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 14,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: "#D7E3FF"
   },
 
-  // ✅ Interchanged: label now looks like old "value"
-  rowTitle: { color: stylesVars.text, opacity: 0.85, fontSize: 12 },
+  rowTitle: {
+    color: stylesVars.text,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "700"
+  },
 
-  // ✅ Interchanged: value now looks like old "title"
-  rowValue: { marginTop: 4, color: stylesVars.blue, fontWeight: "900", fontSize: 13 },
+  rowValue: {
+    marginTop: 4,
+    color: stylesVars.subText,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500"
+  },
 
   primaryBtn: {
     marginTop: 14,
-    borderRadius: 16,
-    paddingVertical: 14,
+    minHeight: 48,
+    borderRadius: 14,
+    paddingVertical: 12,
     alignItems: "center",
+    justifyContent: "center",
     backgroundColor: stylesVars.blue
   },
-  primaryText: { color: "#fff", fontWeight: "900", fontSize: 15 },
+
+  primaryText: {
+    color: stylesVars.white,
+    fontWeight: "700",
+    fontSize: 14
+  },
 
   linkBtn: {
-    paddingHorizontal: 10,
+    minHeight: 40,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center"
   },
-  linkText: { color: stylesVars.blue, fontWeight: "900" },
 
-  pressed: { opacity: 0.75 }
+  linkText: {
+    color: stylesVars.blue,
+    fontSize: 14,
+    fontWeight: "700"
+  },
+
+  pressed: {
+    opacity: 0.82
+  }
 });

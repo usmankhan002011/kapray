@@ -1,20 +1,21 @@
 import { StyleSheet } from "react-native";
 
 export const apColors = {
-  bg: "#ffffff",
-  card: "#ffffff",
+  bg: "#F8FAFC",
+  card: "#FFFFFF",
 
-  blue: "#0B2F6B",
-  blueSoft: "#EAF2FF",
-  blueLabel: "#1E4C9A",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  blueLabel: "#0F172A",
 
-  text: "#111111",
-  muted: "#60708A",
-  border: "#D9E2F2",
-  borderSoft: "#E6EDF8",
+  text: "#0F172A",
+  muted: "#64748B",
+  subText: "#475569",
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
 
   danger: "#B42318",
-  white: "#ffffff"
+  white: "#FFFFFF"
 };
 
 export const apSpacing = {
@@ -39,45 +40,47 @@ export const apStyles = StyleSheet.create({
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
+    gap: 12
   },
 
   card: {
     marginTop: 14,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: apColors.border,
     backgroundColor: apColors.card,
-    padding: 14,
+    padding: 18,
     marginBottom: apSpacing.blockGap
   },
 
   title: {
-    fontSize: 20,
-    fontWeight: "900",
-    color: apColors.blue
+    fontSize: 18,
+    fontWeight: "700",
+    color: apColors.text
   },
 
   subtitle: {
     marginTop: 6,
-    fontSize: 13,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: "500",
     color: apColors.muted,
-    lineHeight: 18
+    lineHeight: 20
   },
 
   label: {
-    fontSize: 12,
-    fontWeight: "900",
-    color: apColors.blueLabel,
+    fontSize: 13,
+    fontWeight: "700",
+    color: apColors.text,
     letterSpacing: 0.2
   },
 
   metaHint: {
     marginTop: 10,
     color: apColors.muted,
-    fontWeight: "800",
-    fontSize: 12
+    fontWeight: "500",
+    fontSize: 13,
+    lineHeight: 18
   },
 
   input: {
@@ -93,23 +96,29 @@ export const apStyles = StyleSheet.create({
   },
 
   linkBtn: {
-    paddingHorizontal: 10,
+    minHeight: 40,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: apColors.blueSoft,
     borderWidth: 1,
-    borderColor: apColors.border
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center"
   },
 
   linkText: {
     color: apColors.blue,
-    fontWeight: "900"
+    fontWeight: "700",
+    fontSize: 14
   },
 
   warn: {
     marginTop: 10,
     color: apColors.muted,
-    fontWeight: "800"
+    fontWeight: "500",
+    fontSize: 13,
+    lineHeight: 18
   },
 
   btnStack: {
@@ -119,49 +128,54 @@ export const apStyles = StyleSheet.create({
 
   primaryBtn: {
     marginTop: 14,
-    borderRadius: 16,
-    paddingVertical: 14,
+    minHeight: 48,
+    borderRadius: 14,
+    paddingVertical: 12,
     alignItems: "center",
+    justifyContent: "center",
     backgroundColor: apColors.blue
   },
-  primaryBtnDisabled: { opacity: 0.4 },
-  primaryText: { color: "#fff", fontWeight: "900", fontSize: 15 },
+  primaryBtnDisabled: { opacity: 0.6 },
+  primaryText: { color: "#fff", fontWeight: "700", fontSize: 14 },
 
   secondaryBtn: {
+    minHeight: 48,
     borderRadius: 14,
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 14,
-    backgroundColor: "#fff",
+    backgroundColor: apColors.blueSoft,
     borderWidth: 1,
-    borderColor: apColors.blue,
-    alignItems: "center"
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center"
   },
-  secondaryText: { color: apColors.blue, fontWeight: "900", fontSize: 15 },
+  secondaryText: { color: apColors.blue, fontWeight: "700", fontSize: 14 },
 
   dangerBtn: {
+    minHeight: 48,
     borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 14,
     backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: apColors.border,
-    alignItems: "center"
+    alignItems: "center",
+    justifyContent: "center"
   },
-  dangerText: { color: apColors.danger, fontWeight: "900", fontSize: 14 },
+  dangerText: { color: apColors.danger, fontWeight: "700", fontSize: 14 },
 
-  // ✅ REQUIRED (fixes your red-line errors)
   loadingRow: {
-    marginTop: 10,
+    marginTop: 12,
     flexDirection: "row",
     alignItems: "center",
     gap: 10
   },
   loadingText: {
     color: apColors.muted,
-    fontWeight: "800"
+    fontWeight: "600",
+    fontSize: 13
   },
 
-  // ✅ Categories one-below-another (vertical)
   segmentRow: {
     flexDirection: "column",
     gap: 10,
@@ -171,9 +185,9 @@ export const apStyles = StyleSheet.create({
   segment: {
     borderWidth: 1,
     borderColor: apColors.border,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
     backgroundColor: "#fff"
   },
 
@@ -182,17 +196,17 @@ export const apStyles = StyleSheet.create({
     borderColor: apColors.blue
   },
 
-  segmentDisabled: { opacity: 0.45 },
+  segmentDisabled: { opacity: 0.6 },
 
   segmentText: {
     color: apColors.text,
-    fontWeight: "900",
-    fontSize: 13
+    fontWeight: "700",
+    fontSize: 14
   },
 
   segmentTextOn: { color: apColors.blue },
 
   segmentTextDisabled: { color: apColors.text },
 
-  pressed: { opacity: 0.75 }
+  pressed: { opacity: 0.82 }
 });

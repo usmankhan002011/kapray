@@ -1,130 +1,186 @@
 import { StyleSheet } from "react-native";
 
 export const stylesVars = {
-  bg: "#F5F7FB",
+  bg: "#F8FAFC",
   cardBg: "#FFFFFF",
-  border: "#D9E2F2",
-  borderSoft: "#E6EDF8",
-  blue: "#3e6292",
-  blueSoft: "#EAF2FF",
-  text: "#111111",
-  subText: "#60708A",
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
   placeholder: "#94A3B8",
   danger: "#B91C1C",
   dangerSoft: "#FEE2E2",
-  dangerBorder: "#FCA5A5"
+  dangerBorder: "#FCA5A5",
+  overlayDark: "rgba(0,0,0,0.58)",
+  overlaySoft: "rgba(255,255,255,0.14)",
+  white: "#FFFFFF",
+  black: "#000000",
 };
 
 export function makeViewProductStyles(width: number, FOOTER_H: number) {
   const styles = StyleSheet.create({
-    content: { padding: 16, backgroundColor: stylesVars.bg },
+    content: {
+      padding: 16,
+      backgroundColor: stylesVars.bg,
+    },
 
     headerRow: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "space-between"
+      justifyContent: "space-between",
+      gap: 12,
     },
-    title: { fontSize: 18, fontWeight: "900", color: stylesVars.blue },
+
+    title: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: stylesVars.text,
+    },
 
     linkBtn: {
-      paddingHorizontal: 10,
+      minHeight: 40,
+      paddingHorizontal: 12,
       paddingVertical: 8,
-      borderRadius: 10,
+      borderRadius: 12,
       backgroundColor: stylesVars.blueSoft,
       borderWidth: 1,
-      borderColor: stylesVars.border
+      borderColor: "#D7E3FF",
+      alignItems: "center",
+      justifyContent: "center",
     },
+
     linkBtnInline: {
       marginTop: 10,
       alignSelf: "flex-start",
-      paddingHorizontal: 10,
+      minHeight: 40,
+      paddingHorizontal: 12,
       paddingVertical: 8,
-      borderRadius: 10,
+      borderRadius: 12,
       backgroundColor: stylesVars.blueSoft,
       borderWidth: 1,
-      borderColor: stylesVars.border
+      borderColor: "#D7E3FF",
+      alignItems: "center",
+      justifyContent: "center",
     },
-    linkText: { color: stylesVars.blue, fontWeight: "900" },
+
+    linkText: {
+      color: stylesVars.blue,
+      fontSize: 14,
+      fontWeight: "700",
+    },
 
     loadingRow: {
       marginTop: 12,
       flexDirection: "row",
       alignItems: "center",
-      gap: 10
+      gap: 10,
     },
-    loadingText: { fontSize: 12, color: stylesVars.subText, fontWeight: "800" },
 
-    warn: { marginTop: 10, color: stylesVars.subText },
+    loadingText: {
+      fontSize: 13,
+      color: stylesVars.mutedText,
+      fontWeight: "600",
+    },
+
+    warn: {
+      marginTop: 10,
+      color: stylesVars.mutedText,
+      fontSize: 13,
+      lineHeight: 18,
+      fontWeight: "500",
+    },
 
     card: {
       marginTop: 14,
-      borderRadius: 16,
+      borderRadius: 18,
       borderWidth: 1,
       borderColor: stylesVars.border,
       backgroundColor: stylesVars.cardBg,
-      padding: 14
+      padding: 18,
     },
 
     sectionTitle: {
-      fontSize: 14,
-      fontWeight: "900",
-      color: stylesVars.blue,
-      letterSpacing: 0.3
+      fontSize: 15,
+      fontWeight: "700",
+      color: stylesVars.text,
+      marginBottom: 2,
     },
 
     meta: {
       marginTop: 6,
-      fontSize: 12,
-      color: stylesVars.subText,
-      fontWeight: "800"
+      fontSize: 13,
+      lineHeight: 18,
+      color: stylesVars.mutedText,
+      fontWeight: "500",
     },
 
     compactBlock: {
       marginTop: 12,
-      borderRadius: 16,
+      borderRadius: 18,
       borderWidth: 1,
       borderColor: stylesVars.border,
       backgroundColor: stylesVars.cardBg,
-      padding: 12
+      padding: 16,
     },
+
     compactLine: {
-      fontSize: 12,
-      fontWeight: "800",
+      fontSize: 14,
+      fontWeight: "500",
       color: stylesVars.text,
-      lineHeight: 16,
-      marginTop: 4
+      lineHeight: 20,
+      marginTop: 4,
     },
+
     metaLine: {
       marginTop: 8,
-      fontSize: 12,
-      fontWeight: "800",
-      color: stylesVars.subText
+      fontSize: 13,
+      lineHeight: 18,
+      fontWeight: "500",
+      color: stylesVars.mutedText,
     },
 
     label: {
-      fontSize: 12,
-      fontWeight: "900",
-      color: stylesVars.blue,
-      letterSpacing: 0.2
+      fontSize: 13,
+      fontWeight: "700",
+      color: stylesVars.text,
+      letterSpacing: 0.2,
     },
 
     mediaBlock: {
       marginTop: 14,
-      borderRadius: 16,
+      borderRadius: 18,
       borderWidth: 1,
       borderColor: stylesVars.border,
-      backgroundColor: "#fff",
-      overflow: "hidden"
+      backgroundColor: stylesVars.cardBg,
+      overflow: "hidden",
     },
-    heroWrap: { width: "100%", backgroundColor: "#fff" },
-    heroImage: { width: "100%", height: 230, resizeMode: "cover", backgroundColor: "#f3f3f3" },
+
+    heroWrap: {
+      width: "100%",
+      backgroundColor: stylesVars.cardBg,
+    },
+
+    heroImage: {
+      width: "100%",
+      height: 230,
+      resizeMode: "cover",
+      backgroundColor: "#F1F5F9",
+    },
 
     heroVideoBox: {
       width: "100%",
       height: 230,
-      backgroundColor: "#000"
+      backgroundColor: stylesVars.black,
     },
-    heroVideo: { width: "100%", height: "100%" },
+
+    heroVideo: {
+      width: "100%",
+      height: "100%",
+    },
+
     heroCover: {
       position: "absolute",
       left: 0,
@@ -133,62 +189,88 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       bottom: 0,
       width: "100%",
       height: "100%",
-      resizeMode: "cover"
+      resizeMode: "cover",
     },
 
     heroOpenViewerBtn: {
       position: "absolute",
       right: 10,
       bottom: 10,
-      backgroundColor: "rgba(11,47,107,0.92)",
-      borderRadius: 999,
+      minHeight: 38,
       paddingHorizontal: 12,
       paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: stylesVars.blue,
       borderWidth: 1,
-      borderColor: "rgba(255,255,255,0.18)"
+      borderColor: "rgba(255,255,255,0.18)",
+      alignItems: "center",
+      justifyContent: "center",
     },
-    heroOpenViewerText: { color: "#fff", fontWeight: "900", fontSize: 12 },
 
-    thumbRow: { flexDirection: "row", gap: 10, padding: 10 },
+    heroOpenViewerText: {
+      color: stylesVars.white,
+      fontWeight: "700",
+      fontSize: 12,
+    },
+
+    thumbRow: {
+      flexDirection: "row",
+      gap: 10,
+      padding: 10,
+    },
+
     thumbWrap: {
       width: 84,
       height: 84,
-      borderRadius: 14,
+      borderRadius: 16,
       overflow: "hidden",
       borderWidth: 1,
-      borderColor: stylesVars.borderSoft,
-      backgroundColor: "#fff"
+      borderColor: stylesVars.border,
+      backgroundColor: stylesVars.cardBg,
     },
+
     thumbOn: {
       borderColor: stylesVars.blue,
-      borderWidth: 2
+      borderWidth: 2,
     },
-    thumb: { width: "100%", height: "100%", backgroundColor: "#f3f3f3" },
+
+    thumb: {
+      width: "100%",
+      height: "100%",
+      backgroundColor: "#F1F5F9",
+    },
 
     videoPlaceholder: {
       width: "100%",
       height: "100%",
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: "#F1F5FF"
+      backgroundColor: stylesVars.blueSoft,
     },
+
     videoPlaceholderText: {
       color: stylesVars.blue,
-      fontWeight: "900",
-      fontSize: 12
+      fontWeight: "700",
+      fontSize: 12,
     },
+
     playBadge: {
       position: "absolute",
       right: 6,
       bottom: 6,
-      backgroundColor: "rgba(11,47,107,0.92)",
       width: 26,
       height: 26,
-      borderRadius: 13,
+      borderRadius: 999,
+      backgroundColor: stylesVars.overlayDark,
       alignItems: "center",
-      justifyContent: "center"
+      justifyContent: "center",
     },
-    playBadgeText: { color: "#fff", fontWeight: "900", fontSize: 12 },
+
+    playBadgeText: {
+      color: stylesVars.white,
+      fontWeight: "700",
+      fontSize: 12,
+    },
 
     videoControlsOverlay: {
       position: "absolute",
@@ -197,53 +279,55 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       top: 0,
       bottom: 0,
       alignItems: "center",
-      justifyContent: "center"
+      justifyContent: "center",
     },
+
     videoControlPill: {
       paddingHorizontal: 14,
       paddingVertical: 10,
       borderRadius: 999,
       backgroundColor: "rgba(0,0,0,0.35)",
       borderWidth: 1,
-      borderColor: "rgba(255,255,255,0.25)"
+      borderColor: "rgba(255,255,255,0.25)",
     },
-    videoControlText: { color: "#fff", fontWeight: "900", fontSize: 18 },
+
+    videoControlText: {
+      color: stylesVars.white,
+      fontWeight: "700",
+      fontSize: 18,
+    },
 
     specTitle: {
       marginTop: 8,
+      fontSize: 15,
+      fontWeight: "700",
+      color: stylesVars.text,
+    },
+
+    specRow: {
+      marginTop: 10,
+    },
+
+    specLabel: {
       fontSize: 13,
-      fontWeight: "900",
-      color: stylesVars.blue,
-      letterSpacing: 0.3
+      fontWeight: "700",
+      color: stylesVars.text,
     },
-    chipsWrap: {
-      marginTop: 8,
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8
-    },
-    chip: {
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 999,
-      backgroundColor: stylesVars.blueSoft,
-      borderWidth: 1,
-      borderColor: stylesVars.border
-    },
-    chipText: {
-      color: stylesVars.blue,
-      fontWeight: "900",
-      fontSize: 12,
-      maxWidth: 220
+
+    specValue: {
+      marginTop: 4,
+      fontSize: 13,
+      lineHeight: 19,
+      color: stylesVars.subText,
+      fontWeight: "500",
     },
 
     moreDescText: {
       marginTop: 6,
-      fontSize: 13,
-      fontWeight: "800",
-      color: stylesVars.text,
-      opacity: 0.9,
-      lineHeight: 18
+      fontSize: 14,
+      fontWeight: "500",
+      color: stylesVars.subText,
+      lineHeight: 20,
     },
 
     fabVendor: {
@@ -256,9 +340,14 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       borderRadius: 999,
       backgroundColor: stylesVars.dangerSoft,
       borderWidth: 1,
-      borderColor: stylesVars.dangerBorder
+      borderColor: stylesVars.dangerBorder,
     },
-    fabVendorText: { color: stylesVars.danger, fontWeight: "900" },
+
+    fabVendorText: {
+      color: stylesVars.danger,
+      fontWeight: "700",
+      fontSize: 13,
+    },
 
     footer: {
       position: "absolute",
@@ -269,35 +358,71 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       paddingHorizontal: 14,
       paddingTop: 12,
       paddingBottom: 18,
-      backgroundColor: "#FFFFFF",
+      backgroundColor: stylesVars.cardBg,
       borderTopWidth: 1,
       borderTopColor: stylesVars.border,
       flexDirection: "row",
       alignItems: "center",
-      gap: 12
+      gap: 12,
     },
-    footerTitle: { fontSize: 13, fontWeight: "900", color: stylesVars.text },
-    footerSub: { marginTop: 4, fontSize: 12, fontWeight: "800", color: stylesVars.subText },
+
+    footerTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: stylesVars.text,
+    },
+
+    footerSub: {
+      marginTop: 4,
+      fontSize: 13,
+      lineHeight: 18,
+      fontWeight: "500",
+      color: stylesVars.mutedText,
+    },
 
     footerBtn: {
+      minHeight: 48,
       backgroundColor: stylesVars.blue,
-      borderRadius: 12,
+      borderRadius: 14,
       paddingVertical: 12,
       paddingHorizontal: 16,
       alignItems: "center",
-      justifyContent: "center"
+      justifyContent: "center",
     },
-    footerBtnDisabled: { opacity: 0.5 },
-    footerBtnText: { color: "#fff", fontWeight: "900", fontSize: 14 },
+
+    footerBtnDisabled: {
+      opacity: 0.6,
+    },
+
+    footerBtnText: {
+      color: stylesVars.white,
+      fontWeight: "700",
+      fontSize: 14,
+    },
 
     viewerContainer: {
       flex: 1,
-      backgroundColor: "#000",
-      justifyContent: "center"
+      backgroundColor: "rgba(0,0,0,0.95)",
+      justifyContent: "center",
     },
-    viewerPage: { width, height: "100%", backgroundColor: "#000" },
-    viewerImage: { width, height: "100%", resizeMode: "contain" },
-    viewerVideo: { width: "100%", height: "100%" },
+
+    viewerPage: {
+      width,
+      height: "100%",
+      backgroundColor: stylesVars.black,
+    },
+
+    viewerImage: {
+      width,
+      height: "100%",
+      resizeMode: "contain",
+    },
+
+    viewerVideo: {
+      width: "100%",
+      height: "100%",
+    },
+
     viewerCover: {
       position: "absolute",
       left: 0,
@@ -307,23 +432,46 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       width: "100%",
       height: "100%",
       resizeMode: "contain",
-      backgroundColor: "#000"
+      backgroundColor: stylesVars.black,
     },
 
     closeButton: {
       position: "absolute",
       top: 40,
       right: 20,
-      backgroundColor: "rgba(255,255,255,0.2)",
-      borderRadius: 20,
-      padding: 8
+      width: 44,
+      height: 44,
+      borderRadius: 999,
+      backgroundColor: stylesVars.overlaySoft,
+      alignItems: "center",
+      justifyContent: "center",
     },
-    closeText: { color: "#fff", fontSize: 20, fontWeight: "900" },
 
-    indexCaption: { position: "absolute", bottom: 40, alignSelf: "center" },
-    indexText: { color: "#fff", fontSize: 14, fontWeight: "900" },
+    closeText: {
+      color: stylesVars.white,
+      fontSize: 20,
+      fontWeight: "900",
+    },
 
-    pressed: { opacity: 0.75 }
+    indexCaption: {
+      position: "absolute",
+      bottom: 34,
+      alignSelf: "center",
+      backgroundColor: stylesVars.overlaySoft,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+    },
+
+    indexText: {
+      color: stylesVars.white,
+      fontSize: 14,
+      fontWeight: "900",
+    },
+
+    pressed: {
+      opacity: 0.82,
+    },
   });
 
   return { stylesVars, styles };

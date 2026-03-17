@@ -20,9 +20,9 @@ const CARD_W = (SCREEN_W - H_PADDING * 2 - GRID_GAP) / 2;
 const CARD_H = Math.max(120, Math.round(CARD_W * 1.05));
 
 const CARD_COLORS: Record<string, { bg: string; text: string }> = {
-  stitched: { bg: "#FCE7F3", text: "#111" },
-  unstitched: { bg: "#E0F2FE", text: "#111" },
-  "ready-to-wear": { bg: "#DCFCE7", text: "#111" },
+  "dupatta-included": { bg: "#FCE7F3", text: "#111" },
+  "trouser-included": { bg: "#E0F2FE", text: "#111" },
+  "blouse-included": { bg: "#DCFCE7", text: "#111" },
   "one-piece": { bg: "#FEF3C7", text: "#111" },
   "two-piece": { bg: "#EDE9FE", text: "#111" },
   "three-piece": { bg: "#FFE4E6", text: "#111" }
@@ -57,9 +57,9 @@ export default function WearStateScreen() {
         const list = (res ?? []) as WearStateItem[];
 
         const order = [
-          "stitched",
-          "unstitched",
-          "ready-to-wear",
+          "dupatta-included",
+          "trouser-included",
+          "blouse-included",
           "one-piece",
           "two-piece",
           "three-piece"

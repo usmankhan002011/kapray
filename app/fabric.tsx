@@ -15,14 +15,25 @@ import StandardFilterDisplay from "@/components/ui/StandardFilterDisplay";
 
 const FABRIC_LOCAL_IMAGES: Record<string, any> = {
   chiffon: require("@/assets/fabric-types-images/CHIFFON.jpg"),
+  crepe_chiffon: require("@/assets/fabric-types-images/CREPE_CHIFFON.jpg"),
+  silk_chiffon: require("@/assets/fabric-types-images/SILK_CHIFFON.jpg"),
+
+  cotton_silk: require("@/assets/fabric-types-images/COTTON_SILK.jpg"),
+  korean_silk: require("@/assets/fabric-types-images/KOREAN_SILK.jpg"),
+  satin_silk: require("@/assets/fabric-types-images/SATIN_SILK.jpg"),
+  silk: require("@/assets/fabric-types-images/SILK.jpg"),
+  silk_velvet: require("@/assets/fabric-types-images/SILK_VELVET.jpg"),
+  tissue_silk: require("@/assets/fabric-types-images/TISSUE_SILK.jpg"),
+
   georgette: require("@/assets/fabric-types-images/GEORGETTE.jpg"),
   jamawar: require("@/assets/fabric-types-images/JAMAWAR.jpg"),
+  katan_brocade: require("@/assets/fabric-types-images/KATAN_BROCADE.jpg"),
   net: require("@/assets/fabric-types-images/NET.jpg"),
   organza: require("@/assets/fabric-types-images/ORGANZA.jpg"),
-  silk: require("@/assets/fabric-types-images/SILK.jpg"),
   tissue: require("@/assets/fabric-types-images/TISSUE.jpg"),
   velvet: require("@/assets/fabric-types-images/VELVET.jpg")
 };
+
 
 const GRID_GAP = 8;
 const H_PADDING = 12;
@@ -89,13 +100,16 @@ export default function FabricScreen() {
         columnWrapperStyle={styles.columnWrap}
         renderItem={({ item }) => {
           const isOn = selectedSet.has(item.id);
-          const localImg =
-            FABRIC_LOCAL_IMAGES[(item.code ?? "").toLowerCase()];
+          const localImg = FABRIC_LOCAL_IMAGES[(item.code ?? "").toLowerCase()];
 
           return (
             <Pressable
               key={item.id}
-              style={[styles.card, isOn ? styles.cardSelected : null]}
+              style={({ pressed }) => [
+                styles.card,
+                isOn ? styles.cardSelected : null,
+                pressed ? styles.pressed : null
+              ]}
               onPress={() => dispatch(toggleFabricType(item.id))}
             >
               <View style={styles.imageWrap}>
@@ -105,7 +119,11 @@ export default function FabricScreen() {
                     style={styles.image}
                     resizeMode="cover"
                   />
-                ) : null}
+                ) : (
+                  <View style={styles.noImage}>
+                    <Text style={styles.noImageText}>No Image</Text>
+                  </View>
+                )}
               </View>
 
               <Text style={styles.label} numberOfLines={1}>
@@ -119,15 +137,39 @@ export default function FabricScreen() {
   );
 }
 
+const stylesVars = {
+  bg: "#F8FAFC",
+  cardBg: "#FFFFFF",
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
+  overlayDark: "rgba(0,0,0,0.58)",
+  overlaySoft: "rgba(255,255,255,0.14)",
+  white: "#FFFFFF",
+  black: "#000000"
+};
+
 const styles = StyleSheet.create({
   heading: {
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 15,
+    fontWeight: "700",
     marginBottom: 6,
-    color: "#111"
+    color: stylesVars.text
   },
+
   infoText: {
-    color: "#111",
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500",
     marginBottom: 6
   },
 
@@ -136,6 +178,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     paddingTop: 2
   },
+
   columnWrap: {
     gap: GRID_GAP,
     marginBottom: GRID_GAP
@@ -144,30 +187,55 @@ const styles = StyleSheet.create({
   card: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 6
+    borderColor: stylesVars.border,
+    borderRadius: 18,
+    padding: 8,
+    backgroundColor: stylesVars.cardBg
   },
+
   cardSelected: {
-    borderColor: "#111"
+    borderColor: stylesVars.blue,
+    borderWidth: 2,
+    backgroundColor: stylesVars.blueSoft
   },
 
   imageWrap: {
     width: "100%",
     height: 96,
-    borderRadius: 6,
+    borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#eee",
-    marginBottom: 6
+    backgroundColor: "#F1F5F9",
+    marginBottom: 8
   },
+
   image: {
     width: "100%",
     height: 96
   },
 
+  noImage: {
+    width: "100%",
+    height: 96,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9"
+  },
+
+  noImageText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: stylesVars.mutedText
+  },
+
   label: {
     fontSize: 13,
-    color: "#111",
-    textAlign: "center"
+    lineHeight: 18,
+    color: stylesVars.text,
+    textAlign: "center",
+    fontWeight: "700"
+  },
+
+  pressed: {
+    opacity: 0.82
   }
 });

@@ -15,7 +15,6 @@ type Params = {
   productName?: string;
   product_name?: string;
 
-  // ✅ dress category passthrough (stitched/unstitched etc.)
   product_category?: string;
 
   price?: string;
@@ -55,16 +54,13 @@ type Params = {
   city?: string;
   notes?: string;
 
-  // ✅ dyeing (buyer selection + vendor cost)
   dye_shade_id?: string;
   dye_hex?: string;
   dye_label?: string;
   dyeing_cost_pkr?: string;
 
-  // tolerate older key from modal
   dyeing_selected_shade?: string;
 
-  // ✅ tailoring passthrough (vendor-set; buyer did not choose tailor)
   tailoring_cost_pkr?: string;
   tailoring_turnaround_days?: string;
 };
@@ -97,13 +93,11 @@ export default function PaymentScreen() {
   const data = useMemo(() => {
     const currency = norm(params.currency) || "PKR";
 
-    // NOTE: place-order now passes total payable in params.price
     const totalParam = norm(params.price);
 
     const mode = norm(params.mode) || "standard";
     const selectedSize = norm(params.selectedSize);
 
-    // ✅ FIX: force tuple typing so TS doesn't widen to string[][]
     const exactPairs = ([
       ["A", norm(params.a)],
       ["B", norm(params.b)],
@@ -132,7 +126,6 @@ export default function PaymentScreen() {
 
     const vendorName = norm(params.vendorName) || norm(params.vendorShopName) || "Vendor";
 
-    // ✅ dyeing
     const dyeShadeId = safeDecode(params.dye_shade_id);
     const dyeHex = safeDecode(norm(params.dye_hex) || norm(params.dyeing_selected_shade));
     const dyeLabel = safeDecode(params.dye_label);
@@ -142,7 +135,6 @@ export default function PaymentScreen() {
     const dyeCost = Number(dyeingCostPkrRaw || 0);
     const safeDye = Number.isFinite(dyeCost) && dyeCost > 0 ? dyeCost : 0;
 
-    // ✅ tailoring (vendor-set; can be 0 if not selected/eligible)
     const tailoringCostRaw = safeDecode(params.tailoring_cost_pkr);
     const tailoringDaysRaw = safeDecode(params.tailoring_turnaround_days);
 
@@ -160,22 +152,17 @@ export default function PaymentScreen() {
     const totalPkrNum = Number(totalParam || 0);
     const totalPkrSafe = Number.isFinite(totalPkrNum) && totalPkrNum > 0 ? totalPkrNum : 0;
 
-    // If shade selected, the totalParam should already include dyeing (from place-order).
-    // Still keep dye line for snapshot + UI.
-    const totalText = totalParam ? `${currency} ${totalParam}` : `${currency} —`;
-
     return {
       productId: firstNonEmpty(params.productId, params.product_id),
       productCode: firstNonEmpty(params.productCode, params.product_code),
       productName: firstNonEmpty(params.productName, params.product_name) || "Product",
       imageUrl: firstNonEmpty(params.imageUrl, params.image_url),
 
-      // ✅ dress category passthrough
       productCategory: norm((params as any).product_category),
 
       currency,
       totalParam,
-      totalText,
+      totalText: totalParam ? `${currency} ${totalParam}` : `${currency} —`,
       totalPkrSafe,
 
       vendorName,
@@ -219,7 +206,6 @@ export default function PaymentScreen() {
         return;
       }
 
-      // Fetch product for snapshots + vendor_id
       let q = supabase
         .from("products")
         .select("id,vendor_id,product_code,title,spec,price,media")
@@ -243,15 +229,11 @@ export default function PaymentScreen() {
       for (const [k, v] of data.exactPairs) exactMap[k] = v;
 
       const currency = data.currency || "PKR";
-
-      // ✅ total already includes dyeing when selected (from place-order)
       const totalPkr = data.totalPkrSafe ? data.totalPkrSafe : null;
 
-      // ✅ merge dyeing + tailoring fields into spec_snapshot (so Orders UI can access them)
       const specSnapshot =
         pRow.spec && typeof pRow.spec === "object" ? { ...(pRow.spec as any) } : {};
 
-      // ✅ add dress category into snapshot for downstream UI
       if (data.productCategory) {
         (specSnapshot as any).product_category = data.productCategory;
       }
@@ -287,11 +269,7 @@ export default function PaymentScreen() {
           product_code_snapshot: productCode,
           title_snapshot: title,
 
-          // ✅ snapshot includes dress category
-          // ✅ snapshot includes dye selection + dyeing cost when selected
-          // ✅ snapshot includes tailoring (vendor-set) when present
           spec_snapshot: specSnapshot,
-
           price_snapshot: pRow.price ?? {},
           media_snapshot: pRow.media ?? {},
 
@@ -305,7 +283,6 @@ export default function PaymentScreen() {
           selected_size: data.mode === "exact" ? null : (data.selectedSize || null),
           exact_measurements: data.mode === "exact" ? exactMap : {},
 
-          // ✅ NEW: simple status pipeline starts here
           status: "placed"
         })
         .select("id")
@@ -345,7 +322,7 @@ export default function PaymentScreen() {
               )}
             </View>
 
-            <View style={{ flex: 1, gap: 6 }}>
+            <View style={styles.productMetaWrap}>
               <Text style={styles.productName} numberOfLines={2}>
                 {data.productName}
               </Text>
@@ -354,7 +331,6 @@ export default function PaymentScreen() {
                 Vendor: <Text style={styles.metaStrong}>{data.vendorName}</Text>
               </Text>
 
-              {/* ✅ show Dress Cat if passed */}
               {!!data.productCategory && (
                 <Text style={styles.meta}>
                   Dress Cat:{" "}
@@ -366,7 +342,6 @@ export default function PaymentScreen() {
                 </Text>
               )}
 
-              {/* ✅ Total amount (already includes dyeing when selected) */}
               <Text style={styles.meta}>
                 Amount:{" "}
                 <Text style={styles.metaStrong}>
@@ -374,7 +349,6 @@ export default function PaymentScreen() {
                 </Text>
               </Text>
 
-              {/* ✅ Dyeing cost line (only if selected) */}
               {data.hasDyeing ? (
                 <Text style={styles.meta}>
                   Dyeing:{" "}
@@ -384,7 +358,6 @@ export default function PaymentScreen() {
                 </Text>
               ) : null}
 
-              {/* ✅ Tailoring line (only if passed) */}
               {data.hasTailoring ? (
                 <Text style={styles.meta}>
                   Tailoring:{" "}
@@ -440,7 +413,7 @@ export default function PaymentScreen() {
             style={({ pressed }) => [
               styles.primaryBtn,
               (pressed || submitting) && styles.pressed,
-              submitting && { opacity: 0.6 }
+              submitting && styles.disabledBtn
             ]}
           >
             <Text style={styles.primaryText}>
@@ -456,65 +429,201 @@ export default function PaymentScreen() {
           <Text style={styles.backText}>Back</Text>
         </Pressable>
 
-        <View style={{ height: 16 }} />
+        <View style={styles.bottomSpacer} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+const stylesVars = {
+  bg: "#F8FAFC",
+  cardBg: "#FFFFFF",
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
+  overlayDark: "rgba(0,0,0,0.58)",
+  overlaySoft: "rgba(255,255,255,0.14)",
+  white: "#FFFFFF",
+  black: "#000000"
+};
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#fff" },
-  scroll: { flex: 1 },
-  container: { padding: 16, gap: 12 },
+  safe: {
+    flex: 1,
+    backgroundColor: stylesVars.bg
+  },
 
-  title: { fontSize: 22, fontWeight: "900" },
-  subtitle: { fontSize: 13, color: "#444" },
+  scroll: {
+    flex: 1,
+    backgroundColor: stylesVars.bg
+  },
 
-  card: { borderWidth: 1, borderColor: "#eee", borderRadius: 16, padding: 14, gap: 10 },
-  sectionTitle: { fontSize: 14, fontWeight: "900" },
+  container: {
+    padding: 16,
+    gap: 12
+  },
 
-  productRow: { flexDirection: "row", gap: 12 },
+  title: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  subtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
+
+  card: {
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    borderRadius: 18,
+    padding: 18,
+    gap: 10,
+    backgroundColor: stylesVars.cardBg
+  },
+
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  productRow: {
+    flexDirection: "row",
+    gap: 12
+  },
+
   imageBox: {
     width: 90,
     height: 90,
     borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#f3f3f3"
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: stylesVars.border
   },
-  image: { width: "100%", height: "100%" },
-  imagePlaceholder: { flex: 1, alignItems: "center", justifyContent: "center" },
-  imagePlaceholderText: { color: "#777", fontSize: 12 },
 
-  productName: { fontSize: 14, fontWeight: "900" },
+  image: {
+    width: "100%",
+    height: "100%"
+  },
 
-  // ✅ CHANGE: labels now LIGHTER BLUE (distinct from values)
-  meta: { fontSize: 12, color: "#1F4E8C" },
+  imagePlaceholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center"
+  },
 
-  // ✅ values stay BLACK
-  metaStrong: { fontWeight: "900", color: "#111" },
+  imagePlaceholderText: {
+    color: stylesVars.mutedText,
+    fontSize: 12,
+    fontWeight: "600"
+  },
 
-  divider: { height: 1, backgroundColor: "#eee", marginVertical: 6 },
+  productMetaWrap: {
+    flex: 1,
+    gap: 6
+  },
 
-  payOption: { borderWidth: 1, borderColor: "#eee", borderRadius: 12, padding: 12, gap: 6 },
-  payTitle: { fontWeight: "900" },
-  payDesc: { fontSize: 12, color: "#555" },
+  productName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  meta: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
+
+  metaStrong: {
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  divider: {
+    height: 1,
+    backgroundColor: stylesVars.border,
+    marginVertical: 6
+  },
+
+  payOption: {
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    borderRadius: 14,
+    padding: 14,
+    gap: 6,
+    backgroundColor: stylesVars.cardBg
+  },
+
+  payTitle: {
+    fontWeight: "700",
+    fontSize: 14,
+    color: stylesVars.text
+  },
+
+  payDesc: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
 
   primaryBtn: {
     borderRadius: 14,
-    backgroundColor: "#111",
+    backgroundColor: stylesVars.blue,
     paddingVertical: 14,
-    alignItems: "center"
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48
   },
-  primaryText: { color: "#fff", fontWeight: "900" },
+
+  primaryText: {
+    color: stylesVars.white,
+    fontWeight: "700",
+    fontSize: 14
+  },
 
   backBtn: {
-    borderRadius: 14,
+    alignSelf: "flex-start",
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#ddd",
-    paddingVertical: 12,
-    alignItems: "center"
+    borderColor: "#D7E3FF",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: stylesVars.blueSoft,
+    minHeight: 40
   },
-  backText: { fontWeight: "900" },
 
-  pressed: { opacity: 0.75 }
+  backText: {
+    fontWeight: "700",
+    color: stylesVars.blue
+  },
+
+  disabledBtn: {
+    opacity: 0.6
+  },
+
+  bottomSpacer: {
+    height: 16
+  },
+
+  pressed: {
+    opacity: 0.82
+  }
 });

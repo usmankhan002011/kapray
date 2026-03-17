@@ -43,24 +43,37 @@ export default function StandardFilterDisplay({
   );
 }
 
+const stylesVars = {
+  bg: "#F8FAFC",
+  cardBg: "#FFFFFF",
+  border: "#E5E7EB",
+  blue: "#2563EB",
+  text: "#0F172A",
+  mutedText: "#64748B",
+  white: "#FFFFFF"
+};
+
 export const optionStyles = StyleSheet.create({
   card: {
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderRadius: 10,
-    borderColor: "#ddd",
-    backgroundColor: "#fff",
+    borderRadius: 14,
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.cardBg,
     marginBottom: 10
   },
+
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10
   },
+
   label: {
-    fontSize: 16,
-    color: "#111"
+    fontSize: 15,
+    color: stylesVars.text,
+    fontWeight: "600"
   }
 });
 
@@ -68,33 +81,41 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
-    backgroundColor: "#fff"
+    backgroundColor: stylesVars.bg
   },
+
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between"
   },
+
   action: {
-    fontSize: 16,
-    color: "#111"
+    fontSize: 14,
+    fontWeight: "600",
+    color: stylesVars.blue
   },
+
   title: {
     flex: 1,
     textAlign: "center",
     fontSize: 18,
     fontWeight: "700",
-    color: "#111",
+    color: stylesVars.text,
     paddingHorizontal: 10
   },
+
   anyRow: {
     marginTop: 12,
-    marginBottom: 6
+    marginBottom: 8
   },
+
   anyText: {
     fontSize: 14,
-    color: "#111"
+    fontWeight: "600",
+    color: stylesVars.mutedText
   },
+
   content: {
     flex: 1
   }
