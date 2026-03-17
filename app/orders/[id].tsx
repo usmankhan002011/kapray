@@ -308,7 +308,7 @@ export default function OrderDetailScreen() {
   }, [load]);
 
   const isBuyerTrackView = useMemo(() => {
-    return fromParam === "track";
+    return fromParam === "track" || fromParam === "buyer-track" || fromParam === "buyer-order";
   }, [fromParam]);
 
   const isVendorView = useMemo(() => {
@@ -324,10 +324,11 @@ export default function OrderDetailScreen() {
   }, [isBuyerTrackView, isVendorView]);
 
   const backTarget = useMemo(() => {
-    if (isBuyerTrackView) return "/";
+    if (fromParam === "track" || fromParam === "buyer-track") return "/flow/orders/track";
+    if (fromParam === "buyer-order") return "/wizard";
     if (isVendorView) return "/orders";
     return "/";
-  }, [isBuyerTrackView, isVendorView]);
+  }, [fromParam, isVendorView]);
 
   useEffect(() => {
     const backAction = () => {

@@ -291,7 +291,10 @@ export default function PaymentScreen() {
       if (oErr) throw oErr;
 
       const orderId = Number(oIns.id);
-      router.replace({ pathname: "/orders/[id]", params: { id: String(orderId) } });
+        router.replace({
+            pathname: "/orders/[id]",
+            params: { id: String(orderId), from: "buyer-order" }
+      });
     } catch (e: any) {
       console.warn("order create failed:", e?.message ?? e);
       Alert.alert("Order failed", e?.message ?? "Could not create order.");
