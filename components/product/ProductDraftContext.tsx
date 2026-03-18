@@ -10,9 +10,9 @@ import * as ImagePicker from "expo-image-picker";
 export type PriceMode = "unstitched_per_meter" | "stitched_total";
 
 export type ProductDraftSpec = {
-  dressTypeIds: number[];
+  dressTypeIds: string[];
   fabricTypeIds: string[];
-  colorShadeIds: string[]; // red/green/...
+  colorShadeIds: string[];
   workTypeIds: string[];
   workDensityIds: string[];
   originCityIds: string[];
@@ -22,14 +22,12 @@ export type ProductDraftSpec = {
 export type ProductDraftPrice = {
   currency: "PKR";
   mode: PriceMode;
-  cost_pkr_per_meter?: number | null; // unstitched
-  cost_pkr_total?: number | null; // stitched / ready-to-wear
-  available_sizes?: string[]; // stitched / ready-to-wear only
+  cost_pkr_per_meter?: number | null;
+  cost_pkr_total?: number | null;
+  available_sizes?: string[];
 };
 
 export type ProductDraftMedia = {
-  // During draft: ImagePicker assets (local URIs)
-  // After upload step later: we will also store storage paths into DB
   images: ImagePicker.ImagePickerAsset[];
   videos: ImagePicker.ImagePickerAsset[];
 };
@@ -53,8 +51,7 @@ type ProductDraftContextValue = {
   setPriceTotal: (value: number | null) => void;
   setAvailableSizes: (sizes: string[]) => void;
 
-  // Selection setters (modal screens write here)
-  setDressTypeIds: (ids: number[]) => void;
+  setDressTypeIds: (ids: string[]) => void;
   setFabricTypeIds: (ids: string[]) => void;
   setColorShadeIds: (ids: string[]) => void;
   setWorkTypeIds: (ids: string[]) => void;
@@ -62,7 +59,6 @@ type ProductDraftContextValue = {
   setOriginCityIds: (ids: string[]) => void;
   setWearStateIds: (ids: string[]) => void;
 
-  // Media setters (add-product writes here)
   setImages: (
     next:
       | ImagePicker.ImagePickerAsset[]
@@ -75,7 +71,6 @@ type ProductDraftContextValue = {
       | ((prev: ImagePicker.ImagePickerAsset[]) => ImagePicker.ImagePickerAsset[])
   ) => void;
 
-  // For later edit flow: hydrate draft from DB record
   setDraft: (next: ProductDraft) => void;
 
   resetDraft: () => void;
@@ -141,7 +136,6 @@ export function ProductDraftProvider({
         mode
       };
 
-      // UX: keep only the relevant field populated
       if (mode === "unstitched_per_meter") {
         nextPrice.cost_pkr_total = null;
         nextPrice.available_sizes = [];
@@ -180,7 +174,7 @@ export function ProductDraftProvider({
     }));
   }, []);
 
-  const setDressTypeIds = useCallback((ids: number[]) => {
+  const setDressTypeIds = useCallback((ids: string[]) => {
     _setDraft((prev) => ({
       ...prev,
       spec: { ...prev.spec, dressTypeIds: ids }
@@ -233,13 +227,11 @@ export function ProductDraftProvider({
     (
       next:
         | ImagePicker.ImagePickerAsset[]
-        | ((
-            prev: ImagePicker.ImagePickerAsset[]
-          ) => ImagePicker.ImagePickerAsset[])
+        | ((prev: ImagePicker.ImagePickerAsset[]) => ImagePicker.ImagePickerAsset[])
     ) => {
       _setDraft((prev) => {
         const nextImages =
-          typeof next === "function" ? (next as any)(prev.media.images) : next;
+          typeof next === "function" ? next(prev.media.images) : next;
 
         return {
           ...prev,
@@ -254,13 +246,11 @@ export function ProductDraftProvider({
     (
       next:
         | ImagePicker.ImagePickerAsset[]
-        | ((
-            prev: ImagePicker.ImagePickerAsset[]
-          ) => ImagePicker.ImagePickerAsset[])
+        | ((prev: ImagePicker.ImagePickerAsset[]) => ImagePicker.ImagePickerAsset[])
     ) => {
       _setDraft((prev) => {
         const nextVideos =
-          typeof next === "function" ? (next as any)(prev.media.videos) : next;
+          typeof next === "function" ? next(prev.media.videos) : next;
 
         return {
           ...prev,

@@ -1,8 +1,9 @@
+// File: components/Wizard/WizardScraffold.tsx
+
 import React from "react";
 import {
   Pressable,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -39,12 +40,13 @@ export default function WizardScaffold({
   return (
     <SafeAreaView style={styles.root}>
       <KeyboardAwareScrollView
-        contentContainerStyle={styles.flex}
+        contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="none"
         enableOnAndroid
         extraScrollHeight={10}
+        showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerTopRow}>
             <Pressable onPress={onBack} style={styles.backButton}>
@@ -60,22 +62,13 @@ export default function WizardScaffold({
 
           {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
 
-          {/* Progress */}
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${progress}%` }]} />
           </View>
         </View>
 
-        {/* Content */}
-        <ScrollView
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {children}
-        </ScrollView>
+        <View style={styles.content}>{children}</View>
 
-        {/* Footer */}
         <View style={styles.footer}>
           <Pressable
             onPress={onNext}
@@ -100,8 +93,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#F6F8FC",
   },
 
-  flex: {
-    flex: 1,
+  scrollContent: {
+    flexGrow: 1,
   },
 
   header: {
@@ -171,6 +164,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 24,
     paddingBottom: 32,
+    flexGrow: 1,
   },
 
   footer: {

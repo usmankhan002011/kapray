@@ -18,7 +18,6 @@ import { supabase } from "@/utils/supabase/client";
 const BUCKET_VENDOR = "vendor_images";
 
 type Params = {
-  // size flow
   productId?: string;
   product_id?: string;
   productCode?: string;
@@ -42,10 +41,8 @@ type Params = {
   m?: string;
   n?: string;
 
-  // ✅ dress category passthrough (stitched/unstitched etc.)
   product_category?: string;
 
-  // product detail params (sometimes forwarded, sometimes not)
   productName?: string;
   product_name?: string;
   price?: string;
@@ -53,28 +50,21 @@ type Params = {
   imageUrl?: string;
   image_url?: string;
 
-  // optional vendor overrides
   vendorName?: string;
   vendorMobile?: string;
   vendorAddress?: string;
 
-  // ✅ dyeing (buyer selection + vendor cost)
   dye_shade_id?: string;
   dye_hex?: string;
   dye_label?: string;
   dyeing_cost_pkr?: string;
 
-  // ✅ NEW: explicit dyeing choice (1/0/true/false)
   dyeing_selected?: string;
-
-  // tolerate older key from modal
   dyeing_selected_shade?: string;
 
-  // ✅ tailoring (vendor-set cost + turnaround)
   tailoring_cost_pkr?: string;
   tailoring_turnaround_days?: string;
 
-  // ✅ NEW: explicit tailoring choice + availability
   tailoring_selected?: string;
   tailoring_available?: string;
 };
@@ -182,7 +172,6 @@ export default function PlaceOrderScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<Params>();
 
-  // vendor slice should be mounted under state.vendor
   const vendor = useSelector((s: any) => (s?.vendor ?? null)) as VendorState | null;
 
   const base = useMemo(() => {
@@ -239,20 +228,16 @@ export default function PlaceOrderScreen() {
     const price = firstNonEmpty(params.price);
     const imageUrl = firstNonEmpty(params.imageUrl, params.image_url);
 
-    // ✅ dyeing (tolerate multiple keys)
     const dyeShadeId = safeDecode(firstNonEmpty(params.dye_shade_id));
     const dyeHex = safeDecode(firstNonEmpty(params.dye_hex, params.dyeing_selected_shade));
     const dyeLabel = safeDecode(firstNonEmpty(params.dye_label));
     const dyeingCostPkr = safeDecode(firstNonEmpty(params.dyeing_cost_pkr));
 
-    // ✅ explicit dyeing selected
     const dyeingSelected = parseBoolParam(params.dyeing_selected);
 
-    // ✅ tailoring
     const tailoringCostPkr = safeDecode(firstNonEmpty(params.tailoring_cost_pkr));
     const tailoringTurnaroundDays = safeDecode(firstNonEmpty(params.tailoring_turnaround_days));
 
-    // ✅ explicit tailoring selected + available
     const tailoringSelected = parseBoolParam(params.tailoring_selected);
     const tailoringAvailable = parseBoolParam(params.tailoring_available);
 
@@ -282,7 +267,6 @@ export default function PlaceOrderScreen() {
     };
   }, [params]);
 
-  // fetched fallback (when details were not forwarded)
   const [loadingProduct, setLoadingProduct] = useState(false);
   const [fetchedProduct, setFetchedProduct] = useState<ProductRow | null>(null);
 
@@ -322,8 +306,13 @@ export default function PlaceOrderScreen() {
         `
         );
 
-      if (base.productId) q = q.eq("id", base.productId);
-      else q = q.eq("product_code", base.productCode);
+      const numericProductId = Number(base.productId);
+
+      if (Number.isFinite(numericProductId)) {
+        q = q.eq("id", numericProductId);
+      } else if (base.productCode) {
+        q = q.eq("product_code", base.productCode);
+      }
 
       const { data, error } = await q.single();
       if (error) return;
@@ -356,7 +345,6 @@ export default function PlaceOrderScreen() {
 
     const imageUrl = base.imageUrl || fetchedImageUrl || "";
 
-    // vendor: prefer redux (already set via view-product), else fallback to fetched join
     const vJoin = fp?.vendor ?? null;
 
     const vendorName =
@@ -377,7 +365,6 @@ export default function PlaceOrderScreen() {
 
     const dyeText = base.dyeLabel || base.dyeShadeId || base.dyeHex || "";
 
-    // ✅ decide whether dyeing/tailoring are selected (explicit first, else infer from presence)
     const hasAnyDyeFields = !!base.dyeHex || !!base.dyeShadeId || !!base.dyeLabel;
     const dyeingSelected =
       typeof base.dyeingSelected === "boolean" ? base.dyeingSelected : hasAnyDyeFields;
@@ -414,7 +401,6 @@ export default function PlaceOrderScreen() {
     };
   }, [base, fetchedProduct, vendor, params.vendorName, params.vendorMobile, params.vendorAddress]);
 
-  // ✅ compute payable (base + dyeing + tailoring) using explicit selected flags
   const priceCalc = useMemo(() => {
     const basePrice = Number(resolved.priceParam || 0);
 
@@ -447,7 +433,6 @@ export default function PlaceOrderScreen() {
     resolved.tailoringSelected
   ]);
 
-  // buyer / delivery fields
   const [buyerName, setBuyerName] = useState("");
   const [buyerMobile, setBuyerMobile] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
@@ -472,23 +457,19 @@ export default function PlaceOrderScreen() {
         selectedSize: base.selectedSize,
         ...base.letters,
 
-        // ✅ keep dress category flowing
         product_category: params.product_category ? String(params.product_category) : "",
 
-        // keep forwarding so it’s instant next time
         productName: resolved.title,
         price: resolved.priceParam,
         currency: resolved.currency,
         imageUrl: resolved.imageUrl,
 
-        // ✅ keep dyeing forward too (and its selection flag)
         dyeing_selected: resolved.dyeingSelected ? "1" : "0",
         dye_shade_id: resolved.dyeShadeId ? encodeURIComponent(resolved.dyeShadeId) : "",
         dye_hex: resolved.dyeHex ? encodeURIComponent(resolved.dyeHex) : "",
         dye_label: resolved.dyeLabel ? encodeURIComponent(resolved.dyeLabel) : "",
         dyeing_cost_pkr: resolved.dyeingCostPkr ? encodeURIComponent(resolved.dyeingCostPkr) : "",
 
-        // ✅ keep tailoring forward too (and its selection flag)
         tailoring_available:
           resolved.tailoringAvailable === true ? "1" : resolved.tailoringAvailable === false ? "0" : "",
         tailoring_selected: resolved.tailoringSelected ? "1" : "0",
@@ -508,10 +489,8 @@ export default function PlaceOrderScreen() {
         productCode: resolved.code || base.productCode,
         productName: resolved.title,
 
-        // ✅ keep dress category flowing
         product_category: params.product_category ? String(params.product_category) : "",
 
-        // ✅ IMPORTANT: send payable total (base + dyeing + tailoring)
         price: String(priceCalc.totalPayable || 0),
 
         currency: resolved.currency,
@@ -525,14 +504,12 @@ export default function PlaceOrderScreen() {
         selectedSize: base.selectedSize,
         ...base.letters,
 
-        // ✅ dyeing goes to payment so it can be saved into order snapshot
         dyeing_selected: resolved.dyeingSelected ? "1" : "0",
         dye_shade_id: resolved.dyeShadeId ? encodeURIComponent(resolved.dyeShadeId) : "",
         dye_hex: resolved.dyeHex ? encodeURIComponent(resolved.dyeHex) : "",
         dye_label: resolved.dyeLabel ? encodeURIComponent(resolved.dyeLabel) : "",
         dyeing_cost_pkr: resolved.dyeingCostPkr ? encodeURIComponent(resolved.dyeingCostPkr) : "",
 
-        // ✅ tailoring goes to payment so it can be saved into order snapshot
         tailoring_available:
           resolved.tailoringAvailable === true ? "1" : resolved.tailoringAvailable === false ? "0" : "",
         tailoring_selected: resolved.tailoringSelected ? "1" : "0",
@@ -566,7 +543,6 @@ export default function PlaceOrderScreen() {
           </View>
         ) : null}
 
-        {/* Product */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Product</Text>
 
@@ -581,7 +557,7 @@ export default function PlaceOrderScreen() {
               )}
             </View>
 
-            <View style={{ flex: 1, gap: 6 }}>
+            <View style={styles.productMetaWrap}>
               <Text style={styles.productName} numberOfLines={2}>
                 {resolved.title}
               </Text>
@@ -590,7 +566,6 @@ export default function PlaceOrderScreen() {
                 Code: <Text style={styles.metaStrong}>{resolved.code || "—"}</Text>
               </Text>
 
-              {/* ✅ changed: show Dress Cat */}
               <Text style={styles.meta}>
                 Dress Cat:{" "}
                 <Text style={styles.metaStrong}>
@@ -611,7 +586,6 @@ export default function PlaceOrderScreen() {
                 </Text>
               </Text>
 
-              {/* ✅ Dyeing cost line (only if dyeing selected) */}
               {priceCalc.hasDyeing ? (
                 <Text style={styles.meta}>
                   Dyeing:{" "}
@@ -621,7 +595,6 @@ export default function PlaceOrderScreen() {
                 </Text>
               ) : null}
 
-              {/* ✅ Tailoring cost line (only if tailoring selected) */}
               {priceCalc.hasTailoring ? (
                 <Text style={styles.meta}>
                   Tailoring:{" "}
@@ -632,7 +605,6 @@ export default function PlaceOrderScreen() {
                 </Text>
               ) : null}
 
-              {/* ✅ Total payable */}
               {resolved.priceParam ? (
                 <Text style={styles.meta}>
                   Total Payable:{" "}
@@ -642,21 +614,15 @@ export default function PlaceOrderScreen() {
                 </Text>
               ) : null}
 
-              {/* ✅ Selected Colour (preview only) */}
               {!!resolved.dyeHex && priceCalc.hasDyeing ? (
-                <View style={{ marginTop: 8 }}>
+                <View style={styles.dyePreviewWrap}>
                   <Text style={styles.meta}>Selected Colour for Dyeing</Text>
 
                   <View
-                    style={{
-                      marginTop: 8,
-                      width: 60,
-                      height: 60,
-                      borderRadius: 14,
-                      backgroundColor: resolved.dyeHex,
-                      borderWidth: 1,
-                      borderColor: "#CBD5E1"
-                    }}
+                    style={[
+                      styles.dyeSwatch,
+                      { backgroundColor: resolved.dyeHex }
+                    ]}
                   />
                 </View>
               ) : null}
@@ -688,7 +654,6 @@ export default function PlaceOrderScreen() {
           </Pressable>
         </View>
 
-        {/* Vendor */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Vendor</Text>
 
@@ -727,7 +692,6 @@ export default function PlaceOrderScreen() {
           ) : null}
         </View>
 
-        {/* Delivery */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Delivery details</Text>
 
@@ -737,7 +701,7 @@ export default function PlaceOrderScreen() {
             onChangeText={setBuyerName}
             placeholder="e.g., Arif Nawaz Khan"
             style={styles.input}
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={stylesVars.placeholder}
           />
 
           <Text style={styles.fieldLabel}>Mobile</Text>
@@ -747,7 +711,7 @@ export default function PlaceOrderScreen() {
             placeholder="e.g., 03XXXXXXXXX"
             keyboardType="phone-pad"
             style={styles.input}
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={stylesVars.placeholder}
           />
 
           <Text style={styles.fieldLabel}>Delivery Address</Text>
@@ -757,7 +721,7 @@ export default function PlaceOrderScreen() {
             placeholder="House / Street / Area"
             style={[styles.input, styles.multiline]}
             multiline
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={stylesVars.placeholder}
           />
 
           <Text style={styles.fieldLabel}>City</Text>
@@ -766,7 +730,7 @@ export default function PlaceOrderScreen() {
             onChangeText={setCity}
             placeholder="e.g., Lahore"
             style={styles.input}
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={stylesVars.placeholder}
           />
 
           <Text style={styles.fieldLabel}>Notes (optional)</Text>
@@ -776,7 +740,7 @@ export default function PlaceOrderScreen() {
             placeholder="Any special instructions"
             style={[styles.input, styles.multiline]}
             multiline
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={stylesVars.placeholder}
           />
 
           <Pressable
@@ -806,68 +770,157 @@ export default function PlaceOrderScreen() {
           <Text style={styles.backText}>Back</Text>
         </Pressable>
 
-        <View style={{ height: 16 }} />
+        <View style={styles.bottomSpacer} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+const stylesVars = {
+  bg: "#F8FAFC",
+  cardBg: "#FFFFFF",
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
+  overlayDark: "rgba(0,0,0,0.58)",
+  overlaySoft: "rgba(255,255,255,0.14)",
+  white: "#FFFFFF",
+  black: "#000000"
+};
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#fff" },
-  scroll: { flex: 1, backgroundColor: "#fff" },
-  container: { padding: 16, gap: 12 },
+  safe: {
+    flex: 1,
+    backgroundColor: stylesVars.bg
+  },
 
-  title: { fontSize: 22, fontWeight: "900", color: "#111" },
+  scroll: {
+    flex: 1,
+    backgroundColor: stylesVars.bg
+  },
 
-  loadingRow: { flexDirection: "row", gap: 10, alignItems: "center" },
+  container: {
+    padding: 16,
+    gap: 12
+  },
+
+  title: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  loadingRow: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "center"
+  },
 
   card: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 14,
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.cardBg,
+    borderRadius: 18,
+    padding: 18,
     gap: 10
   },
 
-  // ✅ labels in blue
-  sectionTitle: { fontSize: 14, fontWeight: "900", color: "#3e6292" },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
 
-  productRow: { flexDirection: "row", gap: 12, alignItems: "center" },
+  productRow: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "center"
+  },
+
   imageBox: {
     width: 86,
     height: 86,
     borderRadius: 12,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#E5E7EB"
+    borderColor: stylesVars.border
   },
-  image: { width: "100%", height: "100%" },
+
+  image: {
+    width: "100%",
+    height: "100%"
+  },
+
   imagePlaceholder: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F3F4F6"
+    backgroundColor: "#F1F5F9"
   },
-  imagePlaceholderText: { fontSize: 12, color: "#6B7280", fontWeight: "800" },
 
-  productName: { fontSize: 15, fontWeight: "900", color: "#111" },
+  imagePlaceholderText: {
+    fontSize: 12,
+    color: stylesVars.mutedText,
+    fontWeight: "600"
+  },
 
-  meta: { fontSize: 12, color: "#374151", fontWeight: "700" },
-  metaStrong: { fontSize: 12, color: "#111", fontWeight: "900" },
+  productMetaWrap: {
+    flex: 1,
+    gap: 6
+  },
 
-  divider: { height: 1, backgroundColor: "#E5E7EB" },
+  productName: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
 
-  pillsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  meta: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
+
+  metaStrong: {
+    fontSize: 13,
+    color: stylesVars.text,
+    fontWeight: "700"
+  },
+
+  divider: {
+    height: 1,
+    backgroundColor: stylesVars.border
+  },
+
+  pillsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+
   pill: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#D7E3FF",
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 999,
-    backgroundColor: "#F9FAFB"
+    backgroundColor: stylesVars.blueSoft
   },
-  pillText: { fontSize: 12, color: "#111", fontWeight: "900" },
+
+  pillText: {
+    fontSize: 12,
+    color: stylesVars.blue,
+    fontWeight: "700"
+  },
 
   vendorBannerWrap: {
     width: "100%",
@@ -875,52 +928,119 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: "#F3F4F6"
+    borderColor: stylesVars.border,
+    backgroundColor: "#F1F5F9"
   },
-  vendorBanner: { width: "100%", height: "100%" },
 
-  // ✅ labels in blue
-  fieldLabel: { fontSize: 12, color: "#3e6292", fontWeight: "900", marginTop: 2 },
+  vendorBanner: {
+    width: "100%",
+    height: "100%"
+  },
+
+  fieldLabel: {
+    fontSize: 13,
+    color: stylesVars.text,
+    fontWeight: "700",
+    marginTop: 2
+  },
+
   input: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: stylesVars.borderSoft,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    color: "#111",
-    fontWeight: "800",
-    backgroundColor: "#fff"
+    color: stylesVars.text,
+    fontWeight: "500",
+    backgroundColor: stylesVars.white
   },
-  multiline: { minHeight: 44, textAlignVertical: "top" },
+
+  multiline: {
+    minHeight: 44,
+    textAlignVertical: "top"
+  },
 
   primaryBtn: {
-    backgroundColor: "#111",
+    minHeight: 48,
+    backgroundColor: stylesVars.blue,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: "center",
+    justifyContent: "center",
     marginTop: 6
   },
-  primaryText: { color: "#fff", fontWeight: "900", fontSize: 14 },
+
+  primaryText: {
+    color: stylesVars.white,
+    fontWeight: "700",
+    fontSize: 14
+  },
 
   secondaryBtn: {
     borderWidth: 1,
-    borderColor: "#111",
+    borderColor: "#D7E3FF",
     paddingVertical: 10,
     borderRadius: 12,
     alignItems: "center",
-    backgroundColor: "#fff",
+    justifyContent: "center",
+    backgroundColor: stylesVars.blueSoft,
     marginTop: 2
   },
-  secondaryText: { color: "#111", fontWeight: "900", fontSize: 14 },
 
-  disabledBtn: { opacity: 0.45 },
+  secondaryText: {
+    color: stylesVars.blue,
+    fontWeight: "700",
+    fontSize: 14
+  },
 
-  helper: { fontSize: 12, color: "#6B7280", fontWeight: "700" },
+  disabledBtn: {
+    opacity: 0.6
+  },
 
-  backBtn: { paddingVertical: 10, borderRadius: 12, alignItems: "center" },
-  backText: { color: "#111", fontWeight: "900", textDecorationLine: "underline" },
+  helper: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
 
-  pressed: { opacity: 0.85 }
+  backBtn: {
+    alignSelf: "flex-start",
+    minHeight: 40,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: "#D7E3FF"
+  },
+
+  backText: {
+    color: stylesVars.blue,
+    fontWeight: "700"
+  },
+
+  dyePreviewWrap: {
+    marginTop: 8
+  },
+
+  dyeSwatch: {
+    marginTop: 8,
+    width: 60,
+    height: 60,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#CBD5E1"
+  },
+
+  bottomSpacer: {
+    height: 16
+  },
+
+  pressed: {
+    opacity: 0.82
+  }
 });

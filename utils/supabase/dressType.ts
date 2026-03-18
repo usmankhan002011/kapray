@@ -1,11 +1,26 @@
 import { supabase } from "./client";
 
-export async function getDressTypes(): Promise<
-  { id: number; name: string; iconURL: string }[]
-> {
-  const { data, error } = await supabase
-    .from("dress_type_with_icon_path")
-    .select("id, name, icon_path");
+export type DressTypeRow = {
+  id: string;
+  code: string;
+  name: string;
+  is_active: boolean;
+  sort_order: number;
+};
+
+export type DressTypeItem = {
+  id: string;
+  code: string;
+  name: string;
+};
+
+export async function getDressTypes(): Promise<DressTypeItem[]> {
+  const { data, error } = await (supabase as any)
+    .from("dress_types")
+    .select("id, code, name, is_active, sort_order")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
 
   console.log(data);
   console.log("ee", error);
@@ -15,17 +30,17 @@ export async function getDressTypes(): Promise<
     return [];
   }
 
-  return data
+  const rows = (data ?? []) as DressTypeRow[];
+
+  return rows
     .map((item) =>
-      item.icon_path === null || item.name === null || item.id === null
+      item?.id == null || item?.code == null || item?.name == null
         ? null
         : {
-            id: item.id,
-            name: item.name,
-            iconURL: supabase.storage
-              .from("dress_type_images")
-              .getPublicUrl(item.icon_path).data.publicUrl
+            id: String(item.id),
+            code: String(item.code),
+            name: String(item.name)
           }
     )
-    .filter((item) => item !== null);
+    .filter((item): item is DressTypeItem => item !== null);
 }

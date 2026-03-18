@@ -35,9 +35,8 @@ const SETTINGS_ROUTE = "/vendor/profile/settings";
 type Picked = { uri: string; mimeType?: string; fileName?: string };
 
 type VendorRow = {
-  id: string;
+  id: number;
   created_at?: string | null;
-
   name: string | null;
   email: string | null;
   mobile: string | null;
@@ -468,41 +467,39 @@ export default function EditVendorScreen() {
     try {
       setSavingMedia(true);
 
-      const { data, error } = await supabase
-        .from("vendor")
-        .update({
-          ...next
-        })
-        .eq("id", vendorId)
-        .select(
-          [
-            "id",
-            "created_at",
-            "name",
-            "email",
-            "mobile",
-            "landline",
-            "shop_name",
-            "address",
-            "location_url",
-            "profile_image_path",
-            "banner_path",
-            "certificate_paths",
-            "shop_image_paths",
-            "shop_video_paths",
-            "status",
-            "location",
-            "offers_tailoring"
-          ].join(",")
-        )
-        .single();
+    const { data, error } = await supabase
+      .from("vendor")
+      .update(next as any)
+      .eq("id", vendorId)
+      .select(
+        [
+          "id",
+          "created_at",
+          "name",
+          "email",
+          "mobile",
+          "landline",
+          "shop_name",
+          "address",
+          "location_url",
+          "profile_image_path",
+          "banner_path",
+          "certificate_paths",
+          "shop_image_paths",
+          "shop_video_paths",
+          "status",
+          "location",
+          "offers_tailoring"
+        ].join(",")
+      )
+      .single();
 
       if (error) {
         Alert.alert("Media update failed", error.message);
         return;
       }
 
-      const row = data as VendorRow;
+     const row = data as unknown as VendorRow;
 
       // keep local in sync
       setProfilePath(row.profile_image_path ?? null);
@@ -514,6 +511,7 @@ export default function EditVendorScreen() {
       dispatch(
         setSelectedVendor({
           ...(row as any),
+          created_at: row.created_at ?? undefined,
           image: null as any
         } as any)
       );
@@ -735,11 +733,12 @@ export default function EditVendorScreen() {
       return;
     }
 
-    const row = data as VendorRow;
+    const row = data as unknown as VendorRow;
 
     dispatch(
       setSelectedVendor({
         ...(row as any),
+        created_at: row.created_at ?? undefined,
         image: null as any
       } as any)
     );
@@ -1207,7 +1206,11 @@ export default function EditVendorScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 24, backgroundColor: "#fff" },
+  content: {
+    padding: 16,
+    paddingBottom: 24,
+    backgroundColor: "#F8FAFC"
+  },
 
   topBar: {
     flexDirection: "row",
@@ -1215,21 +1218,34 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 8
   },
+
   backBtn: {
+    minHeight: 40,
     fontSize: 14,
-    fontWeight: "900",
-    color: "#0B2F6B",
-    paddingHorizontal: 10,
+    fontWeight: "700",
+    color: "#2563EB",
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: "#EAF2FF",
+    borderRadius: 12,
+    backgroundColor: "#EEF4FF",
     borderWidth: 1,
-    borderColor: "#D9E2F2"
+    borderColor: "#D7E3FF",
+    textAlignVertical: "center",
+    overflow: "hidden"
   },
 
-  title: { fontSize: 20, fontWeight: "700", color: "#111" },
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#0F172A"
+  },
 
-  section: { marginTop: 18, fontSize: 16, fontWeight: "900", color: "#111" },
+  section: {
+    marginTop: 18,
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A"
+  },
 
   mediaHeaderRow: {
     flexDirection: "row",
@@ -1237,37 +1253,56 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 10
   },
-  mediaLoadingRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  mediaLoadingText: { fontSize: 12, fontWeight: "800", color: "#60708A" },
+
+  mediaLoadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+
+  mediaLoadingText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#64748B"
+  },
 
   fieldBtnBlue: {
     marginTop: 12,
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#005ea6"
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#2563EB"
   },
 
-  input: { fontSize: 16, color: "#111" },
-  multi: { minHeight: 90, textAlignVertical: "top" },
+  input: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#0F172A"
+  },
+
+  multi: {
+    minHeight: 90,
+    textAlignVertical: "top"
+  },
 
   blueBtn: {
     marginTop: 14,
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#005ea6"
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#2563EB"
   },
-  disabledText: { opacity: 0.6 },
+
+  disabledText: {
+    opacity: 0.6
+  },
 
   orText: {
     marginTop: 14,
     textAlign: "center",
     fontSize: 13,
-    fontWeight: "900",
-    color: "#111",
-    opacity: 0.75
+    fontWeight: "700",
+    color: "#64748B"
   },
 
-  // ✅ NEW: tailoring toggle row
   tailoringRow: {
     marginTop: 14,
     flexDirection: "row",
@@ -1275,39 +1310,61 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 12
   },
-  tailoringLabel: { fontSize: 14, fontWeight: "900", color: "#111" },
+
+  tailoringLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A"
+  },
+
   tailoringPill: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "#D9E2F2",
-    backgroundColor: "#fff"
+    borderColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF"
   },
-  tailoringPillOn: {
-    borderColor: "#0B2F6B",
-    backgroundColor: "#EAF2FF"
-  },
-  tailoringText: { fontSize: 12, fontWeight: "900", color: "#111" },
-  tailoringTextOn: { color: "#0B2F6B" },
 
-  meta: { marginTop: 10, fontSize: 12, color: "#111", opacity: 0.7 },
+  tailoringPillOn: {
+    borderColor: "#D7E3FF",
+    backgroundColor: "#EEF4FF"
+  },
+
+  tailoringText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0F172A"
+  },
+
+  tailoringTextOn: {
+    color: "#2563EB"
+  },
+
+  meta: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#64748B",
+    fontWeight: "500"
+  },
 
   card: {
     marginTop: 14,
-    borderRadius: 14,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#e7e7e7",
-    padding: 14
+    borderColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF",
+    padding: 18
   },
 
   existingBox: {
     marginTop: 12,
-    borderRadius: 14,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#e7e7e7",
-    padding: 12,
-    backgroundColor: "#fafafa"
+    borderColor: "#E5E7EB",
+    padding: 18,
+    backgroundColor: "#FFFFFF"
   },
 
   mediaSectionHeaderRow: {
@@ -1317,27 +1374,74 @@ const styles = StyleSheet.create({
     gap: 10
   },
 
-  existingTitle: { fontSize: 13, fontWeight: "900", color: "#111" },
-  subHead: { marginTop: 12, fontSize: 12, fontWeight: "900", color: "#0B2F6B" },
+  existingTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A"
+  },
 
-  empty: { marginTop: 8, fontSize: 13, fontWeight: "800", color: "#60708A" },
-  emptyInline: { marginTop: 8, fontSize: 13, fontWeight: "800", color: "#60708A" },
+  subHead: {
+    marginTop: 12,
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A"
+  },
 
-  previewWrap: { marginTop: 10, borderRadius: 10, overflow: "hidden" },
-  previewImg: { width: "100%", height: 160 },
+  empty: {
+    marginTop: 10,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: "#64748B"
+  },
 
-  hRow: { flexDirection: "row", gap: 10, paddingTop: 10, paddingBottom: 4 },
+  emptyInline: {
+    marginTop: 8,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: "#64748B"
+  },
+
+  previewWrap: {
+    marginTop: 10,
+    borderRadius: 16,
+    overflow: "hidden"
+  },
+
+  previewImg: {
+    width: "100%",
+    height: 160
+  },
+
+  hRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingTop: 10,
+    paddingBottom: 4
+  },
 
   smallBtn: {
-    paddingHorizontal: 10,
+    minHeight: 40,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: "#EAF2FF",
+    borderRadius: 12,
+    backgroundColor: "#EEF4FF",
     borderWidth: 1,
-    borderColor: "#D9E2F2"
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center"
   },
-  smallBtnDisabled: { opacity: 0.5 },
-  smallBtnText: { color: "#0B2F6B", fontWeight: "900", fontSize: 12 },
+
+  smallBtnDisabled: {
+    opacity: 0.6
+  },
+
+  smallBtnText: {
+    color: "#2563EB",
+    fontWeight: "700",
+    fontSize: 12
+  },
 
   thumbWrap: {
     width: 92,
@@ -1345,13 +1449,20 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#D9E2F2",
-    backgroundColor: "#EAF2FF"
+    borderColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF"
   },
-  thumbPress: { width: "100%", height: "100%" },
-  thumb: { width: "100%", height: "100%" },
 
-  // remove button (ditto-style)
+  thumbPress: {
+    width: "100%",
+    height: "100%"
+  },
+
+  thumb: {
+    width: "100%",
+    height: "100%"
+  },
+
   thumbX: {
     position: "absolute",
     top: 6,
@@ -1365,17 +1476,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center"
   },
-  thumbXText: { color: "#B91C1C", fontWeight: "900", fontSize: 12 },
 
-  // video tile fallback + play badge
+  thumbXText: {
+    color: "#B91C1C",
+    fontWeight: "700",
+    fontSize: 12
+  },
+
   videoPlaceholder: {
     width: "100%",
     height: "100%",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EAF2FF"
+    backgroundColor: "#EEF4FF"
   },
-  videoPlaceholderText: { color: "#0B2F6B", fontWeight: "900", fontSize: 12 },
+
+  videoPlaceholderText: {
+    color: "#2563EB",
+    fontWeight: "700",
+    fontSize: 12
+  },
 
   playBadge: {
     position: "absolute",
@@ -1384,49 +1504,85 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 999,
-    backgroundColor: "rgba(11,47,107,0.85)",
+    backgroundColor: "rgba(0,0,0,0.58)",
     alignItems: "center",
     justifyContent: "center"
   },
-  playBadgeText: { color: "#fff", fontWeight: "900" },
 
-  // ✅ embedded video box (like view profile)
+  playBadgeText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 12
+  },
+
   videoBox: {
     marginTop: 10,
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#D9E2F2"
+    borderColor: "#E5E7EB"
   },
-  video: { width: "100%", height: 220 },
-  videoMeta: { marginTop: 8, color: "#60708A", fontWeight: "800" },
-  videoThumbOn: { borderColor: "#0B2F6B", borderWidth: 2 },
 
-  hint: { marginTop: 10, color: "#60708A", fontWeight: "800" },
+  video: {
+    width: "100%",
+    height: 220
+  },
 
-  pressed: { opacity: 0.75 },
+  videoMeta: {
+    marginTop: 8,
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#64748B",
+    fontWeight: "500"
+  },
+
+  videoThumbOn: {
+    borderColor: "#2563EB",
+    borderWidth: 2
+  },
+
+  hint: {
+    marginTop: 10,
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#64748B",
+    fontWeight: "500"
+  },
+
+  pressed: {
+    opacity: 0.82
+  },
 
   submitBtn: {
     marginTop: 18,
-    backgroundColor: "#0b2f6b",
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "800",
+    minHeight: 48,
+    backgroundColor: "#2563EB",
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
     paddingVertical: 12,
     paddingHorizontal: 14,
-    borderRadius: 10,
+    borderRadius: 14,
     overflow: "hidden",
-    textAlign: "center"
+    textAlign: "center",
+    textAlignVertical: "center"
   },
-  disabledBtn: { opacity: 0.5 },
 
-  // fullscreen viewer
+  disabledBtn: {
+    opacity: 0.6
+  },
+
   viewerContainer: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.95)",
     justifyContent: "center"
   },
-  viewerImage: { width, height: "100%", resizeMode: "contain" },
+
+  viewerImage: {
+    width,
+    height: "100%",
+    resizeMode: "contain"
+  },
 
   closeButton: {
     position: "absolute",
@@ -1435,20 +1591,30 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.14)",
     alignItems: "center",
     justifyContent: "center"
   },
-  closeText: { color: "#fff", fontSize: 20, fontWeight: "900" },
+
+  closeText: {
+    color: "#FFFFFF",
+    fontSize: 20,
+    fontWeight: "900"
+  },
 
   indexCaption: {
     position: "absolute",
     bottom: 34,
     alignSelf: "center",
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.14)",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999
   },
-  indexText: { color: "#fff", fontWeight: "900" }
+
+  indexText: {
+    color: "#FFFFFF",
+    fontWeight: "900",
+    fontSize: 14
+  }
 });

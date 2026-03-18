@@ -16,20 +16,20 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header with search button */}
       <View style={styles.header}>
         <Text style={styles.title}>Kapray</Text>
+
         <TouchableOpacity
           onPress={() => setWizardVisible(true)}
           style={styles.searchButton}
         >
-          <Ionicons name="search" size={28} color="#333" />
+          <Ionicons name="search" size={28} color="#2563EB" />
         </TouchableOpacity>
       </View>
 
       {!hasDressTypeSelection ? (
-        <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
-          <Text>Use search to select filters.</Text>
+        <View style={styles.infoWrap}>
+          <Text style={styles.infoText}>Use search to select filters.</Text>
         </View>
       ) : (
         <View style={styles.resultsWrap}>
@@ -37,7 +37,6 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Wizard Modal */}
       <Modal
         visible={wizardVisible}
         animationType="slide"
@@ -54,55 +53,98 @@ export default function HomeScreen() {
   );
 }
 
+const stylesVars = {
+  bg: "#F8FAFC",
+  cardBg: "#FFFFFF",
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
+  overlayDark: "rgba(0,0,0,0.58)",
+  overlaySoft: "rgba(255,255,255,0.14)",
+  white: "#FFFFFF",
+  black: "#000000"
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f7f7f7",
+    backgroundColor: stylesVars.bg,
     paddingTop: 40
   },
+
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     marginBottom: 10
   },
+
   title: {
     fontSize: 28,
-    fontWeight: "bold",
-    color: "#222"
+    fontWeight: "700",
+    color: stylesVars.text
   },
+
   searchButton: {
-    padding: 6,
-    borderRadius: 20,
-    backgroundColor: "#e0e0e0"
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center"
   },
+
+  infoWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 8
+  },
+
+  infoText: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
+
   resultsWrap: {
     flex: 1
   },
+
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.3)",
+    backgroundColor: "rgba(0,0,0,0.55)",
     justifyContent: "center",
     alignItems: "center"
   },
+
   modalContent: {
     width: "100%",
     height: "100%",
-    backgroundColor: "#fff",
-    borderRadius: 16,
+    backgroundColor: stylesVars.cardBg,
+    borderRadius: 18,
     padding: 24,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 }
+    alignItems: "center"
   },
+
   closeButton: {
     marginTop: 24,
-    backgroundColor: "#222",
+    minHeight: 48,
+    backgroundColor: stylesVars.blue,
     paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 8
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center"
   }
 });

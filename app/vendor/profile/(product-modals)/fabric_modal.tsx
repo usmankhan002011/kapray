@@ -13,14 +13,25 @@ import { useProductDraft } from "@/components/product/ProductDraftContext";
 
 const FABRIC_LOCAL_IMAGES: Record<string, any> = {
   chiffon: require("@/assets/fabric-types-images/CHIFFON.jpg"),
+  crepe_chiffon: require("@/assets/fabric-types-images/CREPE_CHIFFON.jpg"),
+  silk_chiffon: require("@/assets/fabric-types-images/SILK_CHIFFON.jpg"),
+
+  cotton_silk: require("@/assets/fabric-types-images/COTTON_SILK.jpg"),
+  korean_silk: require("@/assets/fabric-types-images/KOREAN_SILK.jpg"),
+  satin_silk: require("@/assets/fabric-types-images/SATIN_SILK.jpg"),
+  silk: require("@/assets/fabric-types-images/SILK.jpg"),
+  silk_velvet: require("@/assets/fabric-types-images/SILK_VELVET.jpg"),
+  tissue_silk: require("@/assets/fabric-types-images/TISSUE_SILK.jpg"),
+
   georgette: require("@/assets/fabric-types-images/GEORGETTE.jpg"),
   jamawar: require("@/assets/fabric-types-images/JAMAWAR.jpg"),
+  katan_brocade: require("@/assets/fabric-types-images/KATAN_BROCADE.jpg"),
   net: require("@/assets/fabric-types-images/NET.jpg"),
   organza: require("@/assets/fabric-types-images/ORGANZA.jpg"),
-  silk: require("@/assets/fabric-types-images/SILK.jpg"),
   tissue: require("@/assets/fabric-types-images/TISSUE.jpg"),
   velvet: require("@/assets/fabric-types-images/VELVET.jpg")
 };
+
 
 const GRID_GAP = 8;
 const H_PADDING = 12;
@@ -139,7 +150,7 @@ export default function ProductFabricModal() {
         </Pressable>
       </View>
 
-      <Text style={styles.heading}>Select Fabric Type</Text>
+      {/* <Text style={styles.heading}>Select Fabric Type</Text> */}
 
       {loading ? <Text style={styles.infoText}>Loading...</Text> : null}
       {err ? <Text style={styles.infoText}>{err}</Text> : null}
@@ -186,8 +197,31 @@ export default function ProductFabricModal() {
   );
 }
 
+const stylesVars = {
+  bg: "#F8FAFC",
+  cardBg: "#FFFFFF",
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
+  overlayDark: "rgba(0,0,0,0.58)",
+  overlaySoft: "rgba(255,255,255,0.14)",
+  white: "#FFFFFF",
+  black: "#000000"
+};
+
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#fff" },
+  screen: {
+    flex: 1,
+    backgroundColor: stylesVars.bg
+  },
 
   header: {
     paddingHorizontal: 14,
@@ -195,11 +229,33 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
+    gap: 12
   },
-  headerTitle: { fontSize: 18, fontWeight: "900", color: "#111" },
-  headerBtn: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10 },
-  headerBtnText: { fontSize: 14, fontWeight: "900", color: "#0b2f6b" },
+
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  headerBtn: {
+    minHeight: 40,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+
+  headerBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: stylesVars.blue
+  },
 
   subHeader: {
     paddingHorizontal: 14,
@@ -209,26 +265,47 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 10
   },
-  subText: { flex: 1, color: "#111", opacity: 0.7 },
-  clearBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#e7e7e7"
+
+  subText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
   },
-  clearBtnText: { fontSize: 12, fontWeight: "900", color: "#111" },
+
+  clearBtn: {
+    minHeight: 40,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.cardBg,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+
+  clearBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
 
   heading: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
     marginBottom: 6,
-    color: "#111",
+    color: stylesVars.text,
     paddingHorizontal: 14,
     paddingTop: 6
   },
+
   infoText: {
-    color: "#111",
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500",
     marginBottom: 6,
     paddingHorizontal: 14
   },
@@ -238,6 +315,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     paddingTop: 2
   },
+
   columnWrap: {
     gap: GRID_GAP,
     marginBottom: GRID_GAP
@@ -246,42 +324,54 @@ const styles = StyleSheet.create({
   card: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 6
+    borderColor: stylesVars.border,
+    borderRadius: 18,
+    padding: 8,
+    backgroundColor: stylesVars.cardBg
   },
+
   cardSelected: {
-    borderColor: "#0b2f6b",
+    borderColor: stylesVars.blue,
     borderWidth: 2,
-    backgroundColor: "#F3F7FF"
+    backgroundColor: stylesVars.blueSoft
   },
 
   imageWrap: {
     width: "100%",
     height: 96,
-    borderRadius: 6,
+    borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#eee",
-    marginBottom: 6
+    backgroundColor: "#F1F5F9",
+    marginBottom: 8
   },
+
   image: {
     width: "100%",
     height: 96
   },
+
   noImage: {
     width: "100%",
     height: 96,
     alignItems: "center",
     justifyContent: "center"
   },
-  noImageText: { color: "#111", opacity: 0.6, fontWeight: "800" },
+
+  noImageText: {
+    color: stylesVars.mutedText,
+    fontSize: 12,
+    fontWeight: "600"
+  },
 
   label: {
     fontSize: 13,
-    color: "#111",
+    color: stylesVars.text,
     textAlign: "center",
-    fontWeight: "700"
+    fontWeight: "700",
+    lineHeight: 18
   },
 
-  pressed: { opacity: 0.75 }
+  pressed: {
+    opacity: 0.82
+  }
 });

@@ -4,7 +4,7 @@ import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, TextIn
 import { useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { setVendorIds } from "@/store/filtersSlice"; // <-- adjust import path if needed
+import { setVendorIds } from "@/store/filtersSlice";
 
 const VENDOR_TABLE = "vendor";
 
@@ -105,7 +105,7 @@ export default function VendorSearchScreen() {
           Vendors
         </Text>
 
-        <Pressable onPress={apply} style={({ pressed }) => [styles.applyBtn, pressed ? { opacity: 0.7 } : null]}>
+        <Pressable onPress={apply} style={({ pressed }) => [styles.applyBtn, pressed ? styles.pressed : null]}>
           <Text style={styles.applyText}>✅ Apply</Text>
         </Pressable>
       </View>
@@ -115,13 +115,13 @@ export default function VendorSearchScreen() {
           value={q}
           onChangeText={setQ}
           placeholder="Search vendor / shop / city…"
-          placeholderTextColor="#9AA3AF"
+          placeholderTextColor={stylesVars.placeholder}
           style={styles.searchInput}
           autoCapitalize="none"
           autoCorrect={false}
         />
 
-        <Pressable onPress={clear} style={({ pressed }) => [styles.clearBtn, pressed ? { opacity: 0.7 } : null]}>
+        <Pressable onPress={clear} style={({ pressed }) => [styles.clearBtn, pressed ? styles.pressed : null]}>
           <Text style={styles.clearText}>🧹 Clear</Text>
         </Pressable>
       </View>
@@ -139,15 +139,15 @@ export default function VendorSearchScreen() {
         <FlatList
           data={filtered}
           keyExtractor={(item) => String(item.id)}
-          contentContainerStyle={{ padding: 16, paddingTop: 10 }}
+          contentContainerStyle={styles.listContent}
           ItemSeparatorComponent={() => <View style={styles.sep} />}
           renderItem={({ item }) => {
             const id = String(item.id);
             const on = selected.has(id);
 
             return (
-              <Pressable onPress={() => toggle(id)} style={styles.row}>
-                <View style={{ flex: 1 }}>
+              <Pressable onPress={() => toggle(id)} style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]}>
+                <View style={styles.rowLeft}>
                   <Text style={styles.rowTitle} numberOfLines={1}>
                     {safe(item.name)}
                   </Text>
@@ -171,8 +171,31 @@ export default function VendorSearchScreen() {
   );
 }
 
+const stylesVars = {
+  bg: "#F8FAFC",
+  cardBg: "#FFFFFF",
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
+  overlayDark: "rgba(0,0,0,0.58)",
+  overlaySoft: "rgba(255,255,255,0.14)",
+  white: "#FFFFFF",
+  black: "#000000"
+};
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: {
+    flex: 1,
+    backgroundColor: stylesVars.bg
+  },
 
   topRow: {
     paddingHorizontal: 16,
@@ -180,52 +203,148 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
+    gap: 12
   },
-  link: { fontSize: 16, color: "#111", fontWeight: "900" },
-  title: { flex: 1, textAlign: "center", fontSize: 18, fontWeight: "900", color: "#111", paddingHorizontal: 10 },
+
+  link: {
+    fontSize: 14,
+    color: stylesVars.blue,
+    fontWeight: "700"
+  },
+
+  title: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 18,
+    fontWeight: "700",
+    color: stylesVars.text,
+    paddingHorizontal: 10
+  },
 
   applyBtn: {
-    borderRadius: 10,
+    minHeight: 40,
+    borderRadius: 12,
     paddingVertical: 8,
-    paddingHorizontal: 10,
-    backgroundColor: "#EAF2FF",
+    paddingHorizontal: 12,
+    backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: "#D9E2F2"
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center"
   },
-  applyText: { fontSize: 13, fontWeight: "900", color: "#0B2F6B" },
 
-  searchWrap: { paddingHorizontal: 16, paddingBottom: 8, flexDirection: "row", gap: 10, alignItems: "center" },
+  applyText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: stylesVars.blue
+  },
+
+  searchWrap: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "center"
+  },
+
   searchInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.10)",
+    borderColor: stylesVars.borderSoft,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    color: "#111",
-    backgroundColor: "#fff"
+    color: stylesVars.text,
+    backgroundColor: stylesVars.white
   },
+
   clearBtn: {
+    minHeight: 40,
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: "#F4F4F5",
+    backgroundColor: stylesVars.cardBg,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.08)"
+    borderColor: stylesVars.border,
+    alignItems: "center",
+    justifyContent: "center"
   },
-  clearText: { fontSize: 13, fontWeight: "900", color: "#111" },
 
-  meta: { paddingHorizontal: 16, paddingBottom: 6, fontSize: 12, color: "#60708A", fontWeight: "800" },
-  metaStrong: { color: "#111", fontWeight: "900" },
+  clearText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
 
-  row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 },
-  rowTitle: { fontSize: 14, fontWeight: "900", color: "#111" },
-  rowSub: { fontSize: 12, fontWeight: "700", color: "#60708A", marginTop: 3 },
-  tick: { fontSize: 18, fontWeight: "900" },
+  meta: {
+    paddingHorizontal: 16,
+    paddingBottom: 6,
+    fontSize: 12,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
 
-  sep: { height: 1, backgroundColor: "rgba(0,0,0,0.06)" },
-  center: { padding: 24, alignItems: "center", justifyContent: "center" },
-  muted: { fontSize: 14, color: "#666", marginTop: 8 }
+  metaStrong: {
+    color: stylesVars.text,
+    fontWeight: "700"
+  },
+
+  listContent: {
+    padding: 16,
+    paddingTop: 10
+  },
+
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12
+  },
+
+  rowLeft: {
+    flex: 1
+  },
+
+  rowTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  rowSub: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: stylesVars.mutedText,
+    marginTop: 3
+  },
+
+  tick: {
+    fontSize: 18,
+    fontWeight: "700"
+  },
+
+  sep: {
+    height: 1,
+    backgroundColor: stylesVars.border
+  },
+
+  center: {
+    padding: 24,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+
+  muted: {
+    fontSize: 14,
+    color: stylesVars.mutedText,
+    fontWeight: "500",
+    marginTop: 8
+  },
+
+  pressed: {
+    opacity: 0.82
+  }
 });

@@ -60,7 +60,6 @@ export default function OrdersIndexScreen() {
   const [rows, setRows] = useState<OrderRow[]>([]);
   const [query, setQuery] = useState("");
 
-  // ✅ Active vs Completed toggle (delivered = completed)
   const [tab, setTab] = useState<"active" | "completed">("active");
 
   const load = useCallback(async () => {
@@ -74,11 +73,6 @@ export default function OrdersIndexScreen() {
         return;
       }
 
-      // statuses policy:
-      // placed = NEW (red)
-      // seen/in_progress/packed = in progress (blue)
-      // dispatched = still active (blue)
-      // delivered = completed
       const activeStatuses = ["placed", "seen", "in_progress", "packed", "dispatched"];
 
       let q = supabase
@@ -147,17 +141,16 @@ export default function OrdersIndexScreen() {
     return rows.filter((r) => {
       const spec = r.spec_snapshot && typeof r.spec_snapshot === "object" ? r.spec_snapshot : {};
 
-      // dye swatch searchable (hex)
       const dyeHex = safeText(spec?.dye_hex ?? spec?.dyeing_hex ?? "");
       const dyeShadeLegacy = safeText(spec?.dyeing_selected_shade ?? "");
 
-      // tailoring searchable
       const tailoringEnabled = safeText(spec?.tailoring_enabled ?? "");
       const tailoringDays = safeText(spec?.tailoring_turnaround_days ?? "");
       const tailoringCost = safeText(spec?.tailoring_cost_pkr ?? "");
 
-      // ✅ dress category searchable (from spec snapshot)
-      const productCategory = safeText(spec?.product_category ?? spec?.dress_category ?? spec?.dress_cat ?? "");
+      const productCategory = safeText(
+        spec?.product_category ?? spec?.dress_category ?? spec?.dress_cat ?? ""
+      );
 
       const hay = [
         r.order_no ?? "",
@@ -194,19 +187,17 @@ export default function OrdersIndexScreen() {
     const dyeHex = safeText(spec?.dye_hex ?? spec?.dyeing_hex ?? "");
     const hasDye = dyeHex && dyeHex !== "—";
 
-    // ✅ Dress Cat (from spec snapshot)
-    const dressCat = humanizeCat(spec?.product_category ?? spec?.dress_category ?? spec?.dress_cat ?? "");
+    const dressCat = humanizeCat(
+      spec?.product_category ?? spec?.dress_category ?? spec?.dress_cat ?? ""
+    );
 
-    // Color rules:
-    // placed -> RED
-    // seen/in_progress/packed/dispatched -> BLUE
     const isNew = status === "placed";
 
     return (
       <Pressable
         onPress={() =>
           router.push({
-            pathname: "/orders/[id]",
+            pathname: "/flow/orders/[id]",
             params: { id: String(item.id) }
           })
         }
@@ -229,7 +220,6 @@ export default function OrdersIndexScreen() {
           {item.title_snapshot} • {item.product_code_snapshot}
         </Text>
 
-        {/* ✅ Dress Category line */}
         <Text style={styles.small} numberOfLines={1}>
           Dress Cat: {dressCat}
         </Text>
@@ -265,7 +255,7 @@ export default function OrdersIndexScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <View style={styles.rowBetween}>
-          <View style={{ flex: 1 }}>
+          <View style={styles.headerMain}>
             <Text style={styles.title}>Orders</Text>
             <Text style={styles.subtitle}>
               Vendor ID: <Text style={styles.subtitleStrong}>{vIdLabel}</Text>
@@ -293,7 +283,9 @@ export default function OrdersIndexScreen() {
               pressed && styles.pressed
             ]}
           >
-            <Text style={[styles.tabText, tab === "completed" && styles.tabTextActive]}>Completed</Text>
+            <Text style={[styles.tabText, tab === "completed" && styles.tabTextActive]}>
+              Completed
+            </Text>
           </Pressable>
         </View>
 
@@ -301,6 +293,7 @@ export default function OrdersIndexScreen() {
           value={query}
           onChangeText={setQuery}
           placeholder="Search: order no, buyer, mobile, city, product..."
+          placeholderTextColor={stylesVars.placeholder}
           style={styles.search}
           autoCapitalize="none"
           autoCorrect={false}
@@ -314,7 +307,9 @@ export default function OrdersIndexScreen() {
       {!vendorIdFromStore ? (
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>No vendor selected</Text>
-          <Text style={styles.emptyText}>Open vendor first (enter Vendor ID), then come back to Orders.</Text>
+          <Text style={styles.emptyText}>
+            Open vendor first (enter Vendor ID), then come back to Orders.
+          </Text>
         </View>
       ) : loading ? (
         <View style={styles.loading}>
@@ -330,7 +325,9 @@ export default function OrdersIndexScreen() {
           ListEmptyComponent={
             <View style={styles.empty}>
               <Text style={styles.emptyTitle}>No orders found</Text>
-              <Text style={styles.emptyText}>Orders will appear here once buyers complete payment.</Text>
+              <Text style={styles.emptyText}>
+                Orders will appear here once buyers complete payment.
+              </Text>
             </View>
           }
         />
@@ -339,107 +336,238 @@ export default function OrdersIndexScreen() {
   );
 }
 
+const stylesVars = {
+  bg: "#F8FAFC",
+  cardBg: "#FFFFFF",
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
+  white: "#FFFFFF",
+  black: "#000000"
+};
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#fff" },
-  header: { padding: 16, gap: 10 },
-  title: { fontSize: 22, fontWeight: "800" },
-  subtitle: { fontSize: 13, color: "#444" },
-  subtitleStrong: { fontWeight: "800", color: "#111" },
-
-  rowBetween: { flexDirection: "row", justifyContent: "space-between", gap: 10, alignItems: "center" },
-
-  trackBtn: {
-    borderWidth: 1,
-    borderColor: "#111",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10
+  safe: {
+    flex: 1,
+    backgroundColor: stylesVars.bg
   },
-  trackText: { fontWeight: "900", color: "#111" },
 
-  tabRow: { flexDirection: "row", gap: 10 },
+  header: {
+    padding: 16,
+    gap: 10,
+    backgroundColor: stylesVars.bg
+  },
+
+  headerMain: {
+    flex: 1
+  },
+
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  subtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
+
+  subtitleStrong: {
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  rowBetween: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10,
+    alignItems: "center"
+  },
+
+  tabRow: {
+    flexDirection: "row",
+    gap: 10
+  },
+
   tabBtn: {
     flex: 1,
+    minHeight: 48,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
-    paddingVertical: 10,
+    borderColor: stylesVars.border,
+    borderRadius: 14,
+    paddingVertical: 12,
     alignItems: "center",
-    backgroundColor: "#fff"
+    justifyContent: "center",
+    backgroundColor: stylesVars.cardBg
   },
+
   tabBtnActive: {
-    borderColor: "#111"
+    borderColor: "#D7E3FF",
+    backgroundColor: stylesVars.blueSoft
   },
-  tabText: { fontWeight: "900", color: "#475569" },
-  tabTextActive: { color: "#111" },
+
+  tabText: {
+    fontWeight: "700",
+    fontSize: 14,
+    color: stylesVars.subText
+  },
+
+  tabTextActive: {
+    color: stylesVars.blue
+  },
 
   search: {
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: stylesVars.borderSoft,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 14
+    fontSize: 14,
+    color: stylesVars.text,
+    backgroundColor: stylesVars.white
   },
 
   refreshBtn: {
     alignSelf: "flex-start",
+    minHeight: 40,
     borderWidth: 1,
-    borderColor: "#111",
+    borderColor: "#D7E3FF",
     borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 10
+    paddingVertical: 10,
+    backgroundColor: stylesVars.blueSoft,
+    alignItems: "center",
+    justifyContent: "center"
   },
-  refreshText: { fontWeight: "800" },
-  pressed: { opacity: 0.7 },
 
-  loading: { padding: 16, flexDirection: "row", alignItems: "center", gap: 10 },
-  loadingText: { color: "#444" },
+  refreshText: {
+    fontWeight: "700",
+    fontSize: 14,
+    color: stylesVars.blue
+  },
 
-  list: { padding: 16, paddingTop: 6, gap: 12 },
+  pressed: {
+    opacity: 0.82
+  },
+
+  loading: {
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+
+  loadingText: {
+    fontSize: 13,
+    color: stylesVars.mutedText,
+    fontWeight: "600"
+  },
+
+  list: {
+    padding: 16,
+    paddingTop: 6,
+    gap: 12,
+    backgroundColor: stylesVars.bg
+  },
 
   card: {
     borderWidth: 1,
-    borderColor: "#eee",
-    borderRadius: 16,
-    padding: 14,
+    borderColor: stylesVars.border,
+    borderRadius: 18,
+    padding: 18,
     gap: 8,
-    backgroundColor: "#fff"
+    backgroundColor: stylesVars.cardBg
   },
 
-  // ✅ New orders (placed) = RED
   cardNewRed: {
-    borderColor: "#EF4444",
+    borderColor: stylesVars.dangerBorder,
     backgroundColor: "#FFF7F7"
   },
 
-  orderNo: { fontSize: 16, fontWeight: "900", flex: 1 },
-  line: { fontSize: 13, color: "#333" },
-  small: { fontSize: 12, color: "#555" },
+  orderNo: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: stylesVars.text,
+    flex: 1
+  },
+
+  line: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.subText,
+    fontWeight: "500"
+  },
+
+  small: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
 
   badge: {
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "700",
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
     overflow: "hidden"
   },
-  badgeRed: { color: "#991B1B", backgroundColor: "#FEE2E2" },
-  badgeBlue: { color: "#1E3A8A", backgroundColor: "#DBEAFE" },
 
-  // Work swatch (kept as existing behavior)
-  dyeRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  badgeRed: {
+    color: stylesVars.danger,
+    backgroundColor: stylesVars.dangerSoft
+  },
+
+  badgeBlue: {
+    color: stylesVars.blue,
+    backgroundColor: stylesVars.blueSoft
+  },
+
+  dyeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+
   dyeSwatch: {
     width: 22,
     height: 22,
     borderRadius: 7,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    backgroundColor: "#fff"
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.white
   },
 
-  empty: { padding: 20, gap: 8, alignItems: "center" },
-  emptyTitle: { fontSize: 16, fontWeight: "800" },
-  emptyText: { fontSize: 13, color: "#555", textAlign: "center" }
+  empty: {
+    padding: 20,
+    gap: 8,
+    alignItems: "center"
+  },
+
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  emptyText: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500",
+    textAlign: "center"
+  }
 });

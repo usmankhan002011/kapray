@@ -1,6 +1,6 @@
 // File: components/stupid/GradientInputCard.tsx
 
-import React, { forwardRef, useEffect } from "react";
+import React, { forwardRef } from "react";
 import { StyleSheet, TextInput, TextInputProps, View } from "react-native";
 
 interface GradientInputCardProps extends TextInputProps {
@@ -9,15 +9,6 @@ interface GradientInputCardProps extends TextInputProps {
 
 const GradientInputCard = forwardRef<TextInput, GradientInputCardProps>(
   ({ children, style, ...textInputProps }, ref) => {
-    // Auto-focus on mount to open keyboard
-    useEffect(() => {
-      const timeout = setTimeout(() => {
-        ref && "current" in ref && ref.current?.focus();
-      }, 32);
-
-      return () => clearTimeout(timeout);
-    }, [ref]);
-
     return (
       <View style={styles.card}>
         <TextInput

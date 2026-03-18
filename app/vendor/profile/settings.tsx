@@ -37,42 +37,66 @@ export default function VendorSettingsScreen() {
   );
 }
 
+const stylesVars = {
+  bg: "#F8FAFC",
+  cardBg: "#FFFFFF",
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
+  white: "#FFFFFF",
+  black: "#000000",
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: stylesVars.bg,
   },
 
   content: {
     padding: 16,
     paddingBottom: 24,
+    backgroundColor: stylesVars.bg,
   },
 
   title: {
-    fontSize: 20,
-    fontWeight: "900",
-    color: "#111",
+    fontSize: 18,
+    fontWeight: "700",
+    color: stylesVars.text,
   },
 
   card: {
-    marginTop: 20,
-    borderRadius: 14,
+    marginTop: 14,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#e7e7e7",
-    padding: 16,
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.cardBg,
+    padding: 18,
   },
 
   placeholder: {
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: "#f5f5f5",
-    marginTop: 12,
+    minHeight: 48,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    marginTop: 10,
+    justifyContent: "center",
   },
 
   actionText: {
-    fontSize: 16,
-    fontWeight: "900",
-    color: "#005ea6",
+    fontSize: 14,
+    fontWeight: "700",
+    color: stylesVars.blue,
   },
 });

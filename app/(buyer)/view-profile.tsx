@@ -22,7 +22,7 @@ const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
 
 type VendorRow = {
-  id: string | number;
+  id: number;
   created_at?: string | null;
 
   name?: string | null;
@@ -66,9 +66,14 @@ export default function BuyerViewProfileScreen() {
   const params = useLocalSearchParams();
   const dispatch = useAppDispatch();
 
-  const vendorId = useMemo(() => {
+  const vendorId = useMemo<number | null>(() => {
     const raw = firstParam((params as any)?.vendorId ?? (params as any)?.id ?? null);
-    return raw ? decodeURIComponent(raw) : null;
+    if (!raw) return null;
+
+    const decoded = decodeURIComponent(raw).trim();
+    const parsed = Number(decoded);
+
+    return Number.isFinite(parsed) ? parsed : null;
   }, [params]);
 
   const [loading, setLoading] = useState(false);
@@ -92,7 +97,11 @@ export default function BuyerViewProfileScreen() {
     [resolvePublicUrl]
   );
 
-  const bannerUrl = useMemo(() => resolvePublicUrl(vendor?.banner_path ?? null), [vendor, resolvePublicUrl]);
+  const bannerUrl = useMemo(
+    () => resolvePublicUrl(vendor?.banner_path ?? null),
+    [vendor, resolvePublicUrl]
+  );
+
   const profileUrl = useMemo(
     () => resolvePublicUrl(vendor?.profile_image_path ?? null),
     [vendor, resolvePublicUrl]
@@ -114,6 +123,7 @@ export default function BuyerViewProfileScreen() {
   );
 
   const [selectedVideoUrl, setSelectedVideoUrl] = useState<string>("");
+
   useEffect(() => {
     if (!shopVideoUrls.length) {
       setSelectedVideoUrl("");
@@ -125,6 +135,7 @@ export default function BuyerViewProfileScreen() {
   }, [shopVideoUrls, selectedVideoUrl]);
 
   const player = useVideoPlayer(selectedVideoUrl || "");
+
   useEffect(() => {
     try {
       if (player) player.loop = false;
@@ -146,12 +157,11 @@ export default function BuyerViewProfileScreen() {
   }
 
   const fetchVendor = useCallback(async () => {
-    if (!vendorId) {
+    if (vendorId == null) {
       setMissingParam(true);
       setVendor(null);
       return;
     }
-
     try {
       setMissingParam(false);
       setLoading(true);
@@ -190,8 +200,8 @@ export default function BuyerViewProfileScreen() {
       const row = data as VendorRow;
       setVendor(row);
 
-      // OPTIONAL (safe): populate selected vendor in redux for downstream flows (purchase, etc.)
       const banner_url = resolvePublicUrl(row?.banner_path ?? null);
+
       dispatch(
         setSelectedVendor({
           shop_name: row?.shop_name ?? null,
@@ -234,10 +244,11 @@ export default function BuyerViewProfileScreen() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: stylesVars.bg }}>
+    <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.headerRow}>
           <Text style={styles.title}>Vendor Profile</Text>
+
           <Pressable
             onPress={() => router.back()}
             style={({ pressed }) => [styles.linkBtn, pressed ? styles.pressed : null]}
@@ -264,18 +275,31 @@ export default function BuyerViewProfileScreen() {
         )}
 
         {!!bannerUrl ? (
-          <View style={styles.bannerWrap}>
-            <Image source={{ uri: bannerUrl }} style={styles.bannerImage} />
+          <View style={styles.mediaBlock}>
+            <View style={styles.heroWrap}>
+              <Image source={{ uri: bannerUrl }} style={styles.heroImage} />
+            </View>
           </View>
         ) : null}
 
         <View style={styles.card}>
           <View style={styles.profileRow}>
-            <View style={styles.avatar}>
-              {profileUrl ? <Image source={{ uri: profileUrl }} style={styles.avatarImg} /> : null}
+            <View style={styles.avatarWrap}>
+              {profileUrl ? (
+                <Image source={{ uri: profileUrl }} style={styles.avatarImg} />
+              ) : (
+                <View style={styles.avatarFallback}>
+                  <Text style={styles.avatarFallbackText}>
+                    {(vendor?.shop_name || vendor?.name || "V")
+                      .trim()
+                      .slice(0, 1)
+                      .toUpperCase()}
+                  </Text>
+                </View>
+              )}
             </View>
 
-            <View style={{ flex: 1 }}>
+            <View style={styles.headerInfo}>
               <Text style={styles.nameText} numberOfLines={1}>
                 {safeText(vendor?.name)}
               </Text>
@@ -307,7 +331,7 @@ export default function BuyerViewProfileScreen() {
           <Text style={styles.sectionTitle}>Certificates</Text>
           {certificateUrls.length ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.hRow}>
+              <View style={styles.thumbRow}>
                 {certificateUrls.map((u, idx) => (
                   <View key={`${u}-${idx}`} style={styles.thumbWrap}>
                     <Image source={{ uri: u }} style={styles.thumb} />
@@ -324,7 +348,7 @@ export default function BuyerViewProfileScreen() {
           <Text style={styles.sectionTitle}>Shop Images</Text>
           {shopImageUrls.length ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.hRow}>
+              <View style={styles.thumbRow}>
                 {shopImageUrls.map((u, idx) => (
                   <View key={`${u}-${idx}`} style={styles.thumbWrap}>
                     <Image source={{ uri: u }} style={styles.thumb} />
@@ -353,10 +377,12 @@ export default function BuyerViewProfileScreen() {
                 </View>
               ) : null}
 
-              <Text style={styles.meta}>Tap a thumbnail to play. Long-press to open externally.</Text>
+              <Text style={styles.meta}>
+                Tap a thumbnail to play. Long-press to open externally.
+              </Text>
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={styles.hRow}>
+                <View style={styles.thumbRow}>
                   {shopVideoUrls.map((v, idx) => (
                     <Pressable
                       key={`${v}-${idx}`}
@@ -390,123 +416,288 @@ export default function BuyerViewProfileScreen() {
 }
 
 const stylesVars = {
-  bg: "#F5F7FB",
+  bg: "#F8FAFC",
   cardBg: "#FFFFFF",
-  border: "#D9E2F2",
-  borderSoft: "#E6EDF8",
-  blue: "#0B2F6B",
-  blueSoft: "#EAF2FF",
-  text: "#111111",
-  subText: "#60708A"
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
+  overlayDark: "rgba(0,0,0,0.58)",
+  overlaySoft: "rgba(255,255,255,0.14)",
+  white: "#FFFFFF",
+  black: "#000000"
 };
 
 const styles = StyleSheet.create({
-  content: { padding: 16, backgroundColor: stylesVars.bg },
+  screen: {
+    flex: 1,
+    backgroundColor: stylesVars.bg
+  },
 
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { fontSize: 20, fontWeight: "900", color: stylesVars.blue },
+  content: {
+    padding: 16,
+    paddingBottom: 24,
+    backgroundColor: stylesVars.bg
+  },
+
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12
+  },
+
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
 
   linkBtn: {
-    paddingHorizontal: 10,
+    minHeight: 40,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center"
   },
+
   linkBtnInline: {
     marginTop: 10,
     alignSelf: "flex-start",
-    paddingHorizontal: 10,
+    minHeight: 40,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center"
   },
-  linkText: { color: stylesVars.blue, fontWeight: "900" },
 
-  loadingRow: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 10 },
-  loadingText: { fontSize: 12, color: stylesVars.subText, fontWeight: "800" },
+  linkText: {
+    color: stylesVars.blue,
+    fontSize: 14,
+    fontWeight: "700"
+  },
+
+  loadingRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+
+  loadingText: {
+    fontSize: 13,
+    color: stylesVars.mutedText,
+    fontWeight: "600"
+  },
 
   card: {
     marginTop: 14,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
-    padding: 14
+    padding: 18
   },
 
-  sectionTitle: { fontSize: 13, fontWeight: "900", color: stylesVars.blue },
-  meta: { marginTop: 6, fontSize: 12, color: stylesVars.subText, fontWeight: "800" },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: stylesVars.text,
+    marginBottom: 2
+  },
 
-  row: { marginTop: 10 },
-  label: { fontSize: 12, fontWeight: "900", color: stylesVars.blue, letterSpacing: 0.2 },
-  value: { marginTop: 4, fontSize: 14, fontWeight: "800", color: stylesVars.text },
+  meta: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
 
-  bannerWrap: {
+  row: {
+    marginTop: 10
+  },
+
+  label: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: stylesVars.text,
+    letterSpacing: 0.2
+  },
+
+  value: {
+    marginTop: 4,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "500",
+    color: stylesVars.text
+  },
+
+  mediaBlock: {
     marginTop: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.cardBg,
+    overflow: "hidden"
+  },
+
+  heroWrap: {
+    width: "100%",
+    backgroundColor: stylesVars.cardBg
+  },
+
+  heroImage: {
+    width: "100%",
+    height: 230,
+    resizeMode: "cover",
+    backgroundColor: "#F1F5F9"
+  },
+
+  profileRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12
+  },
+
+  avatarWrap: {
+    width: 74,
+    height: 74,
+    borderRadius: 20,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.cardBg
+  },
+
+  avatarImg: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover"
+  },
+
+  avatarFallback: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: stylesVars.blue,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+
+  avatarFallbackText: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: stylesVars.white
+  },
+
+  headerInfo: {
+    flex: 1
+  },
+
+  nameText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  shopText: {
+    marginTop: 2,
+    fontSize: 13,
+    fontWeight: "500",
+    color: stylesVars.mutedText
+  },
+
+  statusText: {
+    marginTop: 8,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: stylesVars.mutedText
+  },
+
+  thumbRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingTop: 10,
+    paddingBottom: 4
+  },
+
+  thumbWrap: {
+    width: 84,
+    height: 84,
     borderRadius: 16,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: stylesVars.border,
-    backgroundColor: "#fff"
+    backgroundColor: stylesVars.cardBg
   },
-  bannerImage: { width: "100%", height: 190, resizeMode: "cover" },
 
-  profileRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  avatar: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: stylesVars.borderSoft,
-    backgroundColor: "#fff"
+  thumb: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#F1F5F9"
   },
-  avatarImg: { width: "100%", height: "100%", resizeMode: "cover" },
 
-  nameText: { fontSize: 16, fontWeight: "900", color: stylesVars.text },
-  shopText: { marginTop: 2, fontSize: 13, fontWeight: "800", color: stylesVars.subText },
-  statusText: { marginTop: 4, fontSize: 12, fontWeight: "800", color: stylesVars.subText },
-
-  hRow: { flexDirection: "row", gap: 10, paddingTop: 10, paddingBottom: 4 },
-  thumbWrap: {
-    width: 92,
-    height: 92,
-    borderRadius: 14,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: stylesVars.borderSoft,
-    backgroundColor: "#fff"
+  empty: {
+    marginTop: 10,
+    fontSize: 13,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
   },
-  thumb: { width: "100%", height: "100%", backgroundColor: "#f3f3f3" },
-
-  empty: { marginTop: 10, color: stylesVars.subText, fontWeight: "800" },
 
   videoBox: {
     marginTop: 10,
-    borderRadius: 14,
+    borderRadius: 16,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: stylesVars.borderSoft,
-    backgroundColor: "#fff"
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.cardBg
   },
-  video: { width: "100%", height: 210 },
+
+  video: {
+    width: "100%",
+    height: 220
+  },
 
   videoThumb: {
     width: 110,
     height: 52,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: stylesVars.borderSoft,
-    backgroundColor: "#fff",
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.cardBg,
     alignItems: "center",
     justifyContent: "center"
   },
-  videoThumbOn: { borderColor: stylesVars.blue, borderWidth: 2 },
-  videoThumbText: { color: stylesVars.blue, fontWeight: "900", fontSize: 12 },
 
-  pressed: { opacity: 0.75 }
+  videoThumbOn: {
+    borderColor: stylesVars.blue,
+    borderWidth: 2,
+    backgroundColor: stylesVars.blueSoft
+  },
+
+  videoThumbText: {
+    color: stylesVars.blue,
+    fontWeight: "700",
+    fontSize: 12
+  },
+
+  pressed: {
+    opacity: 0.82
+  }
 });

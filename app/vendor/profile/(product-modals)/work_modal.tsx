@@ -1,12 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  FlatList,
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  View
-} from "react-native";
+import { FlatList, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { getWorkTypes, WorkTypeItem } from "@/utils/supabase/workType";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
@@ -15,12 +8,23 @@ const WORK_LOCAL_IMAGES: Record<string, any> = {
   designer: require("@/assets/work-images/designer.jpg"),
   gotta: require("@/assets/work-images/gotta.jpg"),
   machine: require("@/assets/work-images/machine.jpg"),
+  metallic: require("@/assets/work-images/metallic.jpg"),
   mirror: require("@/assets/work-images/mirror.jpg"),
   sequin: require("@/assets/work-images/sequin.jpg"),
   stone: require("@/assets/work-images/stone.jpg"),
-  thread: require("@/assets/work-images/thread.jpg"),
-  zardozi: require("@/assets/work-images/zardozi.jpg")
+  thread: require("@/assets/work-images/thread.jpg")
 };
+
+const ALLOWED_PARENT_CODES = new Set([
+  "metallic",
+  "thread",
+  "stone",
+  "sequin",
+  "gotta",
+  "mirror",
+  "machine",
+  "designer"
+]);
 
 const GRID_GAP = 8;
 const H_PADDING = 12;
@@ -35,29 +39,36 @@ function pickFirstString(v: unknown): string | null {
   return null;
 }
 
+function getParentSelectionCount(draft: any, parentCode: string) {
+  const map =
+    draft?.spec && typeof draft.spec === "object" && draft.spec.workSubTypeMap
+      ? (draft.spec.workSubTypeMap as Record<string, string[]>)
+      : {};
+
+  const list = Array.isArray(map[parentCode]) ? map[parentCode] : [];
+  return list.length;
+}
+
+function getParentSubtitle(draft: any, parentCode: string) {
+  const count = getParentSelectionCount(draft, parentCode);
+  if (count <= 0) return "None selected";
+  if (count === 1) return "1 selected";
+  return `${count} selected`;
+}
+
 export default function ProductWorkModal() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const returnTo = pickFirstString((params as any)?.returnTo);
 
-  const { draft, setWorkTypeIds } = useProductDraft();
+  const { draft, setWorkTypeIds } = useProductDraft() as any;
 
   const [items, setItems] = useState<WorkTypeItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Local selection inside modal (apply to draft only on Done)
-  const [selected, setSelected] = useState<string[]>(
-    Array.isArray(draft.spec.workTypeIds) ? draft.spec.workTypeIds : []
-  );
-
+  const selected = Array.isArray(draft?.spec?.workTypeIds) ? draft.spec.workTypeIds : [];
   const selectedSet = useMemo(() => new Set(selected), [selected]);
-
-  const itemById = useMemo(() => {
-    const m = new Map<string, WorkTypeItem>();
-    for (const it of items) m.set(String(it.id), it);
-    return m;
-  }, [items]);
 
   useEffect(() => {
     let alive = true;
@@ -67,7 +78,10 @@ export default function ProductWorkModal() {
     getWorkTypes()
       .then((res) => {
         if (!alive) return;
-        setItems(res ?? []);
+        const cleaned = (res ?? []).filter((item) =>
+          ALLOWED_PARENT_CODES.has(safeStr(item.code).toLowerCase())
+        );
+        setItems(cleaned);
       })
       .catch((e) => {
         if (!alive) return;
@@ -91,33 +105,35 @@ export default function ProductWorkModal() {
     router.back();
   }
 
-  function toggle(id: string) {
-    setSelected((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+  function openSubTypes(item: WorkTypeItem) {
+    const mainModalPath = returnTo
+      ? `/vendor/profile/(product-modals)/work_modal?returnTo=${encodeURIComponent(returnTo)}`
+      : "/vendor/profile/(product-modals)/work_modal";
+
+    const encodedReturnTo = encodeURIComponent(mainModalPath);
+    const encodedParentId = encodeURIComponent(String(item.id));
+    const encodedParentCode = encodeURIComponent(String(item.code ?? "").toLowerCase());
+    const encodedParentName = encodeURIComponent(String(item.name ?? ""));
+
+    router.push(
+      `/vendor/profile/(product-modals)/work-subtypes_modal?parentId=${encodedParentId}&parentCode=${encodedParentCode}&parentName=${encodedParentName}&returnTo=${encodedReturnTo}` as any
     );
   }
 
+
   function onClear() {
     (draft.spec as any).workTypeNames = [];
-    setSelected([]);
+    (draft.spec as any).workSubTypeMap = {};
+    (draft.spec as any).workSubTypeNames = [];
     setWorkTypeIds([]);
   }
 
   function onDone() {
-    const pickedNames = selected
-      .map((id) => itemById.get(String(id))?.name ?? "")
-      .map((s) => safeStr(s))
-      .filter(Boolean);
-
-    (draft.spec as any).workTypeNames = pickedNames;
-
-    setWorkTypeIds(selected);
     close();
   }
 
   return (
     <View style={styles.screen}>
-      {/* HEADER */}
       <View style={styles.header}>
         <Pressable
           onPress={close}
@@ -137,7 +153,9 @@ export default function ProductWorkModal() {
       </View>
 
       <View style={styles.subHeader}>
-        <Text style={styles.subText}>Select one or more work types.</Text>
+        <Text style={styles.subText}>
+          Select a work type, then choose one or more sub work types.
+        </Text>
 
         <Pressable
           onPress={onClear}
@@ -147,35 +165,31 @@ export default function ProductWorkModal() {
         </Pressable>
       </View>
 
-      <Text style={styles.heading}>Select Work Type</Text>
-
       {loading ? <Text style={styles.infoText}>Loading...</Text> : null}
       {err ? <Text style={styles.infoText}>{err}</Text> : null}
 
       <FlatList
         data={items}
-        keyExtractor={(i) => i.id}
+        keyExtractor={(i) => String(i.id)}
         numColumns={2}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         columnWrapperStyle={styles.columnWrap}
         renderItem={({ item }) => {
-          const isOn = selectedSet.has(item.id);
-          const localImg = WORK_LOCAL_IMAGES[(item.code ?? "").toLowerCase()];
+          const parentCode = safeStr(item.code).toLowerCase();
+          const isOn = selectedSet.has(String(item.id));
+          const localImg = WORK_LOCAL_IMAGES[parentCode];
+          const subLabel = getParentSubtitle(draft, parentCode);
 
           return (
             <Pressable
-              key={item.id}
+              key={String(item.id)}
               style={[styles.card, isOn ? styles.cardSelected : null]}
-              onPress={() => toggle(item.id)}
+              onPress={() => openSubTypes(item)}
             >
               <View style={styles.imageWrap}>
                 {localImg ? (
-                  <Image
-                    source={localImg}
-                    style={styles.image}
-                    resizeMode="cover"
-                  />
+                  <Image source={localImg} style={styles.image} resizeMode="cover" />
                 ) : (
                   <View style={styles.noImage}>
                     <Text style={styles.noImageText}>No Image</Text>
@@ -186,6 +200,10 @@ export default function ProductWorkModal() {
               <Text style={styles.label} numberOfLines={1}>
                 {item.name} {isOn ? "✓" : ""}
               </Text>
+
+              <Text style={styles.subSelectionText} numberOfLines={1}>
+                {subLabel}
+              </Text>
             </Pressable>
           );
         }}
@@ -194,8 +212,31 @@ export default function ProductWorkModal() {
   );
 }
 
+const stylesVars = {
+  bg: "#F8FAFC",
+  cardBg: "#FFFFFF",
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
+  overlayDark: "rgba(0,0,0,0.58)",
+  overlaySoft: "rgba(255,255,255,0.14)",
+  white: "#FFFFFF",
+  black: "#000000"
+};
+
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#fff" },
+  screen: {
+    flex: 1,
+    backgroundColor: stylesVars.bg
+  },
 
   header: {
     paddingHorizontal: 14,
@@ -203,11 +244,33 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
+    gap: 12
   },
-  headerTitle: { fontSize: 18, fontWeight: "900", color: "#111" },
-  headerBtn: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10 },
-  headerBtnText: { fontSize: 14, fontWeight: "900", color: "#0b2f6b" },
+
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  headerBtn: {
+    minHeight: 40,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+
+  headerBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: stylesVars.blue
+  },
 
   subHeader: {
     paddingHorizontal: 14,
@@ -217,26 +280,38 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 10
   },
-  subText: { flex: 1, color: "#111", opacity: 0.7 },
-  clearBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#e7e7e7"
-  },
-  clearBtnText: { fontSize: 12, fontWeight: "900", color: "#111" },
 
-  heading: {
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 6,
-    color: "#111",
-    paddingHorizontal: 14,
-    paddingTop: 6
+  subText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
   },
+
+  clearBtn: {
+    minHeight: 40,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.cardBg,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+
+  clearBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
   infoText: {
-    color: "#111",
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500",
     marginBottom: 6,
     paddingHorizontal: 14
   },
@@ -246,6 +321,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     paddingTop: 2
   },
+
   columnWrap: {
     gap: GRID_GAP,
     marginBottom: GRID_GAP
@@ -254,42 +330,63 @@ const styles = StyleSheet.create({
   card: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 6
+    borderColor: stylesVars.border,
+    borderRadius: 18,
+    padding: 8,
+    backgroundColor: stylesVars.cardBg
   },
+
   cardSelected: {
-    borderColor: "#0b2f6b",
+    borderColor: stylesVars.blue,
     borderWidth: 2,
-    backgroundColor: "#F3F7FF"
+    backgroundColor: stylesVars.blueSoft
   },
 
   imageWrap: {
     width: "100%",
     height: 96,
-    borderRadius: 6,
+    borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#eee",
-    marginBottom: 6
+    backgroundColor: "#F1F5F9",
+    marginBottom: 8
   },
+
   image: {
     width: "100%",
     height: 96
   },
+
   noImage: {
     width: "100%",
     height: 96,
     alignItems: "center",
     justifyContent: "center"
   },
-  noImageText: { color: "#111", opacity: 0.6, fontWeight: "800" },
+
+  noImageText: {
+    color: stylesVars.mutedText,
+    fontSize: 12,
+    fontWeight: "600"
+  },
 
   label: {
     fontSize: 13,
-    color: "#111",
+    lineHeight: 18,
+    color: stylesVars.text,
     textAlign: "center",
     fontWeight: "700"
   },
 
-  pressed: { opacity: 0.75 }
+  subSelectionText: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 16,
+    color: stylesVars.mutedText,
+    textAlign: "center",
+    fontWeight: "500"
+  },
+
+  pressed: {
+    opacity: 0.82
+  }
 });

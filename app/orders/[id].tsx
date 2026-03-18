@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   Image,
   Modal,
   Pressable,
@@ -141,7 +142,6 @@ function getCatLineFromSpec(spec: any): string {
     s?.tailoring_enabled ?? s?.tailoring_required ?? s?.requires_tailoring
   );
 
-  // NOTE: This line is now shown WITHOUT the "Category:" label in UI (see below).
   if (!isUnstitched) return "Ready to wear (Stitched)";
 
   const dyeTxt = `Dyeable: ${dyeEnabled ? "Yes" : "No"}`;
@@ -169,7 +169,6 @@ function pickFirstImageCandidate(media: any): string {
     m?.thumbnail_url
   ];
 
-  // arrays (prefer images > thumbs)
   if (Array.isArray(m?.images) && m.images.length) candidates.unshift(m.images[0]);
   if (Array.isArray(m?.thumbs) && m.thumbs.length) candidates.push(m.thumbs[0]);
 
@@ -185,8 +184,6 @@ function resolvePublicUrlFromPath(pathOrUrl: string) {
   if (!s) return "";
   if (looksLikeUrl(s)) return s;
 
-  // storage path -> public URL (bucket is public in your setup)
-  // NOTE: this assumes bucket name is "vendor_images" (as per your project plan)
   try {
     const { data } = supabase.storage.from("vendor_images").getPublicUrl(s);
     return data?.publicUrl ?? "";
@@ -198,14 +195,15 @@ function resolvePublicUrlFromPath(pathOrUrl: string) {
 export default function OrderDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<Params>();
+
   const orderId = useMemo(() => String(params.id ?? "").trim(), [params.id]);
+  const fromParam = useMemo(() => String(params.from ?? "").trim().toLowerCase(), [params.from]);
 
   const vendorIdFromStore = useAppSelector((s) => (s.vendor as any)?.id ?? null);
 
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<OrderRow | null>(null);
 
-  // Dispatch modal state
   const [dispatchOpen, setDispatchOpen] = useState(false);
   const [courierName, setCourierName] = useState("");
   const [trackingNumber, setTrackingNumber] = useState("");
@@ -295,7 +293,6 @@ export default function OrderDetailScreen() {
         tracking_number: o.tracking_number ? String(o.tracking_number) : null
       });
 
-      // preload dispatch fields from DB if present
       setCourierName(o.courier_name ? String(o.courier_name) : "");
       setTrackingNumber(o.tracking_number ? String(o.tracking_number) : "");
     } catch (e: any) {
@@ -310,12 +307,48 @@ export default function OrderDetailScreen() {
     load();
   }, [load]);
 
+  const isBuyerTrackView = useMemo(() => {
+    return fromParam === "track" || fromParam === "buyer-track" || fromParam === "buyer-order";
+  }, [fromParam]);
+
   const isVendorView = useMemo(() => {
     if (!order) return false;
     const vId = vendorIdFromStore != null ? Number(vendorIdFromStore) : null;
     if (!vId) return false;
     return vId === order.vendor_id;
   }, [order, vendorIdFromStore]);
+
+  const showVendorActions = useMemo(() => {
+    if (isBuyerTrackView) return false;
+    return isVendorView;
+  }, [isBuyerTrackView, isVendorView]);
+
+  const backTarget = useMemo(() => {
+    if (fromParam === "track" || fromParam === "buyer-track") return "/flow/orders/track";
+    if (fromParam === "buyer-order") return "/";
+    if (isVendorView) return "/orders";
+    return "/";
+  }, [fromParam, isVendorView]);
+
+  const handleBack = useCallback(() => {
+    if (fromParam === "buyer-order") {
+      router.dismissAll();
+      router.replace("/" as any);
+      return true;
+    }
+
+    router.replace(backTarget as any);
+    return true;
+  }, [fromParam, backTarget, router]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      handleBack
+    );
+
+    return () => subscription.remove();
+  }, [handleBack]);
 
   const sizeLine = useMemo(() => {
     if (!order) return "—";
@@ -388,7 +421,6 @@ export default function OrderDetailScreen() {
     return `Fabric: Cost: ${order.currency} ${cost.toLocaleString()}`;
   }, [order]);
 
-  // ✅ Product cost line (use subtotal_pkr; fallback to total_pkr if subtotal missing)
   const productCostLine = useMemo(() => {
     if (!order) return "";
     const base = order.subtotal_pkr != null ? order.subtotal_pkr : order.total_pkr;
@@ -403,7 +435,6 @@ export default function OrderDetailScreen() {
     return getCatLineFromSpec(spec);
   }, [order]);
 
-  // ✅ Dress category line (from spec snapshot)
   const dressCatLine = useMemo(() => {
     if (!order) return "—";
     const spec =
@@ -411,7 +442,6 @@ export default function OrderDetailScreen() {
     return getDressCatFromSpec(spec);
   }, [order]);
 
-  // ✅ Dress banner image (from media snapshot)
   const bannerUrl = useMemo(() => {
     if (!order) return "";
     const picked = pickFirstImageCandidate(order.media_snapshot);
@@ -443,9 +473,6 @@ export default function OrderDetailScreen() {
     const isUnstitched = isUnstitchedFromSpec(spec);
     const isReadyToWear = !isUnstitched;
 
-    // Simple pipeline:
-    // Unstitched: placed -> seen -> in_progress -> packed -> dispatched -> delivered
-    // Ready-to-wear: placed -> seen -> packed -> dispatched -> delivered  (bypass dyeing/tailoring)
     if (s === "placed") return { next: "seen", label: "Mark Seen" };
 
     if (s === "seen") {
@@ -463,7 +490,6 @@ export default function OrderDetailScreen() {
     async (nextStatus: string) => {
       if (!order) return;
 
-      // Dispatch requires courier + tracking
       const ns = norm(nextStatus);
       const courierTrim = courierName.trim();
       const trackingTrim = trackingNumber.trim();
@@ -485,7 +511,6 @@ export default function OrderDetailScreen() {
           payload.tracking_number = trackingTrim;
         }
 
-        // Keep existing courier/tracking when not dispatching
         const { error } = await supabase.from("orders").update(payload).eq("id", order.id);
         if (error) throw error;
 
@@ -501,9 +526,9 @@ export default function OrderDetailScreen() {
     [order, courierName, trackingNumber, load]
   );
 
-  const openDispatchModal = () => {
+  const openDispatchModal = useCallback(() => {
     setDispatchOpen(true);
-  };
+  }, []);
 
   const statusBadgeStyle = useMemo(() => {
     const s = norm(order?.status ?? "");
@@ -514,7 +539,7 @@ export default function OrderDetailScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.top}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => router.replace(backTarget as any)}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
         >
           <Text style={styles.backText}>Back</Text>
@@ -550,7 +575,6 @@ export default function OrderDetailScreen() {
             <View style={styles.card}>
               <Text style={styles.h2}>Product</Text>
 
-              {/* ✅ Banner Image */}
               {!!bannerUrl ? (
                 <View style={styles.bannerWrap}>
                   <Image source={{ uri: bannerUrl }} style={styles.bannerImg} resizeMode="cover" />
@@ -564,22 +588,15 @@ export default function OrderDetailScreen() {
                 Code: <Text style={styles.strong}>{order.product_code_snapshot}</Text>
               </Text>
 
-              {/* ✅ Dress Cat */}
               <Text style={styles.meta}>
                 Dress Category: <Text style={styles.strong}>{dressCatLine}</Text>
               </Text>
 
-              {/* ✅ Product Cost (ABOVE Tailoring) */}
               {!!productCostLine ? <Text style={styles.meta}>{productCostLine}</Text> : null}
-
-              {/* ✅ REMOVED ENTIRELY: Category label + value line */}
-              {/* (catLine is still computed for pipeline logic; just not displayed) */}
-
               {!!tailoringLine ? <Text style={styles.meta}>{tailoringLine}</Text> : null}
               {!!dyeCostLine ? <Text style={styles.meta}>{dyeCostLine}</Text> : null}
               {!!fabricCostLine ? <Text style={styles.meta}>{fabricCostLine}</Text> : null}
 
-              {/* Work swatch (dye selection) */}
               {!!dyeHex ? (
                 <View style={styles.dyeRow}>
                   <Text style={styles.meta}>
@@ -654,8 +671,7 @@ export default function OrderDetailScreen() {
               </Text>
             </View>
 
-            {/* ✅ Vendor actions only if vendor_id matches store */}
-            {isVendorView ? (
+            {showVendorActions ? (
               <View style={styles.card}>
                 <Text style={styles.h2}>Update Status</Text>
 
@@ -683,10 +699,9 @@ export default function OrderDetailScreen() {
               </View>
             ) : null}
 
-            <View style={{ height: 20 }} />
+            <View style={styles.bottomSpacer} />
           </ScrollView>
 
-          {/* Dispatch Modal */}
           <Modal visible={dispatchOpen} animationType="slide" transparent>
             <View style={styles.modalBackdrop}>
               <View style={styles.modalCard}>
@@ -699,7 +714,7 @@ export default function OrderDetailScreen() {
                   onChangeText={setCourierName}
                   placeholder="e.g., Leopards / TCS"
                   style={styles.input}
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={stylesVars.placeholder}
                 />
 
                 <Text style={styles.fieldLabel}>Tracking Number</Text>
@@ -708,7 +723,7 @@ export default function OrderDetailScreen() {
                   onChangeText={setTrackingNumber}
                   placeholder="e.g., 123456789"
                   style={styles.input}
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={stylesVars.placeholder}
                 />
 
                 <View style={styles.modalBtns}>
@@ -737,127 +752,289 @@ export default function OrderDetailScreen() {
   );
 }
 
-const LABEL_BLUE = "#1F4E8C";
+const stylesVars = {
+  bg: "#F8FAFC",
+  cardBg: "#FFFFFF",
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
+  overlayDark: "rgba(0,0,0,0.58)",
+  overlaySoft: "rgba(255,255,255,0.14)",
+  white: "#FFFFFF",
+  black: "#000000"
+};
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#fff" },
-  top: { padding: 16, paddingBottom: 6, flexDirection: "row", alignItems: "center", gap: 12 },
-  title: { fontSize: 18, fontWeight: "900" },
-  backBtn: { borderWidth: 1, borderColor: "#111", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
-  backText: { fontWeight: "800" },
-  pressed: { opacity: 0.7 },
+  safe: {
+    flex: 1,
+    backgroundColor: stylesVars.bg
+  },
 
-  loading: { padding: 16, flexDirection: "row", alignItems: "center", gap: 10 },
-  loadingText: { color: "#444" },
+  top: {
+    padding: 16,
+    paddingBottom: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: stylesVars.bg
+  },
 
-  container: { padding: 16, gap: 12 },
-  card: { borderWidth: 1, borderColor: "#eee", borderRadius: 16, padding: 14, gap: 8 },
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  backBtn: {
+    minHeight: 40,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+
+  backText: {
+    fontWeight: "700",
+    color: stylesVars.blue
+  },
+
+  pressed: {
+    opacity: 0.82
+  },
+
+  loading: {
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+
+  loadingText: {
+    fontSize: 13,
+    color: stylesVars.mutedText,
+    fontWeight: "600"
+  },
+
+  container: {
+    padding: 16,
+    gap: 12
+  },
+
+  card: {
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    borderRadius: 18,
+    padding: 18,
+    gap: 8,
+    backgroundColor: stylesVars.cardBg
+  },
 
   cardNewRed: {
-    borderColor: "#EF4444",
+    borderColor: stylesVars.dangerBorder,
     backgroundColor: "#FFF7F7"
   },
 
-  rowBetween: { flexDirection: "row", justifyContent: "space-between", gap: 10, alignItems: "center" },
+  rowBetween: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10,
+    alignItems: "center"
+  },
 
-  h1: { fontSize: 18, fontWeight: "900", flex: 1, color: "#111" },
-  h2: { fontSize: 14, fontWeight: "900", marginBottom: 2 },
+  h1: {
+    fontSize: 18,
+    fontWeight: "700",
+    flex: 1,
+    color: stylesVars.text
+  },
 
-  // ✅ labels now LIGHT BLUE
-  meta: { fontSize: 13, color: LABEL_BLUE, fontWeight: "700" },
+  h2: {
+    fontSize: 15,
+    fontWeight: "700",
+    marginBottom: 2,
+    color: stylesVars.text
+  },
 
-  // ✅ values stay BLACK
-  strong: { fontWeight: "900", color: "#111" },
+  meta: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
+
+  strong: {
+    fontWeight: "700",
+    color: stylesVars.text
+  },
 
   badge: {
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "700",
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
     overflow: "hidden"
   },
-  badgeRed: { color: "#991B1B", backgroundColor: "#FEE2E2" },
-  badgeBlue: { color: "#1E3A8A", backgroundColor: "#DBEAFE" },
 
-  // ✅ Banner
+  badgeRed: {
+    color: stylesVars.danger,
+    backgroundColor: stylesVars.dangerSoft
+  },
+
+  badgeBlue: {
+    color: "#1E3A8A",
+    backgroundColor: "#DBEAFE"
+  },
+
   bannerWrap: {
     width: "100%",
     height: 160,
-    borderRadius: 14,
+    borderRadius: 16,
     overflow: "hidden",
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#F1F5F9",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: stylesVars.border,
     marginBottom: 4
   },
-  bannerImg: { width: "100%", height: "100%" },
 
-  dyeRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 6 },
+  bannerImg: {
+    width: "100%",
+    height: "100%"
+  },
+
+  dyeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginTop: 6
+  },
+
   dyeSwatch: {
     width: 26,
     height: 26,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#CBD5E1",
-    backgroundColor: "#fff"
+    backgroundColor: stylesVars.white
   },
 
-  divider: { height: 1, backgroundColor: "#eee", marginVertical: 8 },
+  divider: {
+    height: 1,
+    backgroundColor: stylesVars.border,
+    marginVertical: 8
+  },
 
   primaryBtn: {
-    backgroundColor: "#111",
+    minHeight: 48,
+    backgroundColor: stylesVars.blue,
     paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: "center"
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center"
   },
-  primaryText: { color: "#fff", fontWeight: "900", fontSize: 14 },
+
+  primaryText: {
+    color: stylesVars.white,
+    fontWeight: "700",
+    fontSize: 14
+  },
 
   secondaryBtn: {
+    minHeight: 48,
     borderWidth: 1,
-    borderColor: "#111",
+    borderColor: "#D7E3FF",
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: "center",
-    backgroundColor: "#fff",
+    justifyContent: "center",
+    backgroundColor: stylesVars.blueSoft,
     flex: 1
   },
-  secondaryText: { color: "#111", fontWeight: "900", fontSize: 14 },
 
-  empty: { padding: 16 },
-  emptyTitle: { fontSize: 16, fontWeight: "900" },
+  secondaryText: {
+    color: stylesVars.blue,
+    fontWeight: "700",
+    fontSize: 14
+  },
 
-  // Modal
+  empty: {
+    padding: 16
+  },
+
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.35)",
     justifyContent: "flex-end"
   },
+
   modalCard: {
-    backgroundColor: "#fff",
+    backgroundColor: stylesVars.cardBg,
     padding: 16,
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: stylesVars.border,
     gap: 10
   },
-  modalTitle: { fontSize: 16, fontWeight: "900", color: "#111" },
-  modalSub: { fontSize: 12, color: "#64748B", fontWeight: "700" },
 
-  // ✅ labels now LIGHT BLUE
-  fieldLabel: { fontSize: 12, color: LABEL_BLUE, fontWeight: "900", marginTop: 2 },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  modalSub: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
+
+  fieldLabel: {
+    fontSize: 13,
+    color: stylesVars.text,
+    fontWeight: "700",
+    marginTop: 2
+  },
 
   input: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: stylesVars.borderSoft,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    color: "#111",
-    fontWeight: "800",
-    backgroundColor: "#fff"
+    color: stylesVars.text,
+    fontWeight: "500",
+    backgroundColor: stylesVars.white
   },
-  modalBtns: { flexDirection: "row", gap: 10, marginTop: 8 }
+
+  modalBtns: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 8
+  },
+
+  bottomSpacer: {
+    height: 20
+  }
 });

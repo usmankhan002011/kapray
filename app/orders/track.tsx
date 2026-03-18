@@ -36,8 +36,6 @@ type OrderRow = {
   currency: string;
 
   vendor_id: number;
-
-  // ✅ bring spec_snapshot to show Dress Cat and allow future UI
   spec_snapshot?: any;
 };
 
@@ -74,11 +72,9 @@ function money(currency: string, v: any) {
 export default function TrackOrdersScreen() {
   const router = useRouter();
 
-  // Buyer inputs (no login required)
   const [buyerName, setBuyerName] = useState("");
   const [buyerMobile, setBuyerMobile] = useState("");
 
-  // Optional vendor filter (search + pick)
   const [vendorQuery, setVendorQuery] = useState("");
   const [vendorLoading, setVendorLoading] = useState(false);
   const [vendorOptions, setVendorOptions] = useState<VendorRow[]>([]);
@@ -92,7 +88,6 @@ export default function TrackOrdersScreen() {
   const buyerMobileTrim = useMemo(() => norm(buyerMobile), [buyerMobile]);
 
   const canSearch = useMemo(() => {
-    // Simple rule: mobile required (name helps narrow)
     return buyerMobileTrim.length >= 10;
   }, [buyerMobileTrim]);
 
@@ -106,7 +101,6 @@ export default function TrackOrdersScreen() {
     try {
       setVendorLoading(true);
 
-      // Your project uses single "vendor" table (not shops).
       const { data, error } = await supabase
         .from("vendor")
         .select("id,shop_name,name")
@@ -132,7 +126,6 @@ export default function TrackOrdersScreen() {
   }, [vendorQuery]);
 
   useEffect(() => {
-    // Debounce-ish behavior without timers: load when user stops typing a bit (good enough)
     loadVendors();
   }, [loadVendors]);
 
@@ -152,10 +145,6 @@ export default function TrackOrdersScreen() {
       const mobile = buyerMobileTrim;
       const name = buyerNameTrim;
 
-      // Query policy:
-      // - buyer_mobile is REQUIRED exact match (simple & safe)
-      // - buyer_name is optional; if provided we use ILIKE to narrow
-      // - vendor is optional; if selected, require vendor_id match
       let q = supabase
         .from("orders")
         .select(
@@ -251,7 +240,7 @@ export default function TrackOrdersScreen() {
       <Pressable
         onPress={() =>
           router.push({
-            pathname: "/orders/[id]",
+            pathname: "/flow/orders/[id]" as any,
             params: { id: String(item.id), from: "track" }
           })
         }
@@ -274,7 +263,6 @@ export default function TrackOrdersScreen() {
           {item.title_snapshot} • {item.product_code_snapshot}
         </Text>
 
-        {/* ✅ Dress Cat */}
         <Text style={styles.small} numberOfLines={1}>
           Dress Cat: {dressCat}
         </Text>
@@ -314,7 +302,7 @@ export default function TrackOrdersScreen() {
             placeholder="03XXXXXXXXX"
             keyboardType="phone-pad"
             style={styles.input}
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={stylesVars.placeholder}
           />
 
           <Text style={styles.label}>Buyer Name (optional)</Text>
@@ -323,14 +311,14 @@ export default function TrackOrdersScreen() {
             onChangeText={setBuyerName}
             placeholder="e.g., Arif"
             style={styles.input}
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor={stylesVars.placeholder}
           />
 
           <Text style={styles.label}>Vendor (optional)</Text>
 
           {selectedVendor ? (
             <View style={styles.selectedVendorRow}>
-              <View style={{ flex: 1 }}>
+              <View style={styles.selectedVendorInfo}>
                 <Text style={styles.selectedVendorTitle} numberOfLines={1}>
                   {selectedVendorLabel}
                 </Text>
@@ -348,7 +336,7 @@ export default function TrackOrdersScreen() {
                 onChangeText={setVendorQuery}
                 placeholder="Type vendor name (2+ letters)..."
                 style={styles.input}
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={stylesVars.placeholder}
               />
 
               {vendorLoading ? (
@@ -414,121 +402,283 @@ export default function TrackOrdersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#fff" },
+const stylesVars = {
+  bg: "#F8FAFC",
+  cardBg: "#FFFFFF",
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
+  white: "#FFFFFF",
+  black: "#000000"
+};
 
-  header: { padding: 16, gap: 10 },
-  title: { fontSize: 22, fontWeight: "900", color: "#111" },
-  subtitle: { fontSize: 13, color: "#444", fontWeight: "700" },
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: stylesVars.bg
+  },
+
+  header: {
+    padding: 16,
+    gap: 10,
+    backgroundColor: stylesVars.bg
+  },
+
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  subtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
 
   cardForm: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 16,
-    padding: 14,
+    borderColor: stylesVars.border,
+    borderRadius: 18,
+    padding: 18,
     gap: 10,
-    backgroundColor: "#fff"
+    backgroundColor: stylesVars.cardBg
   },
 
-  label: { fontSize: 12, color: "#6B7280", fontWeight: "900" },
+  label: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: stylesVars.text,
+    letterSpacing: 0.2
+  },
+
   input: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: stylesVars.borderSoft,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    color: "#111",
-    fontWeight: "800",
-    backgroundColor: "#fff"
+    color: stylesVars.text,
+    fontWeight: "500",
+    backgroundColor: stylesVars.white
   },
 
   vendorOptionsBox: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: stylesVars.border,
     borderRadius: 12,
     overflow: "hidden",
-    maxHeight: 220
+    maxHeight: 220,
+    backgroundColor: stylesVars.cardBg
   },
+
   vendorOption: {
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
-    backgroundColor: "#fff"
+    borderBottomColor: stylesVars.borderSoft,
+    backgroundColor: stylesVars.cardBg
   },
-  vendorOptionTitle: { fontSize: 13, fontWeight: "900", color: "#111" },
-  vendorOptionSub: { fontSize: 12, fontWeight: "700", color: "#475569", marginTop: 2 },
+
+  vendorOptionTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  vendorOptionSub: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: stylesVars.mutedText,
+    marginTop: 2
+  },
 
   selectedVendorRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: stylesVars.border,
     borderRadius: 12,
-    padding: 12
+    padding: 12,
+    backgroundColor: stylesVars.cardBg
   },
-  selectedVendorTitle: { fontSize: 13, fontWeight: "900", color: "#111" },
-  selectedVendorSub: { fontSize: 12, fontWeight: "700", color: "#64748B", marginTop: 2 },
 
-  clearBtn: {
-    borderWidth: 1,
-    borderColor: "#111",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10
+  selectedVendorInfo: {
+    flex: 1
   },
-  clearBtnText: { fontSize: 12, fontWeight: "900", color: "#111" },
 
-  primaryBtn: {
-    backgroundColor: "#111",
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: "center",
+  selectedVendorTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  selectedVendorSub: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: stylesVars.mutedText,
     marginTop: 2
   },
-  primaryText: { color: "#fff", fontWeight: "900", fontSize: 14 },
 
-  disabledBtn: { opacity: 0.45 },
-  pressed: { opacity: 0.85 },
+  clearBtn: {
+    minHeight: 40,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: stylesVars.blueSoft,
+    alignItems: "center",
+    justifyContent: "center"
+  },
 
-  loadingRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  helper: { fontSize: 12, color: "#6B7280", fontWeight: "700" },
+  clearBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: stylesVars.blue
+  },
 
-  loadingArea: { padding: 16, flexDirection: "row", alignItems: "center", gap: 10 },
+  primaryBtn: {
+    minHeight: 48,
+    backgroundColor: stylesVars.blue,
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2
+  },
 
-  list: { padding: 16, paddingTop: 6, gap: 12 },
+  primaryText: {
+    color: stylesVars.white,
+    fontWeight: "700",
+    fontSize: 14
+  },
+
+  disabledBtn: {
+    opacity: 0.6
+  },
+
+  pressed: {
+    opacity: 0.82
+  },
+
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+
+  helper: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
+
+  loadingArea: {
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+
+  list: {
+    padding: 16,
+    paddingTop: 6,
+    gap: 12,
+    backgroundColor: stylesVars.bg
+  },
 
   card: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 16,
-    padding: 14,
+    borderColor: stylesVars.border,
+    borderRadius: 18,
+    padding: 18,
     gap: 8,
-    backgroundColor: "#fff"
+    backgroundColor: stylesVars.cardBg
   },
+
   cardNewRed: {
-    borderColor: "#EF4444",
+    borderColor: stylesVars.dangerBorder,
     backgroundColor: "#FFF7F7"
   },
 
-  rowBetween: { flexDirection: "row", justifyContent: "space-between", gap: 10 },
-  orderNo: { fontSize: 16, fontWeight: "900", flex: 1, color: "#111" },
-  line: { fontSize: 13, color: "#333", fontWeight: "700" },
-  small: { fontSize: 12, color: "#555", fontWeight: "700" },
+  rowBetween: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10,
+    alignItems: "center"
+  },
+
+  orderNo: {
+    fontSize: 16,
+    fontWeight: "700",
+    flex: 1,
+    color: stylesVars.text
+  },
+
+  line: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.subText,
+    fontWeight: "500"
+  },
+
+  small: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
 
   badge: {
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "700",
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
     overflow: "hidden"
   },
-  badgeRed: { color: "#991B1B", backgroundColor: "#FEE2E2" },
-  badgeBlue: { color: "#1E3A8A", backgroundColor: "#DBEAFE" },
 
-  empty: { padding: 20, gap: 8, alignItems: "center" },
-  emptyTitle: { fontSize: 16, fontWeight: "900", color: "#111" },
-  emptyText: { fontSize: 13, color: "#555", textAlign: "center", fontWeight: "700" }
+  badgeRed: {
+    color: stylesVars.danger,
+    backgroundColor: stylesVars.dangerSoft
+  },
+
+  badgeBlue: {
+    color: stylesVars.blue,
+    backgroundColor: stylesVars.blueSoft
+  },
+
+  empty: {
+    padding: 20,
+    gap: 8,
+    alignItems: "center"
+  },
+
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  emptyText: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    textAlign: "center",
+    fontWeight: "500"
+  }
 });

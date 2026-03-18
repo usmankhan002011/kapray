@@ -3,7 +3,7 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 type Multi = string[];
 
 export type FiltersState = {
-  dressTypeId: number | null;
+  dressTypeId: string | null;
   dressTypeIds: Multi;
 
   fabricTypeIds: Multi;
@@ -14,11 +14,9 @@ export type FiltersState = {
   wearStateIds: Multi;
   priceBandIds: Multi;
 
-  // ✅ Cost Range (Redux). null = ANY
   minCostPkr: number | null;
   maxCostPkr: number | null;
 
-  // ✅ Vendors (multi-select). Empty = ANY
   vendorIds: Multi;
 };
 
@@ -34,15 +32,12 @@ const initialState: FiltersState = {
   wearStateIds: [],
   priceBandIds: [],
 
-  // ✅ Cost Range (Redux)
   minCostPkr: null,
   maxCostPkr: null,
 
-  // ✅ Vendors
   vendorIds: []
 };
 
-// empty array = ANY
 function toggleId(arr: string[], id: string) {
   return arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id];
 }
@@ -51,14 +46,14 @@ function clampCostRange(
   minCostPkr: number | null,
   maxCostPkr: number | null
 ): { minCostPkr: number | null; maxCostPkr: number | null } {
-  // If either is null, no ordering needed.
   if (minCostPkr === null || maxCostPkr === null) {
     return { minCostPkr, maxCostPkr };
   }
-  // Ensure min <= max
+
   if (minCostPkr <= maxCostPkr) {
     return { minCostPkr, maxCostPkr };
   }
+
   return { minCostPkr: maxCostPkr, maxCostPkr: minCostPkr };
 }
 
@@ -68,12 +63,11 @@ const filtersSlice = createSlice({
   reducers: {
     resetAllFilters: () => initialState,
 
-    setDressTypeId: (state, action: PayloadAction<number | null>) => {
+    setDressTypeId: (state, action: PayloadAction<string | null>) => {
       state.dressTypeId = action.payload;
       state.dressTypeIds =
         action.payload === null ? [] : [String(action.payload)];
 
-      // Reset downstream filters when dress type changes
       state.fabricTypeIds = [];
       state.colorShadeIds = [];
       state.workTypeIds = [];
@@ -82,20 +76,16 @@ const filtersSlice = createSlice({
       state.wearStateIds = [];
       state.priceBandIds = [];
 
-      // ✅ Reset cost range too (downstream)
       state.minCostPkr = null;
       state.maxCostPkr = null;
-
-      // ✅ vendorIds intentionally NOT reset
     },
 
     setDressTypeIds: (state, action: PayloadAction<string[]>) => {
       state.dressTypeIds = action.payload ?? [];
       state.dressTypeId = state.dressTypeIds.length
-        ? Number(state.dressTypeIds[0])
+        ? String(state.dressTypeIds[0])
         : null;
 
-      // Reset downstream filters when dress type changes
       state.fabricTypeIds = [];
       state.colorShadeIds = [];
       state.workTypeIds = [];
@@ -104,11 +94,8 @@ const filtersSlice = createSlice({
       state.wearStateIds = [];
       state.priceBandIds = [];
 
-      // ✅ Reset cost range too (downstream)
       state.minCostPkr = null;
       state.maxCostPkr = null;
-
-      // ✅ vendorIds intentionally NOT reset
     },
 
     clearFabricTypes: (state) => {
@@ -160,8 +147,6 @@ const filtersSlice = createSlice({
       state.priceBandIds = toggleId(state.priceBandIds, action.payload);
     },
 
-    // ✅ Cost Range (Redux)
-    // Keep these as the ONLY source of truth for the slider selection (no route params).
     clearCostRange: (state) => {
       state.minCostPkr = null;
       state.maxCostPkr = null;
@@ -180,7 +165,6 @@ const filtersSlice = createSlice({
       state.maxCostPkr = clamped.maxCostPkr;
     },
 
-    // ✅ Vendors
     clearVendors: (state) => {
       state.vendorIds = [];
     },
@@ -219,11 +203,9 @@ export const {
   clearPriceBands,
   togglePriceBand,
 
-  // ✅ Cost Range
   clearCostRange,
   setCostRange,
 
-  // ✅ Vendors
   clearVendors,
   toggleVendor,
   setVendorIds

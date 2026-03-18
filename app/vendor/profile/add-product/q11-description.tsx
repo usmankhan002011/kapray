@@ -34,14 +34,23 @@ function formatPicked(list: any, emptyLabel: string) {
 }
 
 const stylesVars = {
-  bg: "#F5F7FB",
+  bg: "#F8FAFC",
   cardBg: "#FFFFFF",
-  border: "#D9E2F2",
-  borderSoft: "#E6EDF8",
-  blue: "#0B2F6B",
-  blueSoft: "#EAF2FF",
-  text: "#111111",
-  subText: "#60708A"
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
+  overlayDark: "rgba(0,0,0,0.58)",
+  overlaySoft: "rgba(255,255,255,0.14)",
+  white: "#FFFFFF",
+  black: "#000000"
 };
 
 function pickFirstString(v: unknown): string | null {
@@ -62,11 +71,9 @@ export default function Q11Description() {
 
   const { draft } = useProductDraft() as any;
 
-  // This screen’s route (origin screen for these modals)
   const modalReturnTo = "/vendor/profile/add-product/q11-description";
 
   function goPickModal(name: ModalName) {
-    // DO NOT TOUCH: modal navigation is exactly kept as your existing file
     const encoded = encodeURIComponent(modalReturnTo);
     router.push(`/vendor/profile/(product-modals)/${name}?returnTo=${encoded}` as any);
   }
@@ -117,8 +124,12 @@ export default function Q11Description() {
   }
 
   function workSummary() {
+    const subNames = (draft?.spec as any)?.workSubTypeNames as any[] | undefined;
+    if (Array.isArray(subNames) && subNames.length) return formatPicked(subNames, "Any");
+
     const names = (draft?.spec as any)?.workTypeNames as any[] | undefined;
     if (Array.isArray(names) && names.length) return formatPicked(names, "Any");
+
     const list = (draft?.spec?.workTypeIds ?? []) as any[];
     return list.length ? `${list.length} selected` : "Any";
   }
@@ -267,53 +278,108 @@ export default function Q11Description() {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 24, backgroundColor: stylesVars.bg },
+  content: {
+    padding: 16,
+    paddingBottom: 24,
+    backgroundColor: stylesVars.bg
+  },
 
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { fontSize: 20, fontWeight: "900", color: stylesVars.blue },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12
+  },
+
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
 
   linkBtn: {
-    paddingHorizontal: 10,
+    minHeight: 40,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center"
   },
-  linkText: { color: stylesVars.blue, fontWeight: "900" },
+
+  linkText: {
+    color: stylesVars.blue,
+    fontSize: 14,
+    fontWeight: "700"
+  },
 
   card: {
     marginTop: 14,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
-    padding: 14
+    padding: 18
   },
 
-  sectionTitle: { fontSize: 13, fontWeight: "900", color: stylesVars.blue },
-  btnRow: { marginTop: 12, gap: 10 },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: stylesVars.text,
+    marginBottom: 2
+  },
+
+  btnRow: {
+    marginTop: 12,
+    gap: 10
+  },
 
   pickBtn: {
-    borderRadius: 12,
+    borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 14,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: "#D7E3FF"
   },
-  pickTitle: { color: stylesVars.blue, fontWeight: "900", fontSize: 13 },
-  pickValue: { marginTop: 4, color: stylesVars.text, opacity: 0.8, fontSize: 12 },
+
+  pickTitle: {
+    color: stylesVars.blue,
+    fontWeight: "700",
+    fontSize: 14
+  },
+
+  pickValue: {
+    marginTop: 4,
+    color: stylesVars.subText,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500"
+  },
 
   primaryBtn: {
     marginTop: 14,
-    borderRadius: 16,
-    paddingVertical: 14,
+    minHeight: 48,
+    borderRadius: 14,
+    paddingVertical: 12,
     alignItems: "center",
+    justifyContent: "center",
     backgroundColor: stylesVars.blue
   },
-  primaryBtnDisabled: { opacity: 0.4 },
-  primaryText: { color: "#fff", fontWeight: "900", fontSize: 15 },
 
-  pressed: { opacity: 0.75 }
+  primaryBtnDisabled: {
+    opacity: 0.6
+  },
+
+  primaryText: {
+    color: stylesVars.white,
+    fontWeight: "700",
+    fontSize: 14
+  },
+
+  pressed: {
+    opacity: 0.82
+  }
 });

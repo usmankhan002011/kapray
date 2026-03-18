@@ -120,6 +120,22 @@ kapray
 │   │   ├── view-product.tsx
 │   │   └── view-profile.tsx
 │   ├── (tabs)
+│   │   ├── flow
+│   │   │   ├── orders
+│   │   │   │   ├── [id].tsx
+│   │   │   │   ├── index.tsx
+│   │   │   │   └── track.tsx
+│   │   │   ├── purchase
+│   │   │   │   ├── _layout.tsx
+│   │   │   │   ├── cart.tsx
+│   │   │   │   ├── payment.tsx
+│   │   │   │   ├── place-order.tsx
+│   │   │   │   └── size.tsx
+│   │   │   ├── _layout.tsx
+│   │   │   ├── confirmation.tsx
+│   │   │   ├── results-filters.tsx
+│   │   │   ├── vendor-search.tsx
+│   │   │   └── view-product.tsx
 │   │   ├── _layout.tsx
 │   │   ├── index.tsx
 │   │   └── shops.tsx
@@ -162,7 +178,8 @@ kapray
 │   │   │   │   ├── origin-city_modal.tsx
 │   │   │   │   ├── wear-state_modal.tsx
 │   │   │   │   ├── work_modal.tsx
-│   │   │   │   └── work-density_modal.tsx
+│   │   │   │   ├── work-density_modal.tsx
+│   │   │   │   └── work-subtypes_modal.tsx
 │   │   │   ├── add-product
 │   │   │   │   ├── _layout.tsx
 │   │   │   │   ├── index.tsx
@@ -208,17 +225,75 @@ kapray
 │   ├── vendor-search.tsx
 │   ├── wear-state.tsx
 │   ├── wizard.tsx
+│   ├── wizard_legacy.tsx
 │   ├── work.tsx
 │   └── work-density.tsx
 ├── assets
+│   ├── dress-types-images
+│   │   ├── blouse 10.png
+│   │   ├── BLOUSE 3.png
+│   │   ├── BLOUSE.png
+│   │   ├── BLOUSE_1.png
+│   │   ├── BLOUSE_3.png
+│   │   ├── BLOUSE_4.png
+│   │   ├── BLOUSE1.png
+│   │   ├── BLOUSE20.png
+│   │   ├── blouse40.png
+│   │   ├── BLOUSE56.png
+│   │   ├── blousr6.png
+│   │   ├── DUPATTA.png
+│   │   ├── DUPATTA_1.png
+│   │   ├── DUPATTA_14.png
+│   │   ├── DUPATTA_2.png
+│   │   ├── DUPATTA_6.png
+│   │   ├── DUPATTA_8.png
+│   │   ├── DUPATTA+3.png
+│   │   ├── DUPATTA4.png
+│   │   ├── FARCHI_LEHNGA.png
+│   │   ├── FARCHI_LEHNGA_1.png
+│   │   ├── FARCHI_LEHNGA_4.png
+│   │   ├── FARCHI_LEHNGA_9.png
+│   │   ├── GHARARA.png
+│   │   ├── GHARARA_1.png
+│   │   ├── LEHNGA_SET.jpg
+│   │   ├── LEHNGA_SET.png
+│   │   ├── LEHNGA_SET_1.png
+│   │   ├── LEHNGA_SET2.png
+│   │   ├── LEHNGA_SET6.png
+│   │   ├── LEHNGA_SET9.png
+│   │   ├── MAXI_GOWN.jpg
+│   │   ├── MAXI_GOWN.png
+│   │   ├── MAXI_GOWN_1.png
+│   │   ├── PESHWAS_FROCK.png
+│   │   ├── PESHWAS_FROCK_1.png
+│   │   ├── PESHWAS_FROCK2.png
+│   │   ├── SAREE.png
+│   │   ├── SAREE_1.png
+│   │   ├── SAREE_4.png
+│   │   ├── SHARARA.png
+│   │   ├── SHARARA_1.jpg
+│   │   ├── SHARARA_1.png
+│   │   ├── SHIRT_AND_BOTTOM_SET.jpg
+│   │   ├── SHIRT_AND_BOTTOM_SET.png
+│   │   ├── SHIRT_AND_BOTTOM_SET_1.png
+│   │   ├── SHIRT_AND_BOTTOM_SET_10.png
+│   │   └── SHIRT_AND_BOTTOM_SET_8.png
 │   ├── fabric-types-images
 │   │   ├── CHIFFON.jpg
+│   │   ├── COTTON_SILK.jpg
+│   │   ├── CREPE_CHIFFON.jpg
 │   │   ├── GEORGETTE.jpg
 │   │   ├── JAMAWAR.jpg
+│   │   ├── KATAN_BROCADE.jpg
+│   │   ├── KOREAN_SILK.jpg
 │   │   ├── NET.jpg
 │   │   ├── ORGANZA.jpg
+│   │   ├── SATIN_SILK.jpg
 │   │   ├── SILK.jpg
+│   │   ├── SILK_CHIFFON.jpg
+│   │   ├── SILK_VELVET.jpg
 │   │   ├── TISSUE.jpg
+│   │   ├── TISSUE_SILK.jpg
 │   │   └── VELVET.jpg
 │   ├── images
 │   │   └── completeLogo.png
@@ -240,11 +315,59 @@ kapray
 │   │   ├── designer.jpg
 │   │   ├── gotta.jpg
 │   │   ├── machine.jpg
+│   │   ├── metallic.jpg
 │   │   ├── mirror.jpg
 │   │   ├── sequin.jpg
 │   │   ├── stone.jpg
-│   │   ├── thread.jpg
-│   │   └── zardozi.jpg
+│   │   └── thread.jpg
+│   ├── work-subtype-images
+│   │   ├── designer
+│   │   │   ├── 3d_floral_embroidery.jpg
+│   │   │   ├── digital_print_embellishment.jpg
+│   │   │   └── hand_printed_embroidery.jpg
+│   │   ├── gotta
+│   │   │   ├── gotta_patti.jpg
+│   │   │   └── patch_applique.jpg
+│   │   ├── machine
+│   │   │   ├── computer_embroidery.jpg
+│   │   │   ├── machine_embroidery.jpg
+│   │   │   └── machine_embroidery_2.webp
+│   │   ├── metallic
+│   │   │   ├── dabka.png
+│   │   │   ├── kora.png
+│   │   │   ├── mukesh.jpg
+│   │   │   ├── nakshi.jpg
+│   │   │   ├── salma.png
+│   │   │   ├── tilla.png
+│   │   │   ├── zardozi.jpg
+│   │   │   └── zari.png
+│   │   ├── mirror
+│   │   │   ├── kutch_mirror_work.jpg
+│   │   │   └── mirror_work.jpg
+│   │   ├── sequin
+│   │   │   ├── sequins.jpg
+│   │   │   └── sitara.jpg
+│   │   ├── stone
+│   │   │   ├── bead_work.jpg
+│   │   │   ├── bead_work.png
+│   │   │   ├── bead_work_2.jpg
+│   │   │   ├── bead_work_2.png
+│   │   │   ├── cut_dana.jpg
+│   │   │   ├── cut_dana_2.jpg
+│   │   │   ├── cutdana 2.png
+│   │   │   ├── cutdana 3.jpg
+│   │   │   ├── cutdana.png
+│   │   │   ├── pearl_work.jpg
+│   │   │   ├── rhinestones.jpg
+│   │   │   ├── rhinestones.png
+│   │   │   └── swarovski_crystal.jpg
+│   │   └── thread
+│   │       ├── chickenkari.png
+│   │       ├── chikankari.jpg
+│   │       ├── resham 2.jpg
+│   │       ├── resham.jpg
+│   │       ├── resham.png
+│   │       └── sozni.jpg
 │   ├── filter funnel emoji.jpg
 │   └── sizes outline.jpg
 ├── components
@@ -262,6 +385,11 @@ kapray
 │   │   ├── icon-symbol.tsx
 │   │   ├── select-panel.tsx
 │   │   └── StandardFilterDisplay.tsx
+│   ├── Wizard
+│   │   ├── GradientInputCard.tsx
+│   │   ├── VendorReviewSummary.tsx
+│   │   ├── WizardScraffold.tsx
+│   │   └── wizardTypes.ts
 │   ├── external-link.tsx
 │   ├── haptic-tab.tsx
 │   ├── hello-wave.tsx
@@ -271,7 +399,8 @@ kapray
 ├── constants
 │   └── theme.ts
 ├── data
-│   └── products.data.ts
+│   ├── products.data.ts
+│   └── workSubTypes.ts
 ├── hooks
 │   ├── use-color-scheme.ts
 │   ├── use-color-scheme.web.ts
@@ -284,22 +413,27 @@ kapray
 │   ├── index.ts
 │   └── vendorSlice.ts
 ├── utils
+│   ├── helpers
+│   │   └── wizardHelpers.ts
 │   └── supabase
 │       ├── client.ts
 │       ├── consumer.ts
 │       ├── dressType.ts
+│       ├── dressType_legacy.ts
 │       ├── fabricType.ts
 │       ├── originCity.ts
 │       ├── priceBand.ts
 │       ├── product.ts
+│       ├── supabase.ts
 │       ├── supabaseSecrets.ts
-│       ├── types.ts
 │       ├── vendor.ts
 │       ├── wearState.ts
 │       ├── workDensity.ts
 │       └── workType.ts
+├── .easignore
 ├── .gitignore
 ├── app.json
+├── eas.json
 ├── eslint.config.js
 ├── expo-env.d.ts
 ├── package.json
@@ -309,10 +443,71 @@ kapray
 ├── tree-app.txt
 └── tsconfig.json
 PS C:\DEV\kapray\kapray>
-as on 07Mar26
+as on 16Mar26
 
 -------------------------------------------------------------------------------------------------------------
 strategy
 file lines < 200
 no special button or placeholder for the button. make text as button where required e.g., select, all etc>
 no placeholders. keeep the screen contents merged. no styling at this stage. keep styles minimum where required
+
+--------------------------------------------------------------------------------------------------------------------
+
+Principle: Styles Standard 
+
+Use ViewProduct styles as the single source of truth.
+
+Keep all existing style keys; change only visual values.
+
+Follow the same color palette, radius, spacing, typography, borders, and opacity rules from the standard file.
+
+Prefer:
+
+bg #F8FAFC
+
+cardBg #FFFFFF
+
+border #E5E7EB
+
+blue #2563EB
+
+blueSoft #EEF4FF
+
+text #0F172A
+
+subText #475569
+
+mutedText #64748B
+
+Standard shape rules:
+
+cards 18
+
+buttons 12–14
+
+pills 999
+
+Standard type rules:
+
+titles 18 / 700
+
+section titles 15 / 700
+
+labels 13 / 700
+
+body/meta 13–14 / 500
+
+Standard interaction rules:
+
+soft blue buttons use border #D7E3FF
+
+disabled opacity 0.6
+
+pressed opacity 0.82
+
+In one line:
+
+Do not redesign per file; make every file visually conform to makeViewProductStyles while preserving its original style names and functional layout.
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+

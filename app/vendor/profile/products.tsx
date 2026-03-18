@@ -171,8 +171,9 @@ export default function VendorProductsScreen() {
 
   // If we returned here with a new product_id, fetch and insert it at the top immediately
   useEffect(() => {
-    const newId = String((params as any)?.new_product_id ?? "").trim();
-    if (!newId || !vendorId) return;
+    const newIdRaw = String((params as any)?.new_product_id ?? "").trim();
+    const newId = safeInt(newIdRaw);
+    if (newId == null || !vendorId) return;
 
     let alive = true;
 
@@ -346,40 +347,71 @@ export default function VendorProductsScreen() {
 }
 
 const stylesVars = {
-  bg: "#F5F7FB",
+  bg: "#F8FAFC",
   cardBg: "#FFFFFF",
-  border: "#D9E2F2",
-  borderSoft: "#E6EDF8",
-  blue: "#0B2F6B",
-  blueSoft: "#EAF2FF",
-  text: "#111111",
-  subText: "#60708A"
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
+  overlayDark: "rgba(0,0,0,0.58)",
+  overlaySoft: "rgba(255,255,255,0.14)",
+  white: "#FFFFFF",
+  black: "#000000"
 };
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 24, backgroundColor: stylesVars.bg },
+  content: {
+    padding: 16,
+    paddingBottom: 24,
+    backgroundColor: stylesVars.bg
+  },
 
   topBar: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center"
+    alignItems: "center",
+    gap: 12
   },
 
-  title: { fontSize: 20, fontWeight: "900", color: stylesVars.blue },
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
 
-  refresh: { fontSize: 14, fontWeight: "900", color: "#005ea6" },
-  disabledText: { opacity: 0.6 },
+  refresh: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: stylesVars.blue
+  },
+
+  disabledText: {
+    opacity: 0.6
+  },
 
   card: {
     marginTop: 14,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
-    padding: 14
+    padding: 18
   },
 
-  meta: { marginTop: 6, fontSize: 14, color: stylesVars.subText },
+  meta: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
 
   btnRow: {
     marginTop: 14,
@@ -387,49 +419,63 @@ const styles = StyleSheet.create({
   },
 
   primaryBtn: {
-    borderRadius: 12,
+    minHeight: 48,
+    borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 14,
     backgroundColor: stylesVars.blue,
-    alignItems: "center"
+    alignItems: "center",
+    justifyContent: "center"
   },
-  primaryText: { color: "#fff", fontWeight: "900", fontSize: 14 },
+
+  primaryText: {
+    color: stylesVars.white,
+    fontWeight: "700",
+    fontSize: 14
+  },
 
   secondaryBtn: {
-    borderRadius: 12,
+    minHeight: 48,
+    borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    backgroundColor: "#fff",
+    backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: stylesVars.blue,
-    alignItems: "center"
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center"
   },
-  secondaryText: { color: stylesVars.blue, fontWeight: "900", fontSize: 14 },
+
+  secondaryText: {
+    color: stylesVars.blue,
+    fontWeight: "700",
+    fontSize: 14
+  },
 
   section: {
     marginTop: 18,
-    fontSize: 16,
-    fontWeight: "900",
-    color: stylesVars.blue
+    fontSize: 15,
+    fontWeight: "700",
+    color: stylesVars.text
   },
 
   listCard: {
     marginTop: 10,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: stylesVars.border,
-    backgroundColor: "#fff",
-    padding: 12
+    backgroundColor: stylesVars.cardBg,
+    padding: 18
   },
 
   item: {
     marginTop: 10,
     borderWidth: 1,
-    borderColor: stylesVars.borderSoft,
-    borderRadius: 14,
+    borderColor: stylesVars.border,
+    borderRadius: 16,
     paddingVertical: 10,
     paddingHorizontal: 10,
-    backgroundColor: "#fff",
+    backgroundColor: stylesVars.cardBg,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between"
@@ -440,26 +486,59 @@ const styles = StyleSheet.create({
     height: 54,
     borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#eee",
+    backgroundColor: "#F1F5F9",
     borderWidth: 1,
-    borderColor: stylesVars.borderSoft
+    borderColor: stylesVars.border
   },
-  thumb: { width: 54, height: 54 },
+
+  thumb: {
+    width: 54,
+    height: 54
+  },
+
   thumbFallback: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center"
   },
-  thumbFallbackText: { color: "#111", opacity: 0.55, fontWeight: "800", fontSize: 10 },
 
-  itemMid: { flex: 1, paddingHorizontal: 10 },
+  thumbFallbackText: {
+    color: stylesVars.mutedText,
+    fontWeight: "600",
+    fontSize: 10
+  },
 
-  itemCode: { fontSize: 12, fontWeight: "900", color: stylesVars.blue },
-  itemTitle: { marginTop: 2, fontSize: 13, fontWeight: "800", color: "#111" },
+  itemMid: {
+    flex: 1,
+    paddingHorizontal: 10
+  },
 
-  itemArrow: { fontSize: 22, fontWeight: "900", color: stylesVars.subText },
+  itemCode: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: stylesVars.blue
+  },
 
-  empty: { color: stylesVars.subText, fontWeight: "800" },
+  itemTitle: {
+    marginTop: 2,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: stylesVars.text
+  },
+
+  itemArrow: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: stylesVars.subText
+  },
+
+  empty: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
 
   loadingRow: {
     flexDirection: "row",
@@ -467,21 +546,47 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 6
   },
-  loadingText: { color: stylesVars.subText, fontWeight: "800" },
 
-  footer: { paddingTop: 8, paddingBottom: 10 },
+  loadingText: {
+    fontSize: 13,
+    color: stylesVars.mutedText,
+    fontWeight: "600"
+  },
+
+  footer: {
+    paddingTop: 8,
+    paddingBottom: 10
+  },
+
   loadMoreBtn: {
     marginTop: 8,
-    borderRadius: 12,
+    minHeight: 48,
+    borderRadius: 14,
     paddingVertical: 12,
     paddingHorizontal: 14,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: stylesVars.border,
-    alignItems: "center"
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center"
   },
-  loadMoreText: { color: stylesVars.blue, fontWeight: "900" },
-  endText: { marginTop: 10, textAlign: "center", color: stylesVars.subText, fontWeight: "800" },
 
-  pressed: { opacity: 0.75 }
+  loadMoreText: {
+    color: stylesVars.blue,
+    fontWeight: "700",
+    fontSize: 14
+  },
+
+  endText: {
+    marginTop: 10,
+    textAlign: "center",
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
+
+  pressed: {
+    opacity: 0.82
+  }
 });

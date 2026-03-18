@@ -10,21 +10,21 @@ type Mode = "standard" | "exact";
 type Unit = "cm" | "in";
 
 type MeasureKey =
-  | "a" // Neck
-  | "b" // Shoulder width
-  | "c" // Bust/Chest
-  | "d" // Under-bust
-  | "e" // Waist
-  | "f" // Hips
-  | "g" // Shoulder to waist
-  | "h" // Sleeve length
-  | "i" // Bicep
-  | "j" // Wrist
-  | "k" // Height
-  | "l" // Waist to floor
-  | "m" // Inseam
-  | "n" // Outseam
-  | "o"; // Thigh circumference
+  | "a"
+  | "b"
+  | "c"
+  | "d"
+  | "e"
+  | "f"
+  | "g"
+  | "h"
+  | "i"
+  | "j"
+  | "k"
+  | "l"
+  | "m"
+  | "n"
+  | "o";
 
 const MEASURE_LABELS: Record<MeasureKey, { code: string; title: string; hint: string }> = {
   a: { code: "A", title: "Neck circumference", hint: "Around base of neck" },
@@ -44,31 +44,42 @@ const MEASURE_LABELS: Record<MeasureKey, { code: string; title: string; hint: st
   o: { code: "O", title: "Thigh circumference", hint: "Fullest upper thigh" }
 };
 
+const stylesVars = {
+  bg: "#F8FAFC",
+  cardBg: "#FFFFFF",
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
+  overlayDark: "rgba(0,0,0,0.58)",
+  overlaySoft: "rgba(255,255,255,0.14)",
+  white: "#FFFFFF",
+  black: "#000000"
+};
+
 function BodyMeasureSvg() {
-  // Color rule:
-  // - Waist lines: BLUE
-  // - Length lines: RED (G, H, K, L, M, N)
-  // - Others: GREEN (A, B, C, D, F, I, J)
   const BLUE = "#1E5EFF";
   const RED = "#D11F1F";
   const GREEN = "#138A36";
   const OUTLINE = "#111";
 
-  const labelFill = (c: string) => c; // keep labels same color as their line
+  const labelFill = (c: string) => c;
 
   return (
     <View style={styles.svgCard}>
       <Text style={styles.svgTitle}>Measure Guide (A–N)</Text>
 
-      {/* wider viewBox so labels never clip */}
       <Svg width="100%" height={440} viewBox="0 0 360 580">
-        {/* ===== silhouette: more feminine waist/hip contour ===== */}
-        {/* Head */}
         <Circle cx="180" cy="60" r="30" stroke={OUTLINE} strokeWidth="2" fill="none" />
-        {/* Neck */}
         <Path d="M165 88 C170 100, 190 100, 195 88" stroke={OUTLINE} strokeWidth="2" fill="none" />
 
-        {/* Body (narrower waist, wider hips) */}
         <Path
           d="
             M 125 128
@@ -100,8 +111,6 @@ function BodyMeasureSvg() {
           fill="none"
         />
 
-        {/* ===== Arms separated from body (gap) ===== */}
-        {/* Left arm (separated) */}
         <Path
           d="
             M 105 146
@@ -112,7 +121,6 @@ function BodyMeasureSvg() {
           strokeWidth="2"
           fill="none"
         />
-        {/* Right arm (separated) */}
         <Path
           d="
             M 255 146
@@ -124,12 +132,6 @@ function BodyMeasureSvg() {
           fill="none"
         />
 
-        {/* ===== helper: anchor dot ===== */}
-        {/*
-          We use dots at endpoints to make it “measurement-like”.
-        */}
-
-        {/* ===== A: Neck circumference (GREEN) ===== */}
         <Line x1="160" y1="98" x2="200" y2="98" stroke={GREEN} strokeWidth="2.5" />
         <Circle cx="160" cy="98" r="3.5" fill={GREEN} />
         <Circle cx="200" cy="98" r="3.5" fill={GREEN} />
@@ -138,7 +140,6 @@ function BodyMeasureSvg() {
           A
         </SvgText>
 
-        {/* ===== B: Shoulder width (GREEN) ===== */}
         <Line x1="138" y1="132" x2="222" y2="132" stroke={GREEN} strokeWidth="2.5" />
         <Circle cx="138" cy="132" r="3.5" fill={GREEN} />
         <Circle cx="222" cy="132" r="3.5" fill={GREEN} />
@@ -147,7 +148,6 @@ function BodyMeasureSvg() {
           B
         </SvgText>
 
-        {/* ===== C: Bust / Chest (GREEN) ===== */}
         <Line x1="140" y1="194" x2="220" y2="194" stroke={GREEN} strokeWidth="2.5" />
         <Circle cx="140" cy="194" r="3.5" fill={GREEN} />
         <Circle cx="220" cy="194" r="3.5" fill={GREEN} />
@@ -156,7 +156,6 @@ function BodyMeasureSvg() {
           C
         </SvgText>
 
-        {/* ===== D: Under-bust (GREEN) ===== */}
         <Line x1="148" y1="224" x2="212" y2="224" stroke={GREEN} strokeWidth="2.5" />
         <Circle cx="148" cy="224" r="3.5" fill={GREEN} />
         <Circle cx="212" cy="224" r="3.5" fill={GREEN} />
@@ -165,7 +164,6 @@ function BodyMeasureSvg() {
           D
         </SvgText>
 
-        {/* ===== E: Waist (GREEN) — expanded edge-to-edge ===== */}
         <Line x1="118" y1="266" x2="242" y2="266" stroke={GREEN} strokeWidth="3" />
         <Circle cx="118" cy="266" r="3.8" fill={GREEN} />
         <Circle cx="242" cy="266" r="3.8" fill={GREEN} />
@@ -174,7 +172,6 @@ function BodyMeasureSvg() {
           E
         </SvgText>
 
-        {/* ===== F: Hips (GREEN) — wider ===== */}
         <Line x1="120" y1="322" x2="240" y2="322" stroke={GREEN} strokeWidth="2.5" />
         <Circle cx="120" cy="322" r="3.5" fill={GREEN} />
         <Circle cx="240" cy="322" r="3.5" fill={GREEN} />
@@ -183,7 +180,6 @@ function BodyMeasureSvg() {
           F
         </SvgText>
 
-        {/* ===== O: Thigh circumference (GREEN) ===== */}
         <Line x1="140" y1="372" x2="220" y2="372" stroke={GREEN} strokeWidth="2.5" />
         <Circle cx="140" cy="372" r="3.5" fill={GREEN} />
         <Circle cx="220" cy="372" r="3.5" fill={GREEN} />
@@ -192,7 +188,6 @@ function BodyMeasureSvg() {
           O
         </SvgText>
 
-        {/* ===== G: Shoulder to waist (RED) ===== */}
         <Line x1="62" y1="132" x2="62" y2="266" stroke={RED} strokeWidth="2.5" />
         <Circle cx="62" cy="132" r="3.5" fill={RED} />
         <Circle cx="62" cy="266" r="3.5" fill={RED} />
@@ -201,7 +196,6 @@ function BodyMeasureSvg() {
           G
         </SvgText>
 
-        {/* ===== H: Sleeve length (RED) — shoulder → wrist (arm separated) ===== */}
         <Line x1="304" y1="150" x2="304" y2="360" stroke={RED} strokeWidth="2.5" />
         <Circle cx="304" cy="150" r="3.5" fill={RED} />
         <Circle cx="304" cy="360" r="3.5" fill={RED} />
@@ -209,7 +203,6 @@ function BodyMeasureSvg() {
           H
         </SvgText>
 
-        {/* ===== I: Bicep circumference (BLUE) — on separated left arm ===== */}
         <Line x1="78" y1="220" x2="112" y2="220" stroke={BLUE} strokeWidth="2.5" />
         <Circle cx="78" cy="220" r="3.5" fill={BLUE} />
         <Circle cx="112" cy="220" r="3.5" fill={BLUE} />
@@ -218,7 +211,6 @@ function BodyMeasureSvg() {
           I
         </SvgText>
 
-        {/* ===== J: Wrist circumference (BLUE) — on separated left arm ===== */}
         <Line x1="84" y1="356" x2="108" y2="356" stroke={BLUE} strokeWidth="2.5" />
         <Circle cx="84" cy="356" r="3.5" fill={BLUE} />
         <Circle cx="108" cy="356" r="3.5" fill={BLUE} />
@@ -227,19 +219,16 @@ function BodyMeasureSvg() {
           J
         </SvgText>
 
-        {/* ===== K: Full height (RED) ===== */}
         <Line x1="334" y1="28" x2="334" y2="540" stroke={RED} strokeWidth="2.5" />
         <SvgText x="346" y="295" fontSize="16" fontWeight="800" fill={labelFill(RED)}>
           K
         </SvgText>
 
-        {/* ===== L: Waist to floor (RED) ===== */}
         <Line x1="318" y1="266" x2="318" y2="540" stroke={RED} strokeWidth="2.5" />
         <SvgText x="330" y="430" fontSize="16" fontWeight="800" fill={labelFill(RED)}>
           L
         </SvgText>
 
-        {/* ===== M: Inseam (RED) — crotch → ankle (inner) ===== */}
         <Line x1="180" y1="352" x2="180" y2="522" stroke={RED} strokeWidth="2.5" />
         <Circle cx="180" cy="352" r="3.5" fill={RED} />
         <Circle cx="180" cy="522" r="3.5" fill={RED} />
@@ -248,7 +237,6 @@ function BodyMeasureSvg() {
           M
         </SvgText>
 
-        {/* ===== N: Outseam (RED) — waist → ankle (outside) ===== */}
         <Line x1="244" y1="266" x2="244" y2="522" stroke={RED} strokeWidth="2.5" />
         <Circle cx="244" cy="266" r="3.5" fill={RED} />
         <Circle cx="244" cy="522" r="3.5" fill={RED} />
@@ -283,34 +271,24 @@ export default function SizeScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
     returnTo?: string;
-
     productId?: string;
     product_id?: string;
     productCode?: string;
     product_code?: string;
-
     productName?: string;
-
-    // ✅ dress category passthrough (stitched/unstitched etc.)
     product_category?: string;
-
     price?: string;
     currency?: string;
     imageUrl?: string;
-
     dye_shade_id?: string;
     dye_hex?: string;
     dye_label?: string;
     dyeing_cost_pkr?: string;
-
-    // ✅ tailoring passthrough
     tailoring_cost_pkr?: string;
     tailoring_turnaround_days?: string;
-
     selectedSize?: string;
     mode?: string;
     unit?: string;
-
     a?: string;
     b?: string;
     c?: string;
@@ -385,13 +363,10 @@ export default function SizeScreen() {
     router.replace({
       pathname: returnTo as any,
       params: {
-        ...(params as any), // keep forwarded product + dye + tailoring params
+        ...(params as any),
         productId,
         productCode,
-
-        // ✅ ensure canonical key exists for place-order
         product_category: (params as any)?.product_category ?? (params as any)?.productCategory ?? "",
-
         ...p
       }
     });
@@ -423,7 +398,6 @@ export default function SizeScreen() {
       isValidNumberOrEmpty(n) &&
       isValidNumberOrEmpty(o);
 
-    // require at least one measurement
     const hasAny = [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o].some(
       (x) => String(x ?? "").trim().length > 0
     );
@@ -534,91 +508,21 @@ export default function SizeScreen() {
           </View>
 
           <View style={styles.inputs}>
-            <MeasureRow
-              code="A"
-              value={a}
-              onChange={setA}
-              placeholder={"Neck circumference" + unitSuffix}
-            />
-            <MeasureRow
-              code="B"
-              value={b}
-              onChange={setB}
-              placeholder={"Shoulder width" + unitSuffix}
-            />
-            <MeasureRow
-              code="C"
-              value={c}
-              onChange={setC}
-              placeholder={"Bust / Chest circumference" + unitSuffix}
-            />
-            <MeasureRow
-              code="D"
-              value={d}
-              onChange={setD}
-              placeholder={"Under-bust circumference" + unitSuffix}
-            />
-            <MeasureRow
-              code="E"
-              value={e}
-              onChange={setE}
-              placeholder={"Waist circumference" + unitSuffix}
-            />
-            <MeasureRow
-              code="F"
-              value={f}
-              onChange={setF}
-              placeholder={"Hips circumference" + unitSuffix}
-            />
-            <MeasureRow
-              code="O"
-              value={o}
-              onChange={setO}
-              placeholder={"Thigh circumference" + unitSuffix}
-            />
-            <MeasureRow
-              code="G"
-              value={g}
-              onChange={setG}
-              placeholder={"Shoulder to waist" + unitSuffix}
-            />
-            <MeasureRow
-              code="H"
-              value={h}
-              onChange={setH}
-              placeholder={"Sleeve length" + unitSuffix}
-            />
-            <MeasureRow
-              code="I"
-              value={i}
-              onChange={setI}
-              placeholder={"Bicep circumference" + unitSuffix}
-            />
-            <MeasureRow
-              code="J"
-              value={j}
-              onChange={setJ}
-              placeholder={"Wrist circumference" + unitSuffix}
-            />
-            <MeasureRow
-              code="K"
-              value={k}
-              onChange={setK}
-              placeholder={"Full height" + unitSuffix}
-            />
-            <MeasureRow
-              code="L"
-              value={l}
-              onChange={setL}
-              placeholder={"Waist to floor" + unitSuffix}
-            />
+            <MeasureRow code="A" value={a} onChange={setA} placeholder={"Neck circumference" + unitSuffix} />
+            <MeasureRow code="B" value={b} onChange={setB} placeholder={"Shoulder width" + unitSuffix} />
+            <MeasureRow code="C" value={c} onChange={setC} placeholder={"Bust / Chest circumference" + unitSuffix} />
+            <MeasureRow code="D" value={d} onChange={setD} placeholder={"Under-bust circumference" + unitSuffix} />
+            <MeasureRow code="E" value={e} onChange={setE} placeholder={"Waist circumference" + unitSuffix} />
+            <MeasureRow code="F" value={f} onChange={setF} placeholder={"Hips circumference" + unitSuffix} />
+            <MeasureRow code="O" value={o} onChange={setO} placeholder={"Thigh circumference" + unitSuffix} />
+            <MeasureRow code="G" value={g} onChange={setG} placeholder={"Shoulder to waist" + unitSuffix} />
+            <MeasureRow code="H" value={h} onChange={setH} placeholder={"Sleeve length" + unitSuffix} />
+            <MeasureRow code="I" value={i} onChange={setI} placeholder={"Bicep circumference" + unitSuffix} />
+            <MeasureRow code="J" value={j} onChange={setJ} placeholder={"Wrist circumference" + unitSuffix} />
+            <MeasureRow code="K" value={k} onChange={setK} placeholder={"Full height" + unitSuffix} />
+            <MeasureRow code="L" value={l} onChange={setL} placeholder={"Waist to floor" + unitSuffix} />
             <MeasureRow code="M" value={m} onChange={setM} placeholder={"Inseam" + unitSuffix} />
-            <MeasureRow
-              code="N"
-              value={n}
-              onChange={setN}
-              placeholder={"Outseam" + unitSuffix}
-            />
+            <MeasureRow code="N" value={n} onChange={setN} placeholder={"Outseam" + unitSuffix} />
 
             <Pressable onPress={onSaveExact} style={styles.primaryBtn}>
               <Text style={styles.primaryText}>Continue</Text>
@@ -633,7 +537,7 @@ export default function SizeScreen() {
         </View>
       )}
 
-      <Pressable onPress={() => router.back()}>
+      <Pressable onPress={() => router.back()} style={styles.closeBtn}>
         <Text style={styles.link}>Close</Text>
       </Pressable>
     </ScrollView>
@@ -658,7 +562,7 @@ function MeasureRow({
         value={value}
         onChangeText={onChange}
         placeholder={placeholder}
-        placeholderTextColor="#888"
+        placeholderTextColor={stylesVars.placeholder}
         keyboardType="numeric"
         style={styles.input}
       />
@@ -667,22 +571,57 @@ function MeasureRow({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#fff" },
-  container: { padding: 16, paddingBottom: 28, gap: 12, backgroundColor: "#fff" },
+  screen: {
+    flex: 1,
+    backgroundColor: stylesVars.bg
+  },
 
-  title: { fontSize: 18, fontWeight: "800", color: "#111" },
+  container: {
+    padding: 16,
+    paddingBottom: 28,
+    gap: 12,
+    backgroundColor: stylesVars.bg
+  },
 
-  toggleRow: { flexDirection: "row", gap: 10, marginTop: 6, flexWrap: "wrap" },
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  toggleRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 6,
+    flexWrap: "wrap"
+  },
+
   toggleBtn: {
+    minHeight: 40,
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: "#111",
-    borderRadius: 10
+    borderColor: stylesVars.border,
+    borderRadius: 12,
+    backgroundColor: stylesVars.cardBg,
+    alignItems: "center",
+    justifyContent: "center"
   },
-  toggleActive: { backgroundColor: "#111" },
-  toggleText: { fontSize: 14, fontWeight: "800", color: "#111" },
-  toggleTextActive: { color: "#fff" },
+
+  toggleActive: {
+    backgroundColor: stylesVars.blueSoft,
+    borderColor: "#D7E3FF"
+  },
+
+  toggleText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  toggleTextActive: {
+    color: stylesVars.blue
+  },
 
   sizeGrid: {
     flexDirection: "row",
@@ -690,65 +629,165 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 8
   },
+
   sizePill: {
+    minHeight: 40,
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "#111"
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.cardBg,
+    alignItems: "center",
+    justifyContent: "center"
   },
-  sizeText: { fontSize: 14, fontWeight: "900", color: "#111" },
 
-  exactWrap: { gap: 10, marginTop: 8 },
-  helper: { fontSize: 13, color: "#333", opacity: 0.85 },
+  sizeText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
 
-  unitRow: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
+  exactWrap: {
+    gap: 10,
+    marginTop: 8
+  },
+
+  helper: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
+
+  unitRow: {
+    flexDirection: "row",
+    gap: 10,
+    flexWrap: "wrap"
+  },
+
   unitPill: {
+    minHeight: 40,
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "#111"
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.cardBg,
+    alignItems: "center",
+    justifyContent: "center"
   },
-  unitActive: { backgroundColor: "#111" },
-  unitText: { fontSize: 13, fontWeight: "900", color: "#111" },
-  unitTextActive: { color: "#fff" },
+
+  unitActive: {
+    backgroundColor: stylesVars.blueSoft,
+    borderColor: "#D7E3FF"
+  },
+
+  unitText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  unitTextActive: {
+    color: stylesVars.blue
+  },
 
   svgCard: {
     borderWidth: 1,
-    borderColor: "#111",
-    borderRadius: 12,
+    borderColor: stylesVars.border,
+    borderRadius: 18,
     padding: 12,
-    backgroundColor: "#fff"
+    backgroundColor: stylesVars.cardBg
   },
-  svgTitle: { fontSize: 14, fontWeight: "900", marginBottom: 8, color: "#111" },
-  legend: { marginTop: 8, gap: 4 },
-  legendText: { fontSize: 12, color: "#111", opacity: 0.85 },
 
-  inputs: { gap: 10 },
-  inputRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  inputLabel: { width: 24, fontSize: 16, fontWeight: "900", color: "#111" },
+  svgTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 8,
+    color: stylesVars.text
+  },
+
+  legend: {
+    marginTop: 8,
+    gap: 4
+  },
+
+  legendText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
+
+  inputs: {
+    gap: 10
+  },
+
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+
+  inputLabel: {
+    width: 24,
+    fontSize: 16,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
   input: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "#111",
-    borderRadius: 10,
+    borderColor: stylesVars.borderSoft,
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    color: "#111",
-    backgroundColor: "#fff"
+    color: stylesVars.text,
+    backgroundColor: stylesVars.white
   },
 
   primaryBtn: {
     marginTop: 4,
+    minHeight: 48,
     paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: "#111",
-    alignItems: "center"
+    borderRadius: 14,
+    backgroundColor: stylesVars.blue,
+    alignItems: "center",
+    justifyContent: "center"
   },
-  primaryText: { color: "#fff", fontWeight: "900" },
-  validation: { fontSize: 12, color: "#b00020" },
 
-  link: { fontSize: 16, textDecorationLine: "underline", marginTop: 8, color: "#111" }
+  primaryText: {
+    color: stylesVars.white,
+    fontWeight: "700",
+    fontSize: 14
+  },
+
+  validation: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.danger,
+    fontWeight: "500"
+  },
+
+  closeBtn: {
+    alignSelf: "flex-start",
+    minHeight: 40,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+
+  link: {
+    fontSize: 14,
+    color: stylesVars.blue,
+    fontWeight: "700"
+  }
 });

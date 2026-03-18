@@ -77,16 +77,26 @@ export default function CreateShopScreen() {
   const currentStep = STEPS[stepIndex];
   const isLastStep = stepIndex === STEPS.length - 1;
 
-  const ownerRef = useRef<TextInput>(null);
-  const emailRef = useRef<TextInput>(null);
-  const mobileRef = useRef<TextInput>(null);
-  const landlineRef = useRef<TextInput>(null);
-  const shopRef = useRef<TextInput>(null);
-  const addressRef = useRef<TextInput>(null);
-  const locationRef = useRef<TextInput>(null);
+    const ownerRef = useRef<TextInput>(null);
+    const emailRef = useRef<TextInput>(null);
+    const mobileRef = useRef<TextInput>(null);
+    const landlineRef = useRef<TextInput>(null);
+    const shopRef = useRef<TextInput>(null);
+    const addressRef = useRef<TextInput>(null);
+    const locationRef = useRef<TextInput>(null);
 
-  useEffect(() => {
-    const onBackPress = () => {
+    useEffect(() => {
+      if (stepIndex !== 0) return;
+
+      const t = setTimeout(() => {
+        ownerRef.current?.focus();
+      }, 250);
+
+      return () => clearTimeout(t);
+    }, [stepIndex]);
+
+    useEffect(() => {
+      const onBackPress = () => {
       if (stepIndex > 0) {
         setStepIndex((prev) => prev - 1);
         return true; // prevent default navigation
@@ -224,7 +234,7 @@ export default function CreateShopScreen() {
         location: form.address.trim(),
         status: "pending",
       })
-      .select("id")
+      .select("id, created_at")
       .single();
 
     if (insErr || !vendorRow?.id) {
@@ -310,7 +320,7 @@ export default function CreateShopScreen() {
     dispatch(
       setSelectedVendor({
         id: vendor_id,
-        created_at: null,
+        created_at: vendorRow.created_at ?? null,
         name: form.ownerName.trim(),
         email: form.email.trim(),
         mobile: form.mobile.trim(),
@@ -600,7 +610,7 @@ export default function CreateShopScreen() {
             >
               <Text style={styles.choiceCardTitle}>Yes</Text>
               <Text style={styles.choiceCardSubtitle}>
-                This shop offers stitching or tailoring services
+                This shop offers tailoring services for their unstiched products
               </Text>
             </Pressable>
 

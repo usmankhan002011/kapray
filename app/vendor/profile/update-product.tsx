@@ -9,7 +9,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View
+  View,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
@@ -23,7 +23,7 @@ const PRODUCTS_TABLE = "products";
 const BUCKET_VENDOR = "vendor_images";
 
 type ProductRow = {
-  id: string;
+  id: number;
   vendor_id: number;
   product_code: string | null;
   title: string | null;
@@ -106,37 +106,31 @@ export default function UpdateProductScreen() {
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [query, setQuery] = useState("");
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const selected = useMemo(() => {
     return products.find((p) => p.id === selectedId) ?? null;
   }, [products, selectedId]);
 
-  // ✅ picker visibility: once selected, hide list and show only the product editor
   const [pickerOpen, setPickerOpen] = useState(true);
 
-  // ✅ Allowed edits only
   const [title, setTitle] = useState("");
   const [moreDescription, setMoreDescription] = useState("");
   const [inventoryQty, setInventoryQty] = useState<number>(0);
 
-  // ✅ Cost mode is read-only (comes from DB), but costs are editable.
   const [priceMode, setPriceMode] = useState<"stitched_total" | "unstitched_per_meter">(
-    "unstitched_per_meter"
+    "unstitched_per_meter",
   );
   const [priceTotal, setPriceTotal] = useState<number>(0);
   const [pricePerMeter, setPricePerMeter] = useState<number>(0);
   const [availableSizes, setAvailableSizes] = useState<string[]>([]);
 
-  // ✅ Dyeing (unstitched): vendor can update toggle + cost
   const [dyeingEnabled, setDyeingEnabled] = useState<boolean>(false);
   const [dyeingCost, setDyeingCost] = useState<number>(0);
 
-  // ✅ Tailoring (unstitched): vendor can update toggle + cost + turnaround
   const [tailoringEnabled, setTailoringEnabled] = useState<boolean>(false);
   const [tailoringCost, setTailoringCost] = useState<number>(0);
   const [tailoringTurnaroundDays, setTailoringTurnaroundDays] = useState<number>(0);
 
-  // ✅ NEW: video thumbs (best-effort) so multi-select videos still render nice tiles
   const [videoThumbs, setVideoThumbs] = useState<Record<string, string>>({});
 
   const resolvePublicUrl = useCallback((path: string | null | undefined) => {
@@ -158,7 +152,7 @@ export default function UpdateProductScreen() {
       const { data, error } = await supabase
         .from(PRODUCTS_TABLE)
         .select(
-          "id, vendor_id, product_code, title, inventory_qty, made_on_order, spec, price, media, created_at, updated_at"
+          "id, vendor_id, product_code, title, inventory_qty, made_on_order, spec, price, media, created_at, updated_at",
         )
         .eq("vendor_id", vendorId)
         .order("created_at", { ascending: false });
@@ -168,7 +162,7 @@ export default function UpdateProductScreen() {
         return;
       }
 
-      setProducts((data as any) ?? []);
+      setProducts(((data as unknown) as ProductRow[]) ?? []);
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not load products.");
     } finally {
@@ -177,11 +171,10 @@ export default function UpdateProductScreen() {
   }
 
   useEffect(() => {
-    fetchProducts();
+    void fetchProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vendorId]);
 
-  // When selecting a product, hydrate editor state from its DB fields
   useEffect(() => {
     if (!selected) return;
 
@@ -199,17 +192,15 @@ export default function UpdateProductScreen() {
       modeRaw === "stitched_total" ? "stitched_total" : "unstitched_per_meter";
 
     setPriceMode(mode);
-
     setPriceTotal(safeNumOrZero(price?.cost_pkr_total));
     setPricePerMeter(safeNumOrZero(price?.cost_pkr_per_meter));
 
     setAvailableSizes(
       Array.isArray(price?.available_sizes)
         ? price.available_sizes.map((x: any) => String(x).trim()).filter(Boolean)
-        : []
+        : [],
     );
 
-    // ✅ Dyeing
     const dyeOn = Boolean(spec?.dyeing_enabled);
     setDyeingEnabled(dyeOn);
 
@@ -217,18 +208,17 @@ export default function UpdateProductScreen() {
     const dyeCostFromSpec = safeNumOrZero(spec?.dyeing_cost_pkr ?? 0);
     setDyeingCost(dyeCostFromPrice > 0 ? dyeCostFromPrice : dyeCostFromSpec);
 
-    // ✅ Tailoring
     const tailorOn = Boolean(spec?.tailoring_enabled);
     setTailoringEnabled(tailorOn);
 
     const tailorCostFromPrice = safeNumOrZero(price?.tailoring_cost_pkr ?? 0);
-    setTailoringCost(tailorCostFromPrice);
+    const tailorCostFromSpec = safeNumOrZero(spec?.tailoring_cost_pkr ?? 0);
+    setTailoringCost(tailorCostFromPrice > 0 ? tailorCostFromPrice : tailorCostFromSpec);
 
     const daysFromSpec = safeNumOrZero(spec?.tailoring_turnaround_days ?? 0);
     setTailoringTurnaroundDays(daysFromSpec);
   }, [selected]);
 
-  // ✅ If toggled OFF, clear associated values (best UX, and matches Add Product behavior)
   useEffect(() => {
     if (!dyeingEnabled && dyeingCost !== 0) setDyeingCost(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -259,35 +249,35 @@ export default function UpdateProductScreen() {
   }, [selected]);
 
   const media = useMemo(() => safeJson(selected?.media), [selected]);
+
   const imagePaths = useMemo(
     () => (Array.isArray(media?.images) ? media.images.map(String) : []),
-    [media]
+    [media],
   );
   const videoPaths = useMemo(
     () => (Array.isArray(media?.videos) ? media.videos.map(String) : []),
-    [media]
+    [media],
   );
   const thumbPaths = useMemo(
     () => (Array.isArray(media?.thumbs) ? media.thumbs.map(String) : []),
-    [media]
+    [media],
   );
 
   const imageUrls = useMemo(
     () => imagePaths.map((p: string) => resolvePublicUrl(p)).filter(Boolean) as string[],
-    [imagePaths, resolvePublicUrl]
+    [imagePaths, resolvePublicUrl],
   );
 
   const videoUrls = useMemo(
     () => videoPaths.map((p: string) => resolvePublicUrl(p)).filter(Boolean) as string[],
-    [videoPaths, resolvePublicUrl]
+    [videoPaths, resolvePublicUrl],
   );
 
   const thumbUrls = useMemo(
     () => thumbPaths.map((p: string) => resolvePublicUrl(p)).filter(Boolean) as string[],
-    [thumbPaths, resolvePublicUrl]
+    [thumbPaths, resolvePublicUrl],
   );
 
-  // ✅ Best-effort thumbs for videos when DB thumbs are missing
   useEffect(() => {
     let cancelled = false;
 
@@ -315,7 +305,6 @@ export default function UpdateProductScreen() {
     const list = (videoUrls ?? []).slice(0, 20);
     (async () => {
       for (let i = 0; i < list.length; i++) {
-        // eslint-disable-next-line no-await-in-loop
         await ensureThumb(list[i]);
       }
     })();
@@ -352,7 +341,6 @@ export default function UpdateProductScreen() {
     } else {
       const n = Number(priceTotal ?? 0);
       if (!Number.isFinite(n) || n <= 0) return false;
-      // availableSizes optional
     }
 
     return true;
@@ -367,7 +355,7 @@ export default function UpdateProductScreen() {
     dyeingCost,
     tailoringEnabled,
     tailoringCost,
-    tailoringTurnaroundDays
+    tailoringTurnaroundDays,
   ]);
 
   async function saveUpdate() {
@@ -389,22 +377,19 @@ export default function UpdateProductScreen() {
       const prevSpec = safeJson(selected?.spec);
       const prevPrice = safeJson(selected?.price);
 
-      // ✅ Keep mode read-only, update only the costs and related options
       let nextPrice: any = {
         ...(prevPrice ?? {}),
-        mode: priceMode
+        mode: priceMode,
       };
 
       if (priceMode === "unstitched_per_meter") {
         nextPrice = {
           ...nextPrice,
           cost_pkr_per_meter: Number(pricePerMeter ?? 0),
-          // store dyeing + tailoring costs in price JSONB (matches Add Product)
           dyeing_cost_pkr: dyeingEnabled ? Number(dyeingCost ?? 0) : 0,
-          tailoring_cost_pkr: tailoringEnabled ? Number(tailoringCost ?? 0) : 0
+          tailoring_cost_pkr: tailoringEnabled ? Number(tailoringCost ?? 0) : 0,
         };
 
-        // optional: clear stitched fields if present
         if ("cost_pkr_total" in nextPrice) {
           nextPrice.cost_pkr_total = nextPrice.cost_pkr_total ?? undefined;
         }
@@ -414,30 +399,34 @@ export default function UpdateProductScreen() {
           cost_pkr_total: Number(priceTotal ?? 0),
           available_sizes: (availableSizes ?? [])
             .map((x) => String(x).trim())
-            .filter(Boolean)
+            .filter(Boolean),
         };
 
-        // if stitched, force dyeing/tailoring off in snapshots
         nextPrice.dyeing_cost_pkr = 0;
         nextPrice.tailoring_cost_pkr = 0;
       }
 
       const nextSpec: any = {
-        ...(prevSpec ?? {})
+        ...(prevSpec ?? {}),
       };
 
       nextSpec.more_description = String(moreDescription ?? "").trim();
 
       if (priceMode === "unstitched_per_meter") {
         nextSpec.dyeing_enabled = Boolean(dyeingEnabled);
+        nextSpec.dyeing_cost_pkr = dyeingEnabled ? Number(dyeingCost ?? 0) : 0;
+
         nextSpec.tailoring_enabled = Boolean(tailoringEnabled);
+        nextSpec.tailoring_cost_pkr = tailoringEnabled ? Number(tailoringCost ?? 0) : 0;
         nextSpec.tailoring_turnaround_days = tailoringEnabled
           ? Math.max(0, Number(tailoringTurnaroundDays ?? 0))
           : 0;
       } else {
-        // stitched => disable these service flags
         nextSpec.dyeing_enabled = false;
+        nextSpec.dyeing_cost_pkr = 0;
+
         nextSpec.tailoring_enabled = false;
+        nextSpec.tailoring_cost_pkr = 0;
         nextSpec.tailoring_turnaround_days = 0;
       }
 
@@ -445,10 +434,9 @@ export default function UpdateProductScreen() {
         title: title.trim(),
         price: nextPrice,
         spec: nextSpec,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
 
-      // ✅ Force inventory to 0 when made_on_order is true
       if (Boolean(selected?.made_on_order)) {
         updatePayload.inventory_qty = 0;
       } else if (inventoryEditable) {
@@ -461,7 +449,7 @@ export default function UpdateProductScreen() {
         .eq("id", selectedId)
         .eq("vendor_id", vendorId)
         .select(
-          "id, vendor_id, product_code, title, inventory_qty, made_on_order, spec, price, media, created_at, updated_at"
+          "id, vendor_id, product_code, title, inventory_qty, made_on_order, spec, price, media, created_at, updated_at",
         )
         .single();
 
@@ -470,7 +458,7 @@ export default function UpdateProductScreen() {
         return;
       }
 
-      const updated = data as any as ProductRow;
+      const updated = data as unknown as ProductRow;
       setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
 
       Alert.alert("Updated", `Saved changes for ${safeText(updated.product_code)}`);
@@ -490,7 +478,7 @@ export default function UpdateProductScreen() {
 
       const updatePayload = {
         media: nextMedia,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
 
       const { data, error } = await supabase
@@ -499,7 +487,7 @@ export default function UpdateProductScreen() {
         .eq("id", selectedId)
         .eq("vendor_id", vendorId)
         .select(
-          "id, vendor_id, product_code, title, inventory_qty, made_on_order, spec, price, media, created_at, updated_at"
+          "id, vendor_id, product_code, title, inventory_qty, made_on_order, spec, price, media, created_at, updated_at",
         )
         .single();
 
@@ -508,7 +496,7 @@ export default function UpdateProductScreen() {
         return;
       }
 
-      const updated = data as any as ProductRow;
+      const updated = data as unknown as ProductRow;
       setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not update media.");
@@ -519,6 +507,7 @@ export default function UpdateProductScreen() {
 
   async function removeImageAt(idx: number) {
     if (!selected) return;
+
     const m = safeJson(selected.media);
     const images = Array.isArray(m.images) ? [...m.images] : [];
     if (idx < 0 || idx >= images.length) return;
@@ -527,7 +516,7 @@ export default function UpdateProductScreen() {
 
     const next = {
       ...m,
-      images
+      images,
     };
 
     await saveMedia(next);
@@ -535,6 +524,7 @@ export default function UpdateProductScreen() {
 
   async function removeVideoAt(idx: number) {
     if (!selected) return;
+
     const m = safeJson(selected.media);
     const videos = Array.isArray(m.videos) ? [...m.videos] : [];
     const thumbs = Array.isArray(m.thumbs) ? [...m.thumbs] : [];
@@ -547,7 +537,7 @@ export default function UpdateProductScreen() {
     const next = {
       ...m,
       videos,
-      thumbs
+      thumbs,
     };
 
     await saveMedia(next);
@@ -564,7 +554,7 @@ export default function UpdateProductScreen() {
     const contentType = guessContentTypeFromExt(ext);
 
     const base64 = await FileSystem.readAsStringAsync(args.uri, {
-      encoding: FileSystem.EncodingType.Base64
+      encoding: FileSystem.EncodingType.Base64,
     });
     const arrayBuffer = decode(base64);
 
@@ -576,7 +566,7 @@ export default function UpdateProductScreen() {
       .from(BUCKET_VENDOR)
       .upload(storagePath, arrayBuffer, {
         contentType,
-        upsert: false
+        upsert: false,
       });
 
     if (uploadError) throw new Error(uploadError.message);
@@ -603,10 +593,7 @@ export default function UpdateProductScreen() {
           : ImagePicker.MediaTypeOptions.Videos,
       quality: kind === "image" ? 0.9 : undefined,
       allowsEditing: false,
-
-      // ✅ MULTI-SELECT + NO LIMIT (same as Add Product)
-      allowsMultipleSelection: true
-      // selectionLimit removed => unlimited
+      allowsMultipleSelection: true,
     });
 
     if (result.canceled) return;
@@ -619,13 +606,11 @@ export default function UpdateProductScreen() {
 
       const productCode = String(selected.product_code);
 
-      // start from current media
       const m = safeJson(selected.media);
       const nextImages = Array.isArray(m.images) ? [...m.images] : [];
       const nextVideos = Array.isArray(m.videos) ? [...m.videos] : [];
       const nextThumbs = Array.isArray(m.thumbs) ? [...m.thumbs] : [];
 
-      // prevent duplicates by filename/path? (we can only dedupe by uri before upload)
       const seenUri = new Set<string>();
 
       for (let i = 0; i < assets.length; i++) {
@@ -634,13 +619,12 @@ export default function UpdateProductScreen() {
         if (seenUri.has(uri)) continue;
         seenUri.add(uri);
 
-        // eslint-disable-next-line no-await-in-loop
         const storagePath = await uploadOneAsset({
           kind,
           uri,
           vendorId,
           productCode,
-          index: i
+          index: i,
         });
 
         if (kind === "image") {
@@ -648,20 +632,18 @@ export default function UpdateProductScreen() {
         } else {
           nextVideos.push(storagePath);
 
-          // ✅ create thumb and upload (optional, best-effort)
           try {
             const { uri: thumbUri } = await VideoThumbnails.getThumbnailAsync(uri, {
-              time: 1500
+              time: 1500,
             });
 
             if (thumbUri) {
-              // eslint-disable-next-line no-await-in-loop
               const thumbPath = await uploadOneAsset({
                 kind: "image",
                 uri: thumbUri,
                 vendorId,
                 productCode,
-                index: i
+                index: i,
               });
 
               nextThumbs.push(thumbPath);
@@ -676,12 +658,12 @@ export default function UpdateProductScreen() {
         ...m,
         images: nextImages,
         videos: nextVideos,
-        thumbs: nextThumbs
+        thumbs: nextThumbs,
       };
 
       const updatePayload = {
         media: next,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
 
       const { data, error } = await supabase
@@ -690,7 +672,7 @@ export default function UpdateProductScreen() {
         .eq("id", selectedId)
         .eq("vendor_id", vendorId)
         .select(
-          "id, vendor_id, product_code, title, inventory_qty, made_on_order, spec, price, media, created_at, updated_at"
+          "id, vendor_id, product_code, title, inventory_qty, made_on_order, spec, price, media, created_at, updated_at",
         )
         .single();
 
@@ -699,7 +681,7 @@ export default function UpdateProductScreen() {
         return;
       }
 
-      const updated = data as any as ProductRow;
+      const updated = data as unknown as ProductRow;
       setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not upload media.");
@@ -727,7 +709,6 @@ export default function UpdateProductScreen() {
         </Text>
       ) : null}
 
-      {/* ✅ Product Picker (collapses after selection) */}
       <View style={styles.card}>
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Pick a product</Text>
@@ -785,11 +766,11 @@ export default function UpdateProductScreen() {
 
                   return (
                     <Pressable
-                      key={p.id}
+                      key={String(p.id)}
                       style={({ pressed }) => [
                         styles.item,
                         isOn ? styles.itemOn : null,
-                        pressed ? styles.pressed : null
+                        pressed ? styles.pressed : null,
                       ]}
                       onPress={() => {
                         setSelectedId(p.id);
@@ -862,7 +843,6 @@ export default function UpdateProductScreen() {
               </>
             ) : null}
 
-            {/* ✅ Fixed info (read-only): Cost Mode */}
             <Text style={styles.label}>Cost Mode</Text>
             <View style={styles.fixedPill}>
               <Text style={styles.fixedPillText}>
@@ -893,7 +873,7 @@ export default function UpdateProductScreen() {
                       t
                         .split(",")
                         .map((x) => x.trim())
-                        .filter(Boolean)
+                        .filter(Boolean),
                     )
                   }
                   placeholder="e.g., XS, S, M, L, XL, XXL, All"
@@ -908,7 +888,6 @@ export default function UpdateProductScreen() {
               </>
             ) : (
               <>
-                {/* ✅ Unstitched only: editable cost per meter */}
                 <Text style={styles.label}>Cost per Meter (PKR) *</Text>
                 <TextInput
                   value={String(pricePerMeter ?? "")}
@@ -920,7 +899,6 @@ export default function UpdateProductScreen() {
                   maxLength={12}
                 />
 
-                {/* ✅ Dyeing toggle + cost */}
                 <View style={styles.dyeRow}>
                   <Text style={[styles.label, { marginTop: 0 }]}>Dyeable</Text>
 
@@ -932,14 +910,11 @@ export default function UpdateProductScreen() {
                     style={({ pressed }) => [
                       styles.dyePill,
                       dyeingEnabled ? styles.dyePillOn : null,
-                      pressed ? styles.pressed : null
+                      pressed ? styles.pressed : null,
                     ]}
                   >
                     <Text
-                      style={[
-                        styles.dyePillText,
-                        dyeingEnabled ? styles.dyePillTextOn : null
-                      ]}
+                      style={[styles.dyePillText, dyeingEnabled ? styles.dyePillTextOn : null]}
                     >
                       {dyeingEnabled ? "Yes" : "No"}
                     </Text>
@@ -965,7 +940,6 @@ export default function UpdateProductScreen() {
                   </>
                 ) : null}
 
-                {/* ✅ Tailoring toggle + cost + turnaround */}
                 <View style={styles.tailorRow}>
                   <Text style={[styles.label, { marginTop: 0 }]}>Stitching available</Text>
 
@@ -977,13 +951,13 @@ export default function UpdateProductScreen() {
                     style={({ pressed }) => [
                       styles.tailorPill,
                       tailoringEnabled ? styles.tailorPillOn : null,
-                      pressed ? styles.pressed : null
+                      pressed ? styles.pressed : null,
                     ]}
                   >
                     <Text
                       style={[
                         styles.tailorPillText,
-                        tailoringEnabled ? styles.tailorPillTextOn : null
+                        tailoringEnabled ? styles.tailorPillTextOn : null,
                       ]}
                     >
                       {tailoringEnabled ? "Yes" : "No"}
@@ -1040,7 +1014,7 @@ export default function UpdateProductScreen() {
                 style={({ pressed }) => [
                   styles.smallBtn,
                   savingMedia ? styles.smallBtnDisabled : null,
-                  pressed ? styles.pressed : null
+                  pressed ? styles.pressed : null,
                 ]}
               >
                 <Text style={styles.smallBtnText}>+ Add Image</Text>
@@ -1052,7 +1026,7 @@ export default function UpdateProductScreen() {
                 style={({ pressed }) => [
                   styles.smallBtn,
                   savingMedia ? styles.smallBtnDisabled : null,
-                  pressed ? styles.pressed : null
+                  pressed ? styles.pressed : null,
                 ]}
               >
                 <Text style={styles.smallBtnText}>+ Add Video</Text>
@@ -1134,10 +1108,6 @@ export default function UpdateProductScreen() {
               <Text style={styles.emptyInline}>—</Text>
             )}
 
-            {/* <Text style={styles.hint}>
-              Tip: Use ✕ to remove a media item. Use “Add” to upload and attach new files.
-            </Text> */}
-
             <Text style={styles.label}>More Description</Text>
             <TextInput
               value={moreDescription}
@@ -1157,7 +1127,7 @@ export default function UpdateProductScreen() {
         style={({ pressed }) => [
           styles.saveBtn,
           !canSave || saving ? styles.saveBtnDisabled : null,
-          pressed ? styles.pressed : null
+          pressed ? styles.pressed : null,
         ]}
         onPress={saveUpdate}
         disabled={!canSave || saving}
@@ -1175,86 +1145,137 @@ export default function UpdateProductScreen() {
 }
 
 const stylesVars = {
-  bg: "#F5F7FB",
+  bg: "#F8FAFC",
   cardBg: "#FFFFFF",
-  border: "#D9E2F2",
-  borderSoft: "#E6EDF8",
-  blue: "#0B2F6B",
-  blueSoft: "#EAF2FF",
-  text: "#111111",
-  subText: "#60708A",
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
   placeholder: "#94A3B8",
   danger: "#B91C1C",
   dangerSoft: "#FEE2E2",
-  dangerBorder: "#FCA5A5"
+  dangerBorder: "#FCA5A5",
+  overlayDark: "rgba(0,0,0,0.58)",
+  overlaySoft: "rgba(255,255,255,0.14)",
+  white: "#FFFFFF",
+  black: "#000000",
 };
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 24, backgroundColor: stylesVars.bg },
+  content: {
+    padding: 16,
+    paddingBottom: 24,
+    backgroundColor: stylesVars.bg,
+  },
 
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
+    gap: 12,
   },
-  title: { fontSize: 20, fontWeight: "900", color: stylesVars.blue },
+
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: stylesVars.text,
+  },
 
   linkBtn: {
-    paddingHorizontal: 10,
+    minHeight: 40,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  linkText: { color: stylesVars.blue, fontWeight: "900" },
+
+  linkText: {
+    color: stylesVars.blue,
+    fontSize: 14,
+    fontWeight: "700",
+  },
 
   card: {
     marginTop: 14,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
-    padding: 14
+    padding: 18,
   },
 
   sectionHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 10
+    gap: 10,
   },
 
-  sectionTitle: { fontSize: 13, fontWeight: "900", color: stylesVars.blue },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: stylesVars.text,
+    marginBottom: 2,
+  },
 
   selectedBox: {
     marginTop: 10,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: stylesVars.border,
+    borderColor: "#D7E3FF",
     backgroundColor: stylesVars.blueSoft,
-    padding: 12
+    padding: 14,
   },
-  selectedCode: { fontSize: 12, fontWeight: "900", color: stylesVars.blue },
-  selectedTitle: { marginTop: 3, fontSize: 13, fontWeight: "800", color: "#111" },
+
+  selectedCode: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: stylesVars.blue,
+  },
+
+  selectedTitle: {
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: stylesVars.text,
+  },
 
   smallBtn: {
-    paddingHorizontal: 10,
+    minHeight: 40,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  smallBtnDisabled: { opacity: 0.5 },
-  smallBtnText: { color: stylesVars.blue, fontWeight: "900", fontSize: 12 },
+
+  smallBtnDisabled: {
+    opacity: 0.6,
+  },
+
+  smallBtnText: {
+    color: stylesVars.blue,
+    fontWeight: "700",
+    fontSize: 12,
+  },
 
   label: {
     marginTop: 10,
-    fontSize: 12,
-    fontWeight: "900",
-    color: "#005ea6",
-    letterSpacing: 0.2
+    fontSize: 13,
+    fontWeight: "700",
+    color: stylesVars.text,
+    letterSpacing: 0.2,
   },
 
   input: {
@@ -1266,15 +1287,14 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
     color: stylesVars.text,
-    backgroundColor: "#fff"
+    backgroundColor: stylesVars.white,
   },
 
   textArea: {
     minHeight: 120,
-    paddingTop: 12
+    paddingTop: 12,
   },
 
-  // ✅ read-only pill (for fixed fields like mode)
   fixedPill: {
     marginTop: 8,
     alignSelf: "flex-start",
@@ -1283,9 +1303,14 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: "#D7E3FF",
   },
-  fixedPillText: { color: stylesVars.blue, fontWeight: "900", fontSize: 12 },
+
+  fixedPillText: {
+    color: stylesVars.blue,
+    fontWeight: "700",
+    fontSize: 12,
+  },
 
   madeOnOrderPill: {
     marginTop: 8,
@@ -1295,68 +1320,142 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: "#D7E3FF",
   },
-  madeOnOrderText: { color: stylesVars.blue, fontWeight: "900", fontSize: 12 },
 
-  metaLine: { marginTop: 8, color: stylesVars.subText, fontWeight: "800" },
-  metaStrong: { color: stylesVars.blue, fontWeight: "900" },
-  metaSmall: { marginTop: 10, color: stylesVars.blue, fontWeight: "900", fontSize: 12 },
+  madeOnOrderText: {
+    color: stylesVars.blue,
+    fontWeight: "700",
+    fontSize: 12,
+  },
+
+  metaLine: {
+    marginTop: 8,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500",
+  },
+
+  metaStrong: {
+    color: stylesVars.blue,
+    fontWeight: "700",
+  },
+
+  metaSmall: {
+    marginTop: 10,
+    color: stylesVars.text,
+    fontWeight: "700",
+    fontSize: 13,
+  },
 
   topActionsRow: {
     marginTop: 10,
     flexDirection: "row",
-    justifyContent: "flex-end"
+    justifyContent: "flex-end",
   },
-  refresh: { fontSize: 14, fontWeight: "900", color: "#005ea6" },
-  disabledText: { opacity: 0.6 },
 
-  list: { gap: 10, marginTop: 12 },
+  refresh: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: stylesVars.blue,
+  },
+
+  disabledText: {
+    opacity: 0.6,
+  },
+
+  list: {
+    gap: 10,
+    marginTop: 12,
+  },
 
   item: {
     borderWidth: 1,
-    borderColor: stylesVars.borderSoft,
-    borderRadius: 14,
+    borderColor: stylesVars.border,
+    borderRadius: 16,
     paddingVertical: 12,
     paddingHorizontal: 12,
-    backgroundColor: "#fff",
+    backgroundColor: stylesVars.cardBg,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
   },
+
   itemOn: {
     borderColor: stylesVars.blue,
     borderWidth: 2,
-    backgroundColor: stylesVars.blueSoft
+    backgroundColor: stylesVars.blueSoft,
   },
 
-  itemLeft: { flex: 1, paddingRight: 10 },
-  itemCode: { fontSize: 12, fontWeight: "900", color: stylesVars.blue },
-  itemTitle: { marginTop: 2, fontSize: 13, fontWeight: "800", color: "#111" },
-  itemArrow: { fontSize: 18, fontWeight: "900", color: stylesVars.subText },
+  itemLeft: {
+    flex: 1,
+    paddingRight: 10,
+  },
+
+  itemCode: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: stylesVars.blue,
+  },
+
+  itemTitle: {
+    marginTop: 2,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: stylesVars.text,
+  },
+
+  itemArrow: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: stylesVars.subText,
+  },
 
   loadingRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingVertical: 10
+    paddingVertical: 10,
   },
-  loadingText: { color: stylesVars.subText, fontWeight: "800" },
 
-  hint: { marginTop: 10, color: stylesVars.subText, fontWeight: "800" },
+  loadingText: {
+    fontSize: 13,
+    color: stylesVars.mutedText,
+    fontWeight: "600",
+  },
 
-  thumbRow: { flexDirection: "row", gap: 10, paddingTop: 10, paddingBottom: 4 },
+  hint: {
+    marginTop: 10,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500",
+  },
+
+  thumbRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingTop: 10,
+    paddingBottom: 4,
+  },
 
   thumbWrap: {
     width: 92,
     height: 92,
-    borderRadius: 14,
+    borderRadius: 16,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: stylesVars.borderSoft,
-    backgroundColor: "#fff"
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.cardBg,
   },
-  thumb: { width: "100%", height: "100%", backgroundColor: "#f3f3f3" },
+
+  thumb: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#F1F5F9",
+  },
 
   thumbX: {
     position: "absolute",
@@ -1369,96 +1468,172 @@ const styles = StyleSheet.create({
     height: 26,
     borderRadius: 13,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
-  thumbXText: { color: stylesVars.danger, fontWeight: "900", fontSize: 12 },
+
+  thumbXText: {
+    color: stylesVars.danger,
+    fontWeight: "700",
+    fontSize: 12,
+  },
 
   videoPlaceholder: {
     width: "100%",
     height: "100%",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F1F5FF"
+    backgroundColor: stylesVars.blueSoft,
   },
+
   videoPlaceholderText: {
     color: stylesVars.blue,
-    fontWeight: "900",
-    fontSize: 12
+    fontWeight: "700",
+    fontSize: 12,
   },
+
   playBadge: {
     position: "absolute",
     left: 6,
     bottom: 6,
-    backgroundColor: "rgba(11,47,107,0.92)",
+    backgroundColor: stylesVars.overlayDark,
     width: 26,
     height: 26,
     borderRadius: 13,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
-  playBadgeText: { color: "#fff", fontWeight: "900", fontSize: 12 },
+
+  playBadgeText: {
+    color: stylesVars.white,
+    fontWeight: "700",
+    fontSize: 12,
+  },
 
   saveBtn: {
     marginTop: 14,
-    borderRadius: 16,
-    paddingVertical: 14,
+    minHeight: 48,
+    borderRadius: 14,
+    paddingVertical: 12,
     alignItems: "center",
-    backgroundColor: stylesVars.blue
+    justifyContent: "center",
+    backgroundColor: stylesVars.blue,
   },
-  saveBtnDisabled: { opacity: 0.4 },
-  saveText: { color: "#fff", fontWeight: "900", fontSize: 15 },
 
-  warn: { marginTop: 10, color: stylesVars.subText, fontWeight: "800" },
-  empty: { marginTop: 10, color: stylesVars.subText, fontWeight: "800" },
-  emptyInline: { marginTop: 8, color: stylesVars.subText, fontWeight: "800" },
+  saveBtnDisabled: {
+    opacity: 0.6,
+  },
 
-  // ✅ Dyeing styles
+  saveText: {
+    color: stylesVars.white,
+    fontWeight: "700",
+    fontSize: 14,
+  },
+
+  warn: {
+    marginTop: 10,
+    color: stylesVars.mutedText,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+  },
+
+  empty: {
+    marginTop: 10,
+    color: stylesVars.mutedText,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+  },
+
+  emptyInline: {
+    marginTop: 8,
+    color: stylesVars.mutedText,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+  },
+
   dyeRow: {
     marginTop: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 10
+    gap: 10,
   },
+
   dyePill: {
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: stylesVars.border,
-    backgroundColor: "#fff"
+    backgroundColor: stylesVars.white,
   },
-  dyePillOn: {
-    borderColor: stylesVars.blue,
-    backgroundColor: stylesVars.blueSoft
-  },
-  dyePillText: { fontSize: 12, fontWeight: "900", color: stylesVars.text },
-  dyePillTextOn: { color: stylesVars.blue },
-  dyeHint: { marginTop: 8, color: stylesVars.subText, fontWeight: "800", fontSize: 12 },
 
-  // ✅ Tailoring styles
+  dyePillOn: {
+    borderColor: "#D7E3FF",
+    backgroundColor: stylesVars.blueSoft,
+  },
+
+  dyePillText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: stylesVars.text,
+  },
+
+  dyePillTextOn: {
+    color: stylesVars.blue,
+  },
+
+  dyeHint: {
+    marginTop: 8,
+    color: stylesVars.mutedText,
+    fontWeight: "500",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+
   tailorRow: {
     marginTop: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 10
+    gap: 10,
   },
+
   tailorPill: {
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: stylesVars.border,
-    backgroundColor: "#fff"
+    backgroundColor: stylesVars.white,
   },
-  tailorPillOn: {
-    borderColor: stylesVars.blue,
-    backgroundColor: stylesVars.blueSoft
-  },
-  tailorPillText: { fontSize: 12, fontWeight: "900", color: stylesVars.text },
-  tailorPillTextOn: { color: stylesVars.blue },
-  tailorHint: { marginTop: 8, color: stylesVars.subText, fontWeight: "800", fontSize: 12 },
 
-  pressed: { opacity: 0.75 }
+  tailorPillOn: {
+    borderColor: "#D7E3FF",
+    backgroundColor: stylesVars.blueSoft,
+  },
+
+  tailorPillText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: stylesVars.text,
+  },
+
+  tailorPillTextOn: {
+    color: stylesVars.blue,
+  },
+
+  tailorHint: {
+    marginTop: 8,
+    color: stylesVars.mutedText,
+    fontWeight: "500",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+
+  pressed: {
+    opacity: 0.82,
+  },
 });

@@ -140,7 +140,6 @@ export default function ResultsFiltersModal() {
   const priceValue = priceSummary(minCostPkr, maxCostPkr);
 
   function go(path: string) {
-    // No route params for price. This "from" param is only for back navigation behavior.
     router.push({ pathname: path as any, params: { from: "results-filters" } } as any);
   }
 
@@ -153,9 +152,7 @@ export default function ResultsFiltersModal() {
         </Text>
       </View>
 
-      {/* <Text style={styles.note}>Dress Type is fixed from the first screen.</Text> */}
-
-      <Pressable style={styles.row} onPress={() => go("/fabric")}>
+      <Pressable style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]} onPress={() => go("/fabric")}>
         <View style={styles.left}>
           <Text style={styles.label}>Fabric</Text>
           <Text style={styles.value} numberOfLines={2}>
@@ -165,7 +162,7 @@ export default function ResultsFiltersModal() {
         <Text style={styles.arrow}>›</Text>
       </Pressable>
 
-      <Pressable style={styles.row} onPress={() => go("/color")}>
+      <Pressable style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]} onPress={() => go("/color")}>
         <View style={styles.left}>
           <Text style={styles.label}>Color</Text>
           <Text style={styles.value} numberOfLines={2}>
@@ -175,7 +172,7 @@ export default function ResultsFiltersModal() {
         <Text style={styles.arrow}>›</Text>
       </Pressable>
 
-      <Pressable style={styles.row} onPress={() => go("/work")}>
+      <Pressable style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]} onPress={() => go("/work")}>
         <View style={styles.left}>
           <Text style={styles.label}>Work</Text>
           <Text style={styles.value} numberOfLines={2}>
@@ -185,7 +182,10 @@ export default function ResultsFiltersModal() {
         <Text style={styles.arrow}>›</Text>
       </Pressable>
 
-      <Pressable style={styles.row} onPress={() => go("/work-density")}>
+      <Pressable
+        style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]}
+        onPress={() => go("/work-density")}
+      >
         <View style={styles.left}>
           <Text style={styles.label}>Work Density</Text>
           <Text style={styles.value} numberOfLines={2}>
@@ -195,7 +195,10 @@ export default function ResultsFiltersModal() {
         <Text style={styles.arrow}>›</Text>
       </Pressable>
 
-      <Pressable style={styles.row} onPress={() => go("/origin-city")}>
+      <Pressable
+        style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]}
+        onPress={() => go("/origin-city")}
+      >
         <View style={styles.left}>
           <Text style={styles.label}>Origin City</Text>
           <Text style={styles.value} numberOfLines={2}>
@@ -205,7 +208,10 @@ export default function ResultsFiltersModal() {
         <Text style={styles.arrow}>›</Text>
       </Pressable>
 
-      <Pressable style={styles.row} onPress={() => go("/wear-state")}>
+      <Pressable
+        style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]}
+        onPress={() => go("/wear-state")}
+      >
         <View style={styles.left}>
           <Text style={styles.label}>Wear State</Text>
           <Text style={styles.value} numberOfLines={2}>
@@ -215,7 +221,10 @@ export default function ResultsFiltersModal() {
         <Text style={styles.arrow}>›</Text>
       </Pressable>
 
-      <Pressable style={styles.row} onPress={() => go("/price-band")}>
+      <Pressable
+        style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]}
+        onPress={() => go("/price-band")}
+      >
         <View style={styles.left}>
           <Text style={styles.label}>Price</Text>
           <Text style={styles.value} numberOfLines={2}>
@@ -228,32 +237,97 @@ export default function ResultsFiltersModal() {
   );
 }
 
+const stylesVars = {
+  bg: "#F8FAFC",
+  cardBg: "#FFFFFF",
+  border: "#E5E7EB",
+  borderSoft: "#E5E7EB",
+  blue: "#2563EB",
+  blueSoft: "#EEF4FF",
+  text: "#0F172A",
+  subText: "#475569",
+  mutedText: "#64748B",
+  placeholder: "#94A3B8",
+  danger: "#B91C1C",
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
+  white: "#FFFFFF",
+  black: "#000000"
+};
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", padding: 16 },
+  container: {
+    flex: 1,
+    backgroundColor: stylesVars.bg,
+    padding: 16
+  },
 
   topRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
     paddingBottom: 10
   },
-  title: { fontSize: 20, fontWeight: "900", color: "#111" },
-  close: { fontSize: 14, fontWeight: "900", color: "#005ea6" },
 
-  note: { marginBottom: 12, color: "#666", fontSize: 12 },
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  close: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: stylesVars.blue
+  },
+
+  note: {
+    marginBottom: 12,
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
 
   row: {
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.08)",
-    borderRadius: 14,
-    padding: 12,
+    borderColor: stylesVars.border,
+    borderRadius: 18,
+    padding: 14,
     marginBottom: 10,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
+    backgroundColor: stylesVars.cardBg
   },
-  left: { flex: 1, paddingRight: 10 },
-  label: { fontSize: 13, fontWeight: "900", color: "#111" },
-  value: { marginTop: 4, fontSize: 12, color: "#666" },
-  arrow: { fontSize: 22, fontWeight: "900", color: "#666" }
+
+  left: {
+    flex: 1,
+    paddingRight: 10
+  },
+
+  label: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: stylesVars.text
+  },
+
+  value: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500"
+  },
+
+  arrow: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: stylesVars.subText
+  },
+
+  pressed: {
+    opacity: 0.82
+  }
 });
