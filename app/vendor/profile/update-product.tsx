@@ -212,7 +212,8 @@ export default function UpdateProductScreen() {
     setTailoringEnabled(tailorOn);
 
     const tailorCostFromPrice = safeNumOrZero(price?.tailoring_cost_pkr ?? 0);
-    setTailoringCost(tailorCostFromPrice);
+    const tailorCostFromSpec = safeNumOrZero(spec?.tailoring_cost_pkr ?? 0);
+    setTailoringCost(tailorCostFromPrice > 0 ? tailorCostFromPrice : tailorCostFromSpec);
 
     const daysFromSpec = safeNumOrZero(spec?.tailoring_turnaround_days ?? 0);
     setTailoringTurnaroundDays(daysFromSpec);
@@ -413,13 +414,19 @@ export default function UpdateProductScreen() {
 
       if (priceMode === "unstitched_per_meter") {
         nextSpec.dyeing_enabled = Boolean(dyeingEnabled);
+        nextSpec.dyeing_cost_pkr = dyeingEnabled ? Number(dyeingCost ?? 0) : 0;
+
         nextSpec.tailoring_enabled = Boolean(tailoringEnabled);
+        nextSpec.tailoring_cost_pkr = tailoringEnabled ? Number(tailoringCost ?? 0) : 0;
         nextSpec.tailoring_turnaround_days = tailoringEnabled
           ? Math.max(0, Number(tailoringTurnaroundDays ?? 0))
           : 0;
       } else {
         nextSpec.dyeing_enabled = false;
+        nextSpec.dyeing_cost_pkr = 0;
+
         nextSpec.tailoring_enabled = false;
+        nextSpec.tailoring_cost_pkr = 0;
         nextSpec.tailoring_turnaround_days = 0;
       }
 

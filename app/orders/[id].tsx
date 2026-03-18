@@ -325,24 +325,30 @@ export default function OrderDetailScreen() {
 
   const backTarget = useMemo(() => {
     if (fromParam === "track" || fromParam === "buyer-track") return "/flow/orders/track";
-    if (fromParam === "buyer-order") return "/wizard";
+    if (fromParam === "buyer-order") return "/";
     if (isVendorView) return "/orders";
     return "/";
   }, [fromParam, isVendorView]);
 
-  useEffect(() => {
-    const backAction = () => {
-      router.replace(backTarget as any);
+  const handleBack = useCallback(() => {
+    if (fromParam === "buyer-order") {
+      router.dismissAll();
+      router.replace("/" as any);
       return true;
-    };
+    }
 
+    router.replace(backTarget as any);
+    return true;
+  }, [fromParam, backTarget, router]);
+
+  useEffect(() => {
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
-      backAction
+      handleBack
     );
 
     return () => subscription.remove();
-  }, [backTarget, router]);
+  }, [handleBack]);
 
   const sizeLine = useMemo(() => {
     if (!order) return "—";
@@ -584,10 +590,6 @@ export default function OrderDetailScreen() {
 
               <Text style={styles.meta}>
                 Dress Category: <Text style={styles.strong}>{dressCatLine}</Text>
-              </Text>
-
-              <Text style={styles.meta}>
-                Category Line: <Text style={styles.strong}>{catLine}</Text>
               </Text>
 
               {!!productCostLine ? <Text style={styles.meta}>{productCostLine}</Text> : null}
