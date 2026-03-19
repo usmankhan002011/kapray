@@ -1,11 +1,13 @@
 ﻿// app/(buyer)/view-profile.tsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  FlatList,
   Image,
   Linking,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -70,15 +72,26 @@ export default function BuyerViewProfileScreen() {
     const raw = firstParam((params as any)?.vendorId ?? (params as any)?.id ?? null);
     if (!raw) return null;
 
-    const decoded = decodeURIComponent(raw).trim();
-    const parsed = Number(decoded);
-
-    return Number.isFinite(parsed) ? parsed : null;
+    try {
+      const decoded = decodeURIComponent(raw).trim();
+      const parsed = Number(decoded);
+      return Number.isFinite(parsed) ? parsed : null;
+    } catch {
+      const parsed = Number(String(raw).trim());
+      return Number.isFinite(parsed) ? parsed : null;
+    }
   }, [params]);
 
   const [loading, setLoading] = useState(false);
   const [vendor, setVendor] = useState<VendorRow | null>(null);
   const [missingParam, setMissingParam] = useState(false);
+
+  const [selectedVideoUrl, setSelectedVideoUrl] = useState<string>("");
+
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [gallery, setGallery] = useState<string[]>([]);
+  const flatListRef = useRef<FlatList<string>>(null);
 
   const resolvePublicUrl = useCallback((path: string | null | undefined) => {
     if (!path) return null;
@@ -122,13 +135,12 @@ export default function BuyerViewProfileScreen() {
     [vendor, resolveManyPublic]
   );
 
-  const [selectedVideoUrl, setSelectedVideoUrl] = useState<string>("");
-
   useEffect(() => {
     if (!shopVideoUrls.length) {
       setSelectedVideoUrl("");
       return;
     }
+
     if (!selectedVideoUrl || !shopVideoUrls.includes(selectedVideoUrl)) {
       setSelectedVideoUrl(shopVideoUrls[0]);
     }
@@ -143,6 +155,51 @@ export default function BuyerViewProfileScreen() {
       // ignore
     }
   }, [player]);
+
+  useEffect(() => {
+    [
+      ...certificateUrls,
+      ...shopImageUrls,
+      ...(bannerUrl ? [bannerUrl] : []),
+      ...(profileUrl ? [profileUrl] : [])
+    ].forEach((u) => {
+      if (u) {
+        try {
+          Image.prefetch(u);
+        } catch {
+          // ignore
+        }
+      }
+    });
+  }, [certificateUrls, shopImageUrls, bannerUrl, profileUrl]);
+
+  const openViewerAt = useCallback((imgs: string[], idx: number) => {
+    const list = Array.isArray(imgs) ? imgs.filter(Boolean) : [];
+    if (!list.length) return;
+
+    const safeIdx = Math.max(0, Math.min(idx, list.length - 1));
+    setGallery(list);
+    setCurrentIndex(safeIdx);
+    setViewerVisible(true);
+  }, []);
+
+  useEffect(() => {
+    if (!viewerVisible) return;
+    if (!gallery.length) return;
+
+    const t = setTimeout(() => {
+      try {
+        flatListRef.current?.scrollToIndex({
+          index: currentIndex,
+          animated: false
+        });
+      } catch {
+        // ignore
+      }
+    }, 0);
+
+    return () => clearTimeout(t);
+  }, [viewerVisible, currentIndex, gallery.length]);
 
   async function openExternal(url: string) {
     const u = String(url || "").trim();
@@ -162,6 +219,7 @@ export default function BuyerViewProfileScreen() {
       setVendor(null);
       return;
     }
+
     try {
       setMissingParam(false);
       setLoading(true);
@@ -204,21 +262,22 @@ export default function BuyerViewProfileScreen() {
 
       dispatch(
         setSelectedVendor({
+          id: row?.id ?? null,
           shop_name: row?.shop_name ?? null,
           owner_name: row?.name ?? null,
-
+          name: row?.name ?? null,
           mobile: row?.mobile ?? null,
           landline: row?.landline ?? null,
-
+          email: row?.email ?? null,
           address: row?.address ?? null,
+          location: row?.location ?? null,
           location_url: row?.location_url ?? null,
-
+          profile_image_path: row?.profile_image_path ?? null,
+          banner_path: row?.banner_path ?? null,
           banner_url: banner_url ?? null,
-
           government_permission_url: null,
-          images: null,
-          videos: null,
-
+          images: row?.shop_image_paths ?? null,
+          videos: row?.shop_video_paths ?? null,
           status: row?.status ?? null
         } as any)
       );
@@ -275,18 +334,26 @@ export default function BuyerViewProfileScreen() {
         )}
 
         {!!bannerUrl ? (
-          <View style={styles.mediaBlock}>
+          <Pressable
+            onPress={() => openViewerAt([bannerUrl], 0)}
+            style={({ pressed }) => [styles.mediaBlock, pressed ? styles.pressed : null]}
+          >
             <View style={styles.heroWrap}>
               <Image source={{ uri: bannerUrl }} style={styles.heroImage} />
             </View>
-          </View>
+          </Pressable>
         ) : null}
 
         <View style={styles.card}>
           <View style={styles.profileRow}>
             <View style={styles.avatarWrap}>
               {profileUrl ? (
-                <Image source={{ uri: profileUrl }} style={styles.avatarImg} />
+                <Pressable
+                  onPress={() => openViewerAt([profileUrl], 0)}
+                  style={({ pressed }) => [styles.avatarPress, pressed ? styles.pressed : null]}
+                >
+                  <Image source={{ uri: profileUrl }} style={styles.avatarImg} />
+                </Pressable>
               ) : (
                 <View style={styles.avatarFallback}>
                   <Text style={styles.avatarFallbackText}>
@@ -330,15 +397,22 @@ export default function BuyerViewProfileScreen() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Certificates</Text>
           {certificateUrls.length ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.thumbRow}>
-                {certificateUrls.map((u, idx) => (
-                  <View key={`${u}-${idx}`} style={styles.thumbWrap}>
-                    <Image source={{ uri: u }} style={styles.thumb} />
-                  </View>
-                ))}
-              </View>
-            </ScrollView>
+            <>
+              <Text style={styles.meta}>Tap any certificate to view full screen.</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.thumbRow}>
+                  {certificateUrls.map((u, idx) => (
+                    <Pressable
+                      key={`${u}-${idx}`}
+                      onPress={() => openViewerAt(certificateUrls, idx)}
+                      style={({ pressed }) => [styles.thumbWrap, pressed ? styles.pressed : null]}
+                    >
+                      <Image source={{ uri: u }} style={styles.thumb} />
+                    </Pressable>
+                  ))}
+                </View>
+              </ScrollView>
+            </>
           ) : (
             <Text style={styles.empty}>—</Text>
           )}
@@ -347,15 +421,22 @@ export default function BuyerViewProfileScreen() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Shop Images</Text>
           {shopImageUrls.length ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.thumbRow}>
-                {shopImageUrls.map((u, idx) => (
-                  <View key={`${u}-${idx}`} style={styles.thumbWrap}>
-                    <Image source={{ uri: u }} style={styles.thumb} />
-                  </View>
-                ))}
-              </View>
-            </ScrollView>
+            <>
+              <Text style={styles.meta}>Tap any image to view full screen.</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.thumbRow}>
+                  {shopImageUrls.map((u, idx) => (
+                    <Pressable
+                      key={`${u}-${idx}`}
+                      onPress={() => openViewerAt(shopImageUrls, idx)}
+                      style={({ pressed }) => [styles.thumbWrap, pressed ? styles.pressed : null]}
+                    >
+                      <Image source={{ uri: u }} style={styles.thumb} />
+                    </Pressable>
+                  ))}
+                </View>
+              </ScrollView>
+            </>
           ) : (
             <Text style={styles.empty}>—</Text>
           )}
@@ -411,6 +492,50 @@ export default function BuyerViewProfileScreen() {
           <Field label="Created at" value={vendor?.created_at} />
         </View>
       </ScrollView>
+
+      <Modal visible={viewerVisible} transparent onRequestClose={() => setViewerVisible(false)}>
+        <View style={styles.viewerContainer}>
+          <FlatList
+            ref={flatListRef}
+            data={gallery}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(_, i) => i.toString()}
+            getItemLayout={(_, i) => ({
+              length: width,
+              offset: width * i,
+              index: i
+            })}
+            initialScrollIndex={Math.max(
+              0,
+              Math.min(currentIndex, Math.max(0, gallery.length - 1))
+            )}
+            onScrollToIndexFailed={() => {
+              // ignore
+            }}
+            onMomentumScrollEnd={(e) => {
+              const next = Math.round(e.nativeEvent.contentOffset.x / width) || 0;
+              setCurrentIndex(next);
+            }}
+            renderItem={({ item }) => (
+              <View style={styles.viewerSlide}>
+                <Image source={{ uri: item }} style={styles.viewerImage} />
+              </View>
+            )}
+          />
+
+          <Pressable style={styles.closeButton} onPress={() => setViewerVisible(false)}>
+            <Text style={styles.closeText}>✕</Text>
+          </Pressable>
+
+          <View style={styles.indexCaption}>
+            <Text style={styles.indexText}>
+              {gallery.length ? currentIndex + 1 : 0} / {gallery.length}
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -585,6 +710,11 @@ const styles = StyleSheet.create({
     backgroundColor: stylesVars.cardBg
   },
 
+  avatarPress: {
+    width: "100%",
+    height: "100%"
+  },
+
   avatarImg: {
     width: "100%",
     height: "100%",
@@ -699,5 +829,58 @@ const styles = StyleSheet.create({
 
   pressed: {
     opacity: 0.82
+  },
+
+  viewerContainer: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.95)",
+    justifyContent: "center"
+  },
+
+  viewerSlide: {
+    width,
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+
+  viewerImage: {
+    width,
+    height: "100%",
+    resizeMode: "contain"
+  },
+
+  closeButton: {
+    position: "absolute",
+    top: 40,
+    right: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    backgroundColor: stylesVars.overlaySoft,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+
+  closeText: {
+    color: stylesVars.white,
+    fontSize: 20,
+    fontWeight: "900"
+  },
+
+  indexCaption: {
+    position: "absolute",
+    bottom: 34,
+    alignSelf: "center",
+    backgroundColor: stylesVars.overlaySoft,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999
+  },
+
+  indexText: {
+    color: stylesVars.white,
+    fontWeight: "900",
+    fontSize: 14
   }
 });

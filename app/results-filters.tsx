@@ -1,6 +1,5 @@
-// app/results-filters.tsx
-import React, { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { supabase } from "@/utils/supabase/client";
@@ -136,23 +135,35 @@ export default function ResultsFiltersModal() {
   const wearNames = idsToNames(wearStateIds, wearMap);
 
   const colorNames = (colorShadeIds ?? []).map(safeStr).filter(Boolean);
-
   const priceValue = priceSummary(minCostPkr, maxCostPkr);
 
   function go(path: string) {
     router.push({ pathname: path as any, params: { from: "results-filters" } } as any);
   }
 
+  const closeToResults = useCallback(() => {
+    router.replace("/" as any);
+    return true;
+  }, [router]);
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener("hardwareBackPress", closeToResults);
+    return () => sub.remove();
+  }, [closeToResults]);
+
   return (
     <View style={styles.container}>
       <View style={styles.topRow}>
         <Text style={styles.title}>Filters 🔍</Text>
-        <Text style={styles.close} onPress={() => router.back()}>
+        <Text style={styles.close} onPress={closeToResults}>
           Close
         </Text>
       </View>
 
-      <Pressable style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]} onPress={() => go("/fabric")}>
+      <Pressable
+        style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]}
+        onPress={() => go("/fabric")}
+      >
         <View style={styles.left}>
           <Text style={styles.label}>Fabric</Text>
           <Text style={styles.value} numberOfLines={2}>
@@ -162,7 +173,10 @@ export default function ResultsFiltersModal() {
         <Text style={styles.arrow}>›</Text>
       </Pressable>
 
-      <Pressable style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]} onPress={() => go("/color")}>
+      <Pressable
+        style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]}
+        onPress={() => go("/color")}
+      >
         <View style={styles.left}>
           <Text style={styles.label}>Color</Text>
           <Text style={styles.value} numberOfLines={2}>
@@ -172,7 +186,10 @@ export default function ResultsFiltersModal() {
         <Text style={styles.arrow}>›</Text>
       </Pressable>
 
-      <Pressable style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]} onPress={() => go("/work")}>
+      <Pressable
+        style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]}
+        onPress={() => go("/work")}
+      >
         <View style={styles.left}>
           <Text style={styles.label}>Work</Text>
           <Text style={styles.value} numberOfLines={2}>
