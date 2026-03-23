@@ -46,6 +46,10 @@ type VendorRow = {
   shop_video_paths?: string[] | null;
 
   status?: string | null;
+
+  offers_tailoring?: boolean | null;
+  exports_enabled?: boolean | null;
+  export_regions?: string[] | null;
 };
 
 function safeText(v: any) {
@@ -61,6 +65,10 @@ function firstParam(v: unknown): string | null {
   if (typeof v === "string") return v.trim() || null;
   if (Array.isArray(v) && typeof v[0] === "string") return v[0].trim() || null;
   return null;
+}
+
+function joinOrDash(items?: string[] | null) {
+  return Array.isArray(items) && items.length ? items.join(", ") : "—";
 }
 
 export default function BuyerViewProfileScreen() {
@@ -161,7 +169,7 @@ export default function BuyerViewProfileScreen() {
       ...certificateUrls,
       ...shopImageUrls,
       ...(bannerUrl ? [bannerUrl] : []),
-      ...(profileUrl ? [profileUrl] : [])
+      ...(profileUrl ? [profileUrl] : []),
     ].forEach((u) => {
       if (u) {
         try {
@@ -243,7 +251,10 @@ export default function BuyerViewProfileScreen() {
           certificate_paths,
           shop_image_paths,
           shop_video_paths,
-          status
+          status,
+          offers_tailoring,
+          exports_enabled,
+          export_regions
         `
         )
         .eq("id", vendorId)
@@ -255,7 +266,7 @@ export default function BuyerViewProfileScreen() {
         return;
       }
 
-      const row = data as VendorRow;
+      const row = data as unknown as VendorRow;
       setVendor(row);
 
       const banner_url = resolvePublicUrl(row?.banner_path ?? null);
@@ -275,6 +286,9 @@ export default function BuyerViewProfileScreen() {
           profile_image_path: row?.profile_image_path ?? null,
           banner_path: row?.banner_path ?? null,
           banner_url: banner_url ?? null,
+          offers_tailoring: row?.offers_tailoring ?? null,
+          exports_enabled: row?.exports_enabled ?? false,
+          export_regions: row?.export_regions ?? [],
           government_permission_url: null,
           images: row?.shop_image_paths ?? null,
           videos: row?.shop_video_paths ?? null,
@@ -391,6 +405,25 @@ export default function BuyerViewProfileScreen() {
             >
               <Text style={styles.linkText}>Open Location</Text>
             </Pressable>
+          ) : null}
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Services</Text>
+
+          <Field
+            label="Tailoring"
+            value={vendor?.offers_tailoring ? "Available" : "Not available"}
+          />
+          <Field
+            label="Exports"
+            value={vendor?.exports_enabled ? "Yes" : "No"}
+          />
+          {vendor?.exports_enabled ? (
+            <Field
+              label="Export Regions"
+              value={joinOrDash(vendor?.export_regions)}
+            />
           ) : null}
         </View>
 

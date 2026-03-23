@@ -11,6 +11,29 @@ type ProductCategory =
   | "unstitched_dyeing_tailoring"
   | "stitched_ready";
 
+type SizeLengthMap = Partial<Record<"XS" | "S" | "M" | "L" | "XL" | "XXL", number>>;
+
+type TailoringStylePresetImage = {
+  uri?: string | null;
+  url?: string | null;
+  path?: string | null;
+};
+
+type TailoringStylePreset = {
+  id?: string;
+  title?: string;
+  note?: string;
+  extra_cost_pkr?: number;
+  images?: TailoringStylePresetImage[];
+  default_neck?: string;
+  default_sleeve?: string;
+  default_trouser?: string;
+  allowed_neck_variations?: string[];
+  allowed_sleeve_variations?: string[];
+  allowed_trouser_variations?: string[];
+  allow_custom_note?: boolean;
+};
+
 function safeInt(v: any) {
   const n = Number(v);
   if (!Number.isFinite(n)) return null;
@@ -21,10 +44,30 @@ function safeStr(v: any) {
   return String(v ?? "").trim();
 }
 
-// Show ALL picked values
+function safeNum(v: any) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function normalizeStringArray(v: any): string[] {
+  const arr = Array.isArray(v) ? v : [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const item of arr) {
+    const s = safeStr(item);
+    if (!s) continue;
+    const key = s.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+
+  return out;
+}
+
 function formatPicked(list: any, emptyLabel: string) {
-  const arr = Array.isArray(list) ? list : [];
-  const cleaned = arr.map((x) => safeStr(x)).filter(Boolean);
+  const cleaned = normalizeStringArray(list);
   if (!cleaned.length) return emptyLabel;
   return cleaned.join(", ");
 }
@@ -68,6 +111,65 @@ function categoryLabel(cat: ProductCategory) {
   }
 }
 
+function formatSizeLengthMap(sizeLengthMap: SizeLengthMap | undefined | null) {
+  if (!sizeLengthMap || typeof sizeLengthMap !== "object") return "Not set";
+
+  const orderedKeys: (keyof SizeLengthMap)[] = ["XS", "S", "M", "L", "XL", "XXL"];
+  const parts = orderedKeys
+    .map((key) => {
+      const val = sizeLengthMap[key];
+      const n = Number(val);
+      if (!Number.isFinite(n) || n <= 0) return null;
+      return `${key}: ${n} m`;
+    })
+    .filter(Boolean);
+
+  return parts.length ? parts.join(" • ") : "Not set";
+}
+
+function formatPackageCm(pkg: any) {
+  const length = safeNum(pkg?.length);
+  const width = safeNum(pkg?.width);
+  const height = safeNum(pkg?.height);
+
+  if (length <= 0 || width <= 0 || height <= 0) return "Not set";
+  return `${length} × ${width} × ${height} cm`;
+}
+
+function normalizePresetArray(v: unknown): TailoringStylePreset[] {
+  return Array.isArray(v) ? (v as TailoringStylePreset[]) : [];
+}
+
+function countPresetImages(preset: TailoringStylePreset) {
+  return Array.isArray(preset?.images) ? preset.images.length : 0;
+}
+
+function summarizePreset(preset: TailoringStylePreset, includesTrouser: boolean) {
+  const title = safeStr(preset?.title) || "Untitled style";
+  const imgCount = countPresetImages(preset);
+  const extra = safeNum(preset?.extra_cost_pkr);
+  const neck = safeStr(preset?.default_neck) || "Not set";
+  const sleeve = safeStr(preset?.default_sleeve) || "Not set";
+  const trouser = includesTrouser ? safeStr(preset?.default_trouser) || "Not set" : "N/A";
+
+  const parts = [
+    title,
+    `${imgCount} image${imgCount === 1 ? "" : "s"}`,
+    `Neck: ${neck}`,
+    `Sleeve: ${sleeve}`,
+  ];
+
+  if (includesTrouser) {
+    parts.push(`Trouser: ${trouser}`);
+  }
+
+  if (extra > 0) {
+    parts.push(`+PKR ${extra}`);
+  }
+
+  return parts.join(" • ");
+}
+
 export default function AddProductReviewScreen() {
   const router = useRouter();
 
@@ -85,27 +187,48 @@ export default function AddProductReviewScreen() {
   const inventoryQty = madeOnOrder ? 0 : Number(draft.inventory_qty ?? 0);
 
   const isStitched = cat === "stitched_ready";
+  const isUnstitched = !isStitched;
   const needsDyeing = cat === "unstitched_dyeing" || cat === "unstitched_dyeing_tailoring";
   const needsTailoring = cat === "unstitched_dyeing_tailoring";
 
   const costPerMeter = Number((draft.price as any)?.cost_pkr_per_meter ?? 0);
   const costTotal = Number((draft.price as any)?.cost_pkr_total ?? 0);
 
-  const dyeingCost = Number((draft.price as any)?.dyeing_cost_pkr ?? 0);
+  const dyeingCost =
+    Number((draft.price as any)?.dyeing_cost_pkr ?? 0) ||
+    Number((draft.spec as any)?.dyeing_cost_pkr ?? 0);
+
   const tailoringCost = Number((draft.price as any)?.tailoring_cost_pkr ?? 0);
   const tailoringDays = Number((draft.spec as any)?.tailoring_turnaround_days ?? 0);
 
   const sizes = (draft.price as any)?.available_sizes ?? [];
+  const sizeLengthMap = (draft.spec as any)?.size_length_m as SizeLengthMap | undefined;
+
+  const weightKg = safeNum((draft.spec as any)?.weight_kg);
+  const packageCm = (draft.spec as any)?.package_cm ?? {};
+
   const moreDescription = safeStr((draft.spec as any)?.more_description ?? "");
 
   const imageCount = (draft.media.images ?? []).length;
   const videoCount = (draft.media.videos ?? []).length;
 
+  const includesTrouser = Boolean(
+    (draft.spec as any)?.includes_trouser ??
+      (draft.spec as any)?.has_trouser ??
+      (draft.spec as any)?.product_has_trouser ??
+      false,
+  );
+
+  const tailoringStylePresets = useMemo(
+    () => normalizePresetArray((draft.spec as any)?.tailoring_style_presets),
+    [draft.spec],
+  );
+
   function dressTypeSummary() {
     const names = (draft.spec as any)?.dressTypeNames as any[] | undefined;
     if (Array.isArray(names) && names.length) return formatPicked(names, "Not set");
 
-    const ids = (draft.spec.dressTypeIds ?? []).map((x) => String(x));
+    const ids = (draft.spec.dressTypeIds ?? []).map((x: any) => String(x));
     if (!ids.length) return "Not set";
     return `${ids.length} selected`;
   }
@@ -132,7 +255,7 @@ export default function AddProductReviewScreen() {
       golden: "Golden",
       silver: "Silver",
       white: "White",
-      black: "Black"
+      black: "Black",
     };
 
     const mapped = list.map((id) => map[String(id)] ?? String(id));
@@ -171,8 +294,36 @@ export default function AddProductReviewScreen() {
     return list.length ? `${list.length} selected` : "Any";
   }
 
+  function serviceSummary() {
+    if (isStitched) return "No dyeing / tailoring";
+
+    const parts: string[] = [];
+
+    if (needsDyeing) {
+      parts.push(`Dyeing: ${dyeingCost > 0 ? `${dyeingCost} PKR` : "Not set"}`);
+    } else {
+      parts.push("No dyeing");
+    }
+
+    if (needsTailoring) {
+      parts.push(`Tailoring: ${tailoringCost > 0 ? `${tailoringCost} PKR` : "Not set"}`);
+      parts.push(`${Number.isFinite(tailoringDays) ? tailoringDays : 0} days`);
+      parts.push(`Trouser included: ${includesTrouser ? "Yes" : "No"}`);
+      parts.push(
+        `Style cards: ${tailoringStylePresets.length > 0 ? tailoringStylePresets.length : "Not set"}`,
+      );
+    } else {
+      parts.push("No tailoring");
+    }
+
+    return parts.join(" • ");
+  }
+
   function goEdit(path: string) {
-    router.push({ pathname: path as any, params: { returnTo: "/vendor/profile/add-product/review" } } as any);
+    router.push({
+      pathname: path as any,
+      params: { returnTo: "/vendor/profile/add-product/review" },
+    } as any);
   }
 
   function close() {
@@ -200,7 +351,10 @@ export default function AddProductReviewScreen() {
       <View style={styles.headerRow}>
         <Text style={styles.title}>Review Product</Text>
 
-        <Pressable onPress={close} style={({ pressed }) => [styles.linkBtn, pressed ? styles.pressed : null]}>
+        <Pressable
+          onPress={close}
+          style={({ pressed }) => [styles.linkBtn, pressed ? styles.pressed : null]}
+        >
           <Text style={styles.linkText}>Close</Text>
         </Pressable>
       </View>
@@ -246,7 +400,9 @@ export default function AddProductReviewScreen() {
           style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
         >
           <Text style={styles.rowTitle}>Inventory Quantity *</Text>
-          <Text style={styles.rowValue}>{Number.isFinite(inventoryQty) ? String(inventoryQty) : "0"}</Text>
+          <Text style={styles.rowValue}>
+            {Number.isFinite(inventoryQty) ? String(inventoryQty) : "0"}
+          </Text>
         </Pressable>
       </View>
 
@@ -280,22 +436,83 @@ export default function AddProductReviewScreen() {
               style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
             >
               <Text style={styles.rowTitle}>Cost per Meter (PKR) *</Text>
-              <Text style={styles.rowValue}>{costPerMeter > 0 ? String(costPerMeter) : "Not set"}</Text>
+              <Text style={styles.rowValue}>
+                {costPerMeter > 0 ? String(costPerMeter) : "Not set"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => goEdit("/vendor/profile/add-product/q05b-unstitched-cost-per-meter")}
+              style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+            >
+              <Text style={styles.rowTitle}>Fabric length by size</Text>
+              <Text style={styles.rowValue}>{formatSizeLengthMap(sizeLengthMap)}</Text>
             </Pressable>
 
             <Pressable
               onPress={() => goEdit("/vendor/profile/add-product/q06b-services-costs")}
               style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
             >
-              <Text style={styles.rowTitle}>Dyeing / Tailoring</Text>
-              <Text style={styles.rowValue}>
-                {needsDyeing ? `Dyeing: ${dyeingCost > 0 ? dyeingCost : "Not set"} PKR` : "No dyeing"}
-                {needsTailoring ? ` • Tailoring: ${tailoringCost > 0 ? tailoringCost : "Not set"} PKR` : ""}
-                {needsTailoring ? ` • ${Number.isFinite(tailoringDays) ? tailoringDays : 0} days` : ""}
-              </Text>
+              <Text style={styles.rowTitle}>Services summary</Text>
+              <Text style={styles.rowValue}>{serviceSummary()}</Text>
             </Pressable>
+
+            {needsTailoring ? (
+              <>
+                <Pressable
+                  onPress={() => goEdit("/vendor/profile/add-product/q06b-services-costs")}
+                  style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+                >
+                  <Text style={styles.rowTitle}>Product includes trouser</Text>
+                  <Text style={styles.rowValue}>{includesTrouser ? "Yes" : "No"}</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => goEdit("/vendor/profile/add-product/q06b-services-costs")}
+                  style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+                >
+                  <Text style={styles.rowTitle}>Tailoring style cards</Text>
+                  <Text style={styles.rowValue}>
+                    {tailoringStylePresets.length
+                      ? `${tailoringStylePresets.length} style card(s)`
+                      : "Not set"}
+                  </Text>
+                </Pressable>
+
+                {tailoringStylePresets.map((preset, index) => (
+                  <Pressable
+                    key={`${safeStr(preset.id) || "style"}-${index}`}
+                    onPress={() => goEdit("/vendor/profile/add-product/q06b-services-costs")}
+                    style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+                  >
+                    <Text style={styles.rowTitle}>Style Card {index + 1}</Text>
+                    <Text style={styles.rowValue}>{summarizePreset(preset, includesTrouser)}</Text>
+                  </Pressable>
+                ))}
+              </>
+            ) : null}
           </>
         )}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Shipping</Text>
+
+        <Pressable
+          onPress={() => goEdit("/vendor/profile/add-product/q06c-shipping")}
+          style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+        >
+          <Text style={styles.rowTitle}>Weight (kg)</Text>
+          <Text style={styles.rowValue}>{weightKg > 0 ? String(weightKg) : "Not set"}</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => goEdit("/vendor/profile/add-product/q06c-shipping")}
+          style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+        >
+          <Text style={styles.rowTitle}>Package dimensions</Text>
+          <Text style={styles.rowValue}>{formatPackageCm(packageCm)}</Text>
+        </Pressable>
       </View>
 
       <View style={styles.card}>
@@ -386,7 +603,10 @@ export default function AddProductReviewScreen() {
         </Pressable>
       </View>
 
-      <Pressable style={({ pressed }) => [styles.primaryBtn, pressed ? styles.pressed : null]} onPress={goSubmit}>
+      <Pressable
+        style={({ pressed }) => [styles.primaryBtn, pressed ? styles.pressed : null]}
+        onPress={goSubmit}
+      >
         <Text style={styles.primaryText}>Continue to Save</Text>
       </Pressable>
     </ScrollView>
@@ -407,27 +627,27 @@ const stylesVars = {
   danger: "#B91C1C",
   dangerSoft: "#FEE2E2",
   dangerBorder: "#FCA5A5",
-  white: "#FFFFFF"
+  white: "#FFFFFF",
 };
 
 const styles = StyleSheet.create({
   content: {
     padding: 16,
     paddingBottom: 24,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12
+    gap: 12,
   },
 
   title: {
     fontSize: 18,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   card: {
@@ -436,23 +656,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
-    padding: 18
+    padding: 18,
   },
 
   errorCard: {
     borderColor: stylesVars.dangerBorder,
-    backgroundColor: stylesVars.dangerSoft
+    backgroundColor: stylesVars.dangerSoft,
   },
 
   sectionTitle: {
     fontSize: 15,
     fontWeight: "700",
     color: stylesVars.text,
-    marginBottom: 2
+    marginBottom: 2,
   },
 
   errorTitle: {
-    color: stylesVars.danger
+    color: stylesVars.danger,
   },
 
   meta: {
@@ -460,11 +680,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   errorMeta: {
-    color: stylesVars.danger
+    color: stylesVars.danger,
   },
 
   rowBtn: {
@@ -474,14 +694,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: "#D7E3FF"
+    borderColor: "#D7E3FF",
   },
 
   rowTitle: {
     color: stylesVars.text,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: "700"
+    fontWeight: "700",
   },
 
   rowValue: {
@@ -489,7 +709,7 @@ const styles = StyleSheet.create({
     color: stylesVars.subText,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   primaryBtn: {
@@ -499,13 +719,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: stylesVars.blue
+    backgroundColor: stylesVars.blue,
   },
 
   primaryText: {
     color: stylesVars.white,
     fontWeight: "700",
-    fontSize: 14
+    fontSize: 14,
   },
 
   linkBtn: {
@@ -517,16 +737,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D7E3FF",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   linkText: {
     color: stylesVars.blue,
     fontSize: 14,
-    fontWeight: "700"
+    fontWeight: "700",
   },
 
   pressed: {
-    opacity: 0.82
-  }
+    opacity: 0.82,
+  },
 });

@@ -1,4 +1,5 @@
-// app/purchase/place-order.tsx
+// File: app/purchase/place-order.tsx
+
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   ActivityIndicator,
@@ -8,12 +9,13 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View
+  View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSelector } from "react-redux";
 import { supabase } from "@/utils/supabase/client";
+import { getDeliveryCost } from "@/utils/kapray/delivery";
 
 const BUCKET_VENDOR = "vendor_images";
 
@@ -25,6 +27,9 @@ type Params = {
 
   mode?: string;
   selectedSize?: string;
+  selected_unstitched_size?: string;
+  selected_fabric_length_m?: string;
+  fabric_cost_pkr?: string;
 
   a?: string;
   b?: string;
@@ -40,12 +45,15 @@ type Params = {
   l?: string;
   m?: string;
   n?: string;
+  o?: string;
 
   product_category?: string;
 
   productName?: string;
   product_name?: string;
   price?: string;
+  price_per_meter_pkr?: string;
+  stitched_total_pkr?: string;
   currency?: string;
   imageUrl?: string;
   image_url?: string;
@@ -58,15 +66,30 @@ type Params = {
   dye_hex?: string;
   dye_label?: string;
   dyeing_cost_pkr?: string;
-
   dyeing_selected?: string;
-  dyeing_selected_shade?: string;
+  dyeing_available?: string;
 
   tailoring_cost_pkr?: string;
   tailoring_turnaround_days?: string;
-
   tailoring_selected?: string;
   tailoring_available?: string;
+
+  selected_tailoring_style_id?: string;
+  selected_tailoring_style_title?: string;
+  selected_tailoring_style_image?: string;
+  selected_tailoring_style_snapshot?: string;
+
+  selected_neck_variation?: string;
+  selected_sleeve_variation?: string;
+  selected_trouser_variation?: string;
+
+  custom_tailoring_note?: string;
+  tailoring_style_extra_cost_pkr?: string;
+
+  exports_enabled?: string;
+  export_regions?: string;
+  weight_kg?: string;
+  package_cm?: string;
 };
 
 type VendorState = {
@@ -81,6 +104,8 @@ type VendorState = {
   images: string[] | null;
   videos: string[] | null;
   status: string | null;
+  exports_enabled?: boolean | null;
+  export_regions?: unknown[] | null;
 };
 
 type VendorRow = {
@@ -96,6 +121,8 @@ type VendorRow = {
   profile_image_path?: string | null;
   banner_path?: string | null;
   status?: string | null;
+  exports_enabled?: boolean | null;
+  export_regions?: unknown[] | null;
 };
 
 type ProductRow = {
@@ -107,6 +134,35 @@ type ProductRow = {
   vendor_id?: string | number | null;
   vendor?: VendorRow | null;
 };
+
+type SelectedTailoringStyleSnapshot = {
+  id?: string | null;
+  title?: string | null;
+  note?: string | null;
+  extra_cost_pkr?: number | string | null;
+  default_neck?: string | null;
+  default_sleeve?: string | null;
+  default_trouser?: string | null;
+  selected_neck_variation?: string | null;
+  selected_sleeve_variation?: string | null;
+  selected_trouser_variation?: string | null;
+  image_url?: string | null;
+  allow_custom_note?: boolean | null;
+  custom_note?: string | null;
+};
+
+const PAKISTAN_CITY_OPTIONS = [
+  "Islamabad",
+  "Rawalpindi",
+  "Lahore",
+  "Karachi",
+  "Faisalabad",
+  "Multan",
+  "Peshawar",
+  "Hyderabad",
+  "Quetta",
+  "Sialkot",
+];
 
 const norm = (v: unknown) => (v == null ? "" : String(v).trim());
 
@@ -128,36 +184,20 @@ function safeDecode(v: unknown) {
   }
 }
 
-function resolvePublicUrl(path: string | null | undefined) {
-  const p = norm(path);
-  if (!p) return "";
-  if (/^https?:\/\//i.test(p)) return p;
-  const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(p);
-  return data?.publicUrl ?? "";
+function safeJsonDecode<T = any>(v: unknown, fallback: T): T {
+  const s = safeDecode(v);
+  if (!s) return fallback;
+  try {
+    return JSON.parse(s) as T;
+  } catch {
+    return fallback;
+  }
 }
 
-function getPriceForDisplay(priceObj: any): { currency: string; amountText: string; amountParam: string } {
-  const currency = "PKR";
-
-  if (!priceObj || typeof priceObj !== "object") {
-    return { currency, amountText: "—", amountParam: "" };
-  }
-
-  const mode = String(priceObj?.mode ?? "");
-  const total = priceObj?.cost_pkr_total;
-  const perMeter = priceObj?.cost_pkr_per_meter;
-
-  if (mode === "unstitched_per_meter" && typeof perMeter === "number") {
-    return { currency, amountText: `${perMeter} / meter`, amountParam: String(perMeter) };
-  }
-  if (typeof total === "number") {
-    return { currency, amountText: `${total}`, amountParam: String(total) };
-  }
-  if (typeof perMeter === "number") {
-    return { currency, amountText: `${perMeter} / meter`, amountParam: String(perMeter) };
-  }
-
-  return { currency, amountText: "—", amountParam: "" };
+function safePositiveNumber(v: unknown) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return n;
 }
 
 function parseBoolParam(v: unknown): boolean | null {
@@ -168,10 +208,75 @@ function parseBoolParam(v: unknown): boolean | null {
   return null;
 }
 
+function resolvePublicUrl(path: string | null | undefined) {
+  const p = norm(path);
+  if (!p) return "";
+  if (/^https?:\/\//i.test(p)) return p;
+  const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(p);
+  return data?.publicUrl ?? "";
+}
+
+function prettyCategory(v: string) {
+  return v.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function joinRegions(list?: unknown[] | null) {
+  return Array.isArray(list) && list.length ? list.map((x) => String(x)).join(", ") : "";
+}
+
+function inferCityFromAddress(address: string) {
+  const a = address.toLowerCase();
+  const match = PAKISTAN_CITY_OPTIONS.find((c) => a.includes(c.toLowerCase()));
+  return match || "";
+}
+
+function buildFullAddress(args: {
+  address: string;
+  city: string;
+  postalCode: string;
+  country: string;
+}) {
+  const address = norm(args.address);
+  const city = norm(args.city);
+  const postalCode = norm(args.postalCode);
+  const country = norm(args.country);
+
+  const cityLine = [city, postalCode].filter(Boolean).join(" ");
+  return [address, cityLine, country].filter(Boolean).join(", ");
+}
+
+function computeDeliveryCostSafe(args: {
+  destinationType: "inland" | "export";
+  city: string;
+  exportRegion: string;
+  weightKg: number;
+}) {
+  const { destinationType, city, exportRegion, weightKg } = args;
+  if (weightKg <= 0) return 0;
+
+  try {
+    const raw = getDeliveryCost({
+      weightKg,
+      scope: destinationType === "export" ? "international" : "inland",
+      regionOrCity: destinationType === "export" ? exportRegion : city,
+    } as any);
+
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function cleanVariationLabel(value: string, kind: "neck" | "sleeve") {
+  if (!value) return "";
+  const pattern = kind === "neck" ? /\bneck\b/gi : /\bsleeve\b/gi;
+  return value.replace(pattern, "").replace(/\s{2,}/g, " ").trim();
+}
+
 export default function PlaceOrderScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<Params>();
-
   const vendor = useSelector((s: any) => (s?.vendor ?? null)) as VendorState | null;
 
   const base = useMemo(() => {
@@ -180,6 +285,9 @@ export default function PlaceOrderScreen() {
 
     const mode = firstNonEmpty(params.mode) || "standard";
     const selectedSize = firstNonEmpty(params.selectedSize);
+    const selectedUnstitchedSize = safeDecode(params.selected_unstitched_size);
+    const selectedFabricLengthM = safePositiveNumber(safeDecode(params.selected_fabric_length_m));
+    const fabricCostPkr = safePositiveNumber(params.fabric_cost_pkr);
 
     const letters = {
       a: norm(params.a),
@@ -195,8 +303,10 @@ export default function PlaceOrderScreen() {
       k: norm(params.k),
       l: norm(params.l),
       m: norm(params.m),
-      n: norm(params.n)
+      n: norm(params.n),
+      o: norm(params.o),
     };
+
     const exactPairs: [string, string][] = [
       ["A", letters.a],
       ["B", letters.b],
@@ -211,7 +321,8 @@ export default function PlaceOrderScreen() {
       ["K", letters.k],
       ["L", letters.l],
       ["M", letters.m],
-      ["N", letters.n]
+      ["N", letters.n],
+      ["O", letters.o],
     ].filter((pair): pair is [string, string] => typeof pair[1] === "string" && pair[1].length > 0);
 
     const sizeLabel =
@@ -221,49 +332,97 @@ export default function PlaceOrderScreen() {
           : "Exact Measurements (Not set)"
         : selectedSize
           ? `Standard Size: ${selectedSize}`
-          : "Standard Size (Not set)";
+          : selectedUnstitchedSize
+            ? `Standard Size: ${selectedUnstitchedSize}`
+            : "Standard Size (Not set)";
 
-    const productName = firstNonEmpty(params.productName, params.product_name);
-    const currency = firstNonEmpty(params.currency) || "PKR";
-    const price = firstNonEmpty(params.price);
-    const imageUrl = firstNonEmpty(params.imageUrl, params.image_url);
+    const selectedTailoringStyleId = safeDecode(firstNonEmpty(params.selected_tailoring_style_id));
+    const selectedTailoringStyleTitle = safeDecode(
+      firstNonEmpty(params.selected_tailoring_style_title),
+    );
+    const selectedTailoringStyleImage = safeDecode(
+      firstNonEmpty(params.selected_tailoring_style_image),
+    );
 
-    const dyeShadeId = safeDecode(firstNonEmpty(params.dye_shade_id));
-    const dyeHex = safeDecode(firstNonEmpty(params.dye_hex, params.dyeing_selected_shade));
-    const dyeLabel = safeDecode(firstNonEmpty(params.dye_label));
-    const dyeingCostPkr = safeDecode(firstNonEmpty(params.dyeing_cost_pkr));
+    const selectedTailoringStyleSnapshot = safeJsonDecode<SelectedTailoringStyleSnapshot | null>(
+      params.selected_tailoring_style_snapshot,
+      null,
+    );
 
-    const dyeingSelected = parseBoolParam(params.dyeing_selected);
+    const selectedNeckVariation =
+      safeDecode(firstNonEmpty(params.selected_neck_variation)) ||
+      safeDecode(firstNonEmpty((selectedTailoringStyleSnapshot as any)?.selected_neck_variation));
 
-    const tailoringCostPkr = safeDecode(firstNonEmpty(params.tailoring_cost_pkr));
-    const tailoringTurnaroundDays = safeDecode(firstNonEmpty(params.tailoring_turnaround_days));
+    const selectedSleeveVariation =
+      safeDecode(firstNonEmpty(params.selected_sleeve_variation)) ||
+      safeDecode(firstNonEmpty((selectedTailoringStyleSnapshot as any)?.selected_sleeve_variation));
 
-    const tailoringSelected = parseBoolParam(params.tailoring_selected);
-    const tailoringAvailable = parseBoolParam(params.tailoring_available);
+    const selectedTrouserVariation =
+      safeDecode(firstNonEmpty(params.selected_trouser_variation)) ||
+      safeDecode(firstNonEmpty((selectedTailoringStyleSnapshot as any)?.selected_trouser_variation));
+
+    const customTailoringNote =
+      safeDecode(firstNonEmpty(params.custom_tailoring_note)) ||
+      safeDecode(firstNonEmpty((selectedTailoringStyleSnapshot as any)?.custom_note));
+
+    const styleExtraCostPkr = safePositiveNumber(
+      safeDecode(firstNonEmpty(params.tailoring_style_extra_cost_pkr)) ||
+        (selectedTailoringStyleSnapshot as any)?.extra_cost_pkr,
+    );
 
     return {
       productId,
       productCode,
       mode,
       selectedSize,
-      letters,
+      selectedUnstitchedSize,
+      selectedFabricLengthM,
+      fabricCostPkr,
       exactPairs,
+      letters,
+
+      productName: firstNonEmpty(params.productName, params.product_name),
+      productCategory: norm(params.product_category),
+      priceParam: norm(params.price),
+      pricePerMeterPkr: safePositiveNumber(params.price_per_meter_pkr),
+      stitchedTotalPkr: safePositiveNumber(params.stitched_total_pkr),
+      currency: firstNonEmpty(params.currency) || "PKR",
+      imageUrl: firstNonEmpty(params.imageUrl, params.image_url),
+
+      dyeShadeId: safeDecode(firstNonEmpty(params.dye_shade_id)),
+      dyeHex: safeDecode(firstNonEmpty(params.dye_hex)),
+      dyeLabel: safeDecode(firstNonEmpty(params.dye_label)),
+      dyeingCostPkr: safePositiveNumber(safeDecode(firstNonEmpty(params.dyeing_cost_pkr))),
+      dyeingSelected: parseBoolParam(params.dyeing_selected),
+      dyeingAvailable: parseBoolParam(params.dyeing_available),
+
+      tailoringCostPkr: safePositiveNumber(safeDecode(firstNonEmpty(params.tailoring_cost_pkr))),
+      tailoringTurnaroundDays: safePositiveNumber(
+        safeDecode(firstNonEmpty(params.tailoring_turnaround_days)),
+      ),
+      tailoringSelected: parseBoolParam(params.tailoring_selected),
+      tailoringAvailable: parseBoolParam(params.tailoring_available),
+
+      selectedTailoringStyleId,
+      selectedTailoringStyleTitle:
+        selectedTailoringStyleTitle ||
+        safeDecode(firstNonEmpty((selectedTailoringStyleSnapshot as any)?.title)),
+      selectedTailoringStyleImage:
+        selectedTailoringStyleImage ||
+        safeDecode(firstNonEmpty((selectedTailoringStyleSnapshot as any)?.image_url)),
+      selectedTailoringStyleSnapshot,
+      selectedNeckVariation,
+      selectedSleeveVariation,
+      selectedTrouserVariation,
+      customTailoringNote,
+      styleExtraCostPkr,
+
+      exportsEnabledParam: parseBoolParam(params.exports_enabled),
+      exportRegionsParam: safeJsonDecode<string[]>(params.export_regions, []),
+      weightKg: safePositiveNumber(params.weight_kg),
+      packageCm: safeJsonDecode<Record<string, unknown> | null>(params.package_cm, null),
+
       sizeLabel,
-      productName,
-      currency,
-      price,
-      imageUrl,
-
-      dyeShadeId,
-      dyeHex,
-      dyeLabel,
-      dyeingCostPkr,
-      dyeingSelected,
-
-      tailoringCostPkr,
-      tailoringTurnaroundDays,
-      tailoringSelected,
-      tailoringAvailable
     };
   }, [params]);
 
@@ -272,7 +431,7 @@ export default function PlaceOrderScreen() {
 
   const loadProductIfNeeded = useCallback(async () => {
     const shouldFetch =
-      (!!base.productId || !!base.productCode) && (!base.productName || !base.imageUrl || !base.price);
+      (!!base.productId || !!base.productCode) && (!base.productName || !base.imageUrl);
 
     if (!shouldFetch) return;
 
@@ -281,8 +440,7 @@ export default function PlaceOrderScreen() {
 
       let q = supabase
         .from("products")
-        .select(
-          `
+        .select(`
           id,
           vendor_id,
           product_code,
@@ -301,27 +459,23 @@ export default function PlaceOrderScreen() {
             location_url,
             profile_image_path,
             banner_path,
-            status
+            status,
+            exports_enabled,
+            export_regions
           )
-        `
-        );
+        `);
 
       const numericProductId = Number(base.productId);
 
-      if (Number.isFinite(numericProductId)) {
-        q = q.eq("id", numericProductId);
-      } else if (base.productCode) {
-        q = q.eq("product_code", base.productCode);
-      }
+      if (Number.isFinite(numericProductId)) q = q.eq("id", numericProductId);
+      else if (base.productCode) q = q.eq("product_code", base.productCode);
 
       const { data, error } = await q.single();
-      if (error) return;
-
-      setFetchedProduct(data as any);
+      if (!error) setFetchedProduct(data as any);
     } finally {
       setLoadingProduct(false);
     }
-  }, [base.productId, base.productCode, base.productName, base.imageUrl, base.price]);
+  }, [base.productId, base.productCode, base.productName, base.imageUrl]);
 
   useEffect(() => {
     loadProductIfNeeded();
@@ -329,21 +483,13 @@ export default function PlaceOrderScreen() {
 
   const resolved = useMemo(() => {
     const fp = fetchedProduct;
-
     const title = base.productName || norm(fp?.title) || "Product";
     const code = base.productCode || norm(fp?.product_code) || "";
     const id = base.productId || norm(fp?.id) || "";
 
-    const priceObj = fp?.price ?? null;
-    const p = base.price
-      ? { currency: base.currency || "PKR", amountText: base.price, amountParam: base.price }
-      : getPriceForDisplay(priceObj);
-
     const media = fp?.media ?? {};
     const imagePath = media?.images?.[0] ?? "";
-    const fetchedImageUrl = resolvePublicUrl(imagePath);
-
-    const imageUrl = base.imageUrl || fetchedImageUrl || "";
+    const imageUrl = base.imageUrl || resolvePublicUrl(imagePath) || "";
 
     const vJoin = fp?.vendor ?? null;
 
@@ -353,97 +499,156 @@ export default function PlaceOrderScreen() {
         vendor?.shop_name,
         vendor?.owner_name,
         vJoin?.shop_name,
-        vJoin?.name
+        vJoin?.name,
       ) || "Vendor";
 
     const vendorMobile = firstNonEmpty(params.vendorMobile, vendor?.mobile, vJoin?.mobile);
     const vendorAddress = firstNonEmpty(params.vendorAddress, vendor?.address, vJoin?.address);
-
     const vendorBanner = norm(vendor?.banner_url) || resolvePublicUrl(vJoin?.banner_path) || "";
-
     const vendorStatus = firstNonEmpty(vendor?.status, vJoin?.status);
 
-    const dyeText = base.dyeLabel || base.dyeShadeId || base.dyeHex || "";
+    const exportsEnabled = Boolean(
+      base.exportsEnabledParam ??
+        vendor?.exports_enabled ??
+        (vJoin as any)?.exports_enabled ??
+        false,
+    );
 
-    const hasAnyDyeFields = !!base.dyeHex || !!base.dyeShadeId || !!base.dyeLabel;
-    const dyeingSelected =
-      typeof base.dyeingSelected === "boolean" ? base.dyeingSelected : hasAnyDyeFields;
+    const exportRegions =
+      base.exportRegionsParam?.length
+        ? base.exportRegionsParam
+        : ((vendor?.export_regions as unknown[] | null | undefined) ??
+            ((vJoin as any)?.export_regions ?? []));
 
-    const tailoringSelected = typeof base.tailoringSelected === "boolean" ? base.tailoringSelected : false;
+    const isUnstitched =
+      base.productCategory === "unstitched_plain" ||
+      base.productCategory === "unstitched_dyeing" ||
+      base.productCategory === "unstitched_dyeing_tailoring";
+
+    const totalProductCostPkr = isUnstitched
+      ? base.fabricCostPkr
+      : base.stitchedTotalPkr || safePositiveNumber(base.priceParam);
+
+    const hasDyeing =
+      Boolean(base.dyeingSelected) &&
+      (Boolean(base.dyeHex) || Boolean(base.dyeShadeId) || Boolean(base.dyeLabel));
+
+    const hasTailoring = Boolean(base.tailoringSelected) && base.tailoringCostPkr > 0;
+    const hasStyleSelected =
+      hasTailoring &&
+      (Boolean(base.selectedTailoringStyleId) ||
+        Boolean(base.selectedTailoringStyleTitle) ||
+        Boolean(base.selectedTailoringStyleSnapshot));
 
     return {
       id,
       code,
       title,
-      currency: p.currency,
-      priceText: p.amountText,
-      priceParam: p.amountParam,
       imageUrl,
-
       vendorName,
       vendorMobile,
       vendorAddress,
       vendorBanner,
       vendorStatus,
-
-      dyeText,
-      dyeShadeId: base.dyeShadeId,
-      dyeHex: base.dyeHex,
-      dyeLabel: base.dyeLabel,
-      dyeingCostPkr: base.dyeingCostPkr,
-      dyeingSelected,
-
-      tailoringCostPkr: base.tailoringCostPkr,
-      tailoringTurnaroundDays: base.tailoringTurnaroundDays,
-      tailoringSelected,
-
-      tailoringAvailable: typeof base.tailoringAvailable === "boolean" ? base.tailoringAvailable : null
+      exportsEnabled,
+      exportRegions,
+      isUnstitched,
+      totalProductCostPkr,
+      hasDyeing,
+      hasTailoring,
+      hasStyleSelected,
     };
-  }, [base, fetchedProduct, vendor, params.vendorName, params.vendorMobile, params.vendorAddress]);
-
-  const priceCalc = useMemo(() => {
-    const basePrice = Number(resolved.priceParam || 0);
-
-    const dyeCost = Number(resolved.dyeingCostPkr || 0);
-    const safeBase = Number.isFinite(basePrice) && basePrice > 0 ? basePrice : 0;
-    const safeDye = Number.isFinite(dyeCost) && dyeCost > 0 ? dyeCost : 0;
-
-    const tailoringCost = Number(resolved.tailoringCostPkr || 0);
-    const safeTailoring = Number.isFinite(tailoringCost) && tailoringCost > 0 ? tailoringCost : 0;
-
-    const hasDyeing =
-      Boolean(resolved.dyeingSelected) &&
-      (!!resolved.dyeHex || !!resolved.dyeShadeId || !!resolved.dyeLabel);
-    const hasTailoring = Boolean(resolved.tailoringSelected) && safeTailoring > 0;
-
-    const dyeAdd = hasDyeing ? safeDye : 0;
-    const tailoringAdd = hasTailoring ? safeTailoring : 0;
-
-    const totalPayable = safeBase + dyeAdd + tailoringAdd;
-
-    return { hasDyeing, hasTailoring, safeBase, safeDye, safeTailoring, dyeAdd, tailoringAdd, totalPayable };
-  }, [
-    resolved.priceParam,
-    resolved.dyeingCostPkr,
-    resolved.dyeHex,
-    resolved.dyeShadeId,
-    resolved.dyeLabel,
-    resolved.dyeingSelected,
-    resolved.tailoringCostPkr,
-    resolved.tailoringSelected
-  ]);
+  }, [base, fetchedProduct, params.vendorAddress, params.vendorMobile, params.vendorName, vendor]);
 
   const [buyerName, setBuyerName] = useState("");
   const [buyerMobile, setBuyerMobile] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [city, setCity] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+  const [country, setCountry] = useState("Pakistan");
   const [notes, setNotes] = useState("");
+
+  const [destinationType, setDestinationType] = useState<"inland" | "export">("inland");
+  const [exportRegion, setExportRegion] = useState("");
+
+  const exportRegionList = useMemo(() => {
+    return Array.isArray(resolved.exportRegions)
+      ? resolved.exportRegions.map((x) => String(x))
+      : [];
+  }, [resolved.exportRegions]);
+
+  useEffect(() => {
+    if (destinationType !== "inland") return;
+    if (country !== "Pakistan") setCountry("Pakistan");
+  }, [destinationType, country]);
+
+  useEffect(() => {
+    if (destinationType !== "inland") return;
+    if (city.trim()) return;
+    const inferred = inferCityFromAddress(deliveryAddress);
+    if (inferred) setCity(inferred);
+  }, [deliveryAddress, destinationType, city]);
+
+  const fullAddressPreview = useMemo(() => {
+    return buildFullAddress({
+      address: deliveryAddress,
+      city,
+      postalCode,
+      country: destinationType === "inland" ? "Pakistan" : country,
+    });
+  }, [deliveryAddress, city, postalCode, country, destinationType]);
+
+  const deliveryCostPkr = useMemo(() => {
+    return computeDeliveryCostSafe({
+      destinationType,
+      city: city.trim(),
+      exportRegion: exportRegion.trim(),
+      weightKg: base.weightKg,
+    });
+  }, [base.weightKg, city, destinationType, exportRegion]);
+
+  const subtotalBeforeDeliveryPkr = useMemo(() => {
+  return Math.round(
+    resolved.totalProductCostPkr +
+      (resolved.hasDyeing ? base.dyeingCostPkr : 0) +
+      (resolved.hasTailoring ? base.tailoringCostPkr : 0) +
+      (base.styleExtraCostPkr > 0 ? base.styleExtraCostPkr : 0)
+  );
+}, [
+  base.dyeingCostPkr,
+  base.tailoringCostPkr,
+  base.styleExtraCostPkr,
+  resolved.totalProductCostPkr,
+  resolved.hasDyeing,
+  resolved.hasTailoring,
+]);
+
+  const grandTotalPkr = useMemo(() => {
+    return Math.round(subtotalBeforeDeliveryPkr + deliveryCostPkr);
+  }, [subtotalBeforeDeliveryPkr, deliveryCostPkr]);
+
+  const courierSummary = useMemo(() => {
+    if (!base.weightKg) return "Shipping weight is not available yet.";
+    if (destinationType === "export") {
+      if (!exportRegion.trim()) return "Select export region to calculate courier.";
+      return deliveryCostPkr > 0
+        ? `Export courier: PKR ${deliveryCostPkr}`
+        : `Export courier could not be calculated for ${exportRegion}.`;
+    }
+    if (!city.trim()) return "Select or enter city to calculate delivery.";
+    return deliveryCostPkr > 0
+      ? `Inland delivery: PKR ${deliveryCostPkr}`
+      : `Delivery could not be calculated for ${city}.`;
+  }, [base.weightKg, city, deliveryCostPkr, destinationType, exportRegion]);
 
   const canContinue =
     buyerName.trim().length >= 2 &&
     buyerMobile.trim().replace(/\D/g, "").length >= 10 &&
     deliveryAddress.trim().length >= 10 &&
-    city.trim().length >= 2;
+    city.trim().length >= 2 &&
+    (destinationType === "inland"
+      ? true
+      : country.trim().length >= 2 && resolved.exportsEnabled && exportRegion.trim().length >= 2);
 
   const goChangeSize = () => {
     router.push({
@@ -452,32 +657,79 @@ export default function PlaceOrderScreen() {
         returnTo: "/purchase/place-order",
         productId: resolved.id || base.productId,
         productCode: resolved.code || base.productCode,
-
-        mode: base.mode,
-        selectedSize: base.selectedSize,
-        ...base.letters,
-
-        product_category: params.product_category ? String(params.product_category) : "",
-
         productName: resolved.title,
-        price: resolved.priceParam,
-        currency: resolved.currency,
+        product_category: base.productCategory,
+        currency: base.currency,
         imageUrl: resolved.imageUrl,
 
-        dyeing_selected: resolved.dyeingSelected ? "1" : "0",
-        dye_shade_id: resolved.dyeShadeId ? encodeURIComponent(resolved.dyeShadeId) : "",
-        dye_hex: resolved.dyeHex ? encodeURIComponent(resolved.dyeHex) : "",
-        dye_label: resolved.dyeLabel ? encodeURIComponent(resolved.dyeLabel) : "",
-        dyeing_cost_pkr: resolved.dyeingCostPkr ? encodeURIComponent(resolved.dyeingCostPkr) : "",
+        price_per_meter_pkr: base.pricePerMeterPkr ? String(base.pricePerMeterPkr) : "",
+        stitched_total_pkr: base.stitchedTotalPkr ? String(base.stitchedTotalPkr) : "",
+        price: base.priceParam,
+
+        selectedSize: base.selectedSize,
+        selected_unstitched_size: base.selectedUnstitchedSize
+          ? encodeURIComponent(base.selectedUnstitchedSize)
+          : "",
+        selected_fabric_length_m: base.selectedFabricLengthM
+          ? encodeURIComponent(String(base.selectedFabricLengthM))
+          : "",
+        fabric_cost_pkr: base.fabricCostPkr ? String(base.fabricCostPkr) : "",
+
+        mode: base.mode,
+        ...base.letters,
+
+        dyeing_available:
+          base.dyeingAvailable === true ? "1" : base.dyeingAvailable === false ? "0" : "",
+        dyeing_selected: base.dyeingSelected ? "1" : "0",
+        dye_shade_id: base.dyeShadeId ? encodeURIComponent(base.dyeShadeId) : "",
+        dye_hex: base.dyeHex ? encodeURIComponent(base.dyeHex) : "",
+        dye_label: base.dyeLabel ? encodeURIComponent(base.dyeLabel) : "",
+        dyeing_cost_pkr: base.dyeingCostPkr ? encodeURIComponent(String(base.dyeingCostPkr)) : "",
 
         tailoring_available:
-          resolved.tailoringAvailable === true ? "1" : resolved.tailoringAvailable === false ? "0" : "",
-        tailoring_selected: resolved.tailoringSelected ? "1" : "0",
-        tailoring_cost_pkr: resolved.tailoringCostPkr ? encodeURIComponent(resolved.tailoringCostPkr) : "",
-        tailoring_turnaround_days: resolved.tailoringTurnaroundDays
-          ? encodeURIComponent(resolved.tailoringTurnaroundDays)
-          : ""
-      }
+          base.tailoringAvailable === true ? "1" : base.tailoringAvailable === false ? "0" : "",
+        tailoring_selected: base.tailoringSelected ? "1" : "0",
+        tailoring_cost_pkr: base.tailoringCostPkr
+          ? encodeURIComponent(String(base.tailoringCostPkr))
+          : "",
+        tailoring_turnaround_days: base.tailoringTurnaroundDays
+          ? encodeURIComponent(String(base.tailoringTurnaroundDays))
+          : "",
+
+        selected_tailoring_style_id: base.selectedTailoringStyleId
+          ? encodeURIComponent(base.selectedTailoringStyleId)
+          : "",
+        selected_tailoring_style_title: base.selectedTailoringStyleTitle
+          ? encodeURIComponent(base.selectedTailoringStyleTitle)
+          : "",
+        selected_tailoring_style_image: base.selectedTailoringStyleImage
+          ? encodeURIComponent(base.selectedTailoringStyleImage)
+          : "",
+        selected_tailoring_style_snapshot: base.selectedTailoringStyleSnapshot
+          ? encodeURIComponent(JSON.stringify(base.selectedTailoringStyleSnapshot))
+          : "",
+        selected_neck_variation: base.selectedNeckVariation
+          ? encodeURIComponent(base.selectedNeckVariation)
+          : "",
+        selected_sleeve_variation: base.selectedSleeveVariation
+          ? encodeURIComponent(base.selectedSleeveVariation)
+          : "",
+        selected_trouser_variation: base.selectedTrouserVariation
+          ? encodeURIComponent(base.selectedTrouserVariation)
+          : "",
+        custom_tailoring_note: base.customTailoringNote
+          ? encodeURIComponent(base.customTailoringNote)
+          : "",
+        tailoring_style_extra_cost_pkr:
+          base.styleExtraCostPkr > 0 ? encodeURIComponent(String(base.styleExtraCostPkr)) : "",
+
+        exports_enabled: resolved.exportsEnabled ? "1" : "0",
+        export_regions: exportRegionList.length
+          ? encodeURIComponent(JSON.stringify(exportRegionList))
+          : "",
+        weight_kg: base.weightKg ? String(base.weightKg) : "",
+        package_cm: base.packageCm ? encodeURIComponent(JSON.stringify(base.packageCm)) : "",
+      },
     });
   };
 
@@ -488,13 +740,22 @@ export default function PlaceOrderScreen() {
         productId: resolved.id || base.productId,
         productCode: resolved.code || base.productCode,
         productName: resolved.title,
+        product_category: base.productCategory,
 
-        product_category: params.product_category ? String(params.product_category) : "",
-
-        price: String(priceCalc.totalPayable || 0),
-
-        currency: resolved.currency,
+        currency: base.currency,
         imageUrl: resolved.imageUrl,
+
+        price_per_meter_pkr: base.pricePerMeterPkr ? String(base.pricePerMeterPkr) : "",
+        stitched_total_pkr: base.stitchedTotalPkr ? String(base.stitchedTotalPkr) : "",
+        base_product_cost_pkr: String(resolved.totalProductCostPkr || 0),
+        fabric_cost_pkr: base.fabricCostPkr ? String(base.fabricCostPkr) : "",
+        selected_fabric_length_m: base.selectedFabricLengthM
+          ? encodeURIComponent(String(base.selectedFabricLengthM))
+          : "",
+
+        subtotal_before_delivery_pkr: String(subtotalBeforeDeliveryPkr || 0),
+        delivery_cost_pkr: String(deliveryCostPkr || 0),
+        price: String(grandTotalPkr || 0),
 
         vendorName: resolved.vendorName,
         vendorMobile: resolved.vendorMobile,
@@ -502,28 +763,69 @@ export default function PlaceOrderScreen() {
 
         mode: base.mode,
         selectedSize: base.selectedSize,
+        selected_unstitched_size: base.selectedUnstitchedSize
+          ? encodeURIComponent(base.selectedUnstitchedSize)
+          : "",
         ...base.letters,
 
-        dyeing_selected: resolved.dyeingSelected ? "1" : "0",
-        dye_shade_id: resolved.dyeShadeId ? encodeURIComponent(resolved.dyeShadeId) : "",
-        dye_hex: resolved.dyeHex ? encodeURIComponent(resolved.dyeHex) : "",
-        dye_label: resolved.dyeLabel ? encodeURIComponent(resolved.dyeLabel) : "",
-        dyeing_cost_pkr: resolved.dyeingCostPkr ? encodeURIComponent(resolved.dyeingCostPkr) : "",
+        destination_type: destinationType,
+        export_region:
+          destinationType === "export" && exportRegion ? encodeURIComponent(exportRegion) : "",
+        postal_code: postalCode ? encodeURIComponent(postalCode.trim()) : "",
+        country: encodeURIComponent(
+          (destinationType === "inland" ? "Pakistan" : country).trim(),
+        ),
+        weight_kg: base.weightKg ? String(base.weightKg) : "",
+
+        dyeing_selected: resolved.hasDyeing ? "1" : "0",
+        dye_shade_id: base.dyeShadeId ? encodeURIComponent(base.dyeShadeId) : "",
+        dye_hex: base.dyeHex ? encodeURIComponent(base.dyeHex) : "",
+        dye_label: base.dyeLabel ? encodeURIComponent(base.dyeLabel) : "",
+        dyeing_cost_pkr: resolved.hasDyeing ? encodeURIComponent(String(base.dyeingCostPkr)) : "",
 
         tailoring_available:
-          resolved.tailoringAvailable === true ? "1" : resolved.tailoringAvailable === false ? "0" : "",
-        tailoring_selected: resolved.tailoringSelected ? "1" : "0",
-        tailoring_cost_pkr: resolved.tailoringCostPkr ? encodeURIComponent(resolved.tailoringCostPkr) : "",
-        tailoring_turnaround_days: resolved.tailoringTurnaroundDays
-          ? encodeURIComponent(resolved.tailoringTurnaroundDays)
+          base.tailoringAvailable === true ? "1" : base.tailoringAvailable === false ? "0" : "",
+        tailoring_selected: resolved.hasTailoring ? "1" : "0",
+        tailoring_cost_pkr: resolved.hasTailoring
+          ? encodeURIComponent(String(base.tailoringCostPkr))
           : "",
+        tailoring_turnaround_days: base.tailoringTurnaroundDays
+          ? encodeURIComponent(String(base.tailoringTurnaroundDays))
+          : "",
+
+        selected_tailoring_style_id: base.selectedTailoringStyleId
+          ? encodeURIComponent(base.selectedTailoringStyleId)
+          : "",
+        selected_tailoring_style_title: base.selectedTailoringStyleTitle
+          ? encodeURIComponent(base.selectedTailoringStyleTitle)
+          : "",
+        selected_tailoring_style_image: base.selectedTailoringStyleImage
+          ? encodeURIComponent(base.selectedTailoringStyleImage)
+          : "",
+        selected_tailoring_style_snapshot: base.selectedTailoringStyleSnapshot
+          ? encodeURIComponent(JSON.stringify(base.selectedTailoringStyleSnapshot))
+          : "",
+        selected_neck_variation: base.selectedNeckVariation
+          ? encodeURIComponent(base.selectedNeckVariation)
+          : "",
+        selected_sleeve_variation: base.selectedSleeveVariation
+          ? encodeURIComponent(base.selectedSleeveVariation)
+          : "",
+        selected_trouser_variation: base.selectedTrouserVariation
+          ? encodeURIComponent(base.selectedTrouserVariation)
+          : "",
+        custom_tailoring_note: base.customTailoringNote
+          ? encodeURIComponent(base.customTailoringNote)
+          : "",
+        tailoring_style_extra_cost_pkr:
+          base.styleExtraCostPkr > 0 ? encodeURIComponent(String(base.styleExtraCostPkr)) : "",
 
         buyerName: buyerName.trim(),
         buyerMobile: buyerMobile.trim(),
         deliveryAddress: deliveryAddress.trim(),
         city: city.trim(),
-        notes: notes.trim()
-      }
+        notes: notes.trim(),
+      },
     });
   };
 
@@ -569,61 +871,53 @@ export default function PlaceOrderScreen() {
               <Text style={styles.meta}>
                 Dress Cat:{" "}
                 <Text style={styles.metaStrong}>
-                  {params.product_category
-                    ? String(params.product_category)
-                        .replace(/_/g, " ")
-                        .replace(/\b\w/g, (c) => c.toUpperCase())
-                    : "—"}
+                  {base.productCategory ? prettyCategory(base.productCategory) : "—"}
                 </Text>
               </Text>
 
-              <Text style={styles.meta}>
-                Price:{" "}
-                <Text style={styles.metaStrong}>
-                  {resolved.priceParam
-                    ? `${resolved.currency} ${resolved.priceText}`
-                    : `${resolved.currency} —`}
-                </Text>
-              </Text>
+              {resolved.isUnstitched ? (
+                <>
+                  {!!base.selectedUnstitchedSize && (
+                    <Text style={styles.meta}>
+                      Size: <Text style={styles.metaStrong}>{base.selectedUnstitchedSize}</Text>
+                    </Text>
+                  )}
 
-              {priceCalc.hasDyeing ? (
+                  {!!base.pricePerMeterPkr && (
+                    <Text style={styles.meta}>
+                      Cost per Meter:{" "}
+                      <Text style={styles.metaStrong}>
+                        {base.currency} {base.pricePerMeterPkr}
+                      </Text>
+                    </Text>
+                  )}
+
+                  {!!base.selectedFabricLengthM && (
+                    <Text style={styles.meta}>
+                      Total Fabric Length:{" "}
+                      <Text style={styles.metaStrong}>{base.selectedFabricLengthM} meter(s)</Text>
+                    </Text>
+                  )}
                 <Text style={styles.meta}>
-                  Dyeing:{" "}
+                  Total Fabric Cost:{" "}
                   <Text style={styles.metaStrong}>
-                    {resolved.currency} {priceCalc.dyeAdd}
+                    {base.currency} {Math.round(base.fabricCostPkr || 0)}
                   </Text>
                 </Text>
-              ) : null}
-
-              {priceCalc.hasTailoring ? (
+                </>
+              ) : (
                 <Text style={styles.meta}>
-                  Tailoring:{" "}
+                  Total Product Cost:{" "}
                   <Text style={styles.metaStrong}>
-                    {resolved.currency} {priceCalc.tailoringAdd}
-                    {resolved.tailoringTurnaroundDays ? ` • ${resolved.tailoringTurnaroundDays} days` : ""}
+                    {base.currency} {resolved.totalProductCostPkr || 0}
                   </Text>
                 </Text>
-              ) : null}
+              )}
 
-              {resolved.priceParam ? (
-                <Text style={styles.meta}>
-                  Total Payable:{" "}
-                  <Text style={styles.metaStrong}>
-                    {resolved.currency} {priceCalc.totalPayable}
-                  </Text>
-                </Text>
-              ) : null}
-
-              {!!resolved.dyeHex && priceCalc.hasDyeing ? (
+              {!!base.dyeHex && resolved.hasDyeing ? (
                 <View style={styles.dyePreviewWrap}>
-                  <Text style={styles.meta}>Selected Colour for Dyeing</Text>
-
-                  <View
-                    style={[
-                      styles.dyeSwatch,
-                      { backgroundColor: resolved.dyeHex }
-                    ]}
-                  />
+                  <Text style={styles.meta}>Selected Colour</Text>
+                  <View style={[styles.dyeSwatch, { backgroundColor: base.dyeHex }]} />
                 </View>
               ) : null}
             </View>
@@ -679,17 +973,245 @@ export default function PlaceOrderScreen() {
             </Text>
           )}
 
-          {!!resolved.vendorStatus && (
-            <Text style={styles.meta}>
-              Status: <Text style={styles.metaStrong}>{resolved.vendorStatus}</Text>
-            </Text>
-          )}
+          <Text style={styles.meta}>
+            Exports:{" "}
+            <Text style={styles.metaStrong}>{resolved.exportsEnabled ? "Yes" : "No"}</Text>
+          </Text>
 
-          {!vendor ? (
-            <Text style={styles.helper}>
-              Vendor redux state is missing, so vendor info is coming from the product JOIN fallback.
+          {resolved.exportsEnabled && exportRegionList.length ? (
+            <Text style={styles.meta}>
+              Export Regions: <Text style={styles.metaStrong}>{joinRegions(exportRegionList)}</Text>
             </Text>
           ) : null}
+        </View>
+
+        {resolved.hasTailoring && resolved.hasStyleSelected ? (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Selected Tailoring Style</Text>
+
+            {!!base.selectedTailoringStyleImage ? (
+              <View style={styles.tailoringImageWrap}>
+                <Image
+                  source={{ uri: base.selectedTailoringStyleImage }}
+                  style={styles.tailoringImage}
+                  resizeMode="cover"
+                />
+              </View>
+            ) : null}
+
+            <Text style={styles.meta}>
+              Style:{" "}
+              <Text style={styles.metaStrong}>
+                {base.selectedTailoringStyleTitle || "Selected style"}
+              </Text>
+            </Text>
+
+            {base.selectedNeckVariation === "no change in selected style" ? (
+              <Text style={styles.meta}>
+                <Text style={styles.metaStrong}>No change in selected style</Text>
+              </Text>
+            ) : (
+              <>
+                {!!base.selectedNeckVariation && (
+                  <Text style={styles.meta}>
+                    Neck:{" "}
+                    <Text style={styles.metaStrong}>
+                      {cleanVariationLabel(base.selectedNeckVariation, "neck")}
+                    </Text>
+                  </Text>
+                )}
+
+                {!!base.selectedSleeveVariation && (
+                  <Text style={styles.meta}>
+                    Sleeve:{" "}
+                    <Text style={styles.metaStrong}>
+                      {cleanVariationLabel(base.selectedSleeveVariation, "sleeve")}
+                    </Text>
+                  </Text>
+                )}
+
+                {!!base.selectedTrouserVariation && (
+                  <Text style={styles.meta}>
+                    Trouser:{" "}
+                    <Text style={styles.metaStrong}>{base.selectedTrouserVariation}</Text>
+                  </Text>
+                )}
+              </>
+            )}
+
+            {base.styleExtraCostPkr > 0 ? (
+              <Text style={styles.meta}>
+                Selected Style Extra:{" "}
+                <Text style={styles.metaStrong}>
+                  {base.currency} {base.styleExtraCostPkr}
+                </Text>
+              </Text>
+            ) : null}
+
+            {!!base.customTailoringNote && (
+              <Text style={styles.meta}>
+                Additional Instructions:{" "}
+                <Text style={styles.metaStrong}>{base.customTailoringNote}</Text>
+              </Text>
+            )}
+          </View>
+        ) : null}
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Destination</Text>
+
+          <Text style={styles.fieldLabel}>Delivery Type</Text>
+          <View style={styles.choiceRow}>
+            <Pressable
+              onPress={() => {
+                setDestinationType("inland");
+                setExportRegion("");
+                setCountry("Pakistan");
+              }}
+              style={[styles.choicePill, destinationType === "inland" ? styles.choicePillOn : null]}
+            >
+              <Text
+                style={[
+                  styles.choiceText,
+                  destinationType === "inland" ? styles.choiceTextOn : null,
+                ]}
+              >
+                Inland
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                if (!resolved.exportsEnabled) return;
+                setDestinationType("export");
+              }}
+              style={[
+                styles.choicePill,
+                destinationType === "export" ? styles.choicePillOn : null,
+                !resolved.exportsEnabled ? styles.disabledBtn : null,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.choiceText,
+                  destinationType === "export" ? styles.choiceTextOn : null,
+                ]}
+              >
+                Export
+              </Text>
+            </Pressable>
+          </View>
+
+          {!resolved.exportsEnabled ? (
+            <Text style={styles.helper}>This vendor does not offer export.</Text>
+          ) : null}
+
+          {destinationType === "export" ? (
+            <>
+              <Text style={styles.fieldLabel}>Import / Region</Text>
+              <Text style={styles.helper}>Select region for courier calculation.</Text>
+
+              <View style={styles.pillsWrap}>
+                {exportRegionList.map((region) => {
+                  const isOn = exportRegion === region;
+
+                  return (
+                    <Pressable
+                      key={region}
+                      onPress={() => setExportRegion(region)}
+                      style={[styles.pill, isOn ? styles.choicePillOn : null]}
+                    >
+                      <Text style={isOn ? styles.choiceTextOn : styles.pillText}>{region}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </>
+          ) : null}
+
+          <Text style={styles.fieldLabel}>Courier</Text>
+          <Text style={styles.helper}>{courierSummary}</Text>
+          {!!base.weightKg && <Text style={styles.helper}>Weight used: {base.weightKg} kg</Text>}
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Cost Breakdown</Text>
+
+          {resolved.isUnstitched && !!base.pricePerMeterPkr ? (
+            <Text style={styles.meta}>
+              Fabric Cost per Meter:{" "}
+              <Text style={styles.metaStrong}>
+                {base.currency} {base.pricePerMeterPkr}
+              </Text>
+            </Text>
+          ) : null}
+
+          {resolved.isUnstitched && !!base.selectedFabricLengthM ? (
+            <Text style={styles.meta}>
+              Total Fabric Length:{" "}
+              <Text style={styles.metaStrong}>{base.selectedFabricLengthM} meter(s)</Text>
+            </Text>
+          ) : null}
+
+          {resolved.isUnstitched ? (
+            <Text style={styles.meta}>
+              Total Fabric Cost:{" "}
+              <Text style={styles.metaStrong}>
+                {base.currency} {base.fabricCostPkr || 0}
+              </Text>
+            </Text>
+          ) : null}
+
+          {resolved.hasDyeing ? (
+            <Text style={styles.meta}>
+              Dyeing:{" "}
+              <Text style={styles.metaStrong}>
+                {base.currency} {base.dyeingCostPkr}
+              </Text>
+            </Text>
+          ) : null}
+
+          {resolved.hasTailoring ? (
+            <Text style={styles.meta}>
+              Tailoring:{" "}
+              <Text style={styles.metaStrong}>
+                {base.currency} {Math.round(base.tailoringCostPkr)}
+                {base.tailoringTurnaroundDays ? ` • ${base.tailoringTurnaroundDays} days` : ""}
+              </Text>
+            </Text>
+          ) : null}
+
+          {base.styleExtraCostPkr > 0 ? (
+            <Text style={styles.meta}>
+              Selected Style Extra:{" "}
+              <Text style={styles.metaStrong}>
+                {base.currency} {Math.round(base.styleExtraCostPkr)}
+              </Text>
+            </Text>
+          ) : null}
+
+          <Text style={styles.meta}>
+            Subtotal Before Delivery:{" "}
+            <Text style={styles.metaStrong}>
+              {base.currency} {Math.round(subtotalBeforeDeliveryPkr)}
+            </Text>
+          </Text>
+
+          <Text style={styles.meta}>
+            Delivery:{" "}
+            <Text style={styles.metaStrong}>
+              {base.currency} {deliveryCostPkr}
+            </Text>
+          </Text>
+
+          <View style={styles.divider} />
+
+          <Text style={styles.meta}>
+            Grand Total:{" "}
+            <Text style={styles.totalStrong}>
+              {base.currency} {grandTotalPkr}
+            </Text>
+          </Text>
         </View>
 
         <View style={styles.card}>
@@ -728,10 +1250,43 @@ export default function PlaceOrderScreen() {
           <TextInput
             value={city}
             onChangeText={setCity}
-            placeholder="e.g., Lahore"
+            placeholder={destinationType === "inland" ? "e.g., Islamabad" : "e.g., London"}
             style={styles.input}
             placeholderTextColor={stylesVars.placeholder}
           />
+
+          <Text style={styles.fieldLabel}>Postal Code (optional)</Text>
+          <TextInput
+            value={postalCode}
+            onChangeText={setPostalCode}
+            placeholder={destinationType === "inland" ? "e.g., 44000" : "e.g., SW1A 1AA"}
+            style={styles.input}
+            placeholderTextColor={stylesVars.placeholder}
+          />
+
+          <Text style={styles.fieldLabel}>Country</Text>
+          <TextInput
+            value={destinationType === "inland" ? "Pakistan" : country}
+            onChangeText={setCountry}
+            placeholder="e.g., Pakistan"
+            editable={destinationType !== "inland"}
+            style={[
+              styles.input,
+              destinationType === "inland" ? styles.disabledInput : null,
+            ]}
+            placeholderTextColor={stylesVars.placeholder}
+          />
+
+          {destinationType === "inland" ? (
+            <Text style={styles.helper}>Country is fixed as Pakistan for inland orders.</Text>
+          ) : null}
+
+          {!!fullAddressPreview && (
+            <>
+              <Text style={styles.fieldLabel}>Address Preview</Text>
+              <Text style={styles.previewText}>{fullAddressPreview}</Text>
+            </>
+          )}
 
           <Text style={styles.fieldLabel}>Notes (optional)</Text>
           <TextInput
@@ -752,14 +1307,16 @@ export default function PlaceOrderScreen() {
             style={({ pressed }) => [
               styles.primaryBtn,
               !canContinue && styles.disabledBtn,
-              pressed && canContinue && styles.pressed
+              pressed && canContinue && styles.pressed,
             ]}
           >
             <Text style={styles.primaryText}>Continue to Payment</Text>
           </Pressable>
 
           {!canContinue ? (
-            <Text style={styles.helper}>Fill name, mobile, address, and city to continue.</Text>
+            <Text style={styles.helper}>
+              Fill name, mobile, address, city, and destination details to continue.
+            </Text>
           ) : null}
         </View>
 
@@ -784,44 +1341,37 @@ const stylesVars = {
   blue: "#2563EB",
   blueSoft: "#EEF4FF",
   text: "#0F172A",
-  subText: "#475569",
   mutedText: "#64748B",
   placeholder: "#94A3B8",
-  danger: "#B91C1C",
-  dangerSoft: "#FEE2E2",
-  dangerBorder: "#FCA5A5",
-  overlayDark: "rgba(0,0,0,0.58)",
-  overlaySoft: "rgba(255,255,255,0.14)",
   white: "#FFFFFF",
-  black: "#000000"
 };
 
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
   scroll: {
     flex: 1,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
   container: {
     padding: 16,
-    gap: 12
+    gap: 12,
   },
 
   title: {
     fontSize: 22,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   loadingRow: {
     flexDirection: "row",
     gap: 10,
-    alignItems: "center"
+    alignItems: "center",
   },
 
   card: {
@@ -830,19 +1380,19 @@ const styles = StyleSheet.create({
     backgroundColor: stylesVars.cardBg,
     borderRadius: 18,
     padding: 18,
-    gap: 10
+    gap: 10,
   },
 
   sectionTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   productRow: {
     flexDirection: "row",
     gap: 12,
-    alignItems: "center"
+    alignItems: "center",
   },
 
   imageBox: {
@@ -851,60 +1401,66 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: stylesVars.border,
   },
 
   image: {
     width: "100%",
-    height: "100%"
+    height: "100%",
   },
 
   imagePlaceholder: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F1F5F9"
+    backgroundColor: "#F1F5F9",
   },
 
   imagePlaceholderText: {
     fontSize: 12,
     color: stylesVars.mutedText,
-    fontWeight: "600"
+    fontWeight: "600",
   },
 
   productMetaWrap: {
     flex: 1,
-    gap: 6
+    gap: 6,
   },
 
   productName: {
     fontSize: 15,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   meta: {
-    fontSize: 13,
+    fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   metaStrong: {
-    fontSize: 13,
+    fontSize: 12,
     color: stylesVars.text,
-    fontWeight: "700"
+    fontWeight: "700",
+  },
+
+  totalStrong: {
+    fontSize: 14,
+    color: stylesVars.text,
+    fontWeight: "700",
   },
 
   divider: {
     height: 1,
-    backgroundColor: stylesVars.border
+    backgroundColor: stylesVars.border,
   },
 
   pillsWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8
+    gap: 8,
   },
 
   pill: {
@@ -913,13 +1469,45 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 999,
-    backgroundColor: stylesVars.blueSoft
+    backgroundColor: stylesVars.blueSoft,
   },
 
   pillText: {
     fontSize: 12,
     color: stylesVars.blue,
-    fontWeight: "700"
+    fontWeight: "700",
+  },
+
+  choiceRow: {
+    flexDirection: "row",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+
+  choicePill: {
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: stylesVars.blueSoft,
+  },
+
+  choicePillOn: {
+    borderColor: stylesVars.blue,
+    backgroundColor: stylesVars.blue,
+  },
+
+  choiceText: {
+    fontSize: 12,
+    color: stylesVars.blue,
+    fontWeight: "700",
+  },
+
+  choiceTextOn: {
+    fontSize: 12,
+    color: stylesVars.white,
+    fontWeight: "700",
   },
 
   vendorBannerWrap: {
@@ -929,19 +1517,34 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
     borderColor: stylesVars.border,
-    backgroundColor: "#F1F5F9"
+    backgroundColor: "#F1F5F9",
   },
 
   vendorBanner: {
     width: "100%",
-    height: "100%"
+    height: "100%",
+  },
+
+  tailoringImageWrap: {
+    width: "100%",
+    height: 220,
+    borderRadius: 14,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: "#F1F5F9",
+  },
+
+  tailoringImage: {
+    width: "100%",
+    height: "100%",
   },
 
   fieldLabel: {
     fontSize: 13,
     color: stylesVars.text,
     fontWeight: "700",
-    marginTop: 2
+    marginTop: 2,
   },
 
   input: {
@@ -950,15 +1553,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 14,
+    fontSize: 13,
     color: stylesVars.text,
     fontWeight: "500",
-    backgroundColor: stylesVars.white
+    backgroundColor: stylesVars.white,
   },
 
   multiline: {
     minHeight: 44,
-    textAlignVertical: "top"
+    textAlignVertical: "top",
   },
 
   primaryBtn: {
@@ -968,63 +1571,82 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 6
+    marginTop: 6,
   },
 
   primaryText: {
     color: stylesVars.white,
     fontWeight: "700",
-    fontSize: 14
+    fontSize: 14,
   },
 
   secondaryBtn: {
     borderWidth: 1,
     borderColor: "#D7E3FF",
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: stylesVars.blueSoft,
-    marginTop: 2
+    marginTop: 2,
   },
 
   secondaryText: {
     color: stylesVars.blue,
     fontWeight: "700",
-    fontSize: 14
+    fontSize: 12,
   },
 
   disabledBtn: {
-    opacity: 0.6
+    opacity: 0.55,
+  },
+
+  disabledInput: {
+    backgroundColor: "#F8FAFC",
+    color: stylesVars.mutedText,
   },
 
   helper: {
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
+  },
+
+  previewText: {
+    borderWidth: 1,
+    borderColor: stylesVars.borderSoft,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    lineHeight: 19,
+    color: stylesVars.text,
+    fontWeight: "500",
+    backgroundColor: "#F8FAFC",
   },
 
   backBtn: {
     alignSelf: "flex-start",
-    minHeight: 40,
+    minHeight: 36,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 12,
+    borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: "#D7E3FF"
+    borderColor: "#D7E3FF",
   },
 
   backText: {
     color: stylesVars.blue,
-    fontWeight: "700"
+    fontWeight: "700",
+    fontSize: 12,
   },
 
   dyePreviewWrap: {
-    marginTop: 8
+    marginTop: 8,
   },
 
   dyeSwatch: {
@@ -1033,14 +1655,14 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#CBD5E1"
+    borderColor: "#CBD5E1",
   },
 
   bottomSpacer: {
-    height: 16
+    height: 16,
   },
 
   pressed: {
-    opacity: 0.82
-  }
+    opacity: 0.82,
+  },
 });

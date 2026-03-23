@@ -12,7 +12,7 @@ import {
   StyleSheet,
   Text,
   View,
-  Dimensions
+  Dimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
@@ -24,6 +24,12 @@ import * as VideoThumbnails from "expo-video-thumbnails";
 const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
 const SETTINGS_ROUTE = "/vendor/profile/settings";
+
+type VendorTailoringOptions = {
+  blouse_neck?: string[] | null;
+  sleeves?: string[] | null;
+  trouser?: string[] | null;
+};
 
 type VendorRow = {
   id: number;
@@ -46,8 +52,10 @@ type VendorRow = {
 
   status: string | null;
 
-  // ✅ NEW: vendor-wide tailoring offering
   offers_tailoring?: boolean | null;
+  exports_enabled?: boolean | null;
+  export_regions?: string[] | null;
+  tailoring_options?: VendorTailoringOptions | null;
 
   // legacy
   location?: string | null;
@@ -60,6 +68,10 @@ function safeText(v: any) {
 
 function isHttpUrl(v: any) {
   return typeof v === "string" && /^https?:\/\//i.test(v);
+}
+
+function joinOrDash(items?: string[] | null) {
+  return Array.isArray(items) && items.length ? items.join(", ") : "—";
 }
 
 export default function VendorProfileScreen() {
@@ -79,38 +91,30 @@ export default function VendorProfileScreen() {
 
   const [loading, setLoading] = useState(false);
 
-  // resolved (public) urls
   const [profileUrl, setProfileUrl] = useState<string | null>(null);
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [shopImageUrls, setShopImageUrls] = useState<string[]>([]);
   const [certificateUrls, setCertificateUrls] = useState<string[]>([]);
   const [videoUrls, setVideoUrls] = useState<string[]>([]);
 
-  // video thumbnails (generated on-device)
   const [videoThumbs, setVideoThumbs] = useState<Record<string, string>>({});
   const [thumbLoading, setThumbLoading] = useState<Record<string, boolean>>({});
 
-  // fullscreen viewer
   const [viewerVisible, setViewerVisible] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [gallery, setGallery] = useState<string[]>([]);
   const flatListRef = useRef<FlatList<string>>(null);
 
-  // video selection
   const [selectedVideoUrl, setSelectedVideoUrl] = useState<string>("");
 
   const goBackToSettings = useCallback(() => {
-    // If an image modal is open, close it first.
     if (viewerVisible) {
       setViewerVisible(false);
       return;
     }
-
-    // Force the target screen regardless of the current stack/tab state.
     router.replace(SETTINGS_ROUTE);
   }, [router, viewerVisible]);
 
-  // ✅ Hardware back: ALWAYS go to settings from this screen (modal closes first)
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       if (viewerVisible) {
@@ -190,7 +194,10 @@ export default function VendorProfileScreen() {
             "shop_video_paths",
             "status",
             "location",
-            "offers_tailoring"
+            "offers_tailoring",
+            "exports_enabled",
+            "export_regions",
+            "tailoring_options",
           ].join(",")
         )
         .eq("id", vendorId)
@@ -201,13 +208,13 @@ export default function VendorProfileScreen() {
         return;
       }
 
-     const row = data as unknown as VendorRow;
+      const row = data as unknown as VendorRow;
       setVendor(row);
 
       dispatch(
         setSelectedVendor({
           ...(row as any),
-          image: null as any
+          image: null as any,
         } as any)
       );
     } catch (e: any) {
@@ -248,16 +255,15 @@ export default function VendorProfileScreen() {
     vendor?.banner_path,
     JSON.stringify(vendor?.shop_image_paths || []),
     JSON.stringify(vendor?.certificate_paths || []),
-    JSON.stringify(vendor?.shop_video_paths || [])
+    JSON.stringify(vendor?.shop_video_paths || []),
   ]);
 
-  // Prefetch images
   useEffect(() => {
     [
       ...shopImageUrls,
       ...certificateUrls,
       ...(profileUrl ? [profileUrl] : []),
-      ...(bannerUrl ? [bannerUrl] : [])
+      ...(bannerUrl ? [bannerUrl] : []),
     ].forEach((u) => u && Image.prefetch(u));
   }, [shopImageUrls, certificateUrls, profileUrl, bannerUrl]);
 
@@ -279,7 +285,7 @@ export default function VendorProfileScreen() {
       try {
         flatListRef.current?.scrollToIndex({
           index: currentIndex,
-          animated: false
+          animated: false,
         });
       } catch {
         // ignore
@@ -289,7 +295,6 @@ export default function VendorProfileScreen() {
     return () => clearTimeout(t);
   }, [viewerVisible, currentIndex, gallery.length]);
 
-  // video selection default
   useEffect(() => {
     if (!videoUrls.length) {
       setSelectedVideoUrl("");
@@ -310,7 +315,6 @@ export default function VendorProfileScreen() {
     }
   }, [player]);
 
-  // Generate thumbnails for video tiles
   useEffect(() => {
     let cancelled = false;
 
@@ -346,7 +350,6 @@ export default function VendorProfileScreen() {
     const list = (videoUrls ?? []).slice(0, 12);
     (async () => {
       for (let i = 0; i < list.length; i++) {
-        // eslint-disable-next-line no-await-in-loop
         await ensureThumb(list[i]);
       }
     })();
@@ -366,7 +369,7 @@ export default function VendorProfileScreen() {
 
   const OpenLink = ({
     label,
-    url
+    url,
   }: {
     label: string;
     url: string | null | undefined;
@@ -394,13 +397,18 @@ export default function VendorProfileScreen() {
     return videoUrls.map((v, idx) => ({ videoUrl: v, idx }));
   }, [videoUrls]);
 
-  const offersTailoring = Boolean((vendor as any)?.offers_tailoring);
+  const offersTailoring = Boolean(vendor?.offers_tailoring);
+  const exportsEnabled = Boolean(vendor?.exports_enabled);
+
+  const blouseNeckOptions = vendor?.tailoring_options?.blouse_neck ?? [];
+  const sleeveOptions = vendor?.tailoring_options?.sleeves ?? [];
+  const trouserOptions = vendor?.tailoring_options?.trouser ?? [];
+  const exportRegions = vendor?.export_regions ?? [];
 
   return (
     <View style={{ flex: 1, backgroundColor: stylesVars.bg }}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.topBar}>
-          {/* ✅ On-screen back also goes to Settings */}
           <Text style={styles.back} onPress={goBackToSettings}>
             ← Back
           </Text>
@@ -460,12 +468,30 @@ export default function VendorProfileScreen() {
             <Text style={styles.shopName}>{safeText(vendor?.shop_name)}</Text>
             <Text style={styles.ownerName}>{safeText(vendor?.name)}</Text>
 
-            {/* ✅ NEW: Tailoring / stitching facility badge */}
-            <View style={styles.tailorBadgeRow}>
-              <Text style={styles.tailorBadgeLabel}>Stitching / Tailoring</Text>
-              <View style={[styles.tailorPill, offersTailoring ? styles.tailorPillOn : null]}>
-                <Text style={[styles.tailorPillText, offersTailoring ? styles.tailorPillTextOn : null]}>
+            <View style={styles.badgeRow}>
+              <Text style={styles.badgeLabel}>Stitching / Tailoring</Text>
+              <View style={[styles.statusPill, offersTailoring ? styles.statusPillOn : null]}>
+                <Text
+                  style={[
+                    styles.statusPillText,
+                    offersTailoring ? styles.statusPillTextOn : null,
+                  ]}
+                >
                   {offersTailoring ? "Available" : "Not available"}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.badgeRow}>
+              <Text style={styles.badgeLabel}>Export</Text>
+              <View style={[styles.statusPill, exportsEnabled ? styles.statusPillOn : null]}>
+                <Text
+                  style={[
+                    styles.statusPillText,
+                    exportsEnabled ? styles.statusPillTextOn : null,
+                  ]}
+                >
+                  {exportsEnabled ? "Available" : "Not available"}
                 </Text>
               </View>
             </View>
@@ -483,6 +509,28 @@ export default function VendorProfileScreen() {
         <View style={styles.card}>
           <Field label="Address" value={vendor?.address || vendor?.location} />
           <OpenLink label="Location URL" url={vendor?.location_url} />
+        </View>
+
+        <Text style={styles.section}>Services</Text>
+        <View style={styles.card}>
+          <Field
+            label="Tailoring service"
+            value={offersTailoring ? "Yes, tailoring available" : "No tailoring service"}
+          />
+
+          {offersTailoring ? (
+            <>
+              <Field label="Blouse neck styles" value={joinOrDash(blouseNeckOptions)} />
+              <Field label="Sleeve styles" value={joinOrDash(sleeveOptions)} />
+              <Field label="Trouser styles" value={joinOrDash(trouserOptions)} />
+            </>
+          ) : null}
+
+          <Field label="Exports" value={exportsEnabled ? "Yes" : "No"} />
+
+          {exportsEnabled ? (
+            <Field label="Export regions" value={joinOrDash(exportRegions)} />
+          ) : null}
         </View>
 
         <Text style={styles.section}>Media</Text>
@@ -577,7 +625,7 @@ export default function VendorProfileScreen() {
                         style={({ pressed }) => [
                           styles.thumbWrap,
                           isOn ? styles.videoThumbOn : null,
-                          pressed ? styles.pressed : null
+                          pressed ? styles.pressed : null,
                         ]}
                       >
                         {thumbUri ? (
@@ -622,7 +670,7 @@ export default function VendorProfileScreen() {
             getItemLayout={(_, i) => ({
               length: width,
               offset: width * i,
-              index: i
+              index: i,
             })}
             initialScrollIndex={Math.max(
               0,
@@ -657,34 +705,28 @@ const stylesVars = {
   bg: "#F8FAFC",
   cardBg: "#FFFFFF",
   border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
   blue: "#2563EB",
   blueSoft: "#EEF4FF",
   text: "#0F172A",
   subText: "#475569",
   mutedText: "#64748B",
-  placeholder: "#94A3B8",
-  danger: "#B91C1C",
-  dangerSoft: "#FEE2E2",
-  dangerBorder: "#FCA5A5",
   overlayDark: "rgba(0,0,0,0.58)",
   overlaySoft: "rgba(255,255,255,0.14)",
   white: "#FFFFFF",
-  black: "#000000"
 };
 
 const styles = StyleSheet.create({
   content: {
     padding: 16,
     paddingBottom: 24,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
   topBar: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    gap: 12
+    gap: 12,
   },
 
   back: {
@@ -699,24 +741,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D7E3FF",
     textAlignVertical: "center",
-    overflow: "hidden"
+    overflow: "hidden",
   },
 
   refresh: {
     fontSize: 14,
     fontWeight: "700",
-    color: stylesVars.blue
+    color: stylesVars.blue,
   },
 
   disabledText: {
-    opacity: 0.6
+    opacity: 0.6,
   },
 
   title: {
     marginTop: 12,
     fontSize: 18,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   hint: {
@@ -724,26 +766,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   loadingRow: {
     marginTop: 12,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10
+    gap: 10,
   },
 
   loadingText: {
     fontSize: 13,
     color: stylesVars.mutedText,
-    fontWeight: "600"
+    fontWeight: "600",
   },
 
   bannerWrap: {
     marginTop: 12,
     borderRadius: 18,
-    overflow: "hidden"
+    overflow: "hidden",
   },
 
   banner: {
@@ -751,7 +793,7 @@ const styles = StyleSheet.create({
     height: 170,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: stylesVars.border,
   },
 
   headerCard: {
@@ -763,7 +805,7 @@ const styles = StyleSheet.create({
     padding: 18,
     flexDirection: "row",
     gap: 12,
-    alignItems: "center"
+    alignItems: "center",
   },
 
   avatarWrap: {
@@ -772,17 +814,17 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: stylesVars.border,
   },
 
   avatarPress: {
     width: "100%",
-    height: "100%"
+    height: "100%",
   },
 
   avatar: {
     width: "100%",
-    height: "100%"
+    height: "100%",
   },
 
   avatarFallback: {
@@ -790,23 +832,23 @@ const styles = StyleSheet.create({
     height: "100%",
     backgroundColor: stylesVars.blue,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   avatarFallbackText: {
     fontSize: 28,
     fontWeight: "700",
-    color: stylesVars.white
+    color: stylesVars.white,
   },
 
   headerInfo: {
-    flex: 1
+    flex: 1,
   },
 
   shopName: {
     fontSize: 16,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   ownerName: {
@@ -814,53 +856,53 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "500",
     lineHeight: 18,
-    color: stylesVars.mutedText
+    color: stylesVars.mutedText,
   },
 
-  tailorBadgeRow: {
+  badgeRow: {
     marginTop: 10,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 10
+    gap: 10,
   },
 
-  tailorBadgeLabel: {
+  badgeLabel: {
     fontSize: 13,
     fontWeight: "700",
     color: stylesVars.text,
-    letterSpacing: 0.2
+    letterSpacing: 0.2,
   },
 
-  tailorPill: {
+  statusPill: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg
+    backgroundColor: stylesVars.cardBg,
   },
 
-  tailorPillOn: {
+  statusPillOn: {
     borderColor: "#D7E3FF",
-    backgroundColor: stylesVars.blueSoft
+    backgroundColor: stylesVars.blueSoft,
   },
 
-  tailorPillText: {
+  statusPillText: {
     fontSize: 12,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
-  tailorPillTextOn: {
-    color: stylesVars.blue
+  statusPillTextOn: {
+    color: stylesVars.blue,
   },
 
   section: {
     marginTop: 18,
     fontSize: 15,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   card: {
@@ -869,18 +911,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
-    padding: 18
+    padding: 18,
   },
 
   row: {
-    marginTop: 10
+    marginTop: 10,
   },
 
   label: {
     fontSize: 13,
     fontWeight: "700",
     color: stylesVars.text,
-    letterSpacing: 0.2
+    letterSpacing: 0.2,
   },
 
   value: {
@@ -888,7 +930,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     fontWeight: "500",
-    color: stylesVars.subText
+    color: stylesVars.subText,
   },
 
   link: {
@@ -897,14 +939,14 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: "700",
     color: stylesVars.blue,
-    textDecorationLine: "underline"
+    textDecorationLine: "underline",
   },
 
   sectionTitle: {
     fontSize: 15,
     fontWeight: "700",
     color: stylesVars.text,
-    marginBottom: 2
+    marginBottom: 2,
   },
 
   meta: {
@@ -912,7 +954,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   empty: {
@@ -920,14 +962,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   hRow: {
     flexDirection: "row",
     gap: 10,
     paddingTop: 10,
-    paddingBottom: 4
+    paddingBottom: 4,
   },
 
   thumbWrap: {
@@ -937,12 +979,12 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
     borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg
+    backgroundColor: stylesVars.cardBg,
   },
 
   thumb: {
     width: "100%",
-    height: "100%"
+    height: "100%",
   },
 
   bannerTag: {
@@ -952,13 +994,13 @@ const styles = StyleSheet.create({
     backgroundColor: stylesVars.overlayDark,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 999
+    borderRadius: 999,
   },
 
   bannerTagText: {
     color: stylesVars.white,
     fontWeight: "700",
-    fontSize: 10
+    fontSize: 10,
   },
 
   videoBox: {
@@ -966,17 +1008,17 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: stylesVars.border,
   },
 
   video: {
     width: "100%",
-    height: 220
+    height: 220,
   },
 
   videoThumbOn: {
     borderColor: stylesVars.blue,
-    borderWidth: 2
+    borderWidth: 2,
   },
 
   videoPlaceholder: {
@@ -984,13 +1026,13 @@ const styles = StyleSheet.create({
     height: "100%",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: stylesVars.blueSoft
+    backgroundColor: stylesVars.blueSoft,
   },
 
   videoPlaceholderText: {
     color: stylesVars.blue,
     fontWeight: "700",
-    fontSize: 12
+    fontSize: 12,
   },
 
   playBadge: {
@@ -1002,29 +1044,29 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: stylesVars.overlayDark,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   playBadgeText: {
     color: stylesVars.white,
     fontWeight: "700",
-    fontSize: 12
+    fontSize: 12,
   },
 
   pressed: {
-    opacity: 0.82
+    opacity: 0.82,
   },
 
   viewerContainer: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.95)",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   viewerImage: {
     width,
     height: "100%",
-    resizeMode: "contain"
+    resizeMode: "contain",
   },
 
   closeButton: {
@@ -1036,13 +1078,13 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: stylesVars.overlaySoft,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   closeText: {
     color: stylesVars.white,
     fontSize: 20,
-    fontWeight: "900"
+    fontWeight: "900",
   },
 
   indexCaption: {
@@ -1052,12 +1094,12 @@ const styles = StyleSheet.create({
     backgroundColor: stylesVars.overlaySoft,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 999
+    borderRadius: 999,
   },
 
   indexText: {
     color: stylesVars.white,
     fontWeight: "900",
-    fontSize: 14
-  }
+    fontSize: 14,
+  },
 });

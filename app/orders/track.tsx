@@ -291,7 +291,7 @@ export default function TrackOrdersScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
-        <Text style={styles.title}>Track Orders</Text>
+        <Text style={styles.title}>Track Order</Text>
         <Text style={styles.subtitle}>Search your orders without login</Text>
 
         <View style={styles.cardForm}>
@@ -368,7 +368,7 @@ export default function TrackOrdersScreen() {
               pressed && canSearch && !loading && styles.pressed
             ]}
           >
-            <Text style={styles.primaryText}>{loading ? "Searching…" : "Search Orders"}</Text>
+            <Text style={styles.primaryText}>{loading ? "Searching…" : "Track Order"}</Text>
           </Pressable>
 
           {!canSearch ? (

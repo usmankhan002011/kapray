@@ -1,4 +1,5 @@
-// app/orders/[id].tsx
+// File: app/orders/[id].tsx
+
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -12,7 +13,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View
+  View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
@@ -41,6 +42,7 @@ type OrderRow = {
 
   spec_snapshot: any;
   media_snapshot: any;
+  price_snapshot: any;
 
   currency: string;
   subtotal_pkr: number | null;
@@ -82,8 +84,24 @@ function boolish(v: any): boolean {
   return !!v;
 }
 
+function numOrNull(v: any): number | null {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return n;
+}
+
 function isUnstitchedFromSpec(spec: any): boolean {
   const s = spec && typeof spec === "object" ? spec : {};
+
+  const cat = String(s?.product_category ?? "").trim().toLowerCase();
+  if (
+    cat === "unstitched_plain" ||
+    cat === "unstitched_dyeing" ||
+    cat === "unstitched_dyeing_tailoring"
+  ) {
+    return true;
+  }
 
   const modeRaw = safeText(
     s?.price_mode ??
@@ -92,7 +110,7 @@ function isUnstitchedFromSpec(spec: any): boolean {
       s?.pricing_mode ??
       s?.price?.mode ??
       s?.price_snapshot?.mode ??
-      s?.priceMode_snapshot
+      s?.priceMode_snapshot,
   );
 
   return (
@@ -119,36 +137,6 @@ function getDressCatFromSpec(spec: any): string {
   return humanizeCat(raw);
 }
 
-function getCatLineFromSpec(spec: any): string {
-  const s = spec && typeof spec === "object" ? spec : {};
-
-  const modeRaw = safeText(
-    s?.price_mode ??
-      s?.priceMode ??
-      s?.mode ??
-      s?.pricing_mode ??
-      s?.price?.mode ??
-      s?.price_snapshot?.mode ??
-      s?.priceMode_snapshot
-  );
-
-  const isUnstitched =
-    modeRaw.toLowerCase().includes("unstitched") ||
-    modeRaw.toLowerCase().includes("per_meter") ||
-    boolish(s?.is_unstitched);
-
-  const dyeEnabled = boolish(s?.dyeing_enabled ?? s?.dyeable ?? s?.is_dyeable);
-  const tailoringEnabled = boolish(
-    s?.tailoring_enabled ?? s?.tailoring_required ?? s?.requires_tailoring
-  );
-
-  if (!isUnstitched) return "Ready to wear (Stitched)";
-
-  const dyeTxt = `Dyeable: ${dyeEnabled ? "Yes" : "No"}`;
-  const tailTxt = `Tailoring: ${tailoringEnabled ? "Yes" : "No"}`;
-  return `Unstitched • ${dyeTxt} • ${tailTxt}`;
-}
-
 function looksLikeUrl(s: string) {
   return /^https?:\/\//i.test(s);
 }
@@ -166,7 +154,7 @@ function pickFirstImageCandidate(media: any): string {
     m?.thumb,
     m?.thumb_url,
     m?.thumbnail,
-    m?.thumbnail_url
+    m?.thumbnail_url,
   ];
 
   if (Array.isArray(m?.images) && m.images.length) candidates.unshift(m.images[0]);
@@ -190,6 +178,12 @@ function resolvePublicUrlFromPath(pathOrUrl: string) {
   } catch {
     return "";
   }
+}
+
+function cleanVariationLabel(value: string, kind: "neck" | "sleeve") {
+  if (!value || value === "—") return "";
+  const pattern = kind === "neck" ? /\bneck\b/gi : /\bsleeve\b/gi;
+  return value.replace(pattern, "").replace(/\s{2,}/g, " ").trim();
 }
 
 export default function OrderDetailScreen() {
@@ -221,8 +215,7 @@ export default function OrderDetailScreen() {
 
       const { data, error } = await supabase
         .from("orders")
-        .select(
-          `
+        .select(`
           id,
           vendor_id,
           created_at,
@@ -238,6 +231,7 @@ export default function OrderDetailScreen() {
           title_snapshot,
           spec_snapshot,
           media_snapshot,
+          price_snapshot,
           currency,
           subtotal_pkr,
           delivery_pkr,
@@ -248,8 +242,7 @@ export default function OrderDetailScreen() {
           exact_measurements,
           courier_name,
           tracking_number
-        `
-        )
+        `)
         .eq("id", Number(orderId))
         .single();
 
@@ -278,6 +271,7 @@ export default function OrderDetailScreen() {
 
         spec_snapshot: o.spec_snapshot ?? {},
         media_snapshot: o.media_snapshot ?? {},
+        price_snapshot: o.price_snapshot ?? {},
 
         currency: String(o.currency ?? "PKR"),
         subtotal_pkr: o.subtotal_pkr != null ? Number(o.subtotal_pkr) : null,
@@ -290,7 +284,7 @@ export default function OrderDetailScreen() {
         exact_measurements: o.exact_measurements ?? {},
 
         courier_name: o.courier_name ? String(o.courier_name) : null,
-        tracking_number: o.tracking_number ? String(o.tracking_number) : null
+        tracking_number: o.tracking_number ? String(o.tracking_number) : null,
       });
 
       setCourierName(o.courier_name ? String(o.courier_name) : "");
@@ -342,13 +336,15 @@ export default function OrderDetailScreen() {
   }, [fromParam, backTarget, router]);
 
   useEffect(() => {
-    const subscription = BackHandler.addEventListener(
-      "hardwareBackPress",
-      handleBack
-    );
-
+    const subscription = BackHandler.addEventListener("hardwareBackPress", handleBack);
     return () => subscription.remove();
   }, [handleBack]);
+
+  const spec = useMemo(() => {
+    return order?.spec_snapshot && typeof order.spec_snapshot === "object" ? order.spec_snapshot : {};
+  }, [order]);
+
+  const isUnstitched = useMemo(() => isUnstitchedFromSpec(spec), [spec]);
 
   const sizeLine = useMemo(() => {
     if (!order) return "—";
@@ -365,82 +361,185 @@ export default function OrderDetailScreen() {
     return order.selected_size ? `Standard: ${order.selected_size}` : "Standard: —";
   }, [order]);
 
+  const selectedUnstitchedSize = useMemo(() => {
+    if (!order) return "";
+    const raw = safeText(spec?.selected_unstitched_size ?? order.selected_size ?? "");
+    return raw === "—" ? "" : raw;
+  }, [order, spec]);
+
+  const selectedFabricLengthM = useMemo(() => {
+    if (!order) return null;
+    return numOrNull(spec?.selected_fabric_length_m ?? "");
+  }, [order, spec]);
+
+  const pricePerMeterPkr = useMemo(() => {
+    if (!order) return null;
+    return numOrNull(
+      spec?.price_per_meter_pkr ??
+        spec?.cost_pkr_per_meter ??
+        spec?.price_snapshot?.cost_pkr_per_meter ??
+        order.price_snapshot?.cost_pkr_per_meter ??
+        null,
+    );
+  }, [order, spec]);
+
+  const fabricCostPkr = useMemo(() => {
+    if (!order) return null;
+    return numOrNull(
+      spec?.fabric_cost_pkr ??
+        spec?.fabricCostPkr ??
+        spec?.fabric_cost ??
+        spec?.fabricCost ??
+        spec?.cloth_cost_pkr ??
+        spec?.clothCostPkr ??
+        spec?.cloth_cost ??
+        spec?.clothCost ??
+        null,
+    );
+  }, [order, spec]);
+
   const dyeHex = useMemo(() => {
     if (!order) return "";
-    const spec =
-      order.spec_snapshot && typeof order.spec_snapshot === "object" ? order.spec_snapshot : {};
     const hex = safeText(spec?.dye_hex ?? spec?.dyeing_hex ?? "");
     return hex !== "—" ? hex : "";
-  }, [order]);
+  }, [order, spec]);
 
-  const dyeCostLine = useMemo(() => {
-    if (!order) return "";
-    const spec =
-      order.spec_snapshot && typeof order.spec_snapshot === "object" ? order.spec_snapshot : {};
-    const enabled = boolish(spec?.dyeing_enabled ?? spec?.dyeable ?? spec?.is_dyeable);
+  const dyeSelected = useMemo(() => {
+    if (!order) return false;
+    return boolish(spec?.dyeing_selected) || !!dyeHex || safeText(spec?.dye_label ?? "") !== "—";
+  }, [order, spec, dyeHex]);
 
-    const costRaw =
+  const dyeCostPkr = useMemo(() => {
+    if (!order) return null;
+    return numOrNull(
       spec?.dyeing_cost_pkr ??
-      spec?.dye_cost_pkr ??
-      spec?.dyeingCostPkr ??
-      spec?.dyeCostPkr ??
-      spec?.dye_cost ??
-      spec?.dyeing_cost ??
-      null;
+        spec?.dye_cost_pkr ??
+        spec?.dyeingCostPkr ??
+        spec?.dyeCostPkr ??
+        spec?.dye_cost ??
+        spec?.dyeing_cost ??
+        null,
+    );
+  }, [order, spec]);
 
-    if (!enabled && (costRaw == null || costRaw === "")) return "";
+  const tailoringSelected = useMemo(() => {
+    if (!order) return false;
+    return boolish(spec?.tailoring_enabled) || boolish(spec?.tailoring_selected);
+  }, [order, spec]);
 
-    const cost =
-      costRaw != null && costRaw !== "" && !Number.isNaN(Number(costRaw)) ? Number(costRaw) : null;
+  const tailoringCostPkr = useMemo(() => {
+    if (!order) return null;
+    return numOrNull(
+      spec?.tailoring_cost_pkr ??
+        spec?.tailoringCostPkr ??
+        spec?.tailoring_cost ??
+        spec?.tailoringCost ??
+        null,
+    );
+  }, [order, spec]);
 
-    if (cost == null) return "Dyeing: Included";
-    return `Dyeing: Cost: ${order.currency} ${cost.toLocaleString()}`;
-  }, [order]);
+  const tailoringTurnaroundDays = useMemo(() => {
+    if (!order) return null;
+    return numOrNull(spec?.tailoring_turnaround_days ?? null);
+  }, [order, spec]);
 
-  const fabricCostLine = useMemo(() => {
+  const selectedTailoringStyleTitle = useMemo(() => {
     if (!order) return "";
-    const spec =
-      order.spec_snapshot && typeof order.spec_snapshot === "object" ? order.spec_snapshot : {};
+    const raw = safeText(spec?.selected_tailoring_style_title ?? "");
+    return raw === "—" ? "" : raw;
+  }, [order, spec]);
 
-    const costRaw =
-      spec?.fabric_cost_pkr ??
-      spec?.fabricCostPkr ??
-      spec?.fabric_cost ??
-      spec?.fabricCost ??
-      spec?.cloth_cost_pkr ??
-      spec?.clothCostPkr ??
-      spec?.cloth_cost ??
-      spec?.clothCost ??
-      null;
-
-    if (costRaw == null || costRaw === "") return "";
-
-    const cost = !Number.isNaN(Number(costRaw)) ? Number(costRaw) : null;
-    if (cost == null) return "";
-
-    return `Fabric: Cost: ${order.currency} ${cost.toLocaleString()}`;
-  }, [order]);
-
-  const productCostLine = useMemo(() => {
+  const selectedNeckVariation = useMemo(() => {
     if (!order) return "";
-    const base = order.subtotal_pkr != null ? order.subtotal_pkr : order.total_pkr;
-    if (base == null) return "";
-    return `Product Cost: ${money(order.currency, base)}`;
-  }, [order]);
+    const raw = safeText(spec?.selected_neck_variation ?? "");
+    return raw === "—" ? "" : raw;
+  }, [order, spec]);
 
-  const catLine = useMemo(() => {
-    if (!order) return "—";
-    const spec =
-      order.spec_snapshot && typeof order.spec_snapshot === "object" ? order.spec_snapshot : {};
-    return getCatLineFromSpec(spec);
-  }, [order]);
+  const selectedSleeveVariation = useMemo(() => {
+    if (!order) return "";
+    const raw = safeText(spec?.selected_sleeve_variation ?? "");
+    return raw === "—" ? "" : raw;
+  }, [order, spec]);
+
+  const selectedTrouserVariation = useMemo(() => {
+    if (!order) return "";
+    const raw = safeText(spec?.selected_trouser_variation ?? "");
+    return raw === "—" ? "" : raw;
+  }, [order, spec]);
+
+  const customTailoringNote = useMemo(() => {
+    if (!order) return "";
+    const raw = safeText(spec?.custom_tailoring_note ?? "");
+    return raw === "—" ? "" : raw;
+  }, [order, spec]);
+
+  const tailoringStyleExtraCostPkr = useMemo(() => {
+    if (!order) return null;
+    return numOrNull(
+      spec?.tailoring_style_extra_cost_pkr ??
+        spec?.style_extra_cost_pkr ??
+        spec?.selected_style_extra_cost_pkr ??
+        null,
+    );
+  }, [order, spec]);
+
+  const noChangeInSelectedStyle = useMemo(() => {
+    return (
+      selectedNeckVariation === "no change in selected style" ||
+      selectedSleeveVariation === "no change in selected style" ||
+      selectedTrouserVariation === "no change in selected style"
+    );
+  }, [selectedNeckVariation, selectedSleeveVariation, selectedTrouserVariation]);
+
+  const destinationType = useMemo(() => {
+    if (!order) return "";
+    const raw = safeText(spec?.destination_type ?? "");
+    return raw === "—" ? "" : raw;
+  }, [order, spec]);
+
+  const exportRegion = useMemo(() => {
+    if (!order) return "";
+    const raw = safeText(spec?.export_region ?? "");
+    return raw === "—" ? "" : raw;
+  }, [order, spec]);
+
+  const deliveryWeightKg = useMemo(() => {
+    if (!order) return null;
+    return numOrNull(spec?.delivery_weight_kg ?? spec?.weight_kg ?? null);
+  }, [order, spec]);
+
+  const baseProductCostPkr = useMemo(() => {
+    if (!order) return null;
+    if (isUnstitched && fabricCostPkr != null) return fabricCostPkr;
+    const direct =
+      numOrNull(spec?.base_product_cost_pkr ?? null) ??
+      numOrNull(spec?.stitched_total_pkr ?? null) ??
+      null;
+    if (direct != null) return direct;
+
+    const subtotal = numOrNull(order.subtotal_pkr);
+    const dye = dyeSelected ? numOrNull(dyeCostPkr) ?? 0 : 0;
+    const tailoring = tailoringSelected ? numOrNull(tailoringCostPkr) ?? 0 : 0;
+    const styleExtra = tailoringStyleExtraCostPkr ?? 0;
+    if (subtotal != null) return Math.max(0, subtotal - dye - tailoring - styleExtra);
+
+    return null;
+  }, [
+    order,
+    spec,
+    isUnstitched,
+    fabricCostPkr,
+    dyeSelected,
+    dyeCostPkr,
+    tailoringSelected,
+    tailoringCostPkr,
+    tailoringStyleExtraCostPkr,
+  ]);
 
   const dressCatLine = useMemo(() => {
     if (!order) return "—";
-    const spec =
-      order.spec_snapshot && typeof order.spec_snapshot === "object" ? order.spec_snapshot : {};
     return getDressCatFromSpec(spec);
-  }, [order]);
+  }, [order, spec]);
 
   const bannerUrl = useMemo(() => {
     if (!order) return "";
@@ -448,43 +547,20 @@ export default function OrderDetailScreen() {
     return resolvePublicUrlFromPath(picked);
   }, [order]);
 
-  const tailoringLine = useMemo(() => {
-    if (!order) return "";
-    const spec =
-      order.spec_snapshot && typeof order.spec_snapshot === "object" ? order.spec_snapshot : {};
-    const enabled = !!spec?.tailoring_enabled;
-    const cost = spec?.tailoring_cost_pkr;
-    const days = spec?.tailoring_turnaround_days;
-
-    if (!enabled && !cost && !days) return "";
-    const costTxt =
-      cost != null && cost !== "" ? `Cost: ${order.currency} ${Number(cost).toLocaleString()}` : "";
-    const daysTxt = days != null && days !== "" ? `Days: ${days}` : "";
-    const join = [costTxt, daysTxt].filter(Boolean).join(" • ");
-    return join.length ? `Tailoring: ${join}` : "Tailoring: Included";
-  }, [order]);
-
   const nextAction = useMemo(() => {
     if (!order) return null;
     const s = norm(order.status);
 
-    const spec =
-      order.spec_snapshot && typeof order.spec_snapshot === "object" ? order.spec_snapshot : {};
-    const isUnstitched = isUnstitchedFromSpec(spec);
-    const isReadyToWear = !isUnstitched;
-
     if (s === "placed") return { next: "seen", label: "Mark Seen" };
-
     if (s === "seen") {
-      if (isReadyToWear) return { next: "packed", label: "Mark Packed" };
+      if (!isUnstitched) return { next: "packed", label: "Mark Packed" };
       return { next: "in_progress", label: "Started Dyeing/Tailoring" };
     }
-
     if (s === "in_progress") return { next: "packed", label: "Mark Packed" };
     if (s === "packed") return { next: "dispatched", label: "Dispatch" };
     if (s === "dispatched") return { next: "delivered", label: "Mark Delivered" };
     return null;
-  }, [order]);
+  }, [order, isUnstitched]);
 
   const updateStatus = useCallback(
     async (nextStatus: string) => {
@@ -523,7 +599,7 @@ export default function OrderDetailScreen() {
         setSaving(false);
       }
     },
-    [order, courierName, trackingNumber, load]
+    [order, courierName, trackingNumber, load],
   );
 
   const openDispatchModal = useCallback(() => {
@@ -568,7 +644,8 @@ export default function OrderDetailScreen() {
               </View>
 
               <Text style={styles.meta}>
-                Created: <Text style={styles.strong}>{new Date(order.created_at).toLocaleString()}</Text>
+                Created:{" "}
+                <Text style={styles.strong}>{new Date(order.created_at).toLocaleString()}</Text>
               </Text>
             </View>
 
@@ -587,15 +664,106 @@ export default function OrderDetailScreen() {
               <Text style={styles.meta}>
                 Code: <Text style={styles.strong}>{order.product_code_snapshot}</Text>
               </Text>
-
               <Text style={styles.meta}>
                 Dress Category: <Text style={styles.strong}>{dressCatLine}</Text>
               </Text>
 
-              {!!productCostLine ? <Text style={styles.meta}>{productCostLine}</Text> : null}
-              {!!tailoringLine ? <Text style={styles.meta}>{tailoringLine}</Text> : null}
-              {!!dyeCostLine ? <Text style={styles.meta}>{dyeCostLine}</Text> : null}
-              {!!fabricCostLine ? <Text style={styles.meta}>{fabricCostLine}</Text> : null}
+              {isUnstitched && selectedUnstitchedSize ? (
+                <Text style={styles.meta}>
+                  Selected Size: <Text style={styles.strong}>{selectedUnstitchedSize}</Text>
+                </Text>
+              ) : null}
+
+              {isUnstitched && pricePerMeterPkr != null ? (
+                <Text style={styles.meta}>
+                  Cost per meter: <Text style={styles.strong}>{money(order.currency, pricePerMeterPkr)}</Text>
+                </Text>
+              ) : null}
+
+              {isUnstitched && selectedFabricLengthM != null ? (
+                <Text style={styles.meta}>
+                  Fabric Length: <Text style={styles.strong}>{selectedFabricLengthM} meter(s)</Text>
+                </Text>
+              ) : null}
+
+              {isUnstitched && fabricCostPkr != null ? (
+                <Text style={styles.meta}>
+                  Total Fabric Cost: <Text style={styles.strong}>{money(order.currency, fabricCostPkr)}</Text>
+                </Text>
+              ) : null}
+
+              {!isUnstitched && baseProductCostPkr != null ? (
+                <Text style={styles.meta}>
+                  Product Cost: <Text style={styles.strong}>{money(order.currency, baseProductCostPkr)}</Text>
+                </Text>
+              ) : null}
+
+              {tailoringSelected ? (
+                <Text style={styles.meta}>
+                  Tailoring:{" "}
+                  <Text style={styles.strong}>
+                    {tailoringCostPkr != null ? money(order.currency, tailoringCostPkr) : "Included"}
+                    {tailoringTurnaroundDays != null ? ` • ${tailoringTurnaroundDays} days` : ""}
+                  </Text>
+                </Text>
+              ) : null}
+
+              {!!selectedTailoringStyleTitle ? (
+                <Text style={styles.meta}>
+                  Style: <Text style={styles.strong}>{selectedTailoringStyleTitle}</Text>
+                </Text>
+              ) : null}
+
+              {tailoringSelected && noChangeInSelectedStyle ? (
+                <Text style={styles.meta}>
+                  <Text style={styles.strong}>No change in selected style</Text>
+                </Text>
+              ) : null}
+
+              {tailoringSelected && !noChangeInSelectedStyle && !!selectedNeckVariation ? (
+                <Text style={styles.meta}>
+                  Neck:{" "}
+                  <Text style={styles.strong}>
+                    {cleanVariationLabel(selectedNeckVariation, "neck")}
+                  </Text>
+                </Text>
+              ) : null}
+
+              {tailoringSelected && !noChangeInSelectedStyle && !!selectedSleeveVariation ? (
+                <Text style={styles.meta}>
+                  Sleeve:{" "}
+                  <Text style={styles.strong}>
+                    {cleanVariationLabel(selectedSleeveVariation, "sleeve")}
+                  </Text>
+                </Text>
+              ) : null}
+
+              {tailoringSelected && !noChangeInSelectedStyle && !!selectedTrouserVariation ? (
+                <Text style={styles.meta}>
+                  Trouser: <Text style={styles.strong}>{selectedTrouserVariation}</Text>
+                </Text>
+              ) : null}
+
+              {tailoringStyleExtraCostPkr != null ? (
+                <Text style={styles.meta}>
+                  Style Extra Cost: <Text style={styles.strong}>{money(order.currency, tailoringStyleExtraCostPkr)}</Text>
+                </Text>
+              ) : null}
+
+              {!!customTailoringNote ? (
+                <Text style={styles.meta}>
+                  Additional Note for Vendor: <Text style={styles.strong}>{customTailoringNote}</Text>
+                </Text>
+              ) : null}
+
+              {dyeSelected ? (
+                <Text style={styles.meta}>
+                  Dyeing:{" "}
+                  <Text style={styles.strong}>
+                    {dyeCostPkr != null ? money(order.currency, dyeCostPkr) : "Included"}
+                  </Text>
+                </Text>
+              ) : null}
 
               {!!dyeHex ? (
                 <View style={styles.dyeRow}>
@@ -628,8 +796,27 @@ export default function OrderDetailScreen() {
                 Address: <Text style={styles.strong}>{order.delivery_address}</Text>
               </Text>
               <Text style={styles.meta}>
-                City: <Text style={styles.strong}>{order.city}</Text>
+                City: <Text style={styles.strong}>{order.city || "—"}</Text>
               </Text>
+
+              {!!destinationType && (
+                <Text style={styles.meta}>
+                  Destination Type: <Text style={styles.strong}>{humanizeCat(destinationType)}</Text>
+                </Text>
+              )}
+
+              {!!exportRegion && (
+                <Text style={styles.meta}>
+                  Export Region: <Text style={styles.strong}>{exportRegion}</Text>
+                </Text>
+              )}
+
+              {deliveryWeightKg != null ? (
+                <Text style={styles.meta}>
+                  Delivery Weight: <Text style={styles.strong}>{deliveryWeightKg} kg</Text>
+                </Text>
+              ) : null}
+
               {!!order.notes && (
                 <Text style={styles.meta}>
                   Notes: <Text style={styles.strong}>{order.notes}</Text>
@@ -656,8 +843,46 @@ export default function OrderDetailScreen() {
 
             <View style={styles.card}>
               <Text style={styles.h2}>Totals</Text>
+
+              {baseProductCostPkr != null ? (
+                <Text style={styles.meta}>
+                  {isUnstitched ? "Total Fabric Cost" : "Product Cost"}:{" "}
+                  <Text style={styles.strong}>{money(order.currency, baseProductCostPkr)}</Text>
+                </Text>
+              ) : null}
+
+              {dyeSelected ? (
+                <Text style={styles.meta}>
+                  Dyeing:{" "}
+                  <Text style={styles.strong}>
+                    {dyeCostPkr != null ? money(order.currency, dyeCostPkr) : `${order.currency} —`}
+                  </Text>
+                </Text>
+              ) : null}
+
+              {tailoringSelected ? (
+                <Text style={styles.meta}>
+                  Tailoring:{" "}
+                  <Text style={styles.strong}>
+                    {tailoringCostPkr != null
+                      ? money(order.currency, tailoringCostPkr)
+                      : `${order.currency} —`}
+                  </Text>
+                </Text>
+              ) : null}
+
+              {tailoringStyleExtraCostPkr != null ? (
+                <Text style={styles.meta}>
+                  Style Extra Cost:{" "}
+                  <Text style={styles.strong}>
+                    {money(order.currency, tailoringStyleExtraCostPkr)}
+                  </Text>
+                </Text>
+              ) : null}
+
               <Text style={styles.meta}>
-                Subtotal: <Text style={styles.strong}>{money(order.currency, order.subtotal_pkr)}</Text>
+                Subtotal before delivery:{" "}
+                <Text style={styles.strong}>{money(order.currency, order.subtotal_pkr)}</Text>
               </Text>
               <Text style={styles.meta}>
                 Delivery: <Text style={styles.strong}>{money(order.currency, order.delivery_pkr)}</Text>
@@ -665,9 +890,11 @@ export default function OrderDetailScreen() {
               <Text style={styles.meta}>
                 Discount: <Text style={styles.strong}>{money(order.currency, order.discount_pkr)}</Text>
               </Text>
+
               <View style={styles.divider} />
+
               <Text style={styles.meta}>
-                Total: <Text style={styles.strong}>{money(order.currency, order.total_pkr)}</Text>
+                Grand Total: <Text style={styles.strong}>{money(order.currency, order.total_pkr)}</Text>
               </Text>
             </View>
 
@@ -766,16 +993,13 @@ const stylesVars = {
   danger: "#B91C1C",
   dangerSoft: "#FEE2E2",
   dangerBorder: "#FCA5A5",
-  overlayDark: "rgba(0,0,0,0.58)",
-  overlaySoft: "rgba(255,255,255,0.14)",
   white: "#FFFFFF",
-  black: "#000000"
 };
 
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
   top: {
@@ -784,52 +1008,53 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
   title: {
     fontSize: 18,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   backBtn: {
-    minHeight: 40,
+    minHeight: 36,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: 999,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
     borderColor: "#D7E3FF",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   backText: {
     fontWeight: "700",
-    color: stylesVars.blue
+    fontSize: 12,
+    color: stylesVars.blue,
   },
 
   pressed: {
-    opacity: 0.82
+    opacity: 0.82,
   },
 
   loading: {
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10
+    gap: 10,
   },
 
   loadingText: {
     fontSize: 13,
     color: stylesVars.mutedText,
-    fontWeight: "600"
+    fontWeight: "600",
   },
 
   container: {
     padding: 16,
-    gap: 12
+    gap: 12,
   },
 
   card: {
@@ -838,45 +1063,45 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 18,
     gap: 8,
-    backgroundColor: stylesVars.cardBg
+    backgroundColor: stylesVars.cardBg,
   },
 
   cardNewRed: {
     borderColor: stylesVars.dangerBorder,
-    backgroundColor: "#FFF7F7"
+    backgroundColor: "#FFF7F7",
   },
 
   rowBetween: {
     flexDirection: "row",
     justifyContent: "space-between",
     gap: 10,
-    alignItems: "center"
+    alignItems: "center",
   },
 
   h1: {
     fontSize: 18,
     fontWeight: "700",
     flex: 1,
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   h2: {
     fontSize: 15,
     fontWeight: "700",
     marginBottom: 2,
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   meta: {
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   strong: {
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   badge: {
@@ -885,17 +1110,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    overflow: "hidden"
+    overflow: "hidden",
   },
 
   badgeRed: {
     color: stylesVars.danger,
-    backgroundColor: stylesVars.dangerSoft
+    backgroundColor: stylesVars.dangerSoft,
   },
 
   badgeBlue: {
     color: "#1E3A8A",
-    backgroundColor: "#DBEAFE"
+    backgroundColor: "#DBEAFE",
   },
 
   bannerWrap: {
@@ -906,12 +1131,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#F1F5F9",
     borderWidth: 1,
     borderColor: stylesVars.border,
-    marginBottom: 4
+    marginBottom: 4,
   },
 
   bannerImg: {
     width: "100%",
-    height: "100%"
+    height: "100%",
   },
 
   dyeRow: {
@@ -919,7 +1144,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
-    marginTop: 6
+    marginTop: 6,
   },
 
   dyeSwatch: {
@@ -928,13 +1153,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#CBD5E1",
-    backgroundColor: stylesVars.white
+    backgroundColor: stylesVars.white,
   },
 
   divider: {
     height: 1,
     backgroundColor: stylesVars.border,
-    marginVertical: 8
+    marginVertical: 8,
   },
 
   primaryBtn: {
@@ -943,13 +1168,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 14,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   primaryText: {
     color: stylesVars.white,
     fontWeight: "700",
-    fontSize: 14
+    fontSize: 14,
   },
 
   secondaryBtn: {
@@ -961,29 +1186,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: stylesVars.blueSoft,
-    flex: 1
+    flex: 1,
   },
 
   secondaryText: {
     color: stylesVars.blue,
     fontWeight: "700",
-    fontSize: 14
+    fontSize: 14,
   },
 
   empty: {
-    padding: 16
+    padding: 16,
   },
 
   emptyTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.35)",
-    justifyContent: "flex-end"
+    justifyContent: "flex-end",
   },
 
   modalCard: {
@@ -993,27 +1218,27 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 18,
     borderWidth: 1,
     borderColor: stylesVars.border,
-    gap: 10
+    gap: 10,
   },
 
   modalTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   modalSub: {
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   fieldLabel: {
     fontSize: 13,
     color: stylesVars.text,
     fontWeight: "700",
-    marginTop: 2
+    marginTop: 2,
   },
 
   input: {
@@ -1025,16 +1250,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: stylesVars.text,
     fontWeight: "500",
-    backgroundColor: stylesVars.white
+    backgroundColor: stylesVars.white,
   },
 
   modalBtns: {
     flexDirection: "row",
     gap: 10,
-    marginTop: 8
+    marginTop: 8,
   },
 
   bottomSpacer: {
-    height: 20
-  }
+    height: 20,
+  },
 });

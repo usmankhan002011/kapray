@@ -7,7 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View
+  View,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as FileSystem from "expo-file-system";
@@ -26,6 +26,32 @@ type ProductCategory =
   | "unstitched_dyeing_tailoring"
   | "stitched_ready";
 
+type TailoringStylePresetImage = {
+  uri?: string | null;
+  url?: string | null;
+  path?: string | null;
+  width?: number;
+  height?: number;
+  fileName?: string | null;
+  mimeType?: string | null;
+  fileSize?: number | null;
+};
+
+type TailoringStylePreset = {
+  id?: string;
+  title?: string;
+  note?: string;
+  extra_cost_pkr?: number;
+  images?: TailoringStylePresetImage[];
+  default_neck?: string;
+  default_sleeve?: string;
+  default_trouser?: string;
+  allowed_neck_variations?: string[];
+  allowed_sleeve_variations?: string[];
+  allowed_trouser_variations?: string[];
+  allow_custom_note?: boolean;
+};
+
 function safeInt(v: any) {
   const n = Number(v);
   if (!Number.isFinite(n)) return null;
@@ -42,6 +68,27 @@ function safeNumOrZero(v: any) {
   return n;
 }
 
+function normalizeStringArray(v: unknown): string[] {
+  const arr = Array.isArray(v) ? v : [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const item of arr) {
+    const s = safeStr(item);
+    if (!s) continue;
+    const key = s.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+
+  return out;
+}
+
+function normalizePresetArray(v: unknown): TailoringStylePreset[] {
+  return Array.isArray(v) ? (v as TailoringStylePreset[]) : [];
+}
+
 async function uploadAssetToStorage(args: {
   bucket: string;
   path: string;
@@ -49,7 +96,7 @@ async function uploadAssetToStorage(args: {
   contentType: string;
 }) {
   const base64 = await FileSystem.readAsStringAsync(args.uri, {
-    encoding: FileSystem.EncodingType.Base64
+    encoding: FileSystem.EncodingType.Base64,
   });
   const buffer = decode(base64);
 
@@ -85,6 +132,129 @@ function inferCategoryFromDraft(draft: any): ProductCategory {
   return "unstitched_plain";
 }
 
+function hasValidSizeLengthMap(v: any) {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+
+  const keys = ["XS", "S", "M", "L", "XL", "XXL"];
+  for (const key of keys) {
+    const n = Number(v[key]);
+    if (Number.isFinite(n) && n > 0) return true;
+  }
+  return false;
+}
+
+function hasValidPackageCm(v: any) {
+  const length = Number(v?.length);
+  const width = Number(v?.width);
+  const height = Number(v?.height);
+
+  return (
+    Number.isFinite(length) &&
+    length > 0 &&
+    Number.isFinite(width) &&
+    width > 0 &&
+    Number.isFinite(height) &&
+    height > 0
+  );
+}
+
+function hasValidTailoringPreset(
+  preset: TailoringStylePreset,
+  includesTrouser: boolean,
+) {
+  const title = safeStr(preset?.title);
+  const images = Array.isArray(preset?.images) ? preset.images : [];
+  const defaultNeck = safeStr(preset?.default_neck);
+  const defaultSleeve = safeStr(preset?.default_sleeve);
+  const defaultTrouser = safeStr(preset?.default_trouser);
+
+  if (!title) return false;
+  if (images.length < 1) return false;
+  if (!defaultNeck) return false;
+  if (!defaultSleeve) return false;
+  if (includesTrouser && !defaultTrouser) return false;
+
+  return true;
+}
+
+async function uploadTailoringPresetImages(args: {
+  vendorId: number;
+  productCode: string;
+  presets: TailoringStylePreset[];
+}) {
+  const nextPresets: TailoringStylePreset[] = [];
+
+  for (let presetIndex = 0; presetIndex < args.presets.length; presetIndex++) {
+    const preset = args.presets[presetIndex];
+    const images = Array.isArray(preset?.images) ? preset.images : [];
+    const uploadedImages: TailoringStylePresetImage[] = [];
+
+    for (let imageIndex = 0; imageIndex < images.length; imageIndex++) {
+      const img = images[imageIndex] ?? {};
+      const rawUri = safeStr((img as any)?.uri ?? "");
+      const rawUrl = safeStr((img as any)?.url ?? "");
+      const rawPath = safeStr((img as any)?.path ?? "");
+
+      if (rawPath && rawUrl) {
+        uploadedImages.push({
+          ...img,
+          uri: rawUrl,
+          url: rawUrl,
+          path: rawPath,
+        });
+        continue;
+      }
+
+      if (rawPath && !rawUrl) {
+        const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(rawPath);
+        uploadedImages.push({
+          ...img,
+          uri: data?.publicUrl ?? rawUri ?? "",
+          url: data?.publicUrl ?? "",
+          path: rawPath,
+        });
+        continue;
+      }
+
+      if (!rawUri) continue;
+
+      const mimeType = safeStr((img as any)?.mimeType) || "image/jpeg";
+      const ext =
+        safeStr((img as any)?.fileName).split(".").pop()?.toLowerCase() ||
+        mimeType.split("/")[1] ||
+        "jpg";
+
+      const presetId = safeStr(preset?.id) || `style_${presetIndex + 1}`;
+      const path = `vendors/${args.vendorId}/products/${args.productCode}/tailoring/${presetId}/${Date.now()}-${imageIndex}.${ext}`;
+
+      const uploadedPath = await uploadAssetToStorage({
+        bucket: BUCKET_VENDOR,
+        path,
+        uri: rawUri,
+        contentType: mimeType.startsWith("image/") ? mimeType : "image/jpeg",
+      });
+
+      if (!uploadedPath) continue;
+
+      const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(uploadedPath);
+
+      uploadedImages.push({
+        ...img,
+        uri: data?.publicUrl ?? rawUri,
+        url: data?.publicUrl ?? "",
+        path: uploadedPath,
+      });
+    }
+
+    nextPresets.push({
+      ...preset,
+      images: uploadedImages,
+    });
+  }
+
+  return nextPresets;
+}
+
 export default function AddProductSubmitScreen() {
   const router = useRouter();
 
@@ -98,7 +268,6 @@ export default function AddProductSubmitScreen() {
 
   const [saving, setSaving] = useState(false);
 
-  // ✅ Load vendor row to know offers_tailoring (same as original)
   const [vendorOffersTailoring, setVendorOffersTailoring] = useState<boolean>(false);
   const [vendorLoading, setVendorLoading] = useState<boolean>(false);
 
@@ -151,10 +320,27 @@ export default function AddProductSubmitScreen() {
   const needsDyeing =
     productCategory === "unstitched_dyeing" || productCategory === "unstitched_dyeing_tailoring";
   const needsTailoring = productCategory === "unstitched_dyeing_tailoring";
+  const isUnstitched = productCategory !== "stitched_ready";
 
   const dyeingCostPkr = safeNumOrZero((draft.price as any)?.dyeing_cost_pkr ?? 0);
   const tailoringCostPkr = safeNumOrZero((draft.price as any)?.tailoring_cost_pkr ?? 0);
   const tailoringTurnaroundDays = safeNumOrZero((draft.spec as any)?.tailoring_turnaround_days ?? 0);
+
+  const sizeLengthMap = (draft.spec as any)?.size_length_m ?? {};
+  const weightKg = safeNumOrZero((draft.spec as any)?.weight_kg ?? 0);
+  const packageCm = (draft.spec as any)?.package_cm ?? {};
+
+  const includesTrouser = Boolean(
+    (draft.spec as any)?.includes_trouser ??
+      (draft.spec as any)?.has_trouser ??
+      (draft.spec as any)?.product_has_trouser ??
+      false,
+  );
+
+  const tailoringStylePresets = useMemo(
+    () => normalizePresetArray((draft.spec as any)?.tailoring_style_presets),
+    [draft.spec],
+  );
 
   const canSave = useMemo(() => {
     if (!vendorId) return false;
@@ -166,6 +352,8 @@ export default function AddProductSubmitScreen() {
     } else {
       const n = Number((draft.price as any)?.cost_pkr_per_meter ?? 0);
       if (!Number.isFinite(n) || n <= 0) return false;
+
+      if (!hasValidSizeLengthMap(sizeLengthMap)) return false;
 
       if (needsDyeing) {
         const d = Number(dyeingCostPkr ?? 0);
@@ -180,8 +368,16 @@ export default function AddProductSubmitScreen() {
 
         const days = Number(tailoringTurnaroundDays ?? 0);
         if (!Number.isFinite(days) || days < 0) return false;
+
+        if (!tailoringStylePresets.length) return false;
+        if (!tailoringStylePresets.every((preset) => hasValidTailoringPreset(preset, includesTrouser))) {
+          return false;
+        }
       }
     }
+
+    if (!Number.isFinite(weightKg) || weightKg <= 0) return false;
+    if (!hasValidPackageCm(packageCm)) return false;
 
     if ((draft.media.images ?? []).length < 1) return false;
     if ((draft.spec.dressTypeIds ?? []).length < 1) return false;
@@ -202,20 +398,123 @@ export default function AddProductSubmitScreen() {
     needsTailoring,
     vendorOffersTailoring,
     tailoringCostPkr,
-    tailoringTurnaroundDays
+    tailoringTurnaroundDays,
+    sizeLengthMap,
+    weightKg,
+    packageCm,
+    tailoringStylePresets,
+    includesTrouser,
   ]);
 
   async function saveProduct() {
     if (saving) return;
 
-    if (!canSave) {
-      Alert.alert("Incomplete", "Please fill required fields and selections.");
-      return;
-    }
-
     if (!vendorId) {
       Alert.alert("Vendor missing", "Please ensure vendor id is loaded.");
       return;
+    }
+
+    if (!safeStr(draft.title)) {
+      Alert.alert("Missing title", "Please enter product title.");
+      return;
+    }
+
+    if (productCategory === "stitched_ready") {
+      const total = Number((draft.price as any)?.cost_pkr_total ?? 0);
+      if (!Number.isFinite(total) || total <= 0) {
+        Alert.alert("Missing price", "Please enter valid total cost for stitched product.");
+        return;
+      }
+    } else {
+      const perMeter = Number((draft.price as any)?.cost_pkr_per_meter ?? 0);
+      if (!Number.isFinite(perMeter) || perMeter <= 0) {
+        Alert.alert("Missing price", "Please enter valid cost per meter.");
+        return;
+      }
+
+      if (!hasValidSizeLengthMap(sizeLengthMap)) {
+        Alert.alert(
+          "Missing size lengths",
+          "For unstitched products, please enter fabric length in meters for at least one size.",
+        );
+        return;
+      }
+
+      if (needsDyeing) {
+        const d = Number(dyeingCostPkr ?? 0);
+        if (!Number.isFinite(d) || d <= 0) {
+          Alert.alert("Missing dyeing cost", "Please enter valid dyeing cost.");
+          return;
+        }
+      }
+
+      if (needsTailoring) {
+        if (!vendorOffersTailoring) {
+          Alert.alert(
+            "Tailoring not enabled",
+            "Your vendor profile does not offer tailoring.",
+          );
+          return;
+        }
+
+        const t = Number(tailoringCostPkr ?? 0);
+        if (!Number.isFinite(t) || t <= 0) {
+          Alert.alert("Missing tailoring cost", "Please enter valid tailoring cost.");
+          return;
+        }
+
+        const days = Number(tailoringTurnaroundDays ?? 0);
+        if (!Number.isFinite(days) || days < 0) {
+          Alert.alert("Invalid turnaround", "Tailoring turnaround days must be 0 or more.");
+          return;
+        }
+
+        if (!tailoringStylePresets.length) {
+          Alert.alert("Missing style cards", "Please add at least one tailoring style card.");
+          return;
+        }
+
+        for (const preset of tailoringStylePresets) {
+          if (!hasValidTailoringPreset(preset, includesTrouser)) {
+            Alert.alert(
+              "Incomplete tailoring style",
+              "Each tailoring style card must have title, at least one image, default neck, default sleeve, and default trouser where trouser is included.",
+            );
+            return;
+          }
+        }
+      }
+    }
+
+    if (!Number.isFinite(weightKg) || weightKg <= 0) {
+      Alert.alert("Missing weight", "Please enter valid product weight in kg.");
+      return;
+    }
+
+    if (!hasValidPackageCm(packageCm)) {
+      Alert.alert(
+        "Missing package dimensions",
+        "Please enter valid package length, width, and height in cm.",
+      );
+      return;
+    }
+
+    if ((draft.media.images ?? []).length < 1) {
+      Alert.alert("Missing images", "Please upload at least one product image.");
+      return;
+    }
+
+    if ((draft.spec.dressTypeIds ?? []).length < 1) {
+      Alert.alert("Missing dress type", "Please select at least one dress type.");
+      return;
+    }
+
+    if (!madeOnOrder) {
+      const q = Number(draft.inventory_qty ?? 0);
+      if (!Number.isFinite(q) || q < 0) {
+        Alert.alert("Invalid inventory", "Inventory must be 0 or more.");
+        return;
+      }
     }
 
     try {
@@ -262,7 +561,22 @@ export default function AddProductSubmitScreen() {
 
           dyeing_enabled: unstitchedDyeingEnabled,
           tailoring_enabled: unstitchedTailoringEnabled,
-          tailoring_turnaround_days: unstitchedTailoringTurnaround
+          tailoring_turnaround_days: unstitchedTailoringTurnaround,
+
+          includes_trouser: unstitchedTailoringEnabled ? includesTrouser : false,
+          tailoring_style_presets: unstitchedTailoringEnabled ? tailoringStylePresets : [],
+
+          weight_kg: Number(weightKg),
+          package_cm: {
+            length: Number(packageCm?.length ?? 0),
+            width: Number(packageCm?.width ?? 0),
+            height: Number(packageCm?.height ?? 0),
+          },
+          ...(isUnstitched
+            ? {
+                size_length_m: sizeLengthMap,
+              }
+            : {}),
         },
 
         price: {
@@ -270,14 +584,14 @@ export default function AddProductSubmitScreen() {
           mode: finalPriceMode,
 
           dyeing_cost_pkr: unstitchedDyeingCost,
-          tailoring_cost_pkr: unstitchedTailoringCost
+          tailoring_cost_pkr: unstitchedTailoringCost,
         },
 
         media: {
           images: [],
           videos: [],
-          thumbs: []
-        }
+          thumbs: [],
+        },
       };
 
       const { data: created, error: insertErr } = await supabase
@@ -299,7 +613,6 @@ export default function AddProductSubmitScreen() {
         return;
       }
 
-      // Upload media
       const imageAssets = draft.media.images ?? [];
       const videoAssets = draft.media.videos ?? [];
 
@@ -321,7 +634,7 @@ export default function AddProductSubmitScreen() {
           bucket: BUCKET_VENDOR,
           path,
           uri,
-          contentType: mimeType.startsWith("image/") ? mimeType : "image/jpeg"
+          contentType: mimeType.startsWith("image/") ? mimeType : "image/jpeg",
         });
 
         if (p) uploadedImagePaths.push(p);
@@ -342,12 +655,11 @@ export default function AddProductSubmitScreen() {
           bucket: BUCKET_VENDOR,
           path: vPath,
           uri,
-          contentType: mimeType.startsWith("video/") ? mimeType : "video/mp4"
+          contentType: mimeType.startsWith("video/") ? mimeType : "video/mp4",
         });
 
         if (vp) uploadedVideoPaths.push(vp);
 
-        // Optional thumb
         try {
           const t = await VideoThumbnails.getThumbnailAsync(uri, { time: 1500 });
           if (t?.uri) {
@@ -356,7 +668,7 @@ export default function AddProductSubmitScreen() {
               bucket: BUCKET_VENDOR,
               path: tPath,
               uri: t.uri,
-              contentType: "image/jpeg"
+              contentType: "image/jpeg",
             });
             if (tp) uploadedThumbPaths.push(tp);
           }
@@ -365,17 +677,29 @@ export default function AddProductSubmitScreen() {
         }
       }
 
+      const uploadedTailoringPresets = unstitchedTailoringEnabled
+        ? await uploadTailoringPresetImages({
+            vendorId,
+            productCode: finalCode,
+            presets: tailoringStylePresets,
+          })
+        : [];
+
       const media = {
         images: uploadedImagePaths,
         videos: uploadedVideoPaths,
-        thumbs: uploadedThumbPaths
+        thumbs: uploadedThumbPaths,
       };
 
       const { error: updErr } = await supabase
         .from(PRODUCTS_TABLE)
         .update({
           media,
-          updated_at: new Date().toISOString()
+          spec: {
+            ...insertPayload.spec,
+            tailoring_style_presets: unstitchedTailoringEnabled ? uploadedTailoringPresets : [],
+          },
+          updated_at: new Date().toISOString(),
         })
         .eq("id", productId);
 
@@ -388,7 +712,7 @@ export default function AddProductSubmitScreen() {
       resetDraft();
 
       router.replace(
-        `/vendor/profile/products?new_product_id=${encodeURIComponent(String(productId))}` as any
+        `/vendor/profile/products?new_product_id=${encodeURIComponent(String(productId))}` as any,
       );
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not save product.");
@@ -441,7 +765,7 @@ export default function AddProductSubmitScreen() {
         style={({ pressed }) => [
           styles.saveBtn,
           !canSave || saving ? styles.saveBtnDisabled : null,
-          pressed ? styles.pressed : null
+          pressed ? styles.pressed : null,
         ]}
         onPress={saveProduct}
         disabled={!canSave || saving}
@@ -470,27 +794,27 @@ const stylesVars = {
   subText: "#475569",
   mutedText: "#64748B",
   placeholder: "#94A3B8",
-  white: "#FFFFFF"
+  white: "#FFFFFF",
 };
 
 const styles = StyleSheet.create({
   content: {
     padding: 16,
     paddingBottom: 24,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12
+    gap: 12,
   },
 
   title: {
     fontSize: 18,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   card: {
@@ -499,14 +823,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
-    padding: 18
+    padding: 18,
   },
 
   sectionTitle: {
     fontSize: 15,
     fontWeight: "700",
     color: stylesVars.text,
-    marginBottom: 2
+    marginBottom: 2,
   },
 
   meta: {
@@ -514,14 +838,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   inlineRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginTop: 10
+    marginTop: 10,
   },
 
   linkBtn: {
@@ -533,13 +857,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D7E3FF",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   linkText: {
     color: stylesVars.blue,
     fontSize: 14,
-    fontWeight: "700"
+    fontWeight: "700",
   },
 
   saveBtn: {
@@ -549,20 +873,20 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: stylesVars.blue
+    backgroundColor: stylesVars.blue,
   },
 
   saveBtnDisabled: {
-    opacity: 0.6
+    opacity: 0.6,
   },
 
   saveText: {
     color: stylesVars.white,
     fontWeight: "700",
-    fontSize: 14
+    fontSize: 14,
   },
 
   pressed: {
-    opacity: 0.82
-  }
+    opacity: 0.82,
+  },
 });

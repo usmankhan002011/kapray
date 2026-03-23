@@ -1,4 +1,5 @@
-// app/orders/index.tsx
+// File: app/orders/index.tsx
+
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -8,7 +9,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View
+  View,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
@@ -29,6 +30,8 @@ type OrderRow = {
 
   spec_snapshot: any;
 
+  subtotal_pkr: number | null;
+  delivery_pkr: number | null;
   total_pkr: number | null;
   currency: string;
 };
@@ -50,6 +53,30 @@ function humanizeCat(v: any) {
     .replace(/\s+/g, " ")
     .trim()
     .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function boolish(v: any): boolean {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v !== 0;
+  if (typeof v === "string") {
+    const s = v.trim().toLowerCase();
+    return s === "true" || s === "1" || s === "yes" || s === "y";
+  }
+  return !!v;
+}
+
+function money(currency: string, v: any) {
+  if (v == null || v === "") return `${currency} —`;
+  const n = typeof v === "number" ? v : Number(v);
+  if (Number.isNaN(n)) return `${currency} —`;
+  return `${currency} ${n.toLocaleString()}`;
+}
+
+function numOrNull(v: any): number | null {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return n;
 }
 
 export default function OrdersIndexScreen() {
@@ -77,8 +104,7 @@ export default function OrdersIndexScreen() {
 
       let q = supabase
         .from("orders")
-        .select(
-          `
+        .select(`
           id,
           created_at,
           order_no,
@@ -89,10 +115,11 @@ export default function OrdersIndexScreen() {
           product_code_snapshot,
           title_snapshot,
           spec_snapshot,
+          subtotal_pkr,
+          delivery_pkr,
           total_pkr,
           currency
-        `
-        )
+        `)
         .eq("vendor_id", vId)
         .order("created_at", { ascending: false })
         .limit(500);
@@ -117,8 +144,10 @@ export default function OrdersIndexScreen() {
         product_code_snapshot: String(o.product_code_snapshot ?? ""),
         title_snapshot: String(o.title_snapshot ?? ""),
         spec_snapshot: o.spec_snapshot ?? {},
+        subtotal_pkr: o.subtotal_pkr != null ? Number(o.subtotal_pkr) : null,
+        delivery_pkr: o.delivery_pkr != null ? Number(o.delivery_pkr) : null,
         total_pkr: o.total_pkr != null ? Number(o.total_pkr) : null,
-        currency: String(o.currency ?? "PKR")
+        currency: String(o.currency ?? "PKR"),
       }));
 
       setRows(mapped);
@@ -142,15 +171,16 @@ export default function OrdersIndexScreen() {
       const spec = r.spec_snapshot && typeof r.spec_snapshot === "object" ? r.spec_snapshot : {};
 
       const dyeHex = safeText(spec?.dye_hex ?? spec?.dyeing_hex ?? "");
-      const dyeShadeLegacy = safeText(spec?.dyeing_selected_shade ?? "");
-
-      const tailoringEnabled = safeText(spec?.tailoring_enabled ?? "");
+      const tailoringEnabled = safeText(spec?.tailoring_enabled ?? spec?.tailoring_selected ?? "");
       const tailoringDays = safeText(spec?.tailoring_turnaround_days ?? "");
       const tailoringCost = safeText(spec?.tailoring_cost_pkr ?? "");
-
       const productCategory = safeText(
-        spec?.product_category ?? spec?.dress_category ?? spec?.dress_cat ?? ""
+        spec?.product_category ?? spec?.dress_category ?? spec?.dress_cat ?? "",
       );
+      const selectedUnstitchedSize = safeText(spec?.selected_unstitched_size ?? "");
+      const fabricLength = safeText(spec?.selected_fabric_length_m ?? "");
+      const exportRegion = safeText(spec?.export_region ?? "");
+      const destinationType = safeText(spec?.destination_type ?? "");
 
       const hay = [
         r.order_no ?? "",
@@ -162,10 +192,13 @@ export default function OrdersIndexScreen() {
         r.title_snapshot,
         productCategory,
         dyeHex,
-        dyeShadeLegacy,
         tailoringEnabled,
         tailoringDays,
-        tailoringCost
+        tailoringCost,
+        selectedUnstitchedSize,
+        fabricLength,
+        exportRegion,
+        destinationType,
       ]
         .join(" ")
         .toLowerCase();
@@ -176,20 +209,22 @@ export default function OrdersIndexScreen() {
 
   const renderItem = ({ item }: { item: OrderRow }) => {
     const orderNo = item.order_no || `Order #${item.id}`;
-    const amount =
-      item.total_pkr != null
-        ? `${item.currency} ${Number(item.total_pkr).toLocaleString()}`
-        : `${item.currency} —`;
-
     const status = norm(item.status);
 
     const spec = item.spec_snapshot && typeof item.spec_snapshot === "object" ? item.spec_snapshot : {};
+
     const dyeHex = safeText(spec?.dye_hex ?? spec?.dyeing_hex ?? "");
     const hasDye = dyeHex && dyeHex !== "—";
 
     const dressCat = humanizeCat(
-      spec?.product_category ?? spec?.dress_category ?? spec?.dress_cat ?? ""
+      spec?.product_category ?? spec?.dress_category ?? spec?.dress_cat ?? "",
     );
+
+    const selectedUnstitchedSize = safeText(spec?.selected_unstitched_size ?? "");
+    const selectedFabricLengthM = numOrNull(spec?.selected_fabric_length_m ?? null);
+    const fabricCostPkr = numOrNull(spec?.fabric_cost_pkr ?? null);
+    const destinationType = safeText(spec?.destination_type ?? "");
+    const exportRegion = safeText(spec?.export_region ?? "");
 
     const isNew = status === "placed";
 
@@ -198,14 +233,10 @@ export default function OrdersIndexScreen() {
         onPress={() =>
           router.push({
             pathname: "/flow/orders/[id]",
-            params: { id: String(item.id) }
+            params: { id: String(item.id) },
           })
         }
-        style={({ pressed }) => [
-          styles.card,
-          isNew && styles.cardNewRed,
-          pressed && styles.pressed
-        ]}
+        style={({ pressed }) => [styles.card, isNew && styles.cardNewRed, pressed && styles.pressed]}
       >
         <View style={styles.rowBetween}>
           <Text style={styles.orderNo} numberOfLines={1}>
@@ -224,6 +255,19 @@ export default function OrdersIndexScreen() {
           Dress Cat: {dressCat}
         </Text>
 
+        {!!selectedUnstitchedSize && (
+          <Text style={styles.small} numberOfLines={1}>
+            Size: {selectedUnstitchedSize}
+            {selectedFabricLengthM != null ? ` • ${selectedFabricLengthM}m` : ""}
+          </Text>
+        )}
+
+        {fabricCostPkr != null ? (
+          <Text style={styles.small} numberOfLines={1}>
+            Total Fabric Cost: {money(item.currency, fabricCostPkr)}
+          </Text>
+        ) : null}
+
         {hasDye ? (
           <View style={styles.dyeRow}>
             <Text style={styles.small} numberOfLines={1}>
@@ -238,12 +282,15 @@ export default function OrdersIndexScreen() {
             Buyer: {item.buyer_name} ({item.buyer_mobile})
           </Text>
           <Text style={styles.small} numberOfLines={1}>
-            {amount}
+            {money(item.currency, item.total_pkr)}
           </Text>
         </View>
 
         <Text style={styles.small} numberOfLines={1}>
           City: {item.city || "—"}
+          {destinationType !== "—"
+            ? ` • ${humanizeCat(destinationType)}${exportRegion !== "—" ? ` • ${exportRegion}` : ""}`
+            : ""}
         </Text>
       </Pressable>
     );
@@ -269,7 +316,7 @@ export default function OrdersIndexScreen() {
             style={({ pressed }) => [
               styles.tabBtn,
               tab === "active" && styles.tabBtnActive,
-              pressed && styles.pressed
+              pressed && styles.pressed,
             ]}
           >
             <Text style={[styles.tabText, tab === "active" && styles.tabTextActive]}>Active</Text>
@@ -280,7 +327,7 @@ export default function OrdersIndexScreen() {
             style={({ pressed }) => [
               styles.tabBtn,
               tab === "completed" && styles.tabBtnActive,
-              pressed && styles.pressed
+              pressed && styles.pressed,
             ]}
           >
             <Text style={[styles.tabText, tab === "completed" && styles.tabTextActive]}>
@@ -351,29 +398,28 @@ const stylesVars = {
   dangerSoft: "#FEE2E2",
   dangerBorder: "#FCA5A5",
   white: "#FFFFFF",
-  black: "#000000"
 };
 
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
   header: {
     padding: 16,
     gap: 10,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
   headerMain: {
-    flex: 1
+    flex: 1,
   },
 
   title: {
     fontSize: 18,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   subtitle: {
@@ -381,51 +427,51 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   subtitleStrong: {
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   rowBetween: {
     flexDirection: "row",
     justifyContent: "space-between",
     gap: 10,
-    alignItems: "center"
+    alignItems: "center",
   },
 
   tabRow: {
     flexDirection: "row",
-    gap: 10
+    gap: 10,
   },
 
   tabBtn: {
     flex: 1,
-    minHeight: 48,
+    minHeight: 40,
     borderWidth: 1,
-    borderColor: stylesVars.border,
-    borderRadius: 14,
-    paddingVertical: 12,
+    borderColor: "#D7E3FF",
+    borderRadius: 999,
+    paddingVertical: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: stylesVars.cardBg
+    backgroundColor: stylesVars.blueSoft,
   },
 
   tabBtnActive: {
-    borderColor: "#D7E3FF",
-    backgroundColor: stylesVars.blueSoft
+    borderColor: stylesVars.blue,
+    backgroundColor: stylesVars.blue,
   },
 
   tabText: {
     fontWeight: "700",
-    fontSize: 14,
-    color: stylesVars.subText
+    fontSize: 12,
+    color: stylesVars.blue,
   },
 
   tabTextActive: {
-    color: stylesVars.blue
+    color: stylesVars.white,
   },
 
   search: {
@@ -436,50 +482,50 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
     color: stylesVars.text,
-    backgroundColor: stylesVars.white
+    backgroundColor: stylesVars.white,
   },
 
   refreshBtn: {
     alignSelf: "flex-start",
-    minHeight: 40,
+    minHeight: 36,
     borderWidth: 1,
     borderColor: "#D7E3FF",
-    borderRadius: 12,
+    borderRadius: 999,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 8,
     backgroundColor: stylesVars.blueSoft,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   refreshText: {
     fontWeight: "700",
-    fontSize: 14,
-    color: stylesVars.blue
+    fontSize: 12,
+    color: stylesVars.blue,
   },
 
   pressed: {
-    opacity: 0.82
+    opacity: 0.82,
   },
 
   loading: {
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10
+    gap: 10,
   },
 
   loadingText: {
     fontSize: 13,
     color: stylesVars.mutedText,
-    fontWeight: "600"
+    fontWeight: "600",
   },
 
   list: {
     padding: 16,
     paddingTop: 6,
     gap: 12,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
   card: {
@@ -488,33 +534,33 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 18,
     gap: 8,
-    backgroundColor: stylesVars.cardBg
+    backgroundColor: stylesVars.cardBg,
   },
 
   cardNewRed: {
     borderColor: stylesVars.dangerBorder,
-    backgroundColor: "#FFF7F7"
+    backgroundColor: "#FFF7F7",
   },
 
   orderNo: {
     fontSize: 16,
     fontWeight: "700",
     color: stylesVars.text,
-    flex: 1
+    flex: 1,
   },
 
   line: {
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.subText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   small: {
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   badge: {
@@ -523,23 +569,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    overflow: "hidden"
+    overflow: "hidden",
   },
 
   badgeRed: {
     color: stylesVars.danger,
-    backgroundColor: stylesVars.dangerSoft
+    backgroundColor: stylesVars.dangerSoft,
   },
 
   badgeBlue: {
     color: stylesVars.blue,
-    backgroundColor: stylesVars.blueSoft
+    backgroundColor: stylesVars.blueSoft,
   },
 
   dyeRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8
+    gap: 8,
   },
 
   dyeSwatch: {
@@ -548,19 +594,19 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     borderWidth: 1,
     borderColor: stylesVars.border,
-    backgroundColor: stylesVars.white
+    backgroundColor: stylesVars.white,
   },
 
   empty: {
     padding: 20,
     gap: 8,
-    alignItems: "center"
+    alignItems: "center",
   },
 
   emptyTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   emptyText: {
@@ -568,6 +614,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
-    textAlign: "center"
-  }
+    textAlign: "center",
+  },
 });
