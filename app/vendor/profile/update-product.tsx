@@ -1129,10 +1129,9 @@ export default function UpdateProductScreen() {
                 maxLength={10}
               />
             )}
-
             <Text style={styles.label}>Cost Mode</Text>
-            <View style={styles.fixedPill}>
-              <Text style={styles.fixedPillText}>
+            <View style={styles.readonlyField}>
+              <Text style={styles.readonlyValue}>
                 {priceMode === "unstitched_per_meter"
                   ? "Unstitched (PKR/meter)"
                   : "Stitched / Ready-to-wear"}
@@ -1663,22 +1662,21 @@ const styles = StyleSheet.create({
     minHeight: 120,
     paddingTop: 12,
   },
-
-  fixedPill: {
+  readonlyField: {
     marginTop: 8,
-    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: stylesVars.borderSoft,
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: stylesVars.blueSoft,
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
+    backgroundColor: "#F8FAFC",
   },
 
-  fixedPillText: {
-    color: stylesVars.blue,
-    fontWeight: "700",
-    fontSize: 12,
+  readonlyValue: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: stylesVars.text,
   },
 
   madeOnOrderPill: {

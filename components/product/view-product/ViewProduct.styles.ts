@@ -68,7 +68,7 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
 
     linkText: {
       color: stylesVars.blue,
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: "700",
     },
 
@@ -80,7 +80,7 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
     },
 
     loadingText: {
-      fontSize: 13,
+      fontSize: 12,
       color: stylesVars.mutedText,
       fontWeight: "600",
     },
@@ -88,22 +88,22 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
     warn: {
       marginTop: 10,
       color: stylesVars.mutedText,
-      fontSize: 13,
-      lineHeight: 18,
+      fontSize: 12,
+      lineHeight: 17,
       fontWeight: "500",
     },
 
     card: {
-      marginTop: 14,
+      marginTop: 12,
       borderRadius: 18,
       borderWidth: 1,
       borderColor: stylesVars.border,
       backgroundColor: stylesVars.cardBg,
-      padding: 18,
+      padding: 14,
     },
 
     sectionTitle: {
-      fontSize: 15,
+      fontSize: 13,
       fontWeight: "700",
       color: stylesVars.text,
       marginBottom: 2,
@@ -111,10 +111,10 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
 
     meta: {
       marginTop: 6,
-      fontSize: 13,
-      lineHeight: 18,
+      fontSize: 11,
+      lineHeight: 16,
       color: stylesVars.mutedText,
-      fontWeight: "500",
+      fontWeight: "400",
     },
 
     compactBlock: {
@@ -123,29 +123,29 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       borderWidth: 1,
       borderColor: stylesVars.border,
       backgroundColor: stylesVars.cardBg,
-      padding: 16,
+      padding: 14,
     },
 
     compactLine: {
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: "500",
       color: stylesVars.text,
-      lineHeight: 20,
-      marginTop: 4,
+      lineHeight: 18,
+      marginTop: 3,
     },
 
     metaLine: {
-      marginTop: 8,
-      fontSize: 13,
-      lineHeight: 18,
-      fontWeight: "500",
+      marginTop: 6,
+      fontSize: 11,
+      lineHeight: 16,
+      fontWeight: "400",
       color: stylesVars.mutedText,
     },
 
     label: {
       fontSize: 13,
-      fontWeight: "700",
-      color: stylesVars.text,
+      fontWeight: "400",
+      color: stylesVars.mutedText,
       letterSpacing: 0.2,
     },
 
@@ -196,7 +196,7 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       position: "absolute",
       right: 10,
       bottom: 10,
-      minHeight: 38,
+      minHeight: 36,
       paddingHorizontal: 12,
       paddingVertical: 8,
       borderRadius: 999,
@@ -210,7 +210,7 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
     heroOpenViewerText: {
       color: stylesVars.white,
       fontWeight: "700",
-      fontSize: 12,
+      fontSize: 11,
     },
 
     thumbRow: {
@@ -251,7 +251,7 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
     videoPlaceholderText: {
       color: stylesVars.blue,
       fontWeight: "700",
-      fontSize: 12,
+      fontSize: 11,
     },
 
     playBadge: {
@@ -269,7 +269,7 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
     playBadgeText: {
       color: stylesVars.white,
       fontWeight: "700",
-      fontSize: 12,
+      fontSize: 11,
     },
 
     videoControlsOverlay: {
@@ -299,35 +299,35 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
 
     specTitle: {
       marginTop: 8,
-      fontSize: 15,
-      fontWeight: "700",
+      fontSize: 12,
+      fontWeight: "500",
       color: stylesVars.text,
     },
 
     specRow: {
-      marginTop: 10,
+      marginTop: 8,
     },
 
     specLabel: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: stylesVars.text,
+      fontSize: 12,
+      fontWeight: "400",
+      color: stylesVars.mutedText,
     },
 
     specValue: {
-      marginTop: 4,
-      fontSize: 13,
-      lineHeight: 19,
-      color: stylesVars.subText,
+      marginTop: 3,
+      fontSize: 12,
+      lineHeight: 17,
+      color: stylesVars.text,
       fontWeight: "500",
     },
 
     moreDescText: {
       marginTop: 6,
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: "500",
       color: stylesVars.subText,
-      lineHeight: 20,
+      lineHeight: 19,
     },
 
     fabVendor: {
@@ -346,7 +346,7 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
     fabVendorText: {
       color: stylesVars.danger,
       fontWeight: "700",
-      fontSize: 13,
+      fontSize: 12,
     },
 
     footer: {
@@ -367,15 +367,15 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
     },
 
     footerTitle: {
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: "700",
       color: stylesVars.text,
     },
 
     footerSub: {
       marginTop: 4,
-      fontSize: 13,
-      lineHeight: 18,
+      fontSize: 12,
+      lineHeight: 17,
       fontWeight: "500",
       color: stylesVars.mutedText,
     },
@@ -397,7 +397,7 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
     footerBtnText: {
       color: stylesVars.white,
       fontWeight: "700",
-      fontSize: 14,
+      fontSize: 13,
     },
 
     viewerContainer: {
@@ -465,8 +465,8 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
 
     indexText: {
       color: stylesVars.white,
-      fontSize: 14,
-      fontWeight: "900",
+      fontSize: 13,
+      fontWeight: "800",
     },
 
     pressed: {

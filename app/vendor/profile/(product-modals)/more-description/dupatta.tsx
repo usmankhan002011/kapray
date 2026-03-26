@@ -49,7 +49,6 @@ export default function DupattaModal() {
     "Contrasting dupatta enhances the overall color harmony."
   ];
 
-  // show fewer by default so it fits one screen
   const primaryOptions = options.slice(0, 7);
   const extraOptions = options.slice(7);
 
@@ -62,6 +61,7 @@ export default function DupattaModal() {
   const [showMore, setShowMore] = useState<boolean>(false);
 
   function toggle(s: string) {
+    if (alreadyPicked.includes(s)) return;
     setPicked((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
   }
 

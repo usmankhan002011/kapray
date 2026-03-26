@@ -25,19 +25,6 @@ function normalizeSpaces(s: string) {
   return s.replace(/\s+/g, " ").trim();
 }
 
-function removeFirstOccurrence(full: string, part: string) {
-  const a = normalizeSpaces(full);
-  const b = normalizeSpaces(part);
-  if (!a || !b) return full;
-
-  const idx = a.indexOf(b);
-  if (idx < 0) return full;
-
-  const before = a.slice(0, idx).trim();
-  const after = a.slice(idx + b.length).trim();
-  return normalizeSpaces([before, after].filter(Boolean).join(" "));
-}
-
 function parseAppendMany(v: unknown): string[] {
   const raw = pickFirstString(v);
   if (!raw) return [];
@@ -45,6 +32,29 @@ function parseAppendMany(v: unknown): string[] {
     .split("\n")
     .map((x) => safeStr(x))
     .filter(Boolean);
+}
+
+function deriveManualText(fullDescription: string, parts: string[]) {
+  let next = safeStr(fullDescription);
+
+  for (const part of parts) {
+    const normalizedPart = normalizeSpaces(safeStr(part));
+    if (!normalizedPart) continue;
+
+    const normalizedFull = normalizeSpaces(next);
+    const idx = normalizedFull.indexOf(normalizedPart);
+    if (idx < 0) continue;
+
+    const before = normalizedFull.slice(0, idx).trim();
+    const after = normalizedFull.slice(idx + normalizedPart.length).trim();
+    next = normalizeSpaces([before, after].filter(Boolean).join(" "));
+  }
+
+  return next;
+}
+
+function composeDescription(manualText: string, parts: string[]) {
+  return normalizeSpaces([safeStr(manualText), ...parts.map((x) => safeStr(x))].filter(Boolean).join(" "));
 }
 
 export default function Q12MoreDescription() {
@@ -74,58 +84,79 @@ export default function Q12MoreDescription() {
     if (typeof ctx.setDraft === "function") {
       ctx.setDraft((prev: any) => ({
         ...prev,
-        spec: { ...(prev?.spec ?? {}), ...patch }
+        spec: { ...(prev?.spec ?? {}), ...patch },
       }));
       return;
     }
     draft.spec = { ...(draft?.spec ?? {}), ...patch };
   }
 
-  const [text, setText] = useState<string>(safeStr((draft?.spec as any)?.more_description ?? ""));
-  const [selectedSentences, setSelectedSentences] = useState<string[]>(
-    Array.isArray((draft?.spec as any)?.more_description_parts)
-      ? (draft?.spec as any)?.more_description_parts
-      : []
-  );
+  const initialParts = Array.isArray((draft?.spec as any)?.more_description_parts)
+    ? ((draft?.spec as any)?.more_description_parts as string[])
+    : [];
+
+  const initialFullText = safeStr((draft?.spec as any)?.more_description ?? "");
+  const initialManualText =
+    safeStr((draft?.spec as any)?.more_description_manual ?? "") ||
+    deriveManualText(initialFullText, initialParts);
+
+  const [manualText, setManualText] = useState<string>(initialManualText);
+  const [selectedSentences, setSelectedSentences] = useState<string[]>(initialParts);
+
+  const composedDescription = useMemo(() => {
+    return composeDescription(manualText, selectedSentences);
+  }, [manualText, selectedSentences]);
 
   const canContinue = useMemo(() => Boolean(vendorId), [vendorId]);
 
   useFocusEffect(
     React.useCallback(() => {
-      const toAdd = [...appendMany, ...(appendOne ? [appendOne] : [])].filter(Boolean);
+      const toAdd = [...appendMany, ...(appendOne ? [appendOne] : [])]
+        .map((x) => safeStr(x))
+        .filter(Boolean);
 
       if (toAdd.length) {
-        const parts = Array.isArray((draft?.spec as any)?.more_description_parts)
-          ? (draft?.spec as any)?.more_description_parts
+        const latestParts = Array.isArray((draft?.spec as any)?.more_description_parts)
+          ? ((draft?.spec as any)?.more_description_parts as string[])
           : [];
-        const currentText = safeStr((draft?.spec as any)?.more_description ?? "");
 
-        const uniqueToAdd = toAdd.filter((s) => !parts.includes(s));
-        const nextParts = uniqueToAdd.length ? [...parts, ...uniqueToAdd] : parts;
+        const latestManual =
+          safeStr((draft?.spec as any)?.more_description_manual ?? "") ||
+          deriveManualText(
+            safeStr((draft?.spec as any)?.more_description ?? ""),
+            latestParts,
+          );
 
-        const nextText = uniqueToAdd.length
-          ? normalizeSpaces(
-              currentText ? `${currentText} ${uniqueToAdd.join(" ")}` : uniqueToAdd.join(" ")
-            )
-          : currentText;
+        const uniqueToAdd = toAdd.filter((s) => !latestParts.includes(s));
+        const nextParts = uniqueToAdd.length ? [...latestParts, ...uniqueToAdd] : latestParts;
+        const nextManual = latestManual;
+        const nextFull = composeDescription(nextManual, nextParts);
 
-        patchSpec({ more_description_parts: nextParts, more_description: safeStr(nextText) });
         setSelectedSentences(nextParts);
-        setText(nextText);
+        setManualText(nextManual);
 
-        // clear append params
+        patchSpec({
+          more_description_parts: nextParts,
+          more_description_manual: safeStr(nextManual),
+          more_description: safeStr(nextFull),
+        });
+
         router.replace({
           pathname: "/vendor/profile/add-product/q12-more-description",
-          params: returnTo ? { returnTo } : undefined
+          params: returnTo ? { returnTo } : undefined,
         } as any);
       } else {
-        const latestText = safeStr((draft?.spec as any)?.more_description ?? "");
         const latestParts = Array.isArray((draft?.spec as any)?.more_description_parts)
-          ? (draft?.spec as any)?.more_description_parts
+          ? ((draft?.spec as any)?.more_description_parts as string[])
           : [];
 
-        setText(latestText);
+        const latestFull = safeStr((draft?.spec as any)?.more_description ?? "");
+        const latestManual =
+          safeStr((draft?.spec as any)?.more_description_manual ?? "") ||
+          deriveManualText(latestFull, latestParts);
+
         setSelectedSentences(latestParts);
+        setManualText(latestManual);
       }
 
       const timer = setTimeout(() => {
@@ -134,37 +165,42 @@ export default function Q12MoreDescription() {
 
       return () => clearTimeout(timer);
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [appendManyRaw, appendOne, draft, returnTo])
+    }, [appendManyRaw, appendOne, draft, returnTo]),
   );
 
   function onChangeText(next: string) {
-    setText(next);
-    patchSpec({ more_description: safeStr(next) });
+    const cleaned = safeStr(next);
+    setManualText(cleaned);
+
+    patchSpec({
+      more_description_manual: cleaned,
+      more_description_parts: selectedSentences,
+      more_description: safeStr(composeDescription(cleaned, selectedSentences)),
+    });
   }
 
-  function removeSentence(sentence: string) {
-    const nextParts = selectedSentences.filter((s) => s !== sentence);
-    setSelectedSentences(nextParts);
-    patchSpec({ more_description_parts: nextParts });
+  function removeSentenceAt(indexToRemove: number) {
+    setSelectedSentences((prev) => {
+      const nextParts = prev.filter((_, index) => index !== indexToRemove);
 
-    const nextText = removeFirstOccurrence(text, sentence);
-    setText(nextText);
-    patchSpec({ more_description: safeStr(nextText) });
+      patchSpec({
+        more_description_parts: nextParts,
+        more_description_manual: safeStr(manualText),
+        more_description: safeStr(composeDescription(manualText, nextParts)),
+      });
+
+      return nextParts;
+    });
   }
 
   function clearAllBuilder() {
-    const toRemove = selectedSentences.slice();
-
     setSelectedSentences([]);
-    patchSpec({ more_description_parts: [] });
 
-    let nextText = text;
-    for (const s of toRemove) {
-      nextText = removeFirstOccurrence(nextText, s);
-    }
-
-    setText(nextText);
-    patchSpec({ more_description: safeStr(nextText) });
+    patchSpec({
+      more_description_parts: [],
+      more_description_manual: safeStr(manualText),
+      more_description: safeStr(composeDescription(manualText, [])),
+    });
   }
 
   function closeScreen() {
@@ -180,8 +216,8 @@ export default function Q12MoreDescription() {
       pathname: "/vendor/profile/(product-modals)/more-description",
       params: {
         q12Path: "/vendor/profile/add-product/q12-more-description",
-        parentReturnTo: returnTo
-      }
+        parentReturnTo: returnTo,
+      },
     } as any);
   }
 
@@ -191,7 +227,11 @@ export default function Q12MoreDescription() {
       return;
     }
 
-    patchSpec({ more_description: safeStr(text) });
+    patchSpec({
+      more_description_manual: safeStr(manualText),
+      more_description_parts: selectedSentences,
+      more_description: safeStr(composedDescription),
+    });
 
     if (returnTo) {
       router.replace(returnTo as any);
@@ -241,19 +281,19 @@ export default function Q12MoreDescription() {
                 </Pressable>
               </View>
 
-              {selectedSentences.map((sentence) => (
+              {selectedSentences.map((sentence, index) => (
                 <View
-                  key={sentence}
+                  key={`${index}-${sentence}`}
                   style={{
                     flexDirection: "row",
                     alignItems: "flex-start",
                     marginTop: 12,
                     padding: 10,
                     backgroundColor: "#FFF5F5",
-                    borderRadius: 8
+                    borderRadius: 8,
                   }}
                 >
-                  <Pressable onPress={() => removeSentence(sentence)} style={{ marginRight: 8 }}>
+                  <Pressable onPress={() => removeSentenceAt(index)} style={{ marginRight: 8 }}>
                     <Text style={{ color: "red", fontWeight: "bold" }}>✕</Text>
                   </Pressable>
 
@@ -267,7 +307,7 @@ export default function Q12MoreDescription() {
 
           <TextInput
             ref={inputRef}
-            value={text}
+            value={manualText}
             onChangeText={onChangeText}
             placeholder="Write additional details…"
             placeholderTextColor={apColors.muted}
@@ -280,7 +320,7 @@ export default function Q12MoreDescription() {
             style={({ pressed }) => [
               apStyles.primaryBtn,
               !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null
+              pressed ? apStyles.pressed : null,
             ]}
             onPress={onContinue}
             disabled={!canContinue}

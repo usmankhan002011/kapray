@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { apStyles } from "@/components/product/addProductStyles";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 
@@ -8,29 +8,13 @@ function safeStr(v: any) {
   return String(v ?? "").trim();
 }
 
-function normalizeSpaces(s: string) {
-  return s.replace(/\s+/g, " ").trim();
-}
-
 export default function HookModal() {
   const router = useRouter();
-  const ctx = useProductDraft() as any;
-  const { draft } = ctx;
+  const params = useLocalSearchParams();
+  const { draft } = useProductDraft() as any;
 
-  function patchSpec(patch: any) {
-    if (typeof ctx.setSpec === "function") {
-      ctx.setSpec((prev: any) => ({ ...(prev ?? {}), ...patch }));
-      return;
-    }
-    if (typeof ctx.setDraft === "function") {
-      ctx.setDraft((prev: any) => ({
-        ...prev,
-        spec: { ...(prev?.spec ?? {}), ...patch }
-      }));
-      return;
-    }
-    draft.spec = { ...(draft?.spec ?? {}), ...patch };
-  }
+  const q12Path = safeStr((params as any)?.q12Path) || "/vendor/profile/add-product/q12-more-description";
+  const parentReturnTo = safeStr((params as any)?.parentReturnTo);
 
   const options = [
     "This stunning ensemble is beautifully adorned with intricate detailing.",
@@ -47,63 +31,74 @@ export default function HookModal() {
     "A regal design inspired by classic bridal aesthetics."
   ];
 
+  const primaryOptions = options.slice(0, 7);
+  const extraOptions = options.slice(7);
+
   const alreadyPicked: string[] = useMemo(() => {
     const parts = (draft?.spec as any)?.more_description_parts;
     return Array.isArray(parts) ? parts : [];
   }, [draft?.spec]);
 
   const [picked, setPicked] = useState<string[]>([]);
+  const [showMore, setShowMore] = useState<boolean>(false);
 
   function toggle(s: string) {
+    if (alreadyPicked.includes(s)) return;
     setPicked((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
   }
+
+  const pickedCount = useMemo(() => picked.length, [picked]);
 
   function addSelected() {
     if (!picked.length) return;
 
-    const parts = Array.isArray((draft?.spec as any)?.more_description_parts)
-      ? (draft?.spec as any)?.more_description_parts
-      : [];
-    const text = safeStr((draft?.spec as any)?.more_description ?? "");
+    const payload = {
+      pathname: q12Path as any,
+      params: parentReturnTo
+        ? { appendMany: picked.join("\n"), returnTo: parentReturnTo }
+        : { appendMany: picked.join("\n") }
+    } as any;
 
-    const uniqueToAdd = picked.filter((s) => !parts.includes(s));
-    const nextParts = uniqueToAdd.length ? [...parts, ...uniqueToAdd] : parts;
-
-    const nextText = uniqueToAdd.length
-      ? normalizeSpaces(text ? `${text} ${uniqueToAdd.join(" ")}` : uniqueToAdd.join(" "))
-      : text;
-
-    patchSpec({
-      more_description_parts: nextParts,
-      more_description: nextText
-    });
-
-    setPicked([]);
+    router.push(payload);
   }
 
-  function done() {
+  function closeModal() {
     router.back();
   }
+
+  const visibleOptions = showMore ? options : primaryOptions;
 
   return (
     <View style={apStyles.screen}>
       <ScrollView contentContainerStyle={apStyles.content}>
-        <View style={apStyles.headerRow}>
+        <View style={[apStyles.headerRow, { alignItems: "center" }]}>
           <Text style={apStyles.title}>Luxury Hook</Text>
 
-          <Pressable
-            onPress={done}
-            style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
-          >
-            <Text style={apStyles.linkText}>Done</Text>
-          </Pressable>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Pressable
+              onPress={addSelected}
+              disabled={!pickedCount}
+              style={({ pressed }) => [
+                apStyles.linkBtn,
+                !pickedCount ? { opacity: 0.5 } : null,
+                pressed ? apStyles.pressed : null
+              ]}
+            >
+              <Text style={apStyles.linkText}>Add ({pickedCount})</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={closeModal}
+              style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
+            >
+              <Text style={apStyles.linkText}>Close</Text>
+            </Pressable>
+          </View>
         </View>
 
-        <Text style={apStyles.metaHint}>
-          Tap to select multiple. Press “Add selected” to append into More description.
-        </Text>
+        <Text style={apStyles.metaHint}>Tap to select multiple, then press Add.</Text>
 
-        {options.map((o) => {
+        {visibleOptions.map((o) => {
           const isPicked = picked.includes(o);
           const isAlready = alreadyPicked.includes(o);
 
@@ -126,31 +121,14 @@ export default function HookModal() {
           );
         })}
 
-        <Pressable
-          onPress={addSelected}
-          style={({ pressed }) => [
-            apStyles.primaryBtn,
-            !picked.length ? apStyles.primaryBtnDisabled : null,
-            pressed ? apStyles.pressed : null,
-            { marginTop: 16 }
-          ]}
-          disabled={!picked.length}
-        >
-          <Text style={apStyles.primaryText}>Add selected</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => {
-            if (!picked.length) {
-              done();
-              return;
-            }
-            Alert.alert("Selections not added", "Press “Add selected” first, then Done.");
-          }}
-          style={({ pressed }) => [apStyles.secondaryBtn, pressed ? apStyles.pressed : null]}
-        >
-          <Text style={apStyles.secondaryText}>Close without adding</Text>
-        </Pressable>
+        {extraOptions.length ? (
+          <Pressable
+            onPress={() => setShowMore((v) => !v)}
+            style={({ pressed }) => [apStyles.secondaryBtn, pressed ? apStyles.pressed : null]}
+          >
+            <Text style={apStyles.secondaryText}>{showMore ? "Show less" : "Show more"}</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </View>
   );

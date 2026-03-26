@@ -449,6 +449,16 @@ export default function OrderDetailScreen() {
     return raw === "—" ? "" : raw;
   }, [order, spec]);
 
+  const selectedTailoringStyleImage = useMemo(() => {
+    if (!order) return "";
+    const raw = safeText(
+      spec?.selected_tailoring_style_image ??
+        spec?.selected_tailoring_style_snapshot?.image_url ??
+        "",
+    );
+    return raw === "—" ? "" : resolvePublicUrlFromPath(raw);
+  }, [order, spec]);
+
   const selectedNeckVariation = useMemo(() => {
     if (!order) return "";
     const raw = safeText(spec?.selected_neck_variation ?? "");
@@ -708,6 +718,16 @@ export default function OrderDetailScreen() {
                 </Text>
               ) : null}
 
+              {!!selectedTailoringStyleImage ? (
+                <View style={styles.selectedStyleImageWrap}>
+                  <Image
+                    source={{ uri: selectedTailoringStyleImage }}
+                    style={styles.selectedStyleImage}
+                    resizeMode="cover"
+                  />
+                </View>
+              ) : null}
+
               {!!selectedTailoringStyleTitle ? (
                 <Text style={styles.meta}>
                   Style: <Text style={styles.strong}>{selectedTailoringStyleTitle}</Text>
@@ -833,11 +853,18 @@ export default function OrderDetailScreen() {
 
             <View style={styles.card}>
               <Text style={styles.h2}>Tracking</Text>
+
               <Text style={styles.meta}>
                 Courier: <Text style={styles.strong}>{order.courier_name || "—"}</Text>
               </Text>
+
               <Text style={styles.meta}>
                 Tracking #: <Text style={styles.strong}>{order.tracking_number || "—"}</Text>
+              </Text>
+
+              {/* ✅ NEW LINE */}
+              <Text style={[styles.meta, { marginTop: 6 }]}>
+                Buyer may track this order anytime from their Home screen.
               </Text>
             </View>
 
@@ -1261,5 +1288,21 @@ const styles = StyleSheet.create({
 
   bottomSpacer: {
     height: 20,
+  },
+
+  selectedStyleImageWrap: {
+  width: 120,
+  height: 150,
+  borderRadius: 14,
+  overflow: "hidden",
+  backgroundColor: "#F8FAFC",
+  borderWidth: 1,
+  borderColor: stylesVars.border,
+  marginBottom: 6,
+  },
+
+  selectedStyleImage: {
+    width: "100%",
+    height: "100%",
   },
 });

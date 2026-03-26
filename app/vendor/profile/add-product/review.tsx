@@ -307,14 +307,9 @@ export default function AddProductReviewScreen() {
     } else {
       parts.push("No dyeing");
     }
-
     if (needsTailoring) {
       parts.push(`Tailoring: ${tailoringCost > 0 ? `${tailoringCost} PKR` : "Not set"}`);
       parts.push(`${Number.isFinite(tailoringDays) ? tailoringDays : 0} days`);
-      parts.push(`Trouser included: ${includesTrouser ? "Yes" : "No"}`);
-      parts.push(
-        `Style cards: ${tailoringStylePresets.length > 0 ? tailoringStylePresets.length : "Not set"}`,
-      );
     } else {
       parts.push("No tailoring");
     }
@@ -443,9 +438,9 @@ export default function AddProductReviewScreen() {
                 {costPerMeter > 0 ? String(costPerMeter) : "Not set"}
               </Text>
             </Pressable>
-
+            
             <Pressable
-              onPress={() => goEdit("/vendor/profile/add-product/q05b-unstitched-cost-per-meter")}
+              onPress={() => goEdit("/vendor/profile/add-product/q05c-unstitched-fabric-length")}
               style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
             >
               <Text style={styles.rowTitle}>Fabric length by size</Text>

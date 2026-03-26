@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
@@ -14,8 +14,11 @@ type ProductCategory =
 type SizeKey = "XS" | "S" | "M" | "L" | "XL" | "XXL";
 
 const SIZE_KEYS: SizeKey[] = ["XS", "S", "M", "L", "XL", "XXL"];
+const DISPLAY_SIZE_KEYS: SizeKey[] = ["XS", "S", "M", "L", "XL", "XXL"];
+
 const SIZE_FACTOR = 1.1;
 const AUTO_FILL_BG = "#EEF4FF";
+const EDITED_BG = "#FFFFFF";
 
 function sanitizeNumber(input: string) {
   const cleaned = input.replace(/[^\d.]/g, "");
@@ -95,7 +98,6 @@ function getInitialSizeTextsFromDraft(draft: any): Record<SizeKey, string> {
 
 function buildComputedSizeLengthMap(baseSInput: string): Partial<Record<SizeKey, number>> {
   const s = Number(sanitizeNumber(baseSInput ?? ""));
-
   if (!Number.isFinite(s) || s <= 0) return {};
 
   const xs = roundLength(s);
@@ -145,7 +147,7 @@ export default function Q05CUnstitchedFabricLength() {
 
   const [sLengthText, setSLengthText] = useState<string>(getBaseSLengthFromDraft(draft));
   const [sizeTexts, setSizeTexts] = useState<Record<SizeKey, string>>(
-    getInitialSizeTextsFromDraft(draft)
+    getInitialSizeTextsFromDraft(draft),
   );
   const [overriddenSizes, setOverriddenSizes] = useState<Record<SizeKey, boolean>>({
     XS: false,
@@ -177,9 +179,7 @@ export default function Q05CUnstitchedFabricLength() {
     draft.spec = { ...(draft?.spec ?? {}), ...patch };
   }
 
-  const autoMap = useMemo(() => {
-    return buildComputedSizeLengthMap(sLengthText);
-  }, [sLengthText]);
+  const autoMap = useMemo(() => buildComputedSizeLengthMap(sLengthText), [sLengthText]);
 
   useEffect(() => {
     setSizeTexts((prev) => {
@@ -231,7 +231,7 @@ export default function Q05CUnstitchedFabricLength() {
         inputRef.current?.focus();
       }, 100);
       return () => clearTimeout(timer);
-    }, [])
+    }, []),
   );
 
   function closeScreen() {
@@ -269,6 +269,10 @@ export default function Q05CUnstitchedFabricLength() {
 
   function onChangeSize(size: SizeKey, v: string) {
     const next = sanitizeNumber(v);
+
+    if (size === "XS") {
+      return;
+    }
 
     if (size === "S") {
       onChangeS(next);
@@ -319,14 +323,12 @@ export default function Q05CUnstitchedFabricLength() {
     router.push("/vendor/profile/add-product/q06c-shipping" as any);
   }
 
-  const costPerMeter = Number(draft?.price?.cost_pkr_per_meter ?? 0);
-
   return (
     <View style={apStyles.screen}>
       <ScrollView
         keyboardShouldPersistTaps="handled"
         style={apStyles.screen}
-        contentContainerStyle={apStyles.content}
+        contentContainerStyle={[apStyles.content, { paddingBottom: 20 }]}
       >
         <View style={apStyles.headerRow}>
           <Text style={apStyles.title}>Fabric length</Text>
@@ -339,95 +341,121 @@ export default function Q05CUnstitchedFabricLength() {
           </Pressable>
         </View>
 
-        <View style={apStyles.card}>
-          {costPerMeter > 0 ? (
-            <Text style={[apStyles.metaHint, { marginBottom: 10 }]}>
-              Cost per meter: <Text style={{ fontWeight: "900", color: apColors.text }}>PKR {costPerMeter}</Text>
-            </Text>
-          ) : null}
-
+        <View style={[apStyles.card, { padding: 14 }]}>
           <Text
             style={{
-              fontSize: 15,
-              fontWeight: "700",
+              fontSize: 14,
+              fontWeight: "800",
               color: apColors.text,
-              marginBottom: 6,
+              marginBottom: 4,
             }}
           >
             Fabric length by size (meters)
           </Text>
 
-          <View style={{ marginTop: 12 }}>
-            <Text style={apStyles.label}>Enter fabric length for size S *</Text>
-            <TextInput
-              ref={inputRef}
-              value={sLengthText}
-              onChangeText={onChangeS}
-              placeholder="e.g., 2.5"
-              placeholderTextColor={apColors.muted}
-              style={apStyles.input}
-              keyboardType="decimal-pad"
-              maxLength={8}
-            />
-            <Text style={apStyles.metaHint}>Edit other sizes manually if needed.</Text>
-          </View>
+          <Text style={[apStyles.metaHint, { marginBottom: 10 }]}>Enter fabric length for S. Edit others.</Text>
 
           <View
             style={{
               marginTop: 14,
-              borderWidth: 1,
-              borderColor: apColors.border,
-              borderRadius: 14,
-              overflow: "hidden",
-              backgroundColor: apColors.card ?? "#FFFFFF",
+              flexDirection: "row",
+              flexWrap: "wrap",
+              justifyContent: "space-between",
+              rowGap: 10,
             }}
           >
-            {SIZE_KEYS.map((size, index) => {
-              const isBase = size === "S";
-              const isOverridden = overriddenSizes[size];
-              const helper = isBase
-                ? "Base size"
-                : isOverridden
-                ? "Edited manually"
-                : size === "XS"
-                ? "Same as S"
-                : "Auto-filled";
+            {DISPLAY_SIZE_KEYS.map((size) => {
+              const isEdited = overriddenSizes[size];
+              const isXS = size === "XS";
+              const isS = size === "S";
 
               return (
                 <View
                   key={size}
                   style={{
-                    paddingHorizontal: 14,
-                    paddingVertical: 12,
-                    borderBottomWidth: index === SIZE_KEYS.length - 1 ? 0 : 1,
-                    borderBottomColor: apColors.border,
+                    width: "48.5%",
+                    borderWidth: 1,
+                    borderColor: apColors.border,
+                    borderRadius: 14,
+                    backgroundColor: isEdited ? EDITED_BG : AUTO_FILL_BG,
+                    padding: 10,
                   }}
                 >
-                  <View style={{ marginBottom: 8 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: 8,
+                    }}
+                  >
                     <Text
                       style={{
-                        fontSize: 14,
+                        fontSize: 13,
                         fontWeight: "800",
                         color: apColors.text,
                       }}
                     >
                       {size}
                     </Text>
-                    <Text style={apStyles.metaHint}>{helper}</Text>
+
+                    {isXS ? (
+                      <View
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 2,
+                          borderRadius: 999,
+                          backgroundColor: "#E2E8F0",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontWeight: "700",
+                            color: apColors.subText ?? apColors.text,
+                          }}
+                        >
+                          Same as S
+                        </Text>
+                      </View>
+                    ) : isEdited ? (
+                      <View
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 2,
+                          borderRadius: 999,
+                          backgroundColor: "#E2E8F0",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontWeight: "700",
+                            color: apColors.subText ?? apColors.text,
+                          }}
+                        >
+                          Edited
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
 
                   <TextInput
-                    value={isBase ? sLengthText : sizeTexts[size]}
+                    ref={isS ? inputRef : undefined}
+                    value={isS ? sLengthText : sizeTexts[size]}
                     onChangeText={(v) => onChangeSize(size, v)}
+                    editable={!isXS}
                     placeholder="e.g., 2.5"
                     placeholderTextColor={apColors.muted}
                     style={[
                       apStyles.input,
-                      !isBase && !isOverridden
-                        ? {
-                            backgroundColor: AUTO_FILL_BG,
-                          }
-                        : null,
+                      {
+                        minHeight: isS ? 46 : 40,
+                        paddingVertical: 8,
+                        backgroundColor: isXS ? "#FFFFFF" : "#FFFFFF",
+                        fontSize: isS ? 16 : 14,
+                        fontWeight: isS ? "800" : "500",
+                      },
                     ]}
                     keyboardType="decimal-pad"
                     maxLength={8}
@@ -440,6 +468,7 @@ export default function Q05CUnstitchedFabricLength() {
           <Pressable
             style={({ pressed }) => [
               apStyles.primaryBtn,
+              { marginTop: 14 },
               !canContinue ? apStyles.primaryBtnDisabled : null,
               pressed ? apStyles.pressed : null,
             ]}

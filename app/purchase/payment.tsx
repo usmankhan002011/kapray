@@ -577,6 +577,16 @@ export default function PaymentScreen() {
                 </Text>
               ) : null}
 
+              {data.hasStyleSelected && !!data.selectedTailoringStyleImage ? (
+                <View style={styles.selectedStyleImageWrap}>
+                  <Image
+                    source={{ uri: data.selectedTailoringStyleImage }}
+                    style={styles.selectedStyleImage}
+                    resizeMode="cover"
+                  />
+                </View>
+              ) : null}
+
               {data.hasStyleSelected && !!data.selectedTailoringStyleTitle ? (
                 <Text style={styles.meta}>
                   Style: <Text style={styles.metaStrong}>{data.selectedTailoringStyleTitle}</Text>
@@ -911,4 +921,20 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.82,
   },
+  selectedStyleImageWrap: {
+  width: 110,
+  height: 140,
+  borderRadius: 14,
+  overflow: "hidden",
+  backgroundColor: "#F8FAFC",
+  borderWidth: 1,
+  borderColor: stylesVars.border,
+  marginTop: 2,
+  marginBottom: 4,
+},
+
+selectedStyleImage: {
+  width: "100%",
+  height: "100%",
+},
 });

@@ -47,7 +47,6 @@ export default function ReplicaModal() {
     "Premium inspired design with exceptional workmanship."
   ];
 
-  // show fewer by default so it fits one screen
   const primaryOptions = options.slice(0, 7);
   const extraOptions = options.slice(7);
 
@@ -60,6 +59,7 @@ export default function ReplicaModal() {
   const [showMore, setShowMore] = useState<boolean>(false);
 
   function toggle(s: string) {
+    if (alreadyPicked.includes(s)) return; // 🔥 FIX
     setPicked((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
   }
 
