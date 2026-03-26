@@ -157,22 +157,15 @@ function hasValidPackageCm(v: any) {
     height > 0
   );
 }
-
 function hasValidTailoringPreset(
   preset: TailoringStylePreset,
   includesTrouser: boolean,
 ) {
   const title = safeStr(preset?.title);
   const images = Array.isArray(preset?.images) ? preset.images : [];
-  const defaultNeck = safeStr(preset?.default_neck);
-  const defaultSleeve = safeStr(preset?.default_sleeve);
-  const defaultTrouser = safeStr(preset?.default_trouser);
 
   if (!title) return false;
   if (images.length < 1) return false;
-  if (!defaultNeck) return false;
-  if (!defaultSleeve) return false;
-  if (includesTrouser && !defaultTrouser) return false;
 
   return true;
 }
@@ -478,7 +471,7 @@ export default function AddProductSubmitScreen() {
           if (!hasValidTailoringPreset(preset, includesTrouser)) {
             Alert.alert(
               "Incomplete tailoring style",
-              "Each tailoring style card must have title, at least one image, default neck, default sleeve, and default trouser where trouser is included.",
+              "Each tailoring style card must have a title and at least one image.",
             );
             return;
           }

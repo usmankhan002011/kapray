@@ -61,20 +61,6 @@ export default function VendorReviewSummary({ form, jumpToStep }: Props) {
           {form.offersTailoring ? "Yes, tailoring available" : "No tailoring service"}
         </Text>
 
-        {form.offersTailoring ? (
-          <>
-            <Text style={styles.value}>
-              Blouse neck: {joinOrDash(form.tailoringOptions?.blouse_neck)}
-            </Text>
-            <Text style={styles.value}>
-              Sleeves: {joinOrDash(form.tailoringOptions?.sleeves)}
-            </Text>
-            <Text style={styles.value}>
-              Trouser: {joinOrDash(form.tailoringOptions?.trouser)}
-            </Text>
-          </>
-        ) : null}
-
         <Text style={styles.value}>
           Export: {form.exportsEnabled ? "Yes" : "No"}
         </Text>

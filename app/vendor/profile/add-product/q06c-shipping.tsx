@@ -4,6 +4,8 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apStyles, apColors } from "@/components/product/addProductStyles";
+import { getDeliveryCost } from "@/utils/kapray/delivery";
+import { EXPORT_REGIONS } from "@/data/kapray/exportRegions";
 
 function sanitizeNumber(input: string) {
   const cleaned = input.replace(/[^\d.]/g, "");
@@ -76,6 +78,126 @@ export default function Q06CShipping() {
     );
   }, [vendorId, weight, length, width, height]);
 
+  const shippingPreview = useMemo(() => {
+    const actualWeightKg = Number(weight);
+    const rawLengthCm = Number(length);
+    const rawWidthCm = Number(width);
+    const rawHeightCm = Number(height);
+
+    const safeActualWeightKg =
+      Number.isFinite(actualWeightKg) && actualWeightKg > 0 ? actualWeightKg : 0;
+
+    const lengthCm =
+      Number.isFinite(rawLengthCm) && rawLengthCm > 0 ? Math.ceil(rawLengthCm) : 0;
+    const widthCm =
+      Number.isFinite(rawWidthCm) && rawWidthCm > 0 ? Math.ceil(rawWidthCm) : 0;
+    const heightCm =
+      Number.isFinite(rawHeightCm) && rawHeightCm > 0 ? Math.ceil(rawHeightCm) : 0;
+
+    const dimensionalWeightKg =
+      lengthCm > 0 && widthCm > 0 && heightCm > 0
+        ? (lengthCm * widthCm * heightCm) / 5000
+        : 0;
+
+    const chargeableWeightKg = Math.max(safeActualWeightKg, dimensionalWeightKg);
+
+    const roundedChargeableWeightKg =
+      chargeableWeightKg > 0 ? Math.ceil(chargeableWeightKg * 2) / 2 : 0;
+
+    const packageCm =
+      lengthCm > 0 && widthCm > 0 && heightCm > 0
+        ? { length: lengthCm, width: widthCm, height: heightCm }
+        : undefined;
+
+    const inlandAmountPkr =
+      roundedChargeableWeightKg > 0
+        ? getDeliveryCost({
+            weightKg: safeActualWeightKg,
+            packageCm,
+            scope: "inland",
+            regionOrCity: "Karachi",
+          } as any)
+        : null;
+
+    const exportAmounts = EXPORT_REGIONS.map((region) => ({
+      region,
+      amountPkr:
+        roundedChargeableWeightKg > 0
+          ? getDeliveryCost({
+              weightKg: safeActualWeightKg,
+              packageCm,
+              scope: "international",
+              regionOrCity: region,
+            } as any)
+          : null,
+    }));
+
+    const volumetricRatio =
+      safeActualWeightKg > 0 ? dimensionalWeightKg / safeActualWeightKg : 0;
+
+    const efficiencyLevel =
+      volumetricRatio >= 4 ? "red" : volumetricRatio >= 1.5 ? "yellow" : "green";
+
+    const efficiencyLabel =
+      efficiencyLevel === "red"
+        ? "Poor packaging efficiency"
+        : efficiencyLevel === "yellow"
+          ? "Average packaging efficiency"
+          : "Good packaging efficiency";
+
+    const warningText =
+      efficiencyLevel === "red"
+        ? "Volumetric weight is dominating strongly. Courier cost may be much higher than physical weight suggests."
+        : efficiencyLevel === "yellow"
+          ? "Volumetric weight is affecting courier cost. Tighter packaging may reduce charges."
+          : "";
+
+    const suggestedHeightCm =
+      lengthCm > 0 && widthCm > 0 && safeActualWeightKg > 0
+        ? Math.max(1, Math.floor((safeActualWeightKg * 5000) / (lengthCm * widthCm)))
+        : 0;
+
+    const suggestedDimensionalWeightKg =
+      lengthCm > 0 && widthCm > 0 && suggestedHeightCm > 0
+        ? (lengthCm * widthCm * suggestedHeightCm) / 5000
+        : 0;
+
+    const suggestedChargeableWeightKg =
+      suggestedDimensionalWeightKg > 0
+        ? Math.ceil(Math.max(safeActualWeightKg, suggestedDimensionalWeightKg) * 2) / 2
+        : 0;
+
+    const heightReductionCm =
+      suggestedHeightCm > 0 && heightCm > suggestedHeightCm ? heightCm - suggestedHeightCm : 0;
+
+    const suggestionText =
+      efficiencyLevel !== "green" &&
+      suggestedChargeableWeightKg > 0 &&
+      roundedChargeableWeightKg > suggestedChargeableWeightKg &&
+      heightReductionCm > 0
+        ? `Try reducing package height from ${heightCm} cm to about ${suggestedHeightCm} cm. Estimated chargeable weight may improve from ${roundedChargeableWeightKg.toFixed(1)} kg to ${suggestedChargeableWeightKg.toFixed(1)} kg.`
+        : "";
+
+    return {
+      actualWeightKg: safeActualWeightKg,
+      lengthCm,
+      widthCm,
+      heightCm,
+      dimensionalWeightKg,
+      chargeableWeightKg,
+      roundedChargeableWeightKg,
+      inlandAmountPkr,
+      exportAmounts,
+      volumetricRatio,
+      efficiencyLevel,
+      efficiencyLabel,
+      warningText,
+      suggestionText,
+      suggestedChargeableWeightKg,
+      suggestedHeightCm,
+    };
+  }, [height, length, weight, width]);
+
   useFocusEffect(
     React.useCallback(() => {
       const t = setTimeout(() => {
@@ -137,6 +259,27 @@ export default function Q06CShipping() {
 
     router.push("/vendor/profile/add-product/q09-images" as any);
   }
+
+  const efficiencyColor =
+    shippingPreview.efficiencyLevel === "red"
+      ? "#B91C1C"
+      : shippingPreview.efficiencyLevel === "yellow"
+        ? "#B45309"
+        : "#166534";
+
+  const efficiencyBg =
+    shippingPreview.efficiencyLevel === "red"
+      ? "#FEF2F2"
+      : shippingPreview.efficiencyLevel === "yellow"
+        ? "#FFF7ED"
+        : "#F0FDF4";
+
+  const efficiencyBorder =
+    shippingPreview.efficiencyLevel === "red"
+      ? "#FCA5A5"
+      : shippingPreview.efficiencyLevel === "yellow"
+        ? "#FDBA74"
+        : "#86EFAC";
 
   return (
     <View style={apStyles.screen}>
@@ -225,9 +368,189 @@ export default function Q06CShipping() {
             </View>
           </View>
 
-          <Text style={apStyles.metaHint}>
-            Used for courier calculation (weight & volumetric).
-          </Text>
+          <View
+            style={{
+              marginTop: 12,
+              padding: 10,
+              borderWidth: 1,
+              borderColor: apColors.border,
+              borderRadius: 12,
+              backgroundColor: apColors.blueSoft,
+              gap: 4,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 10,
+                lineHeight: 14,
+                color: apColors.subText,
+                fontWeight: "600",
+              }}
+            >
+              Used for courier calculation (actual vs volumetric).
+            </Text>
+
+            {!!shippingPreview.actualWeightKg && (
+              <Text
+                style={{
+                  fontSize: 10,
+                  lineHeight: 14,
+                  color: apColors.subText,
+                  fontWeight: "600",
+                }}
+              >
+                Actual Weight: {shippingPreview.actualWeightKg.toFixed(2)} kg
+              </Text>
+            )}
+
+            {!!shippingPreview.lengthCm &&
+              !!shippingPreview.widthCm &&
+              !!shippingPreview.heightCm && (
+                <Text
+                  style={{
+                    fontSize: 10,
+                    lineHeight: 14,
+                    color: apColors.subText,
+                    fontWeight: "600",
+                  }}
+                >
+                  Rated Dimensions: {shippingPreview.lengthCm} × {shippingPreview.widthCm} ×{" "}
+                  {shippingPreview.heightCm} cm
+                </Text>
+              )}
+
+            {!!shippingPreview.dimensionalWeightKg && (
+              <Text
+                style={{
+                  fontSize: 10,
+                  lineHeight: 14,
+                  color: apColors.subText,
+                  fontWeight: "600",
+                }}
+              >
+                Dimensional Weight: {shippingPreview.dimensionalWeightKg.toFixed(2)} kg
+              </Text>
+            )}
+
+            {!!shippingPreview.roundedChargeableWeightKg && (
+              <Text
+                style={{
+                  fontSize: 10,
+                  lineHeight: 14,
+                  color: apColors.text,
+                  fontWeight: "800",
+                }}
+              >
+                Chargeable Weight: {shippingPreview.roundedChargeableWeightKg.toFixed(1)} kg
+              </Text>
+            )}
+
+            {!!shippingPreview.roundedChargeableWeightKg && (
+              <View
+                style={{
+                  marginTop: 4,
+                  paddingHorizontal: 8,
+                  paddingVertical: 7,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: efficiencyBorder,
+                  backgroundColor: efficiencyBg,
+                  gap: 3,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 10,
+                    lineHeight: 14,
+                    color: efficiencyColor,
+                    fontWeight: "800",
+                  }}
+                >
+                  Packaging Status: {shippingPreview.efficiencyLabel}
+                </Text>
+
+                {shippingPreview.warningText ? (
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      lineHeight: 14,
+                      color: efficiencyColor,
+                      fontWeight: "600",
+                    }}
+                  >
+                    ⚠️ {shippingPreview.warningText}
+                  </Text>
+                ) : (
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      lineHeight: 14,
+                      color: efficiencyColor,
+                      fontWeight: "600",
+                    }}
+                  >
+                    ✓ Package size looks efficient for the entered physical weight.
+                  </Text>
+                )}
+
+                {shippingPreview.suggestionText ? (
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      lineHeight: 14,
+                      color: efficiencyColor,
+                      fontWeight: "600",
+                    }}
+                  >
+                    Suggestion: {shippingPreview.suggestionText}
+                  </Text>
+                ) : null}
+              </View>
+            )}
+
+            {!!shippingPreview.inlandAmountPkr && (
+              <Text
+                style={{
+                  fontSize: 10,
+                  lineHeight: 14,
+                  color: apColors.text,
+                  fontWeight: "700",
+                  marginTop: 2,
+                }}
+              >
+                Inland Estimated Courier (avg Pakistan distance): PKR {shippingPreview.inlandAmountPkr}
+              </Text>
+            )}
+
+            <Text
+              style={{
+                fontSize: 10,
+                lineHeight: 14,
+                color: apColors.text,
+                fontWeight: "700",
+                marginTop: 4,
+              }}
+            >
+              Export Estimated Courier:
+            </Text>
+
+            {shippingPreview.exportAmounts.map((item) => (
+              <Text
+                key={item.region}
+                style={{
+                  fontSize: 10,
+                  lineHeight: 14,
+                  color: apColors.subText,
+                  fontWeight: "600",
+                }}
+              >
+                {item.region}:{" "}
+                {item.amountPkr && Number(item.amountPkr) > 0
+                  ? `PKR ${item.amountPkr}`
+                  : "Not available"}
+              </Text>
+            ))}
+          </View>
 
           <Pressable
             style={({ pressed }) => [

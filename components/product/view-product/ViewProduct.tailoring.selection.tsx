@@ -79,12 +79,25 @@ function resolvePresetImageUrls(
   ];
 
   const resolvedFromArrays = rawCandidates
-    .map((item) => {
-      const s = String(item ?? "").trim();
+  .map((item) => {
+    if (typeof item === "string") {
+      const s = item.trim();
       if (!s) return null;
       return resolvePublicUrl(s) || s;
-    })
-    .filter(Boolean) as string[];
+    }
+
+    if (item && typeof item === "object") {
+      const obj = item as any;
+      const raw =
+        String(obj?.url ?? obj?.uri ?? obj?.path ?? "").trim();
+
+      if (!raw) return null;
+      return resolvePublicUrl(raw) || raw;
+    }
+
+    return null;
+  })
+  .filter(Boolean) as string[];
 
   const fallback = firstResolvedPresetImageUrl(preset, resolvePublicUrl);
 
@@ -304,31 +317,69 @@ export default function ViewProductTailoringSelection({
   return (
     <View style={{ marginTop: 12 }}>
       <Text style={[styles.label, { color: stylesVars.blue }]}>Do you want stitching?</Text>
+      <View style={{ marginTop: 10 }}>
+        <View style={{ flexDirection: "row", gap: 12, flexWrap: "wrap" }}>
+          <Pressable
+            onPress={() => {
+              if (!tailoringEligible) {
+                Alert.alert(
+                  "Stitching not available",
+                  "This product is not eligible for stitching.",
+                );
+                return;
+              }
+              setBuyerWantsTailoring(true);
+            }}
+            style={({ pressed }) => [
+              {
+                paddingVertical: 10,
+                paddingHorizontal: 14,
+                borderRadius: 14,
+                borderWidth: 1.5,
+                borderColor: buyerWantsTailoring ? stylesVars.blue : "#D7E3FF",
+                backgroundColor: buyerWantsTailoring ? stylesVars.blue : "#EEF4FF",
+                opacity: tailoringEligible ? 1 : 0.5,
+              },
+              pressed ? styles.pressed : null,
+            ]}
+          >
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: "800",
+                color: buyerWantsTailoring ? "#FFFFFF" : stylesVars.blue,
+              }}
+            >
+              Yes{tailoringEligible ? ` • +PKR ${tailoringCostPkr}` : ""}
+            </Text>
+          </Pressable>
 
-      <View style={{ flexDirection: "row", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
-        <SelectPill
-          label={`Yes${tailoringEligible ? ` • +PKR ${tailoringCostPkr}` : ""}`}
-          selected={buyerWantsTailoring}
-          disabled={!tailoringEligible}
-          onPress={() => {
-            if (!tailoringEligible) {
-              Alert.alert(
-                "Stitching not available",
-                "This product is not eligible for stitching.",
-              );
-              return;
-            }
-            setBuyerWantsTailoring(true);
-          }}
-        />
-
-        <SelectPill
-          label="No"
-          selected={!buyerWantsTailoring}
-          onPress={() => setBuyerWantsTailoring(false)}
-        />
+          <Pressable
+            onPress={() => setBuyerWantsTailoring(false)}
+            style={({ pressed }) => [
+              {
+                paddingVertical: 10,
+                paddingHorizontal: 14,
+                borderRadius: 14,
+                borderWidth: 1.5,
+                borderColor: !buyerWantsTailoring ? stylesVars.blue : "#D7E3FF",
+                backgroundColor: !buyerWantsTailoring ? stylesVars.blue : "#EEF4FF",
+              },
+              pressed ? styles.pressed : null,
+            ]}
+          >
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: "800",
+                color: !buyerWantsTailoring ? "#FFFFFF" : stylesVars.blue,
+              }}
+            >
+              No
+            </Text>
+          </Pressable>
+        </View>
       </View>
-
       {!tailoringEligible ? (
         <Text style={[styles.meta, { marginTop: 6 }]}>
           Stitching is not available for this product.

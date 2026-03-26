@@ -143,33 +143,36 @@ function normalizePresetArray(v: unknown): TailoringStylePreset[] {
 function countPresetImages(preset: TailoringStylePreset) {
   return Array.isArray(preset?.images) ? preset.images.length : 0;
 }
-
 function summarizePreset(preset: TailoringStylePreset, includesTrouser: boolean) {
   const title = safeStr(preset?.title) || "Untitled style";
   const imgCount = countPresetImages(preset);
   const extra = safeNum(preset?.extra_cost_pkr);
-  const neck = safeStr(preset?.default_neck) || "Not set";
-  const sleeve = safeStr(preset?.default_sleeve) || "Not set";
-  const trouser = includesTrouser ? safeStr(preset?.default_trouser) || "Not set" : "N/A";
+
+  const neckCount = normalizeStringArray(preset?.allowed_neck_variations).length;
+  const sleeveCount = normalizeStringArray(preset?.allowed_sleeve_variations).length;
+  const trouserCount = includesTrouser
+    ? normalizeStringArray(preset?.allowed_trouser_variations).length
+    : 0;
 
   const parts = [
     title,
     `${imgCount} image${imgCount === 1 ? "" : "s"}`,
-    `Neck: ${neck}`,
-    `Sleeve: ${sleeve}`,
+    `Neck vars: ${neckCount || 0}`,
+    `Sleeve vars: ${sleeveCount || 0}`,
   ];
 
   if (includesTrouser) {
-    parts.push(`Trouser: ${trouser}`);
+    parts.push(`Trouser vars: ${trouserCount || 0}`);
   }
 
   if (extra > 0) {
     parts.push(`+PKR ${extra}`);
   }
 
+  parts.push(`Custom note: ${preset?.allow_custom_note ? "Yes" : "No"}`);
+
   return parts.join(" • ");
 }
-
 export default function AddProductReviewScreen() {
   const router = useRouter();
 
@@ -460,7 +463,7 @@ export default function AddProductReviewScreen() {
             {needsTailoring ? (
               <>
                 <Pressable
-                  onPress={() => goEdit("/vendor/profile/add-product/q06b-services-costs")}
+                  onPress={() => goEdit("/vendor/profile/add-product/q06b2-tailoring-styles")}
                   style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
                 >
                   <Text style={styles.rowTitle}>Product includes trouser</Text>
@@ -468,7 +471,7 @@ export default function AddProductReviewScreen() {
                 </Pressable>
 
                 <Pressable
-                  onPress={() => goEdit("/vendor/profile/add-product/q06b-services-costs")}
+                  onPress={() => goEdit("/vendor/profile/add-product/q06b2-tailoring-styles")}
                   style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
                 >
                   <Text style={styles.rowTitle}>Tailoring style cards</Text>
@@ -482,7 +485,7 @@ export default function AddProductReviewScreen() {
                 {tailoringStylePresets.map((preset, index) => (
                   <Pressable
                     key={`${safeStr(preset.id) || "style"}-${index}`}
-                    onPress={() => goEdit("/vendor/profile/add-product/q06b-services-costs")}
+                    onPress={() => goEdit("/vendor/profile/add-product/q06b2-tailoring-styles")}
                     style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
                   >
                     <Text style={styles.rowTitle}>Style Card {index + 1}</Text>

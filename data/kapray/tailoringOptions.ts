@@ -10,6 +10,12 @@ export const BLOUSE_NECK_PATTERNS = [
   'Sweetheart',
   'Collar',
   'Deep Back',
+  'Funnel',
+  'Cowl',
+  'Keyhole',
+  'Tie-neck',
+  'Scoop',
+  'High',
 ] as const;
 
 export const BLOUSE_SLEEVE_PATTERNS = [
@@ -19,6 +25,9 @@ export const BLOUSE_SLEEVE_PATTERNS = [
   'Elbow',
   'Three Quarter',
   'Full',
+  'Puffed',
+  'Dolman',
+  'Butterfly',
 ] as const;
 
 export const TROUSER_STYLES = [

@@ -57,6 +57,12 @@ const EMPTY_TAILORING_OPTIONS = {
   trouser: [] as string[],
 };
 
+const DEFAULT_TAILORING_OPTIONS = {
+  blouse_neck: [...BLOUSE_NECK_PATTERNS],
+  sleeves: [...BLOUSE_SLEEVE_PATTERNS],
+  trouser: [...TROUSER_STYLES],
+};
+
 const initialForm: VendorWizardData = {
   ownerName: "",
   email: "",
@@ -145,26 +151,6 @@ export default function CreateShopScreen() {
     });
   }, []);
 
-  const toggleTailoringOption = useCallback(
-    (group: "blouse_neck" | "sleeves" | "trouser", value: string) => {
-      setForm((prev) => {
-        const current = prev.tailoringOptions?.[group] ?? [];
-        const exists = current.includes(value);
-
-        return {
-          ...prev,
-          tailoringOptions: {
-            ...(prev.tailoringOptions ?? EMPTY_TAILORING_OPTIONS),
-            [group]: exists
-              ? current.filter((item) => item !== value)
-              : [...current, value],
-          },
-        };
-      });
-    },
-    [],
-  );
-
   const setCurrentLocation = useCallback(async () => {
     try {
       setLocLoading(true);
@@ -232,20 +218,6 @@ export default function CreateShopScreen() {
           return true;
 
         case "tailoring":
-          if (form.offersTailoring) {
-            const necks = form.tailoringOptions?.blouse_neck ?? [];
-            const sleeves = form.tailoringOptions?.sleeves ?? [];
-            const trousers = form.tailoringOptions?.trouser ?? [];
-
-            if (!necks.length && !sleeves.length && !trousers.length) {
-              Alert.alert(
-                "Missing",
-                "Please select at least one tailoring style if tailoring is offered.",
-              );
-              return false;
-            }
-          }
-
           if (form.exportsEnabled && (form.exportRegions?.length ?? 0) === 0) {
             Alert.alert("Missing", "Please select at least one export region.");
             return false;
@@ -293,27 +265,13 @@ export default function CreateShopScreen() {
       return;
     }
 
-    if (form.offersTailoring) {
-      const necks = form.tailoringOptions?.blouse_neck ?? [];
-      const sleeves = form.tailoringOptions?.sleeves ?? [];
-      const trousers = form.tailoringOptions?.trouser ?? [];
-
-      if (!necks.length && !sleeves.length && !trousers.length) {
-        Alert.alert(
-          "Missing",
-          "Please select at least one tailoring style if tailoring is offered.",
-        );
-        return;
-      }
-    }
-
     setSaving(true);
 
     const normalizedTailoringOptions = form.offersTailoring
       ? {
-          blouse_neck: form.tailoringOptions?.blouse_neck ?? [],
-          sleeves: form.tailoringOptions?.sleeves ?? [],
-          trouser: form.tailoringOptions?.trouser ?? [],
+          blouse_neck: [...BLOUSE_NECK_PATTERNS],
+          sleeves: [...BLOUSE_SLEEVE_PATTERNS],
+          trouser: [...TROUSER_STYLES],
         }
       : {
           blouse_neck: [],
@@ -718,6 +676,7 @@ export default function CreateShopScreen() {
                     setForm((prev) => ({
                       ...prev,
                       offersTailoring: true,
+                      tailoringOptions: DEFAULT_TAILORING_OPTIONS,
                     }))
                   }
                   style={({ pressed }) => [
@@ -777,81 +736,6 @@ export default function CreateShopScreen() {
                 </Pressable>
               </View>
             </View>
-
-            {form.offersTailoring ? (
-              <View style={styles.previewCard}>
-                <Text style={styles.previewLabel}>Tailoring styles you can provide</Text>
-
-                <Text style={styles.optionGroupTitle}>Blouse neck patterns</Text>
-                <View style={styles.chipWrap}>
-                  {BLOUSE_NECK_PATTERNS.map((item) => {
-                    const selected = form.tailoringOptions?.blouse_neck?.includes(item);
-                    return (
-                      <Pressable
-                        key={item}
-                        style={[styles.choiceChip, selected && styles.choiceChipActive]}
-                        onPress={() => toggleTailoringOption("blouse_neck", item)}
-                      >
-                        <Text
-                          style={[
-                            styles.choiceChipText,
-                            selected && styles.choiceChipTextActive,
-                          ]}
-                        >
-                          {item}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                <Text style={styles.optionGroupTitle}>Blouse sleeve patterns</Text>
-                <View style={styles.chipWrap}>
-                  {BLOUSE_SLEEVE_PATTERNS.map((item) => {
-                    const selected = form.tailoringOptions?.sleeves?.includes(item);
-                    return (
-                      <Pressable
-                        key={item}
-                        style={[styles.choiceChip, selected && styles.choiceChipActive]}
-                        onPress={() => toggleTailoringOption("sleeves", item)}
-                      >
-                        <Text
-                          style={[
-                            styles.choiceChipText,
-                            selected && styles.choiceChipTextActive,
-                          ]}
-                        >
-                          {item}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                <Text style={styles.optionGroupTitle}>Trouser styles</Text>
-                <View style={styles.chipWrap}>
-                  {TROUSER_STYLES.map((item) => {
-                    const selected = form.tailoringOptions?.trouser?.includes(item);
-                    return (
-                      <Pressable
-                        key={item}
-                        style={[styles.choiceChip, selected && styles.choiceChipActive]}
-                        onPress={() => toggleTailoringOption("trouser", item)}
-                      >
-                        <Text
-                          style={[
-                            styles.choiceChipText,
-                            selected && styles.choiceChipTextActive,
-                          ]}
-                        >
-                          {item}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-            ) : null}
 
             <View style={styles.previewCard}>
               <Text style={styles.previewLabel}>Do you export?</Text>
@@ -1246,46 +1130,45 @@ const styles = StyleSheet.create({
   },
   choiceGrid: {
     flexDirection: "row",
-    gap: 16,
+    gap: 10,
   },
   choiceCard: {
     flex: 1,
     minHeight: 140,
-    borderRadius: 18,
-    padding: 20,
-    backgroundColor: "#FFFFFF",
+    borderRadius: 999,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: "#EEF4FF",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#D7E3FF",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
   },
   choiceCardActive: {
-    backgroundColor: "#111827",
-    borderColor: "#111827",
+    backgroundColor: "#2563EB",
+    borderColor: "#2563EB",
   },
   choiceCardPressed: {
-    transform: [{ scale: 0.97 }],
+    opacity: 0.82,
   },
   choiceCardTitle: {
-    fontSize: 18,
+    fontSize: 12,
     fontWeight: "700",
-    color: "#0F172A",
-    marginBottom: 6,
+    color: "#2563EB",
+    marginBottom: 4,
+    textAlign: "center",
   },
   choiceCardTitleActive: {
     color: "#FFFFFF",
   },
   choiceCardSubtitle: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: "#64748B",
+    fontSize: 10,
+    lineHeight: 14,
+    color: "#2563EB",
+    fontWeight: "700",
+    textAlign: "center",
   },
   choiceCardSubtitleActive: {
-    color: "rgba(255,255,255,0.82)",
+    color: "#FFFFFF",
   },
   optionGroupTitle: {
     fontSize: 14,
@@ -1297,26 +1180,28 @@ const styles = StyleSheet.create({
   chipWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
+    gap: 6,
   },
   choiceChip: {
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
-    backgroundColor: "#FFFFFF",
+    minHeight: 34,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
     borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginRight: 8,
-    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: "#EEF4FF",
+    alignItems: "center",
+    justifyContent: "center",
   },
   choiceChipActive: {
-    backgroundColor: "#111827",
-    borderColor: "#111827",
+    backgroundColor: "#2563EB",
+    borderColor: "#2563EB",
   },
   choiceChipText: {
-    color: "#111827",
-    fontSize: 14,
-    fontWeight: "600",
+    color: "#2563EB",
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "center",
   },
   choiceChipTextActive: {
     color: "#FFFFFF",

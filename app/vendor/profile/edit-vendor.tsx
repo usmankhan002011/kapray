@@ -147,6 +147,12 @@ const EMPTY_TAILORING_OPTIONS = {
   trouser: [] as string[],
 };
 
+const DEFAULT_TAILORING_OPTIONS = {
+  blouse_neck: [...BLOUSE_NECK_PATTERNS],
+  sleeves: [...BLOUSE_SLEEVE_PATTERNS],
+  trouser: [...TROUSER_STYLES],
+};
+
 export default function EditVendorScreen() {
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -158,6 +164,8 @@ export default function EditVendorScreen() {
 
   const vendorId = selectedVendor?.id ?? null;
 
+  const [openTailoring, setOpenTailoring] = useState(false);
+  const [openExport, setOpenExport] = useState(false);
   const [shopName, setShopName] = useState(selectedVendor?.shop_name ?? "");
   const [ownerName, setOwnerName] = useState(selectedVendor?.name ?? "");
   const [email, setEmail] = useState(selectedVendor?.email ?? "");
@@ -468,23 +476,6 @@ export default function EditVendorScreen() {
     );
   }, []);
 
-  const toggleTailoringOption = useCallback(
-    (group: "blouse_neck" | "sleeves" | "trouser", value: string) => {
-      setTailoringOptions((prev) => {
-        const current = prev[group] ?? [];
-        const exists = current.includes(value);
-
-        return {
-          ...prev,
-          [group]: exists
-            ? current.filter((item) => item !== value)
-            : [...current, value],
-        };
-      });
-    },
-    []
-  );
-
   const canSubmit = useMemo(() => {
     return (
       !!vendorId &&
@@ -494,10 +485,6 @@ export default function EditVendorScreen() {
       mobile.trim().length > 0 &&
       address.trim().length > 0 &&
       (!exportsEnabled || exportRegions.length > 0) &&
-      (!offersTailoring ||
-        tailoringOptions.blouse_neck.length > 0 ||
-        tailoringOptions.sleeves.length > 0 ||
-        tailoringOptions.trouser.length > 0) &&
       !saving &&
       !savingMedia
     );
@@ -510,8 +497,6 @@ export default function EditVendorScreen() {
     address,
     exportsEnabled,
     exportRegions.length,
-    offersTailoring,
-    tailoringOptions,
     saving,
     savingMedia,
   ]);
@@ -760,26 +745,13 @@ export default function EditVendorScreen() {
       return;
     }
 
-    if (
-      offersTailoring &&
-      tailoringOptions.blouse_neck.length === 0 &&
-      tailoringOptions.sleeves.length === 0 &&
-      tailoringOptions.trouser.length === 0
-    ) {
-      Alert.alert(
-        "Missing",
-        "Please select at least one tailoring style if tailoring is offered."
-      );
-      return;
-    }
-
     setSaving(true);
 
     const normalizedTailoringOptions = offersTailoring
       ? {
-          blouse_neck: tailoringOptions.blouse_neck ?? [],
-          sleeves: tailoringOptions.sleeves ?? [],
-          trouser: tailoringOptions.trouser ?? [],
+          blouse_neck: [...BLOUSE_NECK_PATTERNS],
+          sleeves: [...BLOUSE_SLEEVE_PATTERNS],
+          trouser: [...TROUSER_STYLES],
         }
       : EMPTY_TAILORING_OPTIONS;
 
@@ -944,134 +916,140 @@ export default function EditVendorScreen() {
           </View>
         )}
 
-        <View style={styles.serviceBox}>
-          <View style={styles.serviceHeaderRow}>
-            <Text style={styles.serviceTitle}>Tailoring service</Text>
-            <Pressable
-              onPress={() => {
-                const next = !offersTailoring;
-                setOffersTailoring(next);
-                if (!next) {
-                  setTailoringOptions(EMPTY_TAILORING_OPTIONS);
-                }
-              }}
-              style={({ pressed }) => [
-                styles.servicePill,
-                offersTailoring ? styles.servicePillOn : null,
-                pressed ? styles.pressed : null,
-              ]}
-            >
-              <Text style={[styles.servicePillText, offersTailoring ? styles.servicePillTextOn : null]}>
-                {offersTailoring ? "Yes" : "No"}
-              </Text>
-            </Pressable>
+        <FieldHeader
+          label="Tailoring service"
+          onPress={() => setOpenTailoring((prev) => !prev)}
+        />
+        {openTailoring && (
+          <View style={styles.serviceBox}>
+            <View style={styles.serviceHeaderRow}>
+              <Text style={styles.serviceTitle}>Tailoring service</Text>
+
+              <View style={styles.choiceGrid}>
+                <Pressable
+                  onPress={() => {
+                    setOffersTailoring(true);
+                    setTailoringOptions(DEFAULT_TAILORING_OPTIONS);
+                  }}
+                  style={({ pressed }) => [
+                    styles.choiceCard,
+                    offersTailoring && styles.choiceCardActive,
+                    pressed ? styles.choiceCardPressed : null,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.choiceCardTitle,
+                      offersTailoring && styles.choiceCardTitleActive,
+                    ]}
+                  >
+                    Yes
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    setOffersTailoring(false);
+                    setTailoringOptions(EMPTY_TAILORING_OPTIONS);
+                  }}
+                  style={({ pressed }) => [
+                    styles.choiceCard,
+                    !offersTailoring && styles.choiceCardActive,
+                    pressed ? styles.choiceCardPressed : null,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.choiceCardTitle,
+                      !offersTailoring && styles.choiceCardTitleActive,
+                    ]}
+                  >
+                    No
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
           </View>
+        )}
 
-          {offersTailoring ? (
-            <>
-              <Text style={styles.optionGroupTitle}>Blouse neck patterns</Text>
-              <View style={styles.chipWrap}>
-                {BLOUSE_NECK_PATTERNS.map((item) => {
-                  const selected = tailoringOptions.blouse_neck.includes(item);
-                  return (
-                    <Pressable
-                      key={item}
-                      style={[styles.choiceChip, selected && styles.choiceChipActive]}
-                      onPress={() => toggleTailoringOption("blouse_neck", item)}
-                    >
-                      <Text style={[styles.choiceChipText, selected && styles.choiceChipTextActive]}>
-                        {item}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+        <FieldHeader
+          label="Export service"
+          onPress={() => setOpenExport((prev) => !prev)}
+        />
+        {openExport && (
+          <View style={styles.serviceBox}>
+            <View style={styles.serviceHeaderRow}>
+              <Text style={styles.serviceTitle}>Export service</Text>
+
+              <View style={styles.choiceGrid}>
+                <Pressable
+                  onPress={() => setExportsEnabled(true)}
+                  style={({ pressed }) => [
+                    styles.choiceCard,
+                    exportsEnabled && styles.choiceCardActive,
+                    pressed ? styles.choiceCardPressed : null,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.choiceCardTitle,
+                      exportsEnabled && styles.choiceCardTitleActive,
+                    ]}
+                  >
+                    Yes
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    setExportsEnabled(false);
+                    setExportRegions([]);
+                  }}
+                  style={({ pressed }) => [
+                    styles.choiceCard,
+                    !exportsEnabled && styles.choiceCardActive,
+                    pressed ? styles.choiceCardPressed : null,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.choiceCardTitle,
+                      !exportsEnabled && styles.choiceCardTitleActive,
+                    ]}
+                  >
+                    No
+                  </Text>
+                </Pressable>
               </View>
+            </View>
 
-              <Text style={styles.optionGroupTitle}>Blouse sleeve patterns</Text>
-              <View style={styles.chipWrap}>
-                {BLOUSE_SLEEVE_PATTERNS.map((item) => {
-                  const selected = tailoringOptions.sleeves.includes(item);
-                  return (
-                    <Pressable
-                      key={item}
-                      style={[styles.choiceChip, selected && styles.choiceChipActive]}
-                      onPress={() => toggleTailoringOption("sleeves", item)}
-                    >
-                      <Text style={[styles.choiceChipText, selected && styles.choiceChipTextActive]}>
-                        {item}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <Text style={styles.optionGroupTitle}>Trouser styles</Text>
-              <View style={styles.chipWrap}>
-                {TROUSER_STYLES.map((item) => {
-                  const selected = tailoringOptions.trouser.includes(item);
-                  return (
-                    <Pressable
-                      key={item}
-                      style={[styles.choiceChip, selected && styles.choiceChipActive]}
-                      onPress={() => toggleTailoringOption("trouser", item)}
-                    >
-                      <Text style={[styles.choiceChipText, selected && styles.choiceChipTextActive]}>
-                        {item}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </>
-          ) : null}
-        </View>
-
-        <View style={styles.serviceBox}>
-          <View style={styles.serviceHeaderRow}>
-            <Text style={styles.serviceTitle}>Export service</Text>
-            <Pressable
-              onPress={() => {
-                const next = !exportsEnabled;
-                setExportsEnabled(next);
-                if (!next) {
-                  setExportRegions([]);
-                }
-              }}
-              style={({ pressed }) => [
-                styles.servicePill,
-                exportsEnabled ? styles.servicePillOn : null,
-                pressed ? styles.pressed : null,
-              ]}
-            >
-              <Text style={[styles.servicePillText, exportsEnabled ? styles.servicePillTextOn : null]}>
-                {exportsEnabled ? "Yes" : "No"}
-              </Text>
-            </Pressable>
+            {exportsEnabled ? (
+              <>
+                <Text style={styles.optionGroupTitle}>Select export regions</Text>
+                <View style={styles.chipWrap}>
+                  {EXPORT_REGIONS.map((region) => {
+                    const selected = exportRegions.includes(region);
+                    return (
+                      <Pressable
+                        key={region}
+                        style={({ pressed }) => [
+                          styles.choiceChip,
+                          selected ? styles.choiceChipActive : null,
+                          pressed ? styles.pressed : null,
+                        ]}
+                        onPress={() => toggleExportRegion(region)}
+                      >
+                        <Text style={[styles.choiceChipText, selected && styles.choiceChipTextActive]}>
+                          {region}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            ) : null}
           </View>
-
-          {exportsEnabled ? (
-            <>
-              <Text style={styles.optionGroupTitle}>Select export regions</Text>
-              <View style={styles.chipWrap}>
-                {EXPORT_REGIONS.map((region) => {
-                  const selected = exportRegions.includes(region);
-                  return (
-                    <Pressable
-                      key={region}
-                      style={[styles.choiceChip, selected && styles.choiceChipActive]}
-                      onPress={() => toggleExportRegion(region)}
-                    >
-                      <Text style={[styles.choiceChipText, selected && styles.choiceChipTextActive]}>
-                        {region}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </>
-          ) : null}
-        </View>
-
+        )}
         <FieldHeader label="Landline" onPress={openAndFocusLandline} />
         {openLandline && (
           <View style={optionStyles.card}>
@@ -1541,28 +1519,41 @@ const styles = StyleSheet.create({
     color: "#0F172A",
   },
 
-  servicePill: {
+  choiceGrid: {
+    flexDirection: "row",
+    gap: 10,
+  },
+
+  choiceCard: {
+    minHeight: 34,
+    paddingVertical: 7,
     paddingHorizontal: 12,
-    paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
-  },
-
-  servicePillOn: {
     borderColor: "#D7E3FF",
     backgroundColor: "#EEF4FF",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
-  servicePillText: {
+  choiceCardActive: {
+    backgroundColor: "#2563EB",
+    borderColor: "#2563EB",
+  },
+
+  choiceCardPressed: {
+    opacity: 0.82,
+  },
+
+  choiceCardTitle: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#0F172A",
+    color: "#2563EB",
+    textAlign: "center",
   },
 
-  servicePillTextOn: {
-    color: "#2563EB",
+  choiceCardTitleActive: {
+    color: "#FFFFFF",
   },
 
   optionGroupTitle: {
@@ -1576,29 +1567,31 @@ const styles = StyleSheet.create({
   chipWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
+    gap: 6,
   },
 
   choiceChip: {
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
-    backgroundColor: "#FFFFFF",
+    minHeight: 34,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
     borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginRight: 8,
-    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: "#EEF4FF",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   choiceChipActive: {
-    backgroundColor: "#111827",
-    borderColor: "#111827",
+    backgroundColor: "#2563EB",
+    borderColor: "#2563EB",
   },
 
   choiceChipText: {
-    color: "#111827",
-    fontSize: 14,
-    fontWeight: "600",
+    color: "#2563EB",
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "center",
   },
 
   choiceChipTextActive: {

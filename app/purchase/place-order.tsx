@@ -250,13 +250,15 @@ function computeDeliveryCostSafe(args: {
   city: string;
   exportRegion: string;
   weightKg: number;
+  packageCm?: Record<string, unknown> | null;
 }) {
-  const { destinationType, city, exportRegion, weightKg } = args;
+  const { destinationType, city, exportRegion, weightKg, packageCm } = args;
   if (weightKg <= 0) return 0;
 
   try {
     const raw = getDeliveryCost({
       weightKg,
+      packageCm: packageCm ?? undefined,
       scope: destinationType === "export" ? "international" : "inland",
       regionOrCity: destinationType === "export" ? exportRegion : city,
     } as any);
@@ -604,8 +606,9 @@ export default function PlaceOrderScreen() {
       city: city.trim(),
       exportRegion: exportRegion.trim(),
       weightKg: base.weightKg,
+      packageCm: base.packageCm,
     });
-  }, [base.weightKg, city, destinationType, exportRegion]);
+  }, [base.packageCm, base.weightKg, city, destinationType, exportRegion]);
 
   const subtotalBeforeDeliveryPkr = useMemo(() => {
   return Math.round(

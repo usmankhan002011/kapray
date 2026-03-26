@@ -9,6 +9,9 @@ export const INLAND_COURIER_SLABS: CourierSlab[] = [
   { upToKg: 10, costPkr: 1700 },
 ];
 
+export const INLAND_OVERWEIGHT_PER_KG = 150;
+export const INLAND_MAX_KG = 10;
+
 export const INTERNATIONAL_COURIER_SLABS: Record<ExportRegion, CourierSlab[]> = {
   UK: [
     { upToKg: 0.5, costPkr: 4200 },
@@ -60,3 +63,15 @@ export const INTERNATIONAL_COURIER_SLABS: Record<ExportRegion, CourierSlab[]> = 
     { upToKg: 5, costPkr: 21900 },
   ],
 };
+
+export const INTERNATIONAL_OVERWEIGHT_PER_KG: Record<ExportRegion, number> = {
+  UK: 3200,
+  USA: 5800,
+  EUROPE: 3900,
+  CANADA: 5800,
+  KSA: 2500,
+  UAE: 2300,
+  AUSTRALIA: 4400,
+};
+
+export const INTERNATIONAL_MAX_KG = 5;

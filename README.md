@@ -190,6 +190,7 @@ kapray
 │   │   │   │   ├── q05a-stitched-total-cost.tsx
 │   │   │   │   ├── q05b-unstitched-cost-per-meter.tsx
 │   │   │   │   ├── q06a-sizes.tsx
+│   │   │   │   ├── q06b2-tailoring-styles.tsx
 │   │   │   │   ├── q06b-services-costs.tsx
 │   │   │   │   ├── q06c-shipping.tsx
 │   │   │   │   ├── q09-images.tsx
@@ -313,17 +314,9 @@ kapray
 │   │   │   └── sitara.jpg
 │   │   ├── stone
 │   │   │   ├── bead_work.jpg
-│   │   │   ├── bead_work.png
-│   │   │   ├── bead_work_2.jpg
-│   │   │   ├── bead_work_2.png
 │   │   │   ├── cut_dana.jpg
-│   │   │   ├── cut_dana_2.jpg
-│   │   │   ├── cutdana 2.png
-│   │   │   ├── cutdana 3.jpg
-│   │   │   ├── cutdana.png
 │   │   │   ├── pearl_work.jpg
 │   │   │   ├── rhinestones.jpg
-│   │   │   ├── rhinestones.png
 │   │   │   └── swarovski_crystal.jpg
 │   │   └── thread
 │   │       ├── chickenkari.png
@@ -337,9 +330,14 @@ kapray
 ├── components
 │   ├── product
 │   │   ├── view-product
+│   │   │   ├── TailoringStylePickerModal.tsx
 │   │   │   ├── ViewProduct.media.tsx
 │   │   │   ├── ViewProduct.screen.tsx
-│   │   │   └── ViewProduct.styles.ts
+│   │   │   ├── ViewProduct.styles.ts
+│   │   │   ├── ViewProduct.tailoring.helpers.ts
+│   │   │   ├── ViewProduct.tailoring.selection.tsx
+│   │   │   ├── ViewProduct.tailoring.tsx
+│   │   │   └── ViewProductScreen_legacy
 │   │   ├── addProductStyles.ts
 │   │   ├── ProductDraftContext.tsx
 │   │   └── useAutoFocus.ts
@@ -417,7 +415,7 @@ kapray
 ├── tree-app.txt
 └── tsconfig.json
 PS C:\DEV\kapray\kapray>
-as on 20Mar26
+as on 24Mar26
 
 -------------------------------------------------------------------------------------------------------------
 strategy

@@ -1513,39 +1513,78 @@ export default function ViewProductScreen() {
         {showBuyerActions && showDyeing ? (
           <View style={styles.card}>
             <Text style={[styles.label, { color: stylesVars.blue }]}>Do you want dyeing?</Text>
-
-            <View style={{ flexDirection: "row", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
-              <SelectPill
-                label={`Yes • +PKR ${dyeingCostPkr}`}
-                selected={buyerWantsDyeing}
-                onPress={() => {
-                  setBuyerWantsDyeing(true);
-                  onOpenDyeing();
+        <View style={{ marginTop: 10 }}>
+          <View style={{ flexDirection: "row", gap: 12, flexWrap: "wrap" }}>
+            <Pressable
+              onPress={() => {
+                setBuyerWantsDyeing(true);
+                onOpenDyeing();
+              }}
+              style={({ pressed }) => [
+                {
+                  paddingVertical: 10,
+                  paddingHorizontal: 14,
+                  borderRadius: 14,
+                  borderWidth: 1.5,
+                  borderColor: buyerWantsDyeing ? stylesVars.blue : "#D7E3FF",
+                  backgroundColor: buyerWantsDyeing ? stylesVars.blue : "#EEF4FF",
+                },
+                pressed ? styles.pressed : null,
+              ]}
+            >
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontWeight: "800",
+                  color: buyerWantsDyeing ? "#FFFFFF" : stylesVars.blue,
                 }}
-              />
+              >
+                Yes • +PKR {dyeingCostPkr}
+              </Text>
+            </Pressable>
 
-              <SelectPill
-                label="No"
-                selected={!buyerWantsDyeing}
-                onPress={() => {
-                  setBuyerWantsDyeing(false);
-                  setSelectedDyeShadeId("");
-                  setSelectedDyeHex("");
-                  setSelectedDyeLabel("");
-                  clearCachedDyeSelection(
-                    productId != null ? String(productId) : null,
-                    productCode ?? "",
-                  );
+            <Pressable
+              onPress={() => {
+                setBuyerWantsDyeing(false);
+                setSelectedDyeShadeId("");
+                setSelectedDyeHex("");
+                setSelectedDyeLabel("");
+                clearCachedDyeSelection(
+                  productId != null ? String(productId) : null,
+                  productCode ?? "",
+                );
 
-                  router.setParams({
-                    dyeing_selected: "0",
-                    dye_shade_id: undefined,
-                    dye_hex: undefined,
-                    dye_label: undefined,
-                  } as any);
+                router.setParams({
+                  dyeing_selected: "0",
+                  dye_shade_id: undefined,
+                  dye_hex: undefined,
+                  dye_label: undefined,
+                } as any);
+              }}
+              style={({ pressed }) => [
+                {
+                  paddingVertical: 10,
+                  paddingHorizontal: 14,
+                  borderRadius: 14,
+                  borderWidth: 1.5,
+                  borderColor: !buyerWantsDyeing ? stylesVars.blue : "#D7E3FF",
+                  backgroundColor: !buyerWantsDyeing ? stylesVars.blue : "#EEF4FF",
+                },
+                pressed ? styles.pressed : null,
+              ]}
+            >
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontWeight: "800",
+                  color: !buyerWantsDyeing ? "#FFFFFF" : stylesVars.blue,
                 }}
-              />
-            </View>
+              >
+                No
+              </Text>
+            </Pressable>
+          </View>
+        </View>
 
             {buyerWantsDyeing && selectedDyeHex ? (
               <View style={{ marginTop: 14 }}>

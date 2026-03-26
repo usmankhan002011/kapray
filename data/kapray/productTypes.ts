@@ -68,6 +68,7 @@ export interface DeliveryQuoteInput {
   weightKg: number;
   scope: CourierScope;
   regionOrCity: string;
+  packageCm?: PackageDimensionsCm;
 }
 
 export const UNSTITCHED_SIZE_KEYS: UnstitchedSizeKey[] = [

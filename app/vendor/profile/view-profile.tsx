@@ -470,30 +470,26 @@ export default function VendorProfileScreen() {
 
             <View style={styles.badgeRow}>
               <Text style={styles.badgeLabel}>Stitching / Tailoring</Text>
-              <View style={[styles.statusPill, offersTailoring ? styles.statusPillOn : null]}>
-                <Text
-                  style={[
-                    styles.statusPillText,
-                    offersTailoring ? styles.statusPillTextOn : null,
-                  ]}
-                >
-                  {offersTailoring ? "Available" : "Not available"}
-                </Text>
-              </View>
+              <Text
+                style={[
+                  styles.statusText,
+                  offersTailoring && styles.statusTextOn,
+                ]}
+              >
+                {offersTailoring ? "Available" : "Not available"}
+              </Text>
             </View>
 
             <View style={styles.badgeRow}>
               <Text style={styles.badgeLabel}>Export</Text>
-              <View style={[styles.statusPill, exportsEnabled ? styles.statusPillOn : null]}>
-                <Text
-                  style={[
-                    styles.statusPillText,
-                    exportsEnabled ? styles.statusPillTextOn : null,
-                  ]}
-                >
-                  {exportsEnabled ? "Available" : "Not available"}
-                </Text>
-              </View>
+              <Text
+                style={[
+                  styles.statusText,
+                  exportsEnabled && styles.statusTextOn,
+                ]}
+              >
+                {exportsEnabled ? "Available" : "Not available"}
+              </Text>
             </View>
           </View>
         </View>
@@ -518,13 +514,7 @@ export default function VendorProfileScreen() {
             value={offersTailoring ? "Yes, tailoring available" : "No tailoring service"}
           />
 
-          {offersTailoring ? (
-            <>
-              <Field label="Blouse neck styles" value={joinOrDash(blouseNeckOptions)} />
-              <Field label="Sleeve styles" value={joinOrDash(sleeveOptions)} />
-              <Field label="Trouser styles" value={joinOrDash(trouserOptions)} />
-            </>
-          ) : null}
+          {offersTailoring ? null : null}
 
           <Field label="Exports" value={exportsEnabled ? "Yes" : "No"} />
 
@@ -873,29 +863,14 @@ const styles = StyleSheet.create({
     color: stylesVars.text,
     letterSpacing: 0.2,
   },
-
-  statusPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg,
-  },
-
-  statusPillOn: {
-    borderColor: "#D7E3FF",
-    backgroundColor: stylesVars.blueSoft,
-  },
-
-  statusPillText: {
-    fontSize: 12,
+  statusText: {
+    fontSize: 13,
     fontWeight: "700",
-    color: stylesVars.text,
+    color: stylesVars.mutedText,
   },
 
-  statusPillTextOn: {
-    color: stylesVars.blue,
+  statusTextOn: {
+    color: stylesVars.text, // changed from blue → black
   },
 
   section: {
