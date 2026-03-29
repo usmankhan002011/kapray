@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { apStyles } from "@/components/product/addProductStyles";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 
@@ -8,30 +8,15 @@ function safeStr(v: any) {
   return String(v ?? "").trim();
 }
 
-function normalizeSpaces(s: string) {
-  return s.replace(/\s+/g, " ").trim();
-}
-
 export default function CareModal() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const { draft } = useProductDraft() as any;
 
-  const ctx = useProductDraft() as any;
-  const { draft } = ctx;
-
-  function patchSpec(patch: any) {
-    if (typeof ctx.setSpec === "function") {
-      ctx.setSpec((prev: any) => ({ ...(prev ?? {}), ...patch }));
-      return;
-    }
-    if (typeof ctx.setDraft === "function") {
-      ctx.setDraft((prev: any) => ({
-        ...prev,
-        spec: { ...(prev?.spec ?? {}), ...patch }
-      }));
-      return;
-    }
-    draft.spec = { ...(draft?.spec ?? {}), ...patch };
-  }
+  const q12Path =
+    safeStr((params as any)?.q12Path) ||
+    "/vendor/profile/add-product/q12-more-description";
+  const parentReturnTo = safeStr((params as any)?.parentReturnTo);
 
   const options = [
     "Dry clean recommended to maintain fabric quality.",
@@ -69,26 +54,14 @@ export default function CareModal() {
   function addSelected() {
     if (!picked.length) return;
 
-    const parts = Array.isArray((draft?.spec as any)?.more_description_parts)
-      ? (draft?.spec as any)?.more_description_parts
-      : [];
-    const text = safeStr((draft?.spec as any)?.more_description ?? "");
+    const payload = {
+      pathname: q12Path as any,
+      params: parentReturnTo
+        ? { appendMany: picked.join("\n"), returnTo: parentReturnTo }
+        : { appendMany: picked.join("\n") }
+    } as any;
 
-    const uniqueToAdd = picked.filter((s) => !parts.includes(s));
-    const nextParts = uniqueToAdd.length ? [...parts, ...uniqueToAdd] : parts;
-
-    const nextText = uniqueToAdd.length
-      ? normalizeSpaces(
-          text ? `${text} ${uniqueToAdd.join(" ")}` : uniqueToAdd.join(" ")
-        )
-      : text;
-
-    patchSpec({
-      more_description_parts: nextParts,
-      more_description: nextText
-    });
-
-    setPicked([]);
+    router.push(payload);
   }
 
   function closeModal() {

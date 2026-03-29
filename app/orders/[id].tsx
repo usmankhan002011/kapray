@@ -1,5 +1,3 @@
-// File: app/orders/[id].tsx
-
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -62,7 +60,7 @@ function money(currency: string, v: any) {
   if (v == null || v === "") return `${currency} —`;
   const n = typeof v === "number" ? v : Number(v);
   if (Number.isNaN(n)) return `${currency} —`;
-  return `${currency} ${n.toLocaleString()}`;
+  return `${currency} ${Math.round(n).toLocaleString()}`;
 }
 
 function safeText(v: any) {
@@ -184,6 +182,87 @@ function cleanVariationLabel(value: string, kind: "neck" | "sleeve") {
   if (!value || value === "—") return "";
   const pattern = kind === "neck" ? /\bneck\b/gi : /\bsleeve\b/gi;
   return value.replace(pattern, "").replace(/\s{2,}/g, " ").trim();
+}
+
+function buildAddressPreview(args: {
+  address: string;
+  city: string;
+  postalCode: string;
+  country: string;
+  destinationType: string;
+}) {
+  const address = String(args.address ?? "").trim();
+  const city = String(args.city ?? "").trim();
+  const postalCode = String(args.postalCode ?? "").trim();
+  const country = String(args.country ?? "").trim();
+  const destinationType = String(args.destinationType ?? "").trim().toLowerCase();
+
+  const cityLine = [city, postalCode].filter(Boolean).join(" ");
+  const endCountry = destinationType === "export" ? country : "";
+  return [address, cityLine, endCountry].filter(Boolean).join(", ");
+}
+
+function SectionCard({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.card}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {!!subtitle && <Text style={styles.sectionSubtitle}>{subtitle}</Text>}
+      </View>
+      {children}
+    </View>
+  );
+}
+
+function KVRow({
+  label,
+  value,
+  muted = false,
+}: {
+  label: string;
+  value?: React.ReactNode;
+  muted?: boolean;
+}) {
+  if (
+    value == null ||
+    value === "" ||
+    value === false ||
+    (typeof value === "string" && !value.trim())
+  ) {
+    return null;
+  }
+
+  return (
+    <View style={styles.kvRow}>
+      <Text style={styles.kvLabel}>{label}</Text>
+      <Text style={[styles.kvValue, muted && styles.kvMuted]}>{value}</Text>
+    </View>
+  );
+}
+
+function PriceRow({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
+  return (
+    <View style={styles.priceRow}>
+      <Text style={[styles.priceLabel, strong && styles.priceLabelStrong]}>{label}</Text>
+      <Text style={[styles.priceValue, strong && styles.priceValueStrong]}>{value}</Text>
+    </View>
+  );
 }
 
 export default function OrderDetailScreen() {
@@ -346,20 +425,24 @@ export default function OrderDetailScreen() {
 
   const isUnstitched = useMemo(() => isUnstitchedFromSpec(spec), [spec]);
 
-  const sizeLine = useMemo(() => {
+  const exactPairs = useMemo(() => {
+    if (!order || order.size_mode !== "exact") return [] as [string, string][];
+    const m =
+      order.exact_measurements && typeof order.exact_measurements === "object"
+        ? order.exact_measurements
+        : {};
+    return Object.entries(m)
+      .map(([k, v]) => [String(k), String(v ?? "").trim()] as [string, string])
+      .filter(([, v]) => !!v);
+  }, [order]);
+
+  const sizeLabel = useMemo(() => {
     if (!order) return "—";
     if (order.size_mode === "exact") {
-      const m =
-        order.exact_measurements && typeof order.exact_measurements === "object"
-          ? order.exact_measurements
-          : {};
-      const pairs = Object.entries(m)
-        .map(([k, v]) => `${k}=${String(v ?? "").trim()}`)
-        .filter((x) => !x.endsWith("="));
-      return pairs.length ? `Exact: ${pairs.join(", ")}` : "Exact: —";
+      return exactPairs.length ? "Exact measurements" : "Exact measurements not set";
     }
-    return order.selected_size ? `Standard: ${order.selected_size}` : "Standard: —";
-  }, [order]);
+    return order.selected_size || "Not set";
+  }, [order, exactPairs]);
 
   const selectedUnstitchedSize = useMemo(() => {
     if (!order) return "";
@@ -493,14 +576,6 @@ export default function OrderDetailScreen() {
     );
   }, [order, spec]);
 
-  const noChangeInSelectedStyle = useMemo(() => {
-    return (
-      selectedNeckVariation === "no change in selected style" ||
-      selectedSleeveVariation === "no change in selected style" ||
-      selectedTrouserVariation === "no change in selected style"
-    );
-  }, [selectedNeckVariation, selectedSleeveVariation, selectedTrouserVariation]);
-
   const destinationType = useMemo(() => {
     if (!order) return "";
     const raw = safeText(spec?.destination_type ?? "");
@@ -518,9 +593,33 @@ export default function OrderDetailScreen() {
     return numOrNull(spec?.delivery_weight_kg ?? spec?.weight_kg ?? null);
   }, [order, spec]);
 
+  const postalCode = useMemo(() => {
+    if (!order) return "";
+    const raw = safeText(spec?.postal_code ?? "");
+    return raw === "—" ? "" : raw;
+  }, [order, spec]);
+
+  const country = useMemo(() => {
+    if (!order) return "";
+    const raw = safeText(spec?.country ?? "");
+    return raw === "—" ? "" : raw;
+  }, [order, spec]);
+
+  const addressPreview = useMemo(() => {
+    if (!order) return "";
+    return buildAddressPreview({
+      address: order.delivery_address,
+      city: order.city,
+      postalCode,
+      country,
+      destinationType,
+    });
+  }, [order, postalCode, country, destinationType]);
+
   const baseProductCostPkr = useMemo(() => {
     if (!order) return null;
     if (isUnstitched && fabricCostPkr != null) return fabricCostPkr;
+
     const direct =
       numOrNull(spec?.base_product_cost_pkr ?? null) ??
       numOrNull(spec?.stitched_total_pkr ?? null) ??
@@ -546,7 +645,7 @@ export default function OrderDetailScreen() {
     tailoringStyleExtraCostPkr,
   ]);
 
-  const dressCatLine = useMemo(() => {
+  const categoryLabel = useMemo(() => {
     if (!order) return "—";
     return getDressCatFromSpec(spec);
   }, [order, spec]);
@@ -616,27 +715,29 @@ export default function OrderDetailScreen() {
     setDispatchOpen(true);
   }, []);
 
-  const statusBadgeStyle = useMemo(() => {
+  const statusPillStyle = useMemo(() => {
     const s = norm(order?.status ?? "");
-    return s === "placed" ? styles.badgeRed : styles.badgeBlue;
+    if (s === "placed") return [styles.statusPill, styles.statusPillRed];
+    if (s === "delivered") return [styles.statusPill, styles.statusPillGreen];
+    return [styles.statusPill, styles.statusPillBlue];
   }, [order?.status]);
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.top}>
+      <View style={styles.topBar}>
         <Pressable
-          onPress={() => router.replace(backTarget as any)}
+          onPress={handleBack}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
         >
           <Text style={styles.backText}>Back</Text>
         </Pressable>
-        <Text style={styles.title}>Order Detail</Text>
+        <Text style={styles.pageTitle}>Order Detail</Text>
       </View>
 
       {loading ? (
         <View style={styles.loading}>
           <ActivityIndicator />
-          <Text style={styles.loadingText}>Loading…</Text>
+          <Text style={styles.loadingText}>Loading order…</Text>
         </View>
       ) : !order ? (
         <View style={styles.empty}>
@@ -644,291 +745,247 @@ export default function OrderDetailScreen() {
         </View>
       ) : (
         <>
-          <ScrollView contentContainerStyle={styles.container}>
-            <View style={[styles.card, norm(order.status) === "placed" ? styles.cardNewRed : null]}>
-              <View style={styles.rowBetween}>
-                <Text style={styles.h1}>{order.order_no || `Order #${order.id}`}</Text>
-                <Text style={[styles.badge, statusBadgeStyle]} numberOfLines={1}>
-                  {order.status}
-                </Text>
+          <ScrollView
+            contentContainerStyle={styles.container}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={[styles.headerCard, norm(order.status) === "placed" ? styles.headerCardNew : null]}>
+              <View style={styles.headerRow}>
+                <View style={styles.headerMeta}>
+                  <Text style={styles.orderNo}>{order.order_no || `Order #${order.id}`}</Text>
+                  <Text style={styles.headerSubtext}>
+                    Created {new Date(order.created_at).toLocaleString()}
+                  </Text>
+                </View>
+
+                <View style={statusPillStyle}>
+                  <Text style={styles.statusPillText}>{humanizeCat(order.status)}</Text>
+                </View>
               </View>
-
-              <Text style={styles.meta}>
-                Created:{" "}
-                <Text style={styles.strong}>{new Date(order.created_at).toLocaleString()}</Text>
-              </Text>
             </View>
 
-            <View style={styles.card}>
-              <Text style={styles.h2}>Product</Text>
+            <SectionCard title="Product Summary">
+              <View style={styles.productRow}>
+                <View style={styles.imageBox}>
+                  {bannerUrl ? (
+                    <Image source={{ uri: bannerUrl }} style={styles.image} resizeMode="cover" />
+                  ) : (
+                    <View style={styles.imagePlaceholder}>
+                      <Text style={styles.imagePlaceholderText}>No image</Text>
+                    </View>
+                  )}
+                </View>
 
-              {!!bannerUrl ? (
-                <View style={styles.bannerWrap}>
-                  <Image source={{ uri: bannerUrl }} style={styles.bannerImg} resizeMode="cover" />
+                <View style={styles.productMetaWrap}>
+                  <Text style={styles.productName} numberOfLines={2}>
+                    {order.title_snapshot}
+                  </Text>
+
+                  <View style={styles.productMetaInfo}>
+                    <Text style={styles.productMetaLabel}>Category</Text>
+                    <Text style={styles.productMetaValue}>{categoryLabel}</Text>
+                  </View>
+
+                  {!!order.product_code_snapshot && (
+                    <View style={styles.productMetaInfo}>
+                      <Text style={styles.productMetaLabel}>Code</Text>
+                      <Text style={styles.productMetaValue}>{order.product_code_snapshot}</Text>
+                    </View>
+                  )}
+
+                  <Text style={styles.heroPrice}>
+                    {money(order.currency, baseProductCostPkr)}
+                  </Text>
+                </View>
+              </View>
+            </SectionCard>
+
+            <SectionCard title="Customization">
+              <KVRow
+                label="Size"
+                value={order.size_mode === "exact" ? "Exact measurements" : sizeLabel}
+              />
+
+              {order.size_mode === "exact" && exactPairs.length ? (
+                <View style={styles.measurementsWrap}>
+                  {exactPairs.map(([k, v]) => (
+                    <View key={k} style={styles.measurementChip}>
+                      <Text style={styles.measurementChipText}>
+                        {k}: {v}
+                      </Text>
+                    </View>
+                  ))}
                 </View>
               ) : null}
 
-              <Text style={styles.meta}>
-                Title: <Text style={styles.strong}>{order.title_snapshot}</Text>
-              </Text>
-              <Text style={styles.meta}>
-                Code: <Text style={styles.strong}>{order.product_code_snapshot}</Text>
-              </Text>
-              <Text style={styles.meta}>
-                Dress Category: <Text style={styles.strong}>{dressCatLine}</Text>
-              </Text>
-
-              {isUnstitched && selectedUnstitchedSize ? (
-                <Text style={styles.meta}>
-                  Selected Size: <Text style={styles.strong}>{selectedUnstitchedSize}</Text>
-                </Text>
-              ) : null}
-
-              {isUnstitched && pricePerMeterPkr != null ? (
-                <Text style={styles.meta}>
-                  Cost per meter: <Text style={styles.strong}>{money(order.currency, pricePerMeterPkr)}</Text>
-                </Text>
-              ) : null}
-
-              {isUnstitched && selectedFabricLengthM != null ? (
-                <Text style={styles.meta}>
-                  Fabric Length: <Text style={styles.strong}>{selectedFabricLengthM} meter(s)</Text>
-                </Text>
-              ) : null}
-
-              {isUnstitched && fabricCostPkr != null ? (
-                <Text style={styles.meta}>
-                  Total Fabric Cost: <Text style={styles.strong}>{money(order.currency, fabricCostPkr)}</Text>
-                </Text>
-              ) : null}
-
-              {!isUnstitched && baseProductCostPkr != null ? (
-                <Text style={styles.meta}>
-                  Product Cost: <Text style={styles.strong}>{money(order.currency, baseProductCostPkr)}</Text>
-                </Text>
-              ) : null}
-
-              {tailoringSelected ? (
-                <Text style={styles.meta}>
-                  Tailoring:{" "}
-                  <Text style={styles.strong}>
-                    {tailoringCostPkr != null ? money(order.currency, tailoringCostPkr) : "Included"}
-                    {tailoringTurnaroundDays != null ? ` • ${tailoringTurnaroundDays} days` : ""}
-                  </Text>
-                </Text>
-              ) : null}
-
-              {!!selectedTailoringStyleImage ? (
-                <View style={styles.selectedStyleImageWrap}>
-                  <Image
-                    source={{ uri: selectedTailoringStyleImage }}
-                    style={styles.selectedStyleImage}
-                    resizeMode="cover"
+              {isUnstitched ? (
+                <>
+                  <KVRow label="Selected size" value={selectedUnstitchedSize} />
+                  <KVRow label="Fabric length" value={selectedFabricLengthM != null ? `${selectedFabricLengthM} m` : ""} />
+                  <KVRow
+                    label="Rate"
+                    value={
+                      pricePerMeterPkr != null
+                        ? `${money(order.currency, pricePerMeterPkr)} / meter`
+                        : ""
+                    }
                   />
-                </View>
-              ) : null}
-
-              {!!selectedTailoringStyleTitle ? (
-                <Text style={styles.meta}>
-                  Style: <Text style={styles.strong}>{selectedTailoringStyleTitle}</Text>
-                </Text>
-              ) : null}
-
-              {tailoringSelected && noChangeInSelectedStyle ? (
-                <Text style={styles.meta}>
-                  <Text style={styles.strong}>No change in selected style</Text>
-                </Text>
-              ) : null}
-
-              {tailoringSelected && !noChangeInSelectedStyle && !!selectedNeckVariation ? (
-                <Text style={styles.meta}>
-                  Neck:{" "}
-                  <Text style={styles.strong}>
-                    {cleanVariationLabel(selectedNeckVariation, "neck")}
-                  </Text>
-                </Text>
-              ) : null}
-
-              {tailoringSelected && !noChangeInSelectedStyle && !!selectedSleeveVariation ? (
-                <Text style={styles.meta}>
-                  Sleeve:{" "}
-                  <Text style={styles.strong}>
-                    {cleanVariationLabel(selectedSleeveVariation, "sleeve")}
-                  </Text>
-                </Text>
-              ) : null}
-
-              {tailoringSelected && !noChangeInSelectedStyle && !!selectedTrouserVariation ? (
-                <Text style={styles.meta}>
-                  Trouser: <Text style={styles.strong}>{selectedTrouserVariation}</Text>
-                </Text>
-              ) : null}
-
-              {tailoringStyleExtraCostPkr != null ? (
-                <Text style={styles.meta}>
-                  Style Extra Cost: <Text style={styles.strong}>{money(order.currency, tailoringStyleExtraCostPkr)}</Text>
-                </Text>
-              ) : null}
-
-              {!!customTailoringNote ? (
-                <Text style={styles.meta}>
-                  Additional Note for Vendor: <Text style={styles.strong}>{customTailoringNote}</Text>
-                </Text>
+                </>
               ) : null}
 
               {dyeSelected ? (
-                <Text style={styles.meta}>
-                  Dyeing:{" "}
-                  <Text style={styles.strong}>
-                    {dyeCostPkr != null ? money(order.currency, dyeCostPkr) : "Included"}
-                  </Text>
-                </Text>
-              ) : null}
-
-              {!!dyeHex ? (
-                <View style={styles.dyeRow}>
-                  <Text style={styles.meta}>
-                    Dyeing Colour: <Text style={styles.strong}>Selected</Text>
-                  </Text>
-                  <View style={[styles.dyeSwatch, { backgroundColor: dyeHex }]} />
+                <View style={styles.customBlock}>
+                  <View style={styles.kvRow}>
+                    <Text style={styles.kvLabel}>Dyeing color</Text>
+                    <View style={styles.colorPreviewRow}>
+                      {!!dyeHex && <View style={[styles.dyeSwatch, { backgroundColor: dyeHex }]} />}
+                      <Text style={styles.helper}>
+                        {dyeCostPkr != null ? money(order.currency, dyeCostPkr) : `${order.currency} —`}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
-              ) : null}
-            </View>
-
-            <View style={styles.card}>
-              <Text style={styles.h2}>Buyer</Text>
-              <Text style={styles.meta}>
-                Name: <Text style={styles.strong}>{order.buyer_name}</Text>
-              </Text>
-              <Text style={styles.meta}>
-                Mobile: <Text style={styles.strong}>{order.buyer_mobile}</Text>
-              </Text>
-              {!!order.buyer_email && (
-                <Text style={styles.meta}>
-                  Email: <Text style={styles.strong}>{order.buyer_email}</Text>
-                </Text>
-              )}
-            </View>
-
-            <View style={styles.card}>
-              <Text style={styles.h2}>Delivery</Text>
-              <Text style={styles.meta}>
-                Address: <Text style={styles.strong}>{order.delivery_address}</Text>
-              </Text>
-              <Text style={styles.meta}>
-                City: <Text style={styles.strong}>{order.city || "—"}</Text>
-              </Text>
-
-              {!!destinationType && (
-                <Text style={styles.meta}>
-                  Destination Type: <Text style={styles.strong}>{humanizeCat(destinationType)}</Text>
-                </Text>
-              )}
-
-              {!!exportRegion && (
-                <Text style={styles.meta}>
-                  Export Region: <Text style={styles.strong}>{exportRegion}</Text>
-                </Text>
-              )}
-
-              {deliveryWeightKg != null ? (
-                <Text style={styles.meta}>
-                  Delivery Weight: <Text style={styles.strong}>{deliveryWeightKg} kg</Text>
-                </Text>
-              ) : null}
-
-              {!!order.notes && (
-                <Text style={styles.meta}>
-                  Notes: <Text style={styles.strong}>{order.notes}</Text>
-                </Text>
-              )}
-            </View>
-
-            <View style={styles.card}>
-              <Text style={styles.h2}>Size</Text>
-              <Text style={styles.meta}>
-                <Text style={styles.strong}>{sizeLine}</Text>
-              </Text>
-            </View>
-
-            <View style={styles.card}>
-              <Text style={styles.h2}>Tracking</Text>
-
-              <Text style={styles.meta}>
-                Courier: <Text style={styles.strong}>{order.courier_name || "—"}</Text>
-              </Text>
-
-              <Text style={styles.meta}>
-                Tracking #: <Text style={styles.strong}>{order.tracking_number || "—"}</Text>
-              </Text>
-
-              {/* ✅ NEW LINE */}
-              <Text style={[styles.meta, { marginTop: 6 }]}>
-                Buyer may track this order anytime from their Home screen.
-              </Text>
-            </View>
-
-            <View style={styles.card}>
-              <Text style={styles.h2}>Totals</Text>
-
-              {baseProductCostPkr != null ? (
-                <Text style={styles.meta}>
-                  {isUnstitched ? "Total Fabric Cost" : "Product Cost"}:{" "}
-                  <Text style={styles.strong}>{money(order.currency, baseProductCostPkr)}</Text>
-                </Text>
-              ) : null}
-
-              {dyeSelected ? (
-                <Text style={styles.meta}>
-                  Dyeing:{" "}
-                  <Text style={styles.strong}>
-                    {dyeCostPkr != null ? money(order.currency, dyeCostPkr) : `${order.currency} —`}
-                  </Text>
-                </Text>
               ) : null}
 
               {tailoringSelected ? (
-                <Text style={styles.meta}>
-                  Tailoring:{" "}
-                  <Text style={styles.strong}>
-                    {tailoringCostPkr != null
+                <View style={styles.customBlock}>
+                  <KVRow
+                    label="Tailoring"
+                    value={`${tailoringCostPkr != null ? money(order.currency, tailoringCostPkr) : "Included"}${
+                      tailoringTurnaroundDays != null ? ` • ${tailoringTurnaroundDays} days` : ""
+                    }`}
+                  />
+
+                  {!!selectedTailoringStyleImage && (
+                    <View style={styles.tailoringImageWrap}>
+                      <Image
+                        source={{ uri: selectedTailoringStyleImage }}
+                        style={styles.tailoringImage}
+                        resizeMode="cover"
+                      />
+                    </View>
+                  )}
+
+                  <KVRow label="Style" value={selectedTailoringStyleTitle} />
+                  <KVRow
+                    label="Neck"
+                    value={
+                      selectedNeckVariation &&
+                      selectedNeckVariation !== "no change in selected style"
+                        ? cleanVariationLabel(selectedNeckVariation, "neck")
+                        : ""
+                    }
+                  />
+                  <KVRow
+                    label="Sleeve"
+                    value={
+                      selectedSleeveVariation &&
+                      selectedSleeveVariation !== "no change in selected style"
+                        ? cleanVariationLabel(selectedSleeveVariation, "sleeve")
+                        : ""
+                    }
+                  />
+                  <KVRow
+                    label="Trouser"
+                    value={
+                      selectedTrouserVariation &&
+                      selectedTrouserVariation !== "no change in selected style"
+                        ? selectedTrouserVariation
+                        : ""
+                    }
+                  />
+
+                  {tailoringStyleExtraCostPkr != null ? (
+                    <KVRow
+                      label="Additional style cost"
+                      value={money(order.currency, tailoringStyleExtraCostPkr)}
+                    />
+                  ) : null}
+
+                  {!!customTailoringNote && (
+                    <View style={styles.noteBox}>
+                      <Text style={styles.noteLabel}>Tailoring note</Text>
+                      <Text style={styles.noteText}>{customTailoringNote}</Text>
+                    </View>
+                  )}
+                </View>
+              ) : null}
+            </SectionCard>
+
+            <SectionCard title="Buyer">
+              <KVRow label="Name" value={order.buyer_name} />
+              <KVRow label="Mobile" value={order.buyer_mobile} />
+              <KVRow label="Email" value={order.buyer_email} muted />
+            </SectionCard>
+
+            <SectionCard title="Delivery">
+              {!!addressPreview ? (
+                <View style={styles.previewBox}>
+                  <Text style={styles.previewLabel}>Address</Text>
+                  <Text style={styles.previewText}>{addressPreview}</Text>
+                </View>
+              ) : (
+                <KVRow label="Address" value={order.delivery_address} />
+              )}
+
+              <KVRow label="Delivery type" value={destinationType ? humanizeCat(destinationType) : ""} />
+              <KVRow label="Region" value={exportRegion} muted />
+              <KVRow label="Weight" value={deliveryWeightKg != null ? `${deliveryWeightKg} kg` : ""} muted />
+              <KVRow label="Notes" value={order.notes} muted />
+            </SectionCard>
+
+            <SectionCard title="Tracking">
+              <KVRow label="Courier" value={order.courier_name || "—"} />
+              <KVRow label="Tracking number" value={order.tracking_number || "—"} />
+              <Text style={styles.helper}>Buyer may track this order anytime from their Home screen.</Text>
+            </SectionCard>
+
+            <SectionCard title="Price Summary">
+              {baseProductCostPkr != null ? (
+                <PriceRow
+                  label={isUnstitched ? "Total fabric cost" : "Product"}
+                  value={money(order.currency, baseProductCostPkr)}
+                />
+              ) : null}
+
+              {dyeSelected ? (
+                <PriceRow
+                  label="Dyeing"
+                  value={dyeCostPkr != null ? money(order.currency, dyeCostPkr) : `${order.currency} —`}
+                />
+              ) : null}
+
+              {tailoringSelected ? (
+                <PriceRow
+                  label="Tailoring"
+                  value={
+                    tailoringCostPkr != null
                       ? money(order.currency, tailoringCostPkr)
-                      : `${order.currency} —`}
-                  </Text>
-                </Text>
+                      : `${order.currency} —`
+                  }
+                />
               ) : null}
 
               {tailoringStyleExtraCostPkr != null ? (
-                <Text style={styles.meta}>
-                  Style Extra Cost:{" "}
-                  <Text style={styles.strong}>
-                    {money(order.currency, tailoringStyleExtraCostPkr)}
-                  </Text>
-                </Text>
+                <PriceRow
+                  label="Additional style tailoring cost"
+                  value={money(order.currency, tailoringStyleExtraCostPkr)}
+                />
               ) : null}
 
-              <Text style={styles.meta}>
-                Subtotal before delivery:{" "}
-                <Text style={styles.strong}>{money(order.currency, order.subtotal_pkr)}</Text>
-              </Text>
-              <Text style={styles.meta}>
-                Delivery: <Text style={styles.strong}>{money(order.currency, order.delivery_pkr)}</Text>
-              </Text>
-              <Text style={styles.meta}>
-                Discount: <Text style={styles.strong}>{money(order.currency, order.discount_pkr)}</Text>
-              </Text>
+              <PriceRow label="Subtotal" value={money(order.currency, order.subtotal_pkr)} />
+              <PriceRow label="Shipping" value={money(order.currency, order.delivery_pkr)} />
+              {!!order.discount_pkr ? (
+                <PriceRow label="Discount" value={money(order.currency, order.discount_pkr)} />
+              ) : null}
 
               <View style={styles.divider} />
 
-              <Text style={styles.meta}>
-                Grand Total: <Text style={styles.strong}>{money(order.currency, order.total_pkr)}</Text>
-              </Text>
-            </View>
+              <PriceRow label="Total" value={money(order.currency, order.total_pkr)} strong />
+            </SectionCard>
 
             {showVendorActions ? (
-              <View style={styles.card}>
-                <Text style={styles.h2}>Update Status</Text>
-
+              <SectionCard title="Update Status">
                 {nextAction ? (
                   nextAction.next === "dispatched" ? (
                     <Pressable
@@ -948,9 +1005,9 @@ export default function OrderDetailScreen() {
                     </Pressable>
                   )
                 ) : (
-                  <Text style={styles.meta}>No further actions.</Text>
+                  <Text style={styles.helper}>No further actions.</Text>
                 )}
-              </View>
+              </SectionCard>
             ) : null}
 
             <View style={styles.bottomSpacer} />
@@ -1010,16 +1067,17 @@ const stylesVars = {
   bg: "#F8FAFC",
   cardBg: "#FFFFFF",
   border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
+  borderSoft: "#E2E8F0",
   blue: "#2563EB",
   blueSoft: "#EEF4FF",
   text: "#0F172A",
-  subText: "#475569",
   mutedText: "#64748B",
   placeholder: "#94A3B8",
   danger: "#B91C1C",
   dangerSoft: "#FEE2E2",
   dangerBorder: "#FCA5A5",
+  success: "#166534",
+  successSoft: "#DCFCE7",
   white: "#FFFFFF",
 };
 
@@ -1029,18 +1087,19 @@ const styles = StyleSheet.create({
     backgroundColor: stylesVars.bg,
   },
 
-  top: {
-    padding: 16,
-    paddingBottom: 6,
+  topBar: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     backgroundColor: stylesVars.bg,
   },
 
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
+  pageTitle: {
+    fontSize: 20,
+    fontWeight: "800",
     color: stylesVars.text,
   },
 
@@ -1057,7 +1116,7 @@ const styles = StyleSheet.create({
   },
 
   backText: {
-    fontWeight: "700",
+    fontWeight: "800",
     fontSize: 12,
     color: stylesVars.blue,
   },
@@ -1079,114 +1138,348 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
+  empty: {
+    padding: 16,
+  },
+
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: stylesVars.text,
+  },
+
   container: {
     padding: 16,
+    gap: 14,
+  },
+
+  headerCard: {
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    borderRadius: 20,
+    padding: 16,
+    backgroundColor: stylesVars.cardBg,
+  },
+
+  headerCardNew: {
+    borderColor: stylesVars.dangerBorder,
+    backgroundColor: "#FFF7F7",
+  },
+
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     gap: 12,
+    alignItems: "center",
+  },
+
+  headerMeta: {
+    flex: 1,
+    gap: 3,
+  },
+
+  orderNo: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: stylesVars.text,
+  },
+
+  headerSubtext: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: stylesVars.mutedText,
+    fontWeight: "500",
+  },
+
+  statusPill: {
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+  },
+
+  statusPillRed: {
+    backgroundColor: stylesVars.dangerSoft,
+  },
+
+  statusPillBlue: {
+    backgroundColor: "#DBEAFE",
+  },
+
+  statusPillGreen: {
+    backgroundColor: stylesVars.successSoft,
+  },
+
+  statusPillText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: stylesVars.text,
   },
 
   card: {
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 18,
-    padding: 18,
-    gap: 8,
+    borderRadius: 20,
+    padding: 16,
+    gap: 12,
     backgroundColor: stylesVars.cardBg,
   },
 
-  cardNewRed: {
-    borderColor: stylesVars.dangerBorder,
-    backgroundColor: "#FFF7F7",
+  sectionHeader: {
+    gap: 3,
   },
 
-  rowBetween: {
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: stylesVars.text,
+  },
+
+  sectionSubtitle: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: stylesVars.mutedText,
+    fontWeight: "500",
+  },
+
+  productRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 10,
+    gap: 14,
     alignItems: "center",
   },
 
-  h1: {
-    fontSize: 18,
-    fontWeight: "700",
+  imageBox: {
+    width: 96,
+    height: 96,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: "#F1F5F9",
+  },
+
+  image: {
+    width: "100%",
+    height: "100%",
+  },
+
+  imagePlaceholder: {
     flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+  },
+
+  imagePlaceholderText: {
+    color: stylesVars.mutedText,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+
+  productMetaWrap: {
+    flex: 1,
+    gap: 8,
+  },
+
+  productName: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: "800",
     color: stylesVars.text,
   },
 
-  h2: {
-    fontSize: 15,
+  productMetaInfo: {
+    gap: 2,
+  },
+
+  productMetaLabel: {
+    fontSize: 11,
+    color: stylesVars.mutedText,
     fontWeight: "700",
-    marginBottom: 2,
-    color: stylesVars.text,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
   },
 
-  meta: {
+  productMetaValue: {
     fontSize: 13,
+    color: stylesVars.text,
+    fontWeight: "700",
+  },
+
+  heroPrice: {
+    fontSize: 18,
+    color: stylesVars.text,
+    fontWeight: "800",
+  },
+
+  kvRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  kvLabel: {
+    flex: 0.9,
+    fontSize: 13,
+    lineHeight: 19,
+    color: stylesVars.mutedText,
+    fontWeight: "600",
+  },
+
+  kvValue: {
+    flex: 1.1,
+    fontSize: 13,
+    lineHeight: 19,
+    color: stylesVars.text,
+    fontWeight: "700",
+    textAlign: "right",
+  },
+
+  kvMuted: {
+    color: stylesVars.mutedText,
+  },
+
+  measurementsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+
+  measurementChip: {
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: stylesVars.blueSoft,
+  },
+
+  measurementChipText: {
+    fontSize: 12,
+    color: stylesVars.blue,
+    fontWeight: "800",
+  },
+
+  customBlock: {
+    gap: 10,
+    paddingTop: 2,
+  },
+
+  colorPreviewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  dyeSwatch: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+
+  tailoringImageWrap: {
+    width: "100%",
+    height: 160,
+    borderRadius: 14,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: "#F1F5F9",
+  },
+
+  tailoringImage: {
+    width: "100%",
+    height: "100%",
+  },
+
+  noteBox: {
+    borderWidth: 1,
+    borderColor: stylesVars.borderSoft,
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: "#F8FAFC",
+    gap: 6,
+  },
+
+  noteLabel: {
+    fontSize: 12,
+    color: stylesVars.mutedText,
+    fontWeight: "700",
+  },
+
+  noteText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: stylesVars.text,
+    fontWeight: "500",
+  },
+
+  previewBox: {
+    borderWidth: 1,
+    borderColor: stylesVars.borderSoft,
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: "#F8FAFC",
+    gap: 4,
+  },
+
+  previewLabel: {
+    fontSize: 12,
+    color: stylesVars.mutedText,
+    fontWeight: "700",
+  },
+
+  previewText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: stylesVars.text,
+    fontWeight: "500",
+  },
+
+  helper: {
+    fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
   },
 
-  strong: {
-    fontWeight: "700",
-    color: stylesVars.text,
-  },
-
-  badge: {
-    fontSize: 12,
-    fontWeight: "700",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    overflow: "hidden",
-  },
-
-  badgeRed: {
-    color: stylesVars.danger,
-    backgroundColor: stylesVars.dangerSoft,
-  },
-
-  badgeBlue: {
-    color: "#1E3A8A",
-    backgroundColor: "#DBEAFE",
-  },
-
-  bannerWrap: {
-    width: "100%",
-    height: 160,
-    borderRadius: 16,
-    overflow: "hidden",
-    backgroundColor: "#F1F5F9",
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    marginBottom: 4,
-  },
-
-  bannerImg: {
-    width: "100%",
-    height: "100%",
-  },
-
-  dyeRow: {
+  priceRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
-    marginTop: 6,
   },
 
-  dyeSwatch: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
-    backgroundColor: stylesVars.white,
+  priceLabel: {
+    fontSize: 14,
+    color: stylesVars.mutedText,
+    fontWeight: "600",
+  },
+
+  priceValue: {
+    fontSize: 14,
+    color: stylesVars.text,
+    fontWeight: "700",
+  },
+
+  priceLabelStrong: {
+    fontSize: 16,
+    color: stylesVars.text,
+    fontWeight: "800",
+  },
+
+  priceValueStrong: {
+    fontSize: 18,
+    color: stylesVars.text,
+    fontWeight: "800",
   },
 
   divider: {
     height: 1,
     backgroundColor: stylesVars.border,
-    marginVertical: 8,
+    marginVertical: 2,
   },
 
   primaryBtn: {
@@ -1200,7 +1493,7 @@ const styles = StyleSheet.create({
 
   primaryText: {
     color: stylesVars.white,
-    fontWeight: "700",
+    fontWeight: "800",
     fontSize: 14,
   },
 
@@ -1218,18 +1511,8 @@ const styles = StyleSheet.create({
 
   secondaryText: {
     color: stylesVars.blue,
-    fontWeight: "700",
+    fontWeight: "800",
     fontSize: 14,
-  },
-
-  empty: {
-    padding: 16,
-  },
-
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: stylesVars.text,
   },
 
   modalBackdrop: {
@@ -1250,7 +1533,7 @@ const styles = StyleSheet.create({
 
   modalTitle: {
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "800",
     color: stylesVars.text,
   },
 
@@ -1264,7 +1547,7 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 13,
     color: stylesVars.text,
-    fontWeight: "700",
+    fontWeight: "800",
     marginTop: 2,
   },
 
@@ -1288,21 +1571,5 @@ const styles = StyleSheet.create({
 
   bottomSpacer: {
     height: 20,
-  },
-
-  selectedStyleImageWrap: {
-  width: 120,
-  height: 150,
-  borderRadius: 14,
-  overflow: "hidden",
-  backgroundColor: "#F8FAFC",
-  borderWidth: 1,
-  borderColor: stylesVars.border,
-  marginBottom: 6,
-  },
-
-  selectedStyleImage: {
-    width: "100%",
-    height: "100%",
   },
 });

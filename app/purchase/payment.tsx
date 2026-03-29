@@ -1,5 +1,3 @@
-// File: app/purchase/payment.tsx
-
 import React, { useMemo, useState } from "react";
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -63,6 +61,8 @@ type Params = {
   deliveryAddress?: string;
   city?: string;
   notes?: string;
+  postal_code?: string;
+  country?: string;
 
   destination_type?: string;
   export_region?: string;
@@ -144,8 +144,8 @@ function safePositiveNumber(v: unknown) {
 function parseBoolParam(v: unknown): boolean | null {
   const s = norm(v).toLowerCase();
   if (!s) return null;
-  if (s === "1" || s === "true" || s === "yes" || s === "y" || s === "on") return true;
-  if (s === "0" || s === "false" || s === "no" || s === "n" || s === "off") return false;
+  if (["1", "true", "yes", "y", "on"].includes(s)) return true;
+  if (["0", "false", "no", "n", "off"].includes(s)) return false;
   return null;
 }
 
@@ -157,6 +157,114 @@ function cleanVariationLabel(value: string, kind: "neck" | "sleeve") {
   if (!value) return "";
   const pattern = kind === "neck" ? /\bneck\b/gi : /\bsleeve\b/gi;
   return value.replace(pattern, "").replace(/\s{2,}/g, " ").trim();
+}
+
+function formatMoney(currency: string, amount: number) {
+  return `${currency} ${Math.round(amount || 0)}`;
+}
+
+function buildAddressPreview(args: {
+  address: string;
+  city: string;
+  postalCode: string;
+  country: string;
+  destinationType: string;
+}) {
+  const address = norm(args.address);
+  const city = norm(args.city);
+  const postalCode = norm(args.postalCode);
+  const country = norm(args.country);
+  const destinationType = norm(args.destinationType);
+
+  const cityLine = [city, postalCode].filter(Boolean).join(" ");
+  const endCountry = destinationType === "export" ? country : "";
+  return [address, cityLine, endCountry].filter(Boolean).join(", ");
+}
+
+function SectionCard({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.card}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {!!subtitle && <Text style={styles.sectionSubtitle}>{subtitle}</Text>}
+      </View>
+      {children}
+    </View>
+  );
+}
+
+function KVRow({
+  label,
+  value,
+  muted = false,
+}: {
+  label: string;
+  value?: React.ReactNode;
+  muted?: boolean;
+}) {
+  if (
+    value == null ||
+    value === "" ||
+    value === false ||
+    (typeof value === "string" && !value.trim())
+  ) {
+    return null;
+  }
+
+  return (
+    <View style={styles.kvRow}>
+      <Text style={styles.kvLabel}>{label}</Text>
+      <Text style={[styles.kvValue, muted && styles.kvMuted]}>{value}</Text>
+    </View>
+  );
+}
+
+function PriceRow({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
+  return (
+    <View style={styles.priceRow}>
+      <Text style={[styles.priceLabel, strong && styles.priceLabelStrong]}>{label}</Text>
+      <Text style={[styles.priceValue, strong && styles.priceValueStrong]}>{value}</Text>
+    </View>
+  );
+}
+
+function PaymentMethodCard({
+  title,
+  description,
+  selected,
+}: {
+  title: string;
+  description: string;
+  selected?: boolean;
+}) {
+  return (
+    <View style={[styles.paymentOptionCard, selected && styles.paymentOptionCardSelected]}>
+      <View style={[styles.radioOuter, selected && styles.radioOuterSelected]}>
+        {selected ? <View style={styles.radioInner} /> : null}
+      </View>
+
+      <View style={styles.paymentOptionBody}>
+        <Text style={styles.paymentOptionTitle}>{title}</Text>
+        <Text style={styles.paymentOptionDesc}>{description}</Text>
+      </View>
+    </View>
+  );
 }
 
 export default function PaymentScreen() {
@@ -172,6 +280,7 @@ export default function PaymentScreen() {
     const baseProductCostPkr = safePositiveNumber(params.base_product_cost_pkr);
     const fabricCostPkr = safePositiveNumber(params.fabric_cost_pkr);
     const selectedFabricLengthM = safePositiveNumber(safeDecode(params.selected_fabric_length_m));
+    const pricePerMeterPkr = safePositiveNumber(params.price_per_meter_pkr);
 
     const mode = norm(params.mode) || "standard";
     const selectedSize = norm(params.selectedSize);
@@ -195,16 +304,16 @@ export default function PaymentScreen() {
       ["O", norm(params.o)],
     ] as [string, string][]).filter(([, v]) => v.length > 0);
 
-    const sizeLine =
+    const sizeLabel =
       mode === "exact"
         ? exactPairs.length
-          ? `Exact: ${exactPairs.map(([k, v]) => `${k}=${v}`).join(", ")}`
-          : "Exact: Not set"
+          ? "Exact measurements"
+          : "Exact measurements not set"
         : selectedUnstitchedSize
-          ? `Standard: ${selectedUnstitchedSize}`
+          ? selectedUnstitchedSize
           : selectedSize
-            ? `Standard: ${selectedSize}`
-            : "Standard: Not set";
+            ? selectedSize
+            : "Not set";
 
     const dyeShadeId = safeDecode(params.dye_shade_id);
     const dyeHex = safeDecode(params.dye_hex);
@@ -261,10 +370,18 @@ export default function PaymentScreen() {
         Boolean(selectedTailoringStyleTitle) ||
         Boolean(selectedTailoringStyleSnapshot));
 
-    const noChangeInSelectedStyle =
-      selectedNeckVariation === "no change in selected style" ||
-      selectedSleeveVariation === "no change in selected style" ||
-      selectedTrouserVariation === "no change in selected style";
+    const destinationType = norm(params.destination_type) || "inland";
+    const exportRegion = safeDecode(params.export_region);
+    const postalCode = safeDecode(params.postal_code);
+    const country = safeDecode(params.country);
+
+    const addressPreview = buildAddressPreview({
+      address: norm(params.deliveryAddress),
+      city: norm(params.city),
+      postalCode,
+      country,
+      destinationType,
+    });
 
     return {
       productId: firstNonEmpty(params.productId, params.product_id),
@@ -275,12 +392,12 @@ export default function PaymentScreen() {
 
       currency,
       totalPkrSafe,
-      totalText: totalPkrSafe ? `${currency} ${totalPkrSafe}` : `${currency} —`,
       subtotalBeforeDeliveryPkr,
       deliveryCostPkr,
       baseProductCostPkr,
       fabricCostPkr,
       selectedFabricLengthM,
+      pricePerMeterPkr,
 
       vendorName: norm(params.vendorName) || norm(params.vendorShopName) || "Vendor",
       vendorMobile: norm(params.vendorMobile),
@@ -293,15 +410,18 @@ export default function PaymentScreen() {
       deliveryAddress: norm(params.deliveryAddress),
       city: norm(params.city),
       notes: norm(params.notes),
-      destinationType: norm(params.destination_type),
-      exportRegion: safeDecode(params.export_region),
+      postalCode,
+      country,
+      addressPreview,
+      destinationType,
+      exportRegion,
       weightKg: safePositiveNumber(params.weight_kg),
 
       mode,
       selectedSize,
       selectedUnstitchedSize,
       exactPairs,
-      sizeLine,
+      sizeLabel,
 
       dyeingSelected,
       dyeShadeId,
@@ -323,7 +443,6 @@ export default function PaymentScreen() {
       customTailoringNote,
       tailoringStyleExtraCostPkr,
       hasStyleSelected,
-      noChangeInSelectedStyle,
     };
   }, [params]);
 
@@ -489,251 +608,256 @@ export default function PaymentScreen() {
     }
   };
 
+  const categoryLabel = data.productCategory ? prettyCategory(data.productCategory) : "—";
+
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
-        <Text style={styles.title}>Payment</Text>
-        <Text style={styles.subtitle}>
-          Dummy screen for now. This creates the order and stores the updated pricing breakdown.
-        </Text>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Summary</Text>
-
-          <View style={styles.productRow}>
-            <View style={styles.imageBox}>
-              {data.imageUrl ? (
-                <Image source={{ uri: data.imageUrl }} style={styles.image} />
-              ) : (
-                <View style={styles.imagePlaceholder}>
-                  <Text style={styles.imagePlaceholderText}>No Image</Text>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.productMetaWrap}>
-              <Text style={styles.productName} numberOfLines={2}>
-                {data.productName}
-              </Text>
-
-              <Text style={styles.meta}>
-                Vendor: <Text style={styles.metaStrong}>{data.vendorName}</Text>
-              </Text>
-
-              {!!data.productCategory && (
-                <Text style={styles.meta}>
-                  Dress Cat:{" "}
-                  <Text style={styles.metaStrong}>{prettyCategory(data.productCategory)}</Text>
-                </Text>
-              )}
-
-              {!!data.selectedUnstitchedSize && (
-                <Text style={styles.meta}>
-                  Size: <Text style={styles.metaStrong}>{data.selectedUnstitchedSize}</Text>
-                </Text>
-              )}
-
-              {!!data.selectedFabricLengthM && (
-                <Text style={styles.meta}>
-                  Fabric Length:{" "}
-                  <Text style={styles.metaStrong}>{data.selectedFabricLengthM} meter(s)</Text>
-                </Text>
-              )}
-
-              {data.fabricCostPkr > 0 ? (
-                <Text style={styles.meta}>
-                  Total Fabric Cost:{" "}
-                  <Text style={styles.metaStrong}>
-                    {data.currency} {data.fabricCostPkr}
-                  </Text>
-                </Text>
-              ) : null}
-
-              {data.baseProductCostPkr > 0 && !data.fabricCostPkr ? (
-                <Text style={styles.meta}>
-                  Product Cost:{" "}
-                  <Text style={styles.metaStrong}>
-                    {data.currency} {data.baseProductCostPkr}
-                  </Text>
-                </Text>
-              ) : null}
-
-              {data.dyeingSelected ? (
-                <Text style={styles.meta}>
-                  Dyeing:{" "}
-                  <Text style={styles.metaStrong}>
-                    {data.currency} {data.dyeCostPkr}
-                  </Text>
-                </Text>
-              ) : null}
-
-              {data.tailoringSelected ? (
-                <Text style={styles.meta}>
-                  Tailoring:{" "}
-                  <Text style={styles.metaStrong}>
-                    {data.currency} {data.tailoringCostPkr}
-                    {data.tailoringTurnaroundDays ? ` • ${data.tailoringTurnaroundDays} days` : ""}
-                  </Text>
-                </Text>
-              ) : null}
-
-              {data.hasStyleSelected && !!data.selectedTailoringStyleImage ? (
-                <View style={styles.selectedStyleImageWrap}>
-                  <Image
-                    source={{ uri: data.selectedTailoringStyleImage }}
-                    style={styles.selectedStyleImage}
-                    resizeMode="cover"
-                  />
-                </View>
-              ) : null}
-
-              {data.hasStyleSelected && !!data.selectedTailoringStyleTitle ? (
-                <Text style={styles.meta}>
-                  Style: <Text style={styles.metaStrong}>{data.selectedTailoringStyleTitle}</Text>
-                </Text>
-              ) : null}
-
-              {data.hasStyleSelected && data.noChangeInSelectedStyle ? (
-                <Text style={styles.meta}>
-                  <Text style={styles.metaStrong}>No change in selected style</Text>
-                </Text>
-              ) : null}
-
-              {data.hasStyleSelected &&
-              !data.noChangeInSelectedStyle &&
-              !!data.selectedNeckVariation ? (
-                <Text style={styles.meta}>
-                  Neck:{" "}
-                  <Text style={styles.metaStrong}>
-                    {cleanVariationLabel(data.selectedNeckVariation, "neck")}
-                  </Text>
-                </Text>
-              ) : null}
-
-              {data.hasStyleSelected &&
-              !data.noChangeInSelectedStyle &&
-              !!data.selectedSleeveVariation ? (
-                <Text style={styles.meta}>
-                  Sleeve:{" "}
-                  <Text style={styles.metaStrong}>
-                    {cleanVariationLabel(data.selectedSleeveVariation, "sleeve")}
-                  </Text>
-                </Text>
-              ) : null}
-
-              {data.hasStyleSelected &&
-              !data.noChangeInSelectedStyle &&
-              !!data.selectedTrouserVariation ? (
-                <Text style={styles.meta}>
-                  Trouser: <Text style={styles.metaStrong}>{data.selectedTrouserVariation}</Text>
-                </Text>
-              ) : null}
-
-              {data.hasStyleSelected && data.tailoringStyleExtraCostPkr > 0 ? (
-                <Text style={styles.meta}>
-                  Style Extra Cost:{" "}
-                  <Text style={styles.metaStrong}>
-                    {data.currency} {data.tailoringStyleExtraCostPkr}
-                  </Text>
-                </Text>
-              ) : null}
-
-              {!!data.customTailoringNote ? (
-                <Text style={styles.meta}>
-                  Additional Note for Vendor:{" "}
-                  <Text style={styles.metaStrong}>{data.customTailoringNote}</Text>
-                </Text>
-              ) : null}
-
-              <Text style={styles.meta}>
-                Delivery:{" "}
-                <Text style={styles.metaStrong}>
-                  {data.currency} {data.deliveryCostPkr}
-                </Text>
-              </Text>
-
-              <Text style={styles.meta}>
-                Total Amount: <Text style={styles.metaStrong}>{data.totalText}</Text>
-              </Text>
-            </View>
+    <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
+      <View style={styles.screen}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.pageHeader}>
+            <Text style={styles.title}>Payment</Text>
+            <Text style={styles.pageSubtitle}>Review your order and confirm payment.</Text>
           </View>
 
-          <View style={styles.divider} />
+          <SectionCard title="Product Summary">
+            <View style={styles.productRow}>
+              <View style={styles.imageBox}>
+                {data.imageUrl ? (
+                  <Image source={{ uri: data.imageUrl }} style={styles.image} />
+                ) : (
+                  <View style={styles.imagePlaceholder}>
+                    <Text style={styles.imagePlaceholderText}>No image</Text>
+                  </View>
+                )}
+              </View>
 
-          <Text style={styles.meta}>
-            Size: <Text style={styles.metaStrong}>{data.sizeLine}</Text>
-          </Text>
+              <View style={styles.productMetaWrap}>
+                <Text style={styles.productName} numberOfLines={2}>
+                  {data.productName}
+                </Text>
 
-          <Text style={styles.meta}>
-            Deliver to: <Text style={styles.metaStrong}>{data.deliveryAddress || "—"}</Text>
-          </Text>
+                <View style={styles.productMetaInfo}>
+                  <Text style={styles.productMetaLabel}>Category</Text>
+                  <Text style={styles.productMetaValue}>{categoryLabel}</Text>
+                </View>
 
-          <Text style={styles.meta}>
-            Buyer:{" "}
-            <Text style={styles.metaStrong}>
-              {data.buyerName || "—"} {data.buyerMobile ? `(${data.buyerMobile})` : ""}
-            </Text>
-          </Text>
+                {!!data.productCode && (
+                  <View style={styles.productMetaInfo}>
+                    <Text style={styles.productMetaLabel}>Code</Text>
+                    <Text style={styles.productMetaValue}>{data.productCode}</Text>
+                  </View>
+                )}
 
-          {!!data.city && (
-            <Text style={styles.meta}>
-              City/Region: <Text style={styles.metaStrong}>{data.city}</Text>
-            </Text>
-          )}
+                <Text style={styles.heroPrice}>
+                  {formatMoney(data.currency, data.baseProductCostPkr || data.fabricCostPkr)}
+                </Text>
 
-          {!!data.destinationType && (
-            <Text style={styles.meta}>
-              Destination Type: <Text style={styles.metaStrong}>{data.destinationType}</Text>
-            </Text>
-          )}
+                <Text style={styles.helper}>Sold by {data.vendorName}</Text>
+              </View>
+            </View>
+          </SectionCard>
 
-          {!!data.exportRegion && (
-            <Text style={styles.meta}>
-              Export Region: <Text style={styles.metaStrong}>{data.exportRegion}</Text>
-            </Text>
-          )}
+          <SectionCard title="Customization">
+            <KVRow
+              label="Size"
+              value={data.mode === "exact" ? "Exact measurements" : data.sizeLabel}
+            />
 
-          {!!data.notes && (
-            <Text style={styles.meta}>
-              Notes: <Text style={styles.metaStrong}>{data.notes}</Text>
-            </Text>
-          )}
-        </View>
+            {data.mode === "exact" && data.exactPairs.length ? (
+              <View style={styles.measurementsWrap}>
+                {data.exactPairs.map(([k, v]) => (
+                  <View key={k} style={styles.measurementChip}>
+                    <Text style={styles.measurementChipText}>
+                      {k}: {v}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Choose payment method</Text>
+            {data.fabricCostPkr > 0 ? (
+              <>
+                <KVRow label="Fabric length" value={`${data.selectedFabricLengthM || 0} m`} />
+                <KVRow
+                  label="Rate"
+                  value={
+                    data.pricePerMeterPkr
+                      ? `${formatMoney(data.currency, data.pricePerMeterPkr)} / meter`
+                      : ""
+                  }
+                />
+              </>
+            ) : null}
 
-          <View style={styles.payOption}>
-            <Text style={styles.payTitle}>Cash on Delivery (Dummy)</Text>
-            <Text style={styles.payDesc}>
-              For now this completes the flow and creates the order.
-            </Text>
+            {data.dyeingSelected ? (
+              <View style={styles.customBlock}>
+                <View style={styles.kvRow}>
+                  <Text style={styles.kvLabel}>Dyeing color</Text>
+                  <View style={styles.colorPreviewRow}>
+                    {!!data.dyeHex && (
+                      <View style={[styles.dyeSwatch, { backgroundColor: data.dyeHex }]} />
+                    )}
+                    <Text style={styles.helper}>{formatMoney(data.currency, data.dyeCostPkr)}</Text>
+                  </View>
+                </View>
+              </View>
+            ) : null}
+
+            {data.tailoringSelected ? (
+              <View style={styles.customBlock}>
+                <KVRow
+                  label="Tailoring"
+                  value={`${formatMoney(data.currency, data.tailoringCostPkr)}${
+                    data.tailoringTurnaroundDays ? ` • ${data.tailoringTurnaroundDays} days` : ""
+                  }`}
+                />
+
+                {data.hasStyleSelected ? (
+                  <>
+                    {!!data.selectedTailoringStyleImage && (
+                      <View style={styles.tailoringImageWrap}>
+                        <Image
+                          source={{ uri: data.selectedTailoringStyleImage }}
+                          style={styles.tailoringImage}
+                          resizeMode="cover"
+                        />
+                      </View>
+                    )}
+
+                    <KVRow
+                      label="Style"
+                      value={data.selectedTailoringStyleTitle || "Selected style"}
+                    />
+
+                    {!!data.selectedNeckVariation &&
+                    data.selectedNeckVariation !== "no change in selected style" ? (
+                      <KVRow
+                        label="Neck"
+                        value={cleanVariationLabel(data.selectedNeckVariation, "neck")}
+                      />
+                    ) : null}
+
+                    {!!data.selectedSleeveVariation &&
+                    data.selectedSleeveVariation !== "no change in selected style" ? (
+                      <KVRow
+                        label="Sleeve"
+                        value={cleanVariationLabel(data.selectedSleeveVariation, "sleeve")}
+                      />
+                    ) : null}
+
+                    {!!data.selectedTrouserVariation &&
+                    data.selectedTrouserVariation !== "no change in selected style" ? (
+                      <KVRow label="Trouser" value={data.selectedTrouserVariation} />
+                    ) : null}
+
+                    {data.tailoringStyleExtraCostPkr > 0 ? (
+                      <KVRow
+                        label="Additional style cost"
+                        value={formatMoney(data.currency, data.tailoringStyleExtraCostPkr)}
+                      />
+                    ) : null}
+
+                    {!!data.customTailoringNote ? (
+                      <View style={styles.noteBox}>
+                        <Text style={styles.noteLabel}>Tailoring note</Text>
+                        <Text style={styles.noteText}>{data.customTailoringNote}</Text>
+                      </View>
+                    ) : null}
+                  </>
+                ) : null}
+              </View>
+            ) : null}
+          </SectionCard>
+
+          <SectionCard title="Delivery">
+            <KVRow label="Buyer" value={data.buyerName || "—"} />
+            <KVRow label="Mobile" value={data.buyerMobile || "—"} />
+            {!!data.addressPreview ? (
+              <View style={styles.previewBox}>
+                <Text style={styles.previewLabel}>Address</Text>
+                <Text style={styles.previewText}>{data.addressPreview}</Text>
+              </View>
+            ) : (
+              <KVRow label="Address" value={data.deliveryAddress || "—"} />
+            )}
+
+            <KVRow label="Delivery type" value={data.destinationType || "inland"} />
+            <KVRow label="Region" value={data.exportRegion} muted />
+            {!!data.notes && <KVRow label="Notes" value={data.notes} muted />}
+          </SectionCard>
+
+          <SectionCard title="Price Summary">
+            <PriceRow
+              label="Product"
+              value={formatMoney(
+                data.currency,
+                data.baseProductCostPkr || data.fabricCostPkr || 0,
+              )}
+            />
+
+            {data.dyeingSelected ? (
+              <PriceRow label="Dyeing" value={formatMoney(data.currency, data.dyeCostPkr)} />
+            ) : null}
+
+            {data.tailoringSelected ? (
+              <PriceRow label="Tailoring" value={formatMoney(data.currency, data.tailoringCostPkr)} />
+            ) : null}
+
+            {data.tailoringStyleExtraCostPkr > 0 ? (
+              <PriceRow
+                label="Additional style tailoring cost"
+                value={formatMoney(data.currency, data.tailoringStyleExtraCostPkr)}
+              />
+            ) : null}
+
+            <PriceRow label="Shipping" value={formatMoney(data.currency, data.deliveryCostPkr)} />
+            <View style={styles.divider} />
+            <PriceRow label="Total" value={formatMoney(data.currency, data.totalPkrSafe)} strong />
+          </SectionCard>
+
+          <SectionCard title="Payment Method">
+            <PaymentMethodCard
+              title="Cash on Delivery (Dummy)"
+              description="For now this completes the flow and creates the order."
+              selected
+            />
+          </SectionCard>
+
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+          >
+            <Text style={styles.backText}>Back</Text>
+          </Pressable>
+
+          <View style={styles.bottomSpacer} />
+        </ScrollView>
+
+        <View style={styles.footerBar}>
+          <View style={styles.footerTotalWrap}>
+            <Text style={styles.footerTotalLabel}>Total</Text>
+            <Text style={styles.footerTotalValue}>{formatMoney(data.currency, data.totalPkrSafe)}</Text>
           </View>
 
           <Pressable
             onPress={onDummyPay}
             disabled={submitting}
             style={({ pressed }) => [
-              styles.primaryBtn,
+              styles.footerCta,
               (pressed || submitting) && styles.pressed,
               submitting && styles.disabledBtn,
             ]}
           >
-            <Text style={styles.primaryText}>
-              {submitting ? "Creating Order…" : "Pay Now (Dummy)"}
+            <Text style={styles.footerCtaText}>
+              {submitting ? "Creating Order…" : "Confirm Order"}
             </Text>
           </Pressable>
         </View>
-
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-        >
-          <Text style={styles.backText}>Back</Text>
-        </Pressable>
-
-        <View style={styles.bottomSpacer} />
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -742,10 +866,12 @@ const stylesVars = {
   bg: "#F8FAFC",
   cardBg: "#FFFFFF",
   border: "#E5E7EB",
+  borderSoft: "#E2E8F0",
   blue: "#2563EB",
   blueSoft: "#EEF4FF",
   text: "#0F172A",
   mutedText: "#64748B",
+  placeholder: "#94A3B8",
   white: "#FFFFFF",
 };
 
@@ -755,24 +881,33 @@ const styles = StyleSheet.create({
     backgroundColor: stylesVars.bg,
   },
 
-  scroll: {
+  screen: {
     flex: 1,
     backgroundColor: stylesVars.bg,
   },
 
+  scroll: {
+    flex: 1,
+  },
+
   container: {
     padding: 16,
-    gap: 12,
+    paddingBottom: 120,
+    gap: 14,
+  },
+
+  pageHeader: {
+    gap: 4,
   },
 
   title: {
-    fontSize: 22,
-    fontWeight: "700",
+    fontSize: 24,
+    fontWeight: "800",
     color: stylesVars.text,
   },
 
-  subtitle: {
-    fontSize: 12,
+  pageSubtitle: {
+    fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
@@ -781,31 +916,43 @@ const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 18,
-    padding: 18,
-    gap: 10,
+    borderRadius: 20,
+    padding: 16,
+    gap: 12,
     backgroundColor: stylesVars.cardBg,
   },
 
+  sectionHeader: {
+    gap: 3,
+  },
+
   sectionTitle: {
-    fontSize: 15,
-    fontWeight: "700",
+    fontSize: 16,
+    fontWeight: "800",
     color: stylesVars.text,
+  },
+
+  sectionSubtitle: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: stylesVars.mutedText,
+    fontWeight: "500",
   },
 
   productRow: {
     flexDirection: "row",
-    gap: 12,
+    gap: 14,
+    alignItems: "center",
   },
 
   imageBox: {
-    width: 90,
-    height: 90,
-    borderRadius: 12,
+    width: 96,
+    height: 96,
+    borderRadius: 16,
     overflow: "hidden",
-    backgroundColor: "#F1F5F9",
     borderWidth: 1,
     borderColor: stylesVars.border,
+    backgroundColor: "#F1F5F9",
   },
 
   image: {
@@ -817,6 +964,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "#F1F5F9",
   },
 
   imagePlaceholderText: {
@@ -827,87 +975,337 @@ const styles = StyleSheet.create({
 
   productMetaWrap: {
     flex: 1,
-    gap: 6,
+    gap: 8,
   },
 
   productName: {
-    fontSize: 14,
-    fontWeight: "700",
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: "800",
     color: stylesVars.text,
   },
 
-  meta: {
-    fontSize: 12,
-    lineHeight: 18,
+  productMetaInfo: {
+    gap: 2,
+  },
+
+  productMetaLabel: {
+    fontSize: 11,
     color: stylesVars.mutedText,
-    fontWeight: "500",
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
   },
 
-  metaStrong: {
-    fontWeight: "700",
+  productMetaValue: {
+    fontSize: 13,
     color: stylesVars.text,
+    fontWeight: "700",
+  },
+
+  heroPrice: {
+    fontSize: 18,
+    color: stylesVars.text,
+    fontWeight: "800",
+  },
+
+  kvRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  kvLabel: {
+    flex: 0.9,
+    fontSize: 13,
+    lineHeight: 19,
+    color: stylesVars.mutedText,
+    fontWeight: "600",
+  },
+
+  kvValue: {
+    flex: 1.1,
+    fontSize: 13,
+    lineHeight: 19,
+    color: stylesVars.text,
+    fontWeight: "700",
+    textAlign: "right",
+  },
+
+  kvMuted: {
+    color: stylesVars.mutedText,
+  },
+
+  priceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  priceLabel: {
+    fontSize: 14,
+    color: stylesVars.mutedText,
+    fontWeight: "600",
+  },
+
+  priceValue: {
+    fontSize: 14,
+    color: stylesVars.text,
+    fontWeight: "700",
+  },
+
+  priceLabelStrong: {
+    fontSize: 16,
+    color: stylesVars.text,
+    fontWeight: "800",
+  },
+
+  priceValueStrong: {
+    fontSize: 18,
+    color: stylesVars.text,
+    fontWeight: "800",
   },
 
   divider: {
     height: 1,
     backgroundColor: stylesVars.border,
-    marginVertical: 6,
+    marginVertical: 2,
   },
 
-  payOption: {
+  measurementsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+
+  measurementChip: {
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: stylesVars.blueSoft,
+  },
+
+  measurementChipText: {
+    fontSize: 12,
+    color: stylesVars.blue,
+    fontWeight: "800",
+  },
+
+  customBlock: {
+    gap: 10,
+    paddingTop: 2,
+  },
+
+  colorPreviewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  dyeSwatch: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+
+  tailoringImageWrap: {
+    width: "100%",
+    height: 160,
+    borderRadius: 14,
+    overflow: "hidden",
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 14,
-    padding: 14,
-    gap: 6,
-    backgroundColor: stylesVars.cardBg,
+    backgroundColor: "#F1F5F9",
   },
 
-  payTitle: {
+  tailoringImage: {
+    width: "100%",
+    height: "100%",
+  },
+
+  noteBox: {
+    borderWidth: 1,
+    borderColor: stylesVars.borderSoft,
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: "#F8FAFC",
+    gap: 6,
+  },
+
+  noteLabel: {
+    fontSize: 12,
+    color: stylesVars.mutedText,
     fontWeight: "700",
+  },
+
+  noteText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: stylesVars.text,
+    fontWeight: "500",
+  },
+
+  previewBox: {
+    borderWidth: 1,
+    borderColor: stylesVars.borderSoft,
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: "#F8FAFC",
+    gap: 4,
+  },
+
+  previewLabel: {
+    fontSize: 12,
+    color: stylesVars.mutedText,
+    fontWeight: "700",
+  },
+
+  previewText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: stylesVars.text,
+    fontWeight: "500",
+  },
+
+  paymentOptionCard: {
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    borderRadius: 16,
+    padding: 14,
+    backgroundColor: stylesVars.cardBg,
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "flex-start",
+  },
+
+  paymentOptionCardSelected: {
+    borderColor: "#BFD3FF",
+    backgroundColor: "#F8FBFF",
+  },
+
+  radioOuter: {
+    width: 20,
+    height: 20,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: "#CBD5E1",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+
+  radioOuterSelected: {
+    borderColor: stylesVars.blue,
+  },
+
+  radioInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: stylesVars.blue,
+  },
+
+  paymentOptionBody: {
+    flex: 1,
+    gap: 4,
+  },
+
+  paymentOptionTitle: {
+    fontWeight: "800",
     fontSize: 14,
     color: stylesVars.text,
   },
 
-  payDesc: {
+  paymentOptionDesc: {
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
   },
 
-  primaryBtn: {
-    borderRadius: 14,
-    backgroundColor: stylesVars.blue,
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 48,
-  },
-
-  primaryText: {
-    color: stylesVars.white,
-    fontWeight: "700",
-    fontSize: 14,
+  helper: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500",
   },
 
   backBtn: {
     alignSelf: "flex-start",
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
+    minHeight: 38,
     paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
+    borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: stylesVars.blueSoft,
-    minHeight: 36,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
   },
 
   backText: {
-    fontWeight: "700",
     color: stylesVars.blue,
+    fontWeight: "800",
     fontSize: 12,
+  },
+
+  footerBar: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    bottom: 14,
+    borderRadius: 18,
+    padding: 12,
+    backgroundColor: stylesVars.white,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
+
+  footerTotalWrap: {
+    flex: 1,
+    gap: 2,
+  },
+
+  footerTotalLabel: {
+    fontSize: 12,
+    color: stylesVars.mutedText,
+    fontWeight: "700",
+  },
+
+  footerTotalValue: {
+    fontSize: 18,
+    color: stylesVars.text,
+    fontWeight: "800",
+  },
+
+  footerCta: {
+    minHeight: 48,
+    minWidth: 152,
+    paddingHorizontal: 18,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: stylesVars.blue,
+  },
+
+  footerCtaText: {
+    color: stylesVars.white,
+    fontWeight: "800",
+    fontSize: 14,
   },
 
   disabledBtn: {
@@ -915,26 +1313,10 @@ const styles = StyleSheet.create({
   },
 
   bottomSpacer: {
-    height: 16,
+    height: 12,
   },
 
   pressed: {
     opacity: 0.82,
   },
-  selectedStyleImageWrap: {
-  width: 110,
-  height: 140,
-  borderRadius: 14,
-  overflow: "hidden",
-  backgroundColor: "#F8FAFC",
-  borderWidth: 1,
-  borderColor: stylesVars.border,
-  marginTop: 2,
-  marginBottom: 4,
-},
-
-selectedStyleImage: {
-  width: "100%",
-  height: "100%",
-},
 });

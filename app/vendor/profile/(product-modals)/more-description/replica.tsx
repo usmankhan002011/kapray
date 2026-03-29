@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { apStyles } from "@/components/product/addProductStyles";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 
@@ -8,30 +8,15 @@ function safeStr(v: any) {
   return String(v ?? "").trim();
 }
 
-function normalizeSpaces(s: string) {
-  return s.replace(/\s+/g, " ").trim();
-}
-
 export default function ReplicaModal() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const { draft } = useProductDraft() as any;
 
-  const ctx = useProductDraft() as any;
-  const { draft } = ctx;
-
-  function patchSpec(patch: any) {
-    if (typeof ctx.setSpec === "function") {
-      ctx.setSpec((prev: any) => ({ ...(prev ?? {}), ...patch }));
-      return;
-    }
-    if (typeof ctx.setDraft === "function") {
-      ctx.setDraft((prev: any) => ({
-        ...prev,
-        spec: { ...(prev?.spec ?? {}), ...patch }
-      }));
-      return;
-    }
-    draft.spec = { ...(draft?.spec ?? {}), ...patch };
-  }
+  const q12Path =
+    safeStr((params as any)?.q12Path) ||
+    "/vendor/profile/add-product/q12-more-description";
+  const parentReturnTo = safeStr((params as any)?.parentReturnTo);
 
   const options = [
     "Premium quality master replica with fine finishing.",
@@ -59,8 +44,10 @@ export default function ReplicaModal() {
   const [showMore, setShowMore] = useState<boolean>(false);
 
   function toggle(s: string) {
-    if (alreadyPicked.includes(s)) return; // 🔥 FIX
-    setPicked((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
+    if (alreadyPicked.includes(s)) return;
+    setPicked((prev) =>
+      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
+    );
   }
 
   const pickedCount = useMemo(() => picked.length, [picked]);
@@ -68,24 +55,14 @@ export default function ReplicaModal() {
   function addSelected() {
     if (!picked.length) return;
 
-    const parts = Array.isArray((draft?.spec as any)?.more_description_parts)
-      ? (draft?.spec as any)?.more_description_parts
-      : [];
-    const text = safeStr((draft?.spec as any)?.more_description ?? "");
+    const payload = {
+      pathname: q12Path as any,
+      params: parentReturnTo
+        ? { appendMany: picked.join("\n"), returnTo: parentReturnTo }
+        : { appendMany: picked.join("\n") }
+    } as any;
 
-    const uniqueToAdd = picked.filter((s) => !parts.includes(s));
-    const nextParts = uniqueToAdd.length ? [...parts, ...uniqueToAdd] : parts;
-
-    const nextText = uniqueToAdd.length
-      ? normalizeSpaces(text ? `${text} ${uniqueToAdd.join(" ")}` : uniqueToAdd.join(" "))
-      : text;
-
-    patchSpec({
-      more_description_parts: nextParts,
-      more_description: nextText
-    });
-
-    setPicked([]);
+    router.push(payload);
   }
 
   function closeModal() {
@@ -115,14 +92,19 @@ export default function ReplicaModal() {
 
             <Pressable
               onPress={closeModal}
-              style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
+              style={({ pressed }) => [
+                apStyles.linkBtn,
+                pressed ? apStyles.pressed : null
+              ]}
             >
               <Text style={apStyles.linkText}>Close</Text>
             </Pressable>
           </View>
         </View>
 
-        <Text style={apStyles.metaHint}>Tap to select multiple, then press Add.</Text>
+        <Text style={apStyles.metaHint}>
+          Tap to select multiple, then press Add.
+        </Text>
 
         {visibleOptions.map((o) => {
           const isPicked = picked.includes(o);
@@ -142,7 +124,9 @@ export default function ReplicaModal() {
                 {isPicked ? "✓ " : ""}
                 {o}
               </Text>
-              {isAlready ? <Text style={apStyles.metaHint}>Already added</Text> : null}
+              {isAlready ? (
+                <Text style={apStyles.metaHint}>Already added</Text>
+              ) : null}
             </Pressable>
           );
         })}
@@ -150,9 +134,14 @@ export default function ReplicaModal() {
         {extraOptions.length ? (
           <Pressable
             onPress={() => setShowMore((v) => !v)}
-            style={({ pressed }) => [apStyles.secondaryBtn, pressed ? apStyles.pressed : null]}
+            style={({ pressed }) => [
+              apStyles.secondaryBtn,
+              pressed ? apStyles.pressed : null
+            ]}
           >
-            <Text style={apStyles.secondaryText}>{showMore ? "Show less" : "Show more"}</Text>
+            <Text style={apStyles.secondaryText}>
+              {showMore ? "Show less" : "Show more"}
+            </Text>
           </Pressable>
         ) : null}
       </ScrollView>
