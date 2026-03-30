@@ -2,6 +2,12 @@
 
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
+export type VendorTailoringOptions = {
+  blouse_neck: string[];
+  sleeves: string[];
+  trouser: string[];
+};
+
 export type VendorState = {
   // Core identifiers
   id: number | null;
@@ -26,6 +32,10 @@ export type VendorState = {
   shop_video_paths: string[] | null;
 
   offers_tailoring: boolean | null;
+  exports_enabled: boolean | null;
+  export_regions: string[];
+  tailoring_options: VendorTailoringOptions;
+
   status: string | null;
 
   // Optional/legacy / UI aliases (keep so other screens don’t break)
@@ -38,6 +48,12 @@ export type VendorState = {
 
   // legacy
   location: string | null;
+};
+
+const EMPTY_TAILORING_OPTIONS: VendorTailoringOptions = {
+  blouse_neck: [],
+  sleeves: [],
+  trouser: [],
 };
 
 const initialState: VendorState = {
@@ -62,6 +78,10 @@ const initialState: VendorState = {
   shop_video_paths: null,
 
   offers_tailoring: null,
+  exports_enabled: false,
+  export_regions: [],
+  tailoring_options: EMPTY_TAILORING_OPTIONS,
+
   status: null,
 
   // aliases
@@ -81,7 +101,13 @@ const vendorSlice = createSlice({
   initialState,
   reducers: {
     setSelectedVendor(state, action: PayloadAction<Partial<VendorState>>) {
-      const next = { ...state, ...action.payload };
+      const next: VendorState = {
+        ...state,
+        ...action.payload,
+        export_regions: action.payload.export_regions ?? state.export_regions,
+        tailoring_options:
+          action.payload.tailoring_options ?? state.tailoring_options,
+      };
 
       // Keep aliases in sync (so old UI code keeps working)
       if (next.owner_name == null && next.name != null) {
@@ -98,6 +124,14 @@ const vendorSlice = createSlice({
       }
       if (next.image == null && next.profile_image_path != null) {
         next.image = next.profile_image_path;
+      }
+
+      if (!next.export_regions) {
+        next.export_regions = [];
+      }
+
+      if (!next.tailoring_options) {
+        next.tailoring_options = EMPTY_TAILORING_OPTIONS;
       }
 
       return next;

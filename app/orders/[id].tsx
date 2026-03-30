@@ -1,4 +1,3 @@
-// app/orders/[id].tsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -12,7 +11,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View
+  View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
@@ -41,6 +40,7 @@ type OrderRow = {
 
   spec_snapshot: any;
   media_snapshot: any;
+  price_snapshot: any;
 
   currency: string;
   subtotal_pkr: number | null;
@@ -60,7 +60,7 @@ function money(currency: string, v: any) {
   if (v == null || v === "") return `${currency} —`;
   const n = typeof v === "number" ? v : Number(v);
   if (Number.isNaN(n)) return `${currency} —`;
-  return `${currency} ${n.toLocaleString()}`;
+  return `${currency} ${Math.round(n).toLocaleString()}`;
 }
 
 function safeText(v: any) {
@@ -82,8 +82,24 @@ function boolish(v: any): boolean {
   return !!v;
 }
 
+function numOrNull(v: any): number | null {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return n;
+}
+
 function isUnstitchedFromSpec(spec: any): boolean {
   const s = spec && typeof spec === "object" ? spec : {};
+
+  const cat = String(s?.product_category ?? "").trim().toLowerCase();
+  if (
+    cat === "unstitched_plain" ||
+    cat === "unstitched_dyeing" ||
+    cat === "unstitched_dyeing_tailoring"
+  ) {
+    return true;
+  }
 
   const modeRaw = safeText(
     s?.price_mode ??
@@ -92,7 +108,7 @@ function isUnstitchedFromSpec(spec: any): boolean {
       s?.pricing_mode ??
       s?.price?.mode ??
       s?.price_snapshot?.mode ??
-      s?.priceMode_snapshot
+      s?.priceMode_snapshot,
   );
 
   return (
@@ -119,36 +135,6 @@ function getDressCatFromSpec(spec: any): string {
   return humanizeCat(raw);
 }
 
-function getCatLineFromSpec(spec: any): string {
-  const s = spec && typeof spec === "object" ? spec : {};
-
-  const modeRaw = safeText(
-    s?.price_mode ??
-      s?.priceMode ??
-      s?.mode ??
-      s?.pricing_mode ??
-      s?.price?.mode ??
-      s?.price_snapshot?.mode ??
-      s?.priceMode_snapshot
-  );
-
-  const isUnstitched =
-    modeRaw.toLowerCase().includes("unstitched") ||
-    modeRaw.toLowerCase().includes("per_meter") ||
-    boolish(s?.is_unstitched);
-
-  const dyeEnabled = boolish(s?.dyeing_enabled ?? s?.dyeable ?? s?.is_dyeable);
-  const tailoringEnabled = boolish(
-    s?.tailoring_enabled ?? s?.tailoring_required ?? s?.requires_tailoring
-  );
-
-  if (!isUnstitched) return "Ready to wear (Stitched)";
-
-  const dyeTxt = `Dyeable: ${dyeEnabled ? "Yes" : "No"}`;
-  const tailTxt = `Tailoring: ${tailoringEnabled ? "Yes" : "No"}`;
-  return `Unstitched • ${dyeTxt} • ${tailTxt}`;
-}
-
 function looksLikeUrl(s: string) {
   return /^https?:\/\//i.test(s);
 }
@@ -166,7 +152,7 @@ function pickFirstImageCandidate(media: any): string {
     m?.thumb,
     m?.thumb_url,
     m?.thumbnail,
-    m?.thumbnail_url
+    m?.thumbnail_url,
   ];
 
   if (Array.isArray(m?.images) && m.images.length) candidates.unshift(m.images[0]);
@@ -190,6 +176,93 @@ function resolvePublicUrlFromPath(pathOrUrl: string) {
   } catch {
     return "";
   }
+}
+
+function cleanVariationLabel(value: string, kind: "neck" | "sleeve") {
+  if (!value || value === "—") return "";
+  const pattern = kind === "neck" ? /\bneck\b/gi : /\bsleeve\b/gi;
+  return value.replace(pattern, "").replace(/\s{2,}/g, " ").trim();
+}
+
+function buildAddressPreview(args: {
+  address: string;
+  city: string;
+  postalCode: string;
+  country: string;
+  destinationType: string;
+}) {
+  const address = String(args.address ?? "").trim();
+  const city = String(args.city ?? "").trim();
+  const postalCode = String(args.postalCode ?? "").trim();
+  const country = String(args.country ?? "").trim();
+  const destinationType = String(args.destinationType ?? "").trim().toLowerCase();
+
+  const cityLine = [city, postalCode].filter(Boolean).join(" ");
+  const endCountry = destinationType === "export" ? country : "";
+  return [address, cityLine, endCountry].filter(Boolean).join(", ");
+}
+
+function SectionCard({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.card}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {!!subtitle && <Text style={styles.sectionSubtitle}>{subtitle}</Text>}
+      </View>
+      {children}
+    </View>
+  );
+}
+
+function KVRow({
+  label,
+  value,
+  muted = false,
+}: {
+  label: string;
+  value?: React.ReactNode;
+  muted?: boolean;
+}) {
+  if (
+    value == null ||
+    value === "" ||
+    value === false ||
+    (typeof value === "string" && !value.trim())
+  ) {
+    return null;
+  }
+
+  return (
+    <View style={styles.kvRow}>
+      <Text style={styles.kvLabel}>{label}</Text>
+      <Text style={[styles.kvValue, muted && styles.kvMuted]}>{value}</Text>
+    </View>
+  );
+}
+
+function PriceRow({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
+  return (
+    <View style={styles.priceRow}>
+      <Text style={[styles.priceLabel, strong && styles.priceLabelStrong]}>{label}</Text>
+      <Text style={[styles.priceValue, strong && styles.priceValueStrong]}>{value}</Text>
+    </View>
+  );
 }
 
 export default function OrderDetailScreen() {
@@ -221,8 +294,7 @@ export default function OrderDetailScreen() {
 
       const { data, error } = await supabase
         .from("orders")
-        .select(
-          `
+        .select(`
           id,
           vendor_id,
           created_at,
@@ -238,6 +310,7 @@ export default function OrderDetailScreen() {
           title_snapshot,
           spec_snapshot,
           media_snapshot,
+          price_snapshot,
           currency,
           subtotal_pkr,
           delivery_pkr,
@@ -248,8 +321,7 @@ export default function OrderDetailScreen() {
           exact_measurements,
           courier_name,
           tracking_number
-        `
-        )
+        `)
         .eq("id", Number(orderId))
         .single();
 
@@ -278,6 +350,7 @@ export default function OrderDetailScreen() {
 
         spec_snapshot: o.spec_snapshot ?? {},
         media_snapshot: o.media_snapshot ?? {},
+        price_snapshot: o.price_snapshot ?? {},
 
         currency: String(o.currency ?? "PKR"),
         subtotal_pkr: o.subtotal_pkr != null ? Number(o.subtotal_pkr) : null,
@@ -290,7 +363,7 @@ export default function OrderDetailScreen() {
         exact_measurements: o.exact_measurements ?? {},
 
         courier_name: o.courier_name ? String(o.courier_name) : null,
-        tracking_number: o.tracking_number ? String(o.tracking_number) : null
+        tracking_number: o.tracking_number ? String(o.tracking_number) : null,
       });
 
       setCourierName(o.courier_name ? String(o.courier_name) : "");
@@ -342,105 +415,240 @@ export default function OrderDetailScreen() {
   }, [fromParam, backTarget, router]);
 
   useEffect(() => {
-    const subscription = BackHandler.addEventListener(
-      "hardwareBackPress",
-      handleBack
-    );
-
+    const subscription = BackHandler.addEventListener("hardwareBackPress", handleBack);
     return () => subscription.remove();
   }, [handleBack]);
 
-  const sizeLine = useMemo(() => {
+  const spec = useMemo(() => {
+    return order?.spec_snapshot && typeof order.spec_snapshot === "object" ? order.spec_snapshot : {};
+  }, [order]);
+
+  const isUnstitched = useMemo(() => isUnstitchedFromSpec(spec), [spec]);
+
+  const exactPairs = useMemo(() => {
+    if (!order || order.size_mode !== "exact") return [] as [string, string][];
+    const m =
+      order.exact_measurements && typeof order.exact_measurements === "object"
+        ? order.exact_measurements
+        : {};
+    return Object.entries(m)
+      .map(([k, v]) => [String(k), String(v ?? "").trim()] as [string, string])
+      .filter(([, v]) => !!v);
+  }, [order]);
+
+  const sizeLabel = useMemo(() => {
     if (!order) return "—";
     if (order.size_mode === "exact") {
-      const m =
-        order.exact_measurements && typeof order.exact_measurements === "object"
-          ? order.exact_measurements
-          : {};
-      const pairs = Object.entries(m)
-        .map(([k, v]) => `${k}=${String(v ?? "").trim()}`)
-        .filter((x) => !x.endsWith("="));
-      return pairs.length ? `Exact: ${pairs.join(", ")}` : "Exact: —";
+      return exactPairs.length ? "Exact measurements" : "Exact measurements not set";
     }
-    return order.selected_size ? `Standard: ${order.selected_size}` : "Standard: —";
-  }, [order]);
+    return order.selected_size || "Not set";
+  }, [order, exactPairs]);
+
+  const selectedUnstitchedSize = useMemo(() => {
+    if (!order) return "";
+    const raw = safeText(spec?.selected_unstitched_size ?? order.selected_size ?? "");
+    return raw === "—" ? "" : raw;
+  }, [order, spec]);
+
+  const selectedFabricLengthM = useMemo(() => {
+    if (!order) return null;
+    return numOrNull(spec?.selected_fabric_length_m ?? "");
+  }, [order, spec]);
+
+  const pricePerMeterPkr = useMemo(() => {
+    if (!order) return null;
+    return numOrNull(
+      spec?.price_per_meter_pkr ??
+        spec?.cost_pkr_per_meter ??
+        spec?.price_snapshot?.cost_pkr_per_meter ??
+        order.price_snapshot?.cost_pkr_per_meter ??
+        null,
+    );
+  }, [order, spec]);
+
+  const fabricCostPkr = useMemo(() => {
+    if (!order) return null;
+    return numOrNull(
+      spec?.fabric_cost_pkr ??
+        spec?.fabricCostPkr ??
+        spec?.fabric_cost ??
+        spec?.fabricCost ??
+        spec?.cloth_cost_pkr ??
+        spec?.clothCostPkr ??
+        spec?.cloth_cost ??
+        spec?.clothCost ??
+        null,
+    );
+  }, [order, spec]);
 
   const dyeHex = useMemo(() => {
     if (!order) return "";
-    const spec =
-      order.spec_snapshot && typeof order.spec_snapshot === "object" ? order.spec_snapshot : {};
     const hex = safeText(spec?.dye_hex ?? spec?.dyeing_hex ?? "");
     return hex !== "—" ? hex : "";
-  }, [order]);
+  }, [order, spec]);
 
-  const dyeCostLine = useMemo(() => {
-    if (!order) return "";
-    const spec =
-      order.spec_snapshot && typeof order.spec_snapshot === "object" ? order.spec_snapshot : {};
-    const enabled = boolish(spec?.dyeing_enabled ?? spec?.dyeable ?? spec?.is_dyeable);
+  const dyeSelected = useMemo(() => {
+    if (!order) return false;
+    return boolish(spec?.dyeing_selected) || !!dyeHex || safeText(spec?.dye_label ?? "") !== "—";
+  }, [order, spec, dyeHex]);
 
-    const costRaw =
+  const dyeCostPkr = useMemo(() => {
+    if (!order) return null;
+    return numOrNull(
       spec?.dyeing_cost_pkr ??
-      spec?.dye_cost_pkr ??
-      spec?.dyeingCostPkr ??
-      spec?.dyeCostPkr ??
-      spec?.dye_cost ??
-      spec?.dyeing_cost ??
-      null;
+        spec?.dye_cost_pkr ??
+        spec?.dyeingCostPkr ??
+        spec?.dyeCostPkr ??
+        spec?.dye_cost ??
+        spec?.dyeing_cost ??
+        null,
+    );
+  }, [order, spec]);
 
-    if (!enabled && (costRaw == null || costRaw === "")) return "";
+  const tailoringSelected = useMemo(() => {
+    if (!order) return false;
+    return boolish(spec?.tailoring_enabled) || boolish(spec?.tailoring_selected);
+  }, [order, spec]);
 
-    const cost =
-      costRaw != null && costRaw !== "" && !Number.isNaN(Number(costRaw)) ? Number(costRaw) : null;
+  const tailoringCostPkr = useMemo(() => {
+    if (!order) return null;
+    return numOrNull(
+      spec?.tailoring_cost_pkr ??
+        spec?.tailoringCostPkr ??
+        spec?.tailoring_cost ??
+        spec?.tailoringCost ??
+        null,
+    );
+  }, [order, spec]);
 
-    if (cost == null) return "Dyeing: Included";
-    return `Dyeing: Cost: ${order.currency} ${cost.toLocaleString()}`;
-  }, [order]);
+  const tailoringTurnaroundDays = useMemo(() => {
+    if (!order) return null;
+    return numOrNull(spec?.tailoring_turnaround_days ?? null);
+  }, [order, spec]);
 
-  const fabricCostLine = useMemo(() => {
+  const selectedTailoringStyleTitle = useMemo(() => {
     if (!order) return "";
-    const spec =
-      order.spec_snapshot && typeof order.spec_snapshot === "object" ? order.spec_snapshot : {};
+    const raw = safeText(spec?.selected_tailoring_style_title ?? "");
+    return raw === "—" ? "" : raw;
+  }, [order, spec]);
 
-    const costRaw =
-      spec?.fabric_cost_pkr ??
-      spec?.fabricCostPkr ??
-      spec?.fabric_cost ??
-      spec?.fabricCost ??
-      spec?.cloth_cost_pkr ??
-      spec?.clothCostPkr ??
-      spec?.cloth_cost ??
-      spec?.clothCost ??
-      null;
-
-    if (costRaw == null || costRaw === "") return "";
-
-    const cost = !Number.isNaN(Number(costRaw)) ? Number(costRaw) : null;
-    if (cost == null) return "";
-
-    return `Fabric: Cost: ${order.currency} ${cost.toLocaleString()}`;
-  }, [order]);
-
-  const productCostLine = useMemo(() => {
+  const selectedTailoringStyleImage = useMemo(() => {
     if (!order) return "";
-    const base = order.subtotal_pkr != null ? order.subtotal_pkr : order.total_pkr;
-    if (base == null) return "";
-    return `Product Cost: ${money(order.currency, base)}`;
-  }, [order]);
+    const raw = safeText(
+      spec?.selected_tailoring_style_image ??
+        spec?.selected_tailoring_style_snapshot?.image_url ??
+        "",
+    );
+    return raw === "—" ? "" : resolvePublicUrlFromPath(raw);
+  }, [order, spec]);
 
-  const catLine = useMemo(() => {
-    if (!order) return "—";
-    const spec =
-      order.spec_snapshot && typeof order.spec_snapshot === "object" ? order.spec_snapshot : {};
-    return getCatLineFromSpec(spec);
-  }, [order]);
+  const selectedNeckVariation = useMemo(() => {
+    if (!order) return "";
+    const raw = safeText(spec?.selected_neck_variation ?? "");
+    return raw === "—" ? "" : raw;
+  }, [order, spec]);
 
-  const dressCatLine = useMemo(() => {
+  const selectedSleeveVariation = useMemo(() => {
+    if (!order) return "";
+    const raw = safeText(spec?.selected_sleeve_variation ?? "");
+    return raw === "—" ? "" : raw;
+  }, [order, spec]);
+
+  const selectedTrouserVariation = useMemo(() => {
+    if (!order) return "";
+    const raw = safeText(spec?.selected_trouser_variation ?? "");
+    return raw === "—" ? "" : raw;
+  }, [order, spec]);
+
+  const customTailoringNote = useMemo(() => {
+    if (!order) return "";
+    const raw = safeText(spec?.custom_tailoring_note ?? "");
+    return raw === "—" ? "" : raw;
+  }, [order, spec]);
+
+  const tailoringStyleExtraCostPkr = useMemo(() => {
+    if (!order) return null;
+    return numOrNull(
+      spec?.tailoring_style_extra_cost_pkr ??
+        spec?.style_extra_cost_pkr ??
+        spec?.selected_style_extra_cost_pkr ??
+        null,
+    );
+  }, [order, spec]);
+
+  const destinationType = useMemo(() => {
+    if (!order) return "";
+    const raw = safeText(spec?.destination_type ?? "");
+    return raw === "—" ? "" : raw;
+  }, [order, spec]);
+
+  const exportRegion = useMemo(() => {
+    if (!order) return "";
+    const raw = safeText(spec?.export_region ?? "");
+    return raw === "—" ? "" : raw;
+  }, [order, spec]);
+
+  const deliveryWeightKg = useMemo(() => {
+    if (!order) return null;
+    return numOrNull(spec?.delivery_weight_kg ?? spec?.weight_kg ?? null);
+  }, [order, spec]);
+
+  const postalCode = useMemo(() => {
+    if (!order) return "";
+    const raw = safeText(spec?.postal_code ?? "");
+    return raw === "—" ? "" : raw;
+  }, [order, spec]);
+
+  const country = useMemo(() => {
+    if (!order) return "";
+    const raw = safeText(spec?.country ?? "");
+    return raw === "—" ? "" : raw;
+  }, [order, spec]);
+
+  const addressPreview = useMemo(() => {
+    if (!order) return "";
+    return buildAddressPreview({
+      address: order.delivery_address,
+      city: order.city,
+      postalCode,
+      country,
+      destinationType,
+    });
+  }, [order, postalCode, country, destinationType]);
+
+  const baseProductCostPkr = useMemo(() => {
+    if (!order) return null;
+    if (isUnstitched && fabricCostPkr != null) return fabricCostPkr;
+
+    const direct =
+      numOrNull(spec?.base_product_cost_pkr ?? null) ??
+      numOrNull(spec?.stitched_total_pkr ?? null) ??
+      null;
+    if (direct != null) return direct;
+
+    const subtotal = numOrNull(order.subtotal_pkr);
+    const dye = dyeSelected ? numOrNull(dyeCostPkr) ?? 0 : 0;
+    const tailoring = tailoringSelected ? numOrNull(tailoringCostPkr) ?? 0 : 0;
+    const styleExtra = tailoringStyleExtraCostPkr ?? 0;
+    if (subtotal != null) return Math.max(0, subtotal - dye - tailoring - styleExtra);
+
+    return null;
+  }, [
+    order,
+    spec,
+    isUnstitched,
+    fabricCostPkr,
+    dyeSelected,
+    dyeCostPkr,
+    tailoringSelected,
+    tailoringCostPkr,
+    tailoringStyleExtraCostPkr,
+  ]);
+
+  const categoryLabel = useMemo(() => {
     if (!order) return "—";
-    const spec =
-      order.spec_snapshot && typeof order.spec_snapshot === "object" ? order.spec_snapshot : {};
     return getDressCatFromSpec(spec);
-  }, [order]);
+  }, [order, spec]);
 
   const bannerUrl = useMemo(() => {
     if (!order) return "";
@@ -448,43 +656,20 @@ export default function OrderDetailScreen() {
     return resolvePublicUrlFromPath(picked);
   }, [order]);
 
-  const tailoringLine = useMemo(() => {
-    if (!order) return "";
-    const spec =
-      order.spec_snapshot && typeof order.spec_snapshot === "object" ? order.spec_snapshot : {};
-    const enabled = !!spec?.tailoring_enabled;
-    const cost = spec?.tailoring_cost_pkr;
-    const days = spec?.tailoring_turnaround_days;
-
-    if (!enabled && !cost && !days) return "";
-    const costTxt =
-      cost != null && cost !== "" ? `Cost: ${order.currency} ${Number(cost).toLocaleString()}` : "";
-    const daysTxt = days != null && days !== "" ? `Days: ${days}` : "";
-    const join = [costTxt, daysTxt].filter(Boolean).join(" • ");
-    return join.length ? `Tailoring: ${join}` : "Tailoring: Included";
-  }, [order]);
-
   const nextAction = useMemo(() => {
     if (!order) return null;
     const s = norm(order.status);
 
-    const spec =
-      order.spec_snapshot && typeof order.spec_snapshot === "object" ? order.spec_snapshot : {};
-    const isUnstitched = isUnstitchedFromSpec(spec);
-    const isReadyToWear = !isUnstitched;
-
     if (s === "placed") return { next: "seen", label: "Mark Seen" };
-
     if (s === "seen") {
-      if (isReadyToWear) return { next: "packed", label: "Mark Packed" };
+      if (!isUnstitched) return { next: "packed", label: "Mark Packed" };
       return { next: "in_progress", label: "Started Dyeing/Tailoring" };
     }
-
     if (s === "in_progress") return { next: "packed", label: "Mark Packed" };
     if (s === "packed") return { next: "dispatched", label: "Dispatch" };
     if (s === "dispatched") return { next: "delivered", label: "Mark Delivered" };
     return null;
-  }, [order]);
+  }, [order, isUnstitched]);
 
   const updateStatus = useCallback(
     async (nextStatus: string) => {
@@ -523,34 +708,36 @@ export default function OrderDetailScreen() {
         setSaving(false);
       }
     },
-    [order, courierName, trackingNumber, load]
+    [order, courierName, trackingNumber, load],
   );
 
   const openDispatchModal = useCallback(() => {
     setDispatchOpen(true);
   }, []);
 
-  const statusBadgeStyle = useMemo(() => {
+  const statusPillStyle = useMemo(() => {
     const s = norm(order?.status ?? "");
-    return s === "placed" ? styles.badgeRed : styles.badgeBlue;
+    if (s === "placed") return [styles.statusPill, styles.statusPillRed];
+    if (s === "delivered") return [styles.statusPill, styles.statusPillGreen];
+    return [styles.statusPill, styles.statusPillBlue];
   }, [order?.status]);
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.top}>
+      <View style={styles.topBar}>
         <Pressable
-          onPress={() => router.replace(backTarget as any)}
+          onPress={handleBack}
           style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
         >
           <Text style={styles.backText}>Back</Text>
         </Pressable>
-        <Text style={styles.title}>Order Detail</Text>
+        <Text style={styles.pageTitle}>Order Detail</Text>
       </View>
 
       {loading ? (
         <View style={styles.loading}>
           <ActivityIndicator />
-          <Text style={styles.loadingText}>Loading…</Text>
+          <Text style={styles.loadingText}>Loading order…</Text>
         </View>
       ) : !order ? (
         <View style={styles.empty}>
@@ -558,123 +745,247 @@ export default function OrderDetailScreen() {
         </View>
       ) : (
         <>
-          <ScrollView contentContainerStyle={styles.container}>
-            <View style={[styles.card, norm(order.status) === "placed" ? styles.cardNewRed : null]}>
-              <View style={styles.rowBetween}>
-                <Text style={styles.h1}>{order.order_no || `Order #${order.id}`}</Text>
-                <Text style={[styles.badge, statusBadgeStyle]} numberOfLines={1}>
-                  {order.status}
-                </Text>
-              </View>
-
-              <Text style={styles.meta}>
-                Created: <Text style={styles.strong}>{new Date(order.created_at).toLocaleString()}</Text>
-              </Text>
-            </View>
-
-            <View style={styles.card}>
-              <Text style={styles.h2}>Product</Text>
-
-              {!!bannerUrl ? (
-                <View style={styles.bannerWrap}>
-                  <Image source={{ uri: bannerUrl }} style={styles.bannerImg} resizeMode="cover" />
-                </View>
-              ) : null}
-
-              <Text style={styles.meta}>
-                Title: <Text style={styles.strong}>{order.title_snapshot}</Text>
-              </Text>
-              <Text style={styles.meta}>
-                Code: <Text style={styles.strong}>{order.product_code_snapshot}</Text>
-              </Text>
-
-              <Text style={styles.meta}>
-                Dress Category: <Text style={styles.strong}>{dressCatLine}</Text>
-              </Text>
-
-              {!!productCostLine ? <Text style={styles.meta}>{productCostLine}</Text> : null}
-              {!!tailoringLine ? <Text style={styles.meta}>{tailoringLine}</Text> : null}
-              {!!dyeCostLine ? <Text style={styles.meta}>{dyeCostLine}</Text> : null}
-              {!!fabricCostLine ? <Text style={styles.meta}>{fabricCostLine}</Text> : null}
-
-              {!!dyeHex ? (
-                <View style={styles.dyeRow}>
-                  <Text style={styles.meta}>
-                    Dyeing Colour: <Text style={styles.strong}>Selected</Text>
+          <ScrollView
+            contentContainerStyle={styles.container}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={[styles.headerCard, norm(order.status) === "placed" ? styles.headerCardNew : null]}>
+              <View style={styles.headerRow}>
+                <View style={styles.headerMeta}>
+                  <Text style={styles.orderNo}>{order.order_no || `Order #${order.id}`}</Text>
+                  <Text style={styles.headerSubtext}>
+                    Created {new Date(order.created_at).toLocaleString()}
                   </Text>
-                  <View style={[styles.dyeSwatch, { backgroundColor: dyeHex }]} />
+                </View>
+
+                <View style={statusPillStyle}>
+                  <Text style={styles.statusPillText}>{humanizeCat(order.status)}</Text>
+                </View>
+              </View>
+            </View>
+
+            <SectionCard title="Product Summary">
+              <View style={styles.productRow}>
+                <View style={styles.imageBox}>
+                  {bannerUrl ? (
+                    <Image source={{ uri: bannerUrl }} style={styles.image} resizeMode="cover" />
+                  ) : (
+                    <View style={styles.imagePlaceholder}>
+                      <Text style={styles.imagePlaceholderText}>No image</Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.productMetaWrap}>
+                  <Text style={styles.productName} numberOfLines={2}>
+                    {order.title_snapshot}
+                  </Text>
+
+                  <View style={styles.productMetaInfo}>
+                    <Text style={styles.productMetaLabel}>Category</Text>
+                    <Text style={styles.productMetaValue}>{categoryLabel}</Text>
+                  </View>
+
+                  {!!order.product_code_snapshot && (
+                    <View style={styles.productMetaInfo}>
+                      <Text style={styles.productMetaLabel}>Code</Text>
+                      <Text style={styles.productMetaValue}>{order.product_code_snapshot}</Text>
+                    </View>
+                  )}
+
+                  <Text style={styles.heroPrice}>
+                    {money(order.currency, baseProductCostPkr)}
+                  </Text>
+                </View>
+              </View>
+            </SectionCard>
+
+            <SectionCard title="Customization">
+              <KVRow
+                label="Size"
+                value={order.size_mode === "exact" ? "Exact measurements" : sizeLabel}
+              />
+
+              {order.size_mode === "exact" && exactPairs.length ? (
+                <View style={styles.measurementsWrap}>
+                  {exactPairs.map(([k, v]) => (
+                    <View key={k} style={styles.measurementChip}>
+                      <Text style={styles.measurementChipText}>
+                        {k}: {v}
+                      </Text>
+                    </View>
+                  ))}
                 </View>
               ) : null}
-            </View>
 
-            <View style={styles.card}>
-              <Text style={styles.h2}>Buyer</Text>
-              <Text style={styles.meta}>
-                Name: <Text style={styles.strong}>{order.buyer_name}</Text>
-              </Text>
-              <Text style={styles.meta}>
-                Mobile: <Text style={styles.strong}>{order.buyer_mobile}</Text>
-              </Text>
-              {!!order.buyer_email && (
-                <Text style={styles.meta}>
-                  Email: <Text style={styles.strong}>{order.buyer_email}</Text>
-                </Text>
+              {isUnstitched ? (
+                <>
+                  <KVRow label="Selected size" value={selectedUnstitchedSize} />
+                  <KVRow label="Fabric length" value={selectedFabricLengthM != null ? `${selectedFabricLengthM} m` : ""} />
+                  <KVRow
+                    label="Rate"
+                    value={
+                      pricePerMeterPkr != null
+                        ? `${money(order.currency, pricePerMeterPkr)} / meter`
+                        : ""
+                    }
+                  />
+                </>
+              ) : null}
+
+              {dyeSelected ? (
+                <View style={styles.customBlock}>
+                  <View style={styles.kvRow}>
+                    <Text style={styles.kvLabel}>Dyeing color</Text>
+                    <View style={styles.colorPreviewRow}>
+                      {!!dyeHex && <View style={[styles.dyeSwatch, { backgroundColor: dyeHex }]} />}
+                      <Text style={styles.helper}>
+                        {dyeCostPkr != null ? money(order.currency, dyeCostPkr) : `${order.currency} —`}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ) : null}
+
+              {tailoringSelected ? (
+                <View style={styles.customBlock}>
+                  <KVRow
+                    label="Tailoring"
+                    value={`${tailoringCostPkr != null ? money(order.currency, tailoringCostPkr) : "Included"}${
+                      tailoringTurnaroundDays != null ? ` • ${tailoringTurnaroundDays} days` : ""
+                    }`}
+                  />
+
+                  {!!selectedTailoringStyleImage && (
+                    <View style={styles.tailoringImageWrap}>
+                      <Image
+                        source={{ uri: selectedTailoringStyleImage }}
+                        style={styles.tailoringImage}
+                        resizeMode="cover"
+                      />
+                    </View>
+                  )}
+
+                  <KVRow label="Style" value={selectedTailoringStyleTitle} />
+                  <KVRow
+                    label="Neck"
+                    value={
+                      selectedNeckVariation &&
+                      selectedNeckVariation !== "no change in selected style"
+                        ? cleanVariationLabel(selectedNeckVariation, "neck")
+                        : ""
+                    }
+                  />
+                  <KVRow
+                    label="Sleeve"
+                    value={
+                      selectedSleeveVariation &&
+                      selectedSleeveVariation !== "no change in selected style"
+                        ? cleanVariationLabel(selectedSleeveVariation, "sleeve")
+                        : ""
+                    }
+                  />
+                  <KVRow
+                    label="Trouser"
+                    value={
+                      selectedTrouserVariation &&
+                      selectedTrouserVariation !== "no change in selected style"
+                        ? selectedTrouserVariation
+                        : ""
+                    }
+                  />
+
+                  {tailoringStyleExtraCostPkr != null ? (
+                    <KVRow
+                      label="Additional style cost"
+                      value={money(order.currency, tailoringStyleExtraCostPkr)}
+                    />
+                  ) : null}
+
+                  {!!customTailoringNote && (
+                    <View style={styles.noteBox}>
+                      <Text style={styles.noteLabel}>Tailoring note</Text>
+                      <Text style={styles.noteText}>{customTailoringNote}</Text>
+                    </View>
+                  )}
+                </View>
+              ) : null}
+            </SectionCard>
+
+            <SectionCard title="Buyer">
+              <KVRow label="Name" value={order.buyer_name} />
+              <KVRow label="Mobile" value={order.buyer_mobile} />
+              <KVRow label="Email" value={order.buyer_email} muted />
+            </SectionCard>
+
+            <SectionCard title="Delivery">
+              {!!addressPreview ? (
+                <View style={styles.previewBox}>
+                  <Text style={styles.previewLabel}>Address</Text>
+                  <Text style={styles.previewText}>{addressPreview}</Text>
+                </View>
+              ) : (
+                <KVRow label="Address" value={order.delivery_address} />
               )}
-            </View>
 
-            <View style={styles.card}>
-              <Text style={styles.h2}>Delivery</Text>
-              <Text style={styles.meta}>
-                Address: <Text style={styles.strong}>{order.delivery_address}</Text>
-              </Text>
-              <Text style={styles.meta}>
-                City: <Text style={styles.strong}>{order.city}</Text>
-              </Text>
-              {!!order.notes && (
-                <Text style={styles.meta}>
-                  Notes: <Text style={styles.strong}>{order.notes}</Text>
-                </Text>
-              )}
-            </View>
+              <KVRow label="Delivery type" value={destinationType ? humanizeCat(destinationType) : ""} />
+              <KVRow label="Region" value={exportRegion} muted />
+              <KVRow label="Weight" value={deliveryWeightKg != null ? `${deliveryWeightKg} kg` : ""} muted />
+              <KVRow label="Notes" value={order.notes} muted />
+            </SectionCard>
 
-            <View style={styles.card}>
-              <Text style={styles.h2}>Size</Text>
-              <Text style={styles.meta}>
-                <Text style={styles.strong}>{sizeLine}</Text>
-              </Text>
-            </View>
+            <SectionCard title="Tracking">
+              <KVRow label="Courier" value={order.courier_name || "—"} />
+              <KVRow label="Tracking number" value={order.tracking_number || "—"} />
+              <Text style={styles.helper}>Buyer may track this order anytime from their Home screen.</Text>
+            </SectionCard>
 
-            <View style={styles.card}>
-              <Text style={styles.h2}>Tracking</Text>
-              <Text style={styles.meta}>
-                Courier: <Text style={styles.strong}>{order.courier_name || "—"}</Text>
-              </Text>
-              <Text style={styles.meta}>
-                Tracking #: <Text style={styles.strong}>{order.tracking_number || "—"}</Text>
-              </Text>
-            </View>
+            <SectionCard title="Price Summary">
+              {baseProductCostPkr != null ? (
+                <PriceRow
+                  label={isUnstitched ? "Total fabric cost" : "Product"}
+                  value={money(order.currency, baseProductCostPkr)}
+                />
+              ) : null}
 
-            <View style={styles.card}>
-              <Text style={styles.h2}>Totals</Text>
-              <Text style={styles.meta}>
-                Subtotal: <Text style={styles.strong}>{money(order.currency, order.subtotal_pkr)}</Text>
-              </Text>
-              <Text style={styles.meta}>
-                Delivery: <Text style={styles.strong}>{money(order.currency, order.delivery_pkr)}</Text>
-              </Text>
-              <Text style={styles.meta}>
-                Discount: <Text style={styles.strong}>{money(order.currency, order.discount_pkr)}</Text>
-              </Text>
+              {dyeSelected ? (
+                <PriceRow
+                  label="Dyeing"
+                  value={dyeCostPkr != null ? money(order.currency, dyeCostPkr) : `${order.currency} —`}
+                />
+              ) : null}
+
+              {tailoringSelected ? (
+                <PriceRow
+                  label="Tailoring"
+                  value={
+                    tailoringCostPkr != null
+                      ? money(order.currency, tailoringCostPkr)
+                      : `${order.currency} —`
+                  }
+                />
+              ) : null}
+
+              {tailoringStyleExtraCostPkr != null ? (
+                <PriceRow
+                  label="Additional style tailoring cost"
+                  value={money(order.currency, tailoringStyleExtraCostPkr)}
+                />
+              ) : null}
+
+              <PriceRow label="Subtotal" value={money(order.currency, order.subtotal_pkr)} />
+              <PriceRow label="Shipping" value={money(order.currency, order.delivery_pkr)} />
+              {!!order.discount_pkr ? (
+                <PriceRow label="Discount" value={money(order.currency, order.discount_pkr)} />
+              ) : null}
+
               <View style={styles.divider} />
-              <Text style={styles.meta}>
-                Total: <Text style={styles.strong}>{money(order.currency, order.total_pkr)}</Text>
-              </Text>
-            </View>
+
+              <PriceRow label="Total" value={money(order.currency, order.total_pkr)} strong />
+            </SectionCard>
 
             {showVendorActions ? (
-              <View style={styles.card}>
-                <Text style={styles.h2}>Update Status</Text>
-
+              <SectionCard title="Update Status">
                 {nextAction ? (
                   nextAction.next === "dispatched" ? (
                     <Pressable
@@ -694,9 +1005,9 @@ export default function OrderDetailScreen() {
                     </Pressable>
                   )
                 ) : (
-                  <Text style={styles.meta}>No further actions.</Text>
+                  <Text style={styles.helper}>No further actions.</Text>
                 )}
-              </View>
+              </SectionCard>
             ) : null}
 
             <View style={styles.bottomSpacer} />
@@ -756,185 +1067,419 @@ const stylesVars = {
   bg: "#F8FAFC",
   cardBg: "#FFFFFF",
   border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
+  borderSoft: "#E2E8F0",
   blue: "#2563EB",
   blueSoft: "#EEF4FF",
   text: "#0F172A",
-  subText: "#475569",
   mutedText: "#64748B",
   placeholder: "#94A3B8",
   danger: "#B91C1C",
   dangerSoft: "#FEE2E2",
   dangerBorder: "#FCA5A5",
-  overlayDark: "rgba(0,0,0,0.58)",
-  overlaySoft: "rgba(255,255,255,0.14)",
+  success: "#166534",
+  successSoft: "#DCFCE7",
   white: "#FFFFFF",
-  black: "#000000"
 };
 
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
-  top: {
-    padding: 16,
-    paddingBottom: 6,
+  topBar: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: stylesVars.text
+  pageTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: stylesVars.text,
   },
 
   backBtn: {
-    minHeight: 40,
+    minHeight: 36,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: 999,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
     borderColor: "#D7E3FF",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   backText: {
-    fontWeight: "700",
-    color: stylesVars.blue
+    fontWeight: "800",
+    fontSize: 12,
+    color: stylesVars.blue,
   },
 
   pressed: {
-    opacity: 0.82
+    opacity: 0.82,
   },
 
   loading: {
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10
+    gap: 10,
   },
 
   loadingText: {
     fontSize: 13,
     color: stylesVars.mutedText,
-    fontWeight: "600"
+    fontWeight: "600",
+  },
+
+  empty: {
+    padding: 16,
+  },
+
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: stylesVars.text,
   },
 
   container: {
     padding: 16,
-    gap: 12
+    gap: 14,
+  },
+
+  headerCard: {
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    borderRadius: 20,
+    padding: 16,
+    backgroundColor: stylesVars.cardBg,
+  },
+
+  headerCardNew: {
+    borderColor: stylesVars.dangerBorder,
+    backgroundColor: "#FFF7F7",
+  },
+
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+    alignItems: "center",
+  },
+
+  headerMeta: {
+    flex: 1,
+    gap: 3,
+  },
+
+  orderNo: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: stylesVars.text,
+  },
+
+  headerSubtext: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: stylesVars.mutedText,
+    fontWeight: "500",
+  },
+
+  statusPill: {
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+  },
+
+  statusPillRed: {
+    backgroundColor: stylesVars.dangerSoft,
+  },
+
+  statusPillBlue: {
+    backgroundColor: "#DBEAFE",
+  },
+
+  statusPillGreen: {
+    backgroundColor: stylesVars.successSoft,
+  },
+
+  statusPillText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: stylesVars.text,
   },
 
   card: {
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 18,
-    padding: 18,
-    gap: 8,
-    backgroundColor: stylesVars.cardBg
+    borderRadius: 20,
+    padding: 16,
+    gap: 12,
+    backgroundColor: stylesVars.cardBg,
   },
 
-  cardNewRed: {
-    borderColor: stylesVars.dangerBorder,
-    backgroundColor: "#FFF7F7"
+  sectionHeader: {
+    gap: 3,
   },
 
-  rowBetween: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 10,
-    alignItems: "center"
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: stylesVars.text,
   },
 
-  h1: {
-    fontSize: 18,
-    fontWeight: "700",
-    flex: 1,
-    color: stylesVars.text
-  },
-
-  h2: {
-    fontSize: 15,
-    fontWeight: "700",
-    marginBottom: 2,
-    color: stylesVars.text
-  },
-
-  meta: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: stylesVars.mutedText,
-    fontWeight: "500"
-  },
-
-  strong: {
-    fontWeight: "700",
-    color: stylesVars.text
-  },
-
-  badge: {
+  sectionSubtitle: {
     fontSize: 12,
-    fontWeight: "700",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    overflow: "hidden"
+    lineHeight: 17,
+    color: stylesVars.mutedText,
+    fontWeight: "500",
   },
 
-  badgeRed: {
-    color: stylesVars.danger,
-    backgroundColor: stylesVars.dangerSoft
+  productRow: {
+    flexDirection: "row",
+    gap: 14,
+    alignItems: "center",
   },
 
-  badgeBlue: {
-    color: "#1E3A8A",
-    backgroundColor: "#DBEAFE"
-  },
-
-  bannerWrap: {
-    width: "100%",
-    height: 160,
+  imageBox: {
+    width: 96,
+    height: 96,
     borderRadius: 16,
     overflow: "hidden",
-    backgroundColor: "#F1F5F9",
     borderWidth: 1,
     borderColor: stylesVars.border,
-    marginBottom: 4
+    backgroundColor: "#F1F5F9",
   },
 
-  bannerImg: {
+  image: {
     width: "100%",
-    height: "100%"
+    height: "100%",
   },
 
-  dyeRow: {
+  imagePlaceholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+  },
+
+  imagePlaceholderText: {
+    color: stylesVars.mutedText,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+
+  productMetaWrap: {
+    flex: 1,
+    gap: 8,
+  },
+
+  productName: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: "800",
+    color: stylesVars.text,
+  },
+
+  productMetaInfo: {
+    gap: 2,
+  },
+
+  productMetaLabel: {
+    fontSize: 11,
+    color: stylesVars.mutedText,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+
+  productMetaValue: {
+    fontSize: 13,
+    color: stylesVars.text,
+    fontWeight: "700",
+  },
+
+  heroPrice: {
+    fontSize: 18,
+    color: stylesVars.text,
+    fontWeight: "800",
+  },
+
+  kvRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  kvLabel: {
+    flex: 0.9,
+    fontSize: 13,
+    lineHeight: 19,
+    color: stylesVars.mutedText,
+    fontWeight: "600",
+  },
+
+  kvValue: {
+    flex: 1.1,
+    fontSize: 13,
+    lineHeight: 19,
+    color: stylesVars.text,
+    fontWeight: "700",
+    textAlign: "right",
+  },
+
+  kvMuted: {
+    color: stylesVars.mutedText,
+  },
+
+  measurementsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+
+  measurementChip: {
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: stylesVars.blueSoft,
+  },
+
+  measurementChipText: {
+    fontSize: 12,
+    color: stylesVars.blue,
+    fontWeight: "800",
+  },
+
+  customBlock: {
+    gap: 10,
+    paddingTop: 2,
+  },
+
+  colorPreviewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  dyeSwatch: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+
+  tailoringImageWrap: {
+    width: "100%",
+    height: 160,
+    borderRadius: 14,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: "#F1F5F9",
+  },
+
+  tailoringImage: {
+    width: "100%",
+    height: "100%",
+  },
+
+  noteBox: {
+    borderWidth: 1,
+    borderColor: stylesVars.borderSoft,
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: "#F8FAFC",
+    gap: 6,
+  },
+
+  noteLabel: {
+    fontSize: 12,
+    color: stylesVars.mutedText,
+    fontWeight: "700",
+  },
+
+  noteText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: stylesVars.text,
+    fontWeight: "500",
+  },
+
+  previewBox: {
+    borderWidth: 1,
+    borderColor: stylesVars.borderSoft,
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: "#F8FAFC",
+    gap: 4,
+  },
+
+  previewLabel: {
+    fontSize: 12,
+    color: stylesVars.mutedText,
+    fontWeight: "700",
+  },
+
+  previewText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: stylesVars.text,
+    fontWeight: "500",
+  },
+
+  helper: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500",
+  },
+
+  priceRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
-    marginTop: 6
   },
 
-  dyeSwatch: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
-    backgroundColor: stylesVars.white
+  priceLabel: {
+    fontSize: 14,
+    color: stylesVars.mutedText,
+    fontWeight: "600",
+  },
+
+  priceValue: {
+    fontSize: 14,
+    color: stylesVars.text,
+    fontWeight: "700",
+  },
+
+  priceLabelStrong: {
+    fontSize: 16,
+    color: stylesVars.text,
+    fontWeight: "800",
+  },
+
+  priceValueStrong: {
+    fontSize: 18,
+    color: stylesVars.text,
+    fontWeight: "800",
   },
 
   divider: {
     height: 1,
     backgroundColor: stylesVars.border,
-    marginVertical: 8
+    marginVertical: 2,
   },
 
   primaryBtn: {
@@ -943,13 +1488,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 14,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   primaryText: {
     color: stylesVars.white,
-    fontWeight: "700",
-    fontSize: 14
+    fontWeight: "800",
+    fontSize: 14,
   },
 
   secondaryBtn: {
@@ -961,29 +1506,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: stylesVars.blueSoft,
-    flex: 1
+    flex: 1,
   },
 
   secondaryText: {
     color: stylesVars.blue,
-    fontWeight: "700",
-    fontSize: 14
-  },
-
-  empty: {
-    padding: 16
-  },
-
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: stylesVars.text
+    fontWeight: "800",
+    fontSize: 14,
   },
 
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.35)",
-    justifyContent: "flex-end"
+    justifyContent: "flex-end",
   },
 
   modalCard: {
@@ -993,27 +1528,27 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 18,
     borderWidth: 1,
     borderColor: stylesVars.border,
-    gap: 10
+    gap: 10,
   },
 
   modalTitle: {
     fontSize: 16,
-    fontWeight: "700",
-    color: stylesVars.text
+    fontWeight: "800",
+    color: stylesVars.text,
   },
 
   modalSub: {
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   fieldLabel: {
     fontSize: 13,
     color: stylesVars.text,
-    fontWeight: "700",
-    marginTop: 2
+    fontWeight: "800",
+    marginTop: 2,
   },
 
   input: {
@@ -1025,16 +1560,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: stylesVars.text,
     fontWeight: "500",
-    backgroundColor: stylesVars.white
+    backgroundColor: stylesVars.white,
   },
 
   modalBtns: {
     flexDirection: "row",
     gap: 10,
-    marginTop: 8
+    marginTop: 8,
   },
 
   bottomSpacer: {
-    height: 20
-  }
+    height: 20,
+  },
 });

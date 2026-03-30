@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useMemo, useState } from "react";
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import Wizard from "../wizard";
 import ResultsScreen from "../results";
 import { useAppSelector } from "@/store/hooks";
@@ -19,17 +19,24 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Kapray</Text>
 
-        <TouchableOpacity
-          onPress={() => setWizardVisible(true)}
-          style={styles.searchButton}
-        >
-          <Ionicons name="search" size={28} color="#2563EB" />
-        </TouchableOpacity>
+        {hasDressTypeSelection ? (
+          <Pressable
+            onPress={() => setWizardVisible(true)}
+            style={({ pressed }) => [
+              styles.searchButton,
+              pressed ? styles.pressed : null,
+            ]}
+          >
+            <Ionicons name="search" size={20} color="#2563EB" />
+          </Pressable>
+        ) : (
+          <View style={styles.searchButtonPlaceholder} />
+        )}
       </View>
 
       {!hasDressTypeSelection ? (
-        <View style={styles.infoWrap}>
-          <Text style={styles.infoText}>Use search to select filters.</Text>
+        <View style={styles.wizardWrap}>
+          <Wizard />
         </View>
       ) : (
         <View style={styles.resultsWrap}>
@@ -70,14 +77,14 @@ const stylesVars = {
   overlayDark: "rgba(0,0,0,0.58)",
   overlaySoft: "rgba(255,255,255,0.14)",
   white: "#FFFFFF",
-  black: "#000000"
+  black: "#000000",
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: stylesVars.bg,
-    paddingTop: 40
+    paddingTop: 40,
   },
 
   header: {
@@ -85,47 +92,47 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    marginBottom: 10
+    paddingBottom: 8,
+    minHeight: 56,
   },
 
   title: {
     fontSize: 28,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   searchButton: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: 999,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
     borderColor: "#D7E3FF",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
-  infoWrap: {
-    paddingHorizontal: 16,
-    paddingTop: 8
+  searchButtonPlaceholder: {
+    width: 40,
+    height: 40,
   },
 
-  infoText: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: stylesVars.mutedText,
-    fontWeight: "500"
+  wizardWrap: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingTop: 8,
   },
 
   resultsWrap: {
-    flex: 1
+    flex: 1,
   },
 
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.55)",
     justifyContent: "center",
-    alignItems: "center"
+    alignItems: "center",
   },
 
   modalContent: {
@@ -134,17 +141,9 @@ const styles = StyleSheet.create({
     backgroundColor: stylesVars.cardBg,
     borderRadius: 18,
     padding: 24,
-    alignItems: "center"
   },
 
-  closeButton: {
-    marginTop: 24,
-    minHeight: 48,
-    backgroundColor: stylesVars.blue,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center"
-  }
+  pressed: {
+    opacity: 0.82,
+  },
 });

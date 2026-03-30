@@ -36,6 +36,18 @@ type ProductRow = {
   updated_at?: string | null;
 };
 
+type VendorTailoringOptions = {
+  blouse_neck?: string[] | null;
+  sleeves?: string[] | null;
+  trouser?: string[] | null;
+};
+
+type ProductTailoringSelections = {
+  blouse_neck: string[];
+  sleeves: string[];
+  trouser: string[];
+};
+
 function safeInt(v: any) {
   const n = Number(v);
   if (!Number.isFinite(n)) return null;
@@ -55,7 +67,7 @@ function sanitizeNumber(input: string) {
 }
 
 function safeJson(v: any) {
-  if (v && typeof v === "object") return v;
+  if (v && typeof v === "object" && !Array.isArray(v)) return v;
   return {};
 }
 
@@ -90,6 +102,179 @@ function guessContentTypeFromExt(ext: string) {
   return "application/octet-stream";
 }
 
+function normalizeStringList(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  const out: string[] = [];
+
+  for (const item of v) {
+    const s = String(item ?? "").trim();
+    if (s) out.push(s);
+  }
+
+  return Array.from(new Set(out));
+}
+
+function readVendorTailoringOptions(v: unknown): VendorTailoringOptions {
+  const obj = safeJson(v);
+
+  return {
+    blouse_neck: normalizeStringList(
+      obj?.blouse_neck ??
+        obj?.blouseNeck ??
+        obj?.neck ??
+        obj?.neck_styles ??
+        obj?.neckStyles ??
+        [],
+    ),
+    sleeves: normalizeStringList(
+      obj?.sleeves ??
+        obj?.sleeve ??
+        obj?.sleeve_styles ??
+        obj?.sleeveStyles ??
+        [],
+    ),
+    trouser: normalizeStringList(
+      obj?.trouser ??
+        obj?.trousers ??
+        obj?.bottom ??
+        obj?.bottoms ??
+        obj?.trouser_styles ??
+        obj?.trouserStyles ??
+        [],
+    ),
+  };
+}
+
+function emptyTailoringSelections(): ProductTailoringSelections {
+  return {
+    blouse_neck: [],
+    sleeves: [],
+    trouser: [],
+  };
+}
+
+function readProductTailoringSelections(specInput: unknown): ProductTailoringSelections {
+  const spec = safeJson(specInput);
+
+  const nested =
+    safeJson(spec?.tailoring_options).blouse_neck ||
+    safeJson(spec?.tailoring_styles).blouse_neck ||
+    safeJson(spec?.tailoring_style_options).blouse_neck
+      ? safeJson(spec?.tailoring_options ?? spec?.tailoring_styles ?? spec?.tailoring_style_options)
+      : {};
+
+  const blouse_neck = normalizeStringList(
+    nested?.blouse_neck ??
+      nested?.blouseNeck ??
+      spec?.blouse_neck_styles ??
+      spec?.blouseNeckStyles ??
+      spec?.neck_styles ??
+      spec?.neckStyles ??
+      spec?.neck_options ??
+      spec?.neckOptions ??
+      spec?.blouse_neck ??
+      [],
+  );
+
+  const sleeves = normalizeStringList(
+    nested?.sleeves ??
+      nested?.sleeve ??
+      spec?.sleeve_styles ??
+      spec?.sleeveStyleOptions ??
+      spec?.sleeve_options ??
+      spec?.sleeves ??
+      [],
+  );
+
+  const trouser = normalizeStringList(
+    nested?.trouser ??
+      nested?.trousers ??
+      spec?.trouser_styles ??
+      spec?.trouserStyleOptions ??
+      spec?.trouser_options ??
+      spec?.trouser ??
+      [],
+  );
+
+  return {
+    blouse_neck,
+    sleeves,
+    trouser,
+  };
+}
+
+function writeProductTailoringSelections(
+  specInput: unknown,
+  selections: ProductTailoringSelections,
+) {
+  const spec = safeJson(specInput);
+
+  const normalized: ProductTailoringSelections = {
+    blouse_neck: normalizeStringList(selections.blouse_neck),
+    sleeves: normalizeStringList(selections.sleeves),
+    trouser: normalizeStringList(selections.trouser),
+  };
+
+  return {
+    ...spec,
+
+    tailoring_options: {
+      blouse_neck: normalized.blouse_neck,
+      sleeves: normalized.sleeves,
+      trouser: normalized.trouser,
+    },
+
+    tailoring_styles: {
+      blouse_neck: normalized.blouse_neck,
+      sleeves: normalized.sleeves,
+      trouser: normalized.trouser,
+    },
+
+    tailoring_style_options: {
+      blouse_neck: normalized.blouse_neck,
+      sleeves: normalized.sleeves,
+      trouser: normalized.trouser,
+    },
+
+    blouse_neck_styles: normalized.blouse_neck,
+    sleeve_styles: normalized.sleeves,
+    trouser_styles: normalized.trouser,
+  };
+}
+
+function clearProductTailoringSelections(specInput: unknown) {
+  return writeProductTailoringSelections(specInput, emptyTailoringSelections());
+}
+
+function SelectionPill({
+  label,
+  selected,
+  onPress,
+  disabled,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        styles.optionPill,
+        selected ? styles.optionPillOn : null,
+        disabled ? styles.optionPillDisabled : null,
+        pressed ? styles.pressed : null,
+      ]}
+    >
+      <Text style={[styles.optionPillText, selected ? styles.optionPillTextOn : null]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 export default function UpdateProductScreen() {
   const router = useRouter();
 
@@ -102,6 +287,7 @@ export default function UpdateProductScreen() {
   const [loadingList, setLoadingList] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingMedia, setSavingMedia] = useState(false);
+  const [vendorLoading, setVendorLoading] = useState(false);
 
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [query, setQuery] = useState("");
@@ -131,6 +317,16 @@ export default function UpdateProductScreen() {
   const [tailoringCost, setTailoringCost] = useState<number>(0);
   const [tailoringTurnaroundDays, setTailoringTurnaroundDays] = useState<number>(0);
 
+  const [vendorOffersTailoring, setVendorOffersTailoring] = useState<boolean>(false);
+  const [vendorTailoringOptions, setVendorTailoringOptions] = useState<VendorTailoringOptions>({
+    blouse_neck: [],
+    sleeves: [],
+    trouser: [],
+  });
+
+  const [selectedTailoringStyles, setSelectedTailoringStyles] =
+    useState<ProductTailoringSelections>(emptyTailoringSelections());
+
   const [videoThumbs, setVideoThumbs] = useState<Record<string, string>>({});
 
   const resolvePublicUrl = useCallback((path: string | null | undefined) => {
@@ -139,6 +335,24 @@ export default function UpdateProductScreen() {
     const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(path);
     return data?.publicUrl ?? null;
   }, []);
+
+  const toggleStyle = useCallback(
+    (group: keyof ProductTailoringSelections, value: string) => {
+      const clean = String(value ?? "").trim();
+      if (!clean) return;
+
+      setSelectedTailoringStyles((prev) => {
+        const current = normalizeStringList(prev[group]);
+        const exists = current.includes(clean);
+
+        return {
+          ...prev,
+          [group]: exists ? current.filter((x) => x !== clean) : [...current, clean],
+        };
+      });
+    },
+    [],
+  );
 
   async function fetchProducts() {
     if (!vendorId) {
@@ -170,8 +384,53 @@ export default function UpdateProductScreen() {
     }
   }
 
+  const fetchVendorTailoring = useCallback(async () => {
+    if (!vendorId) {
+      setVendorOffersTailoring(false);
+      setVendorTailoringOptions({
+        blouse_neck: [],
+        sleeves: [],
+        trouser: [],
+      });
+      return;
+    }
+
+    try {
+      setVendorLoading(true);
+
+      const { data, error } = await supabase
+        .from("vendor")
+        .select("id, offers_tailoring, tailoring_options")
+        .eq("id", vendorId)
+        .single();
+
+      if (error) {
+        setVendorOffersTailoring(false);
+        setVendorTailoringOptions({
+          blouse_neck: [],
+          sleeves: [],
+          trouser: [],
+        });
+        return;
+      }
+
+      setVendorOffersTailoring(Boolean((data as any)?.offers_tailoring));
+      setVendorTailoringOptions(readVendorTailoringOptions((data as any)?.tailoring_options));
+    } catch {
+      setVendorOffersTailoring(false);
+      setVendorTailoringOptions({
+        blouse_neck: [],
+        sleeves: [],
+        trouser: [],
+      });
+    } finally {
+      setVendorLoading(false);
+    }
+  }, [vendorId]);
+
   useEffect(() => {
     void fetchProducts();
+    void fetchVendorTailoring();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vendorId]);
 
@@ -217,6 +476,8 @@ export default function UpdateProductScreen() {
 
     const daysFromSpec = safeNumOrZero(spec?.tailoring_turnaround_days ?? 0);
     setTailoringTurnaroundDays(daysFromSpec);
+
+    setSelectedTailoringStyles(readProductTailoringSelections(spec));
   }, [selected]);
 
   useEffect(() => {
@@ -228,6 +489,7 @@ export default function UpdateProductScreen() {
     if (!tailoringEnabled) {
       if (tailoringCost !== 0) setTailoringCost(0);
       if (tailoringTurnaroundDays !== 0) setTailoringTurnaroundDays(0);
+      setSelectedTailoringStyles(emptyTailoringSelections());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tailoringEnabled]);
@@ -317,6 +579,25 @@ export default function UpdateProductScreen() {
 
   const isUnstitched = priceMode === "unstitched_per_meter";
 
+  const blouseNeckOptions = useMemo(
+    () => normalizeStringList(vendorTailoringOptions?.blouse_neck),
+    [vendorTailoringOptions?.blouse_neck],
+  );
+
+  const sleeveOptions = useMemo(
+    () => normalizeStringList(vendorTailoringOptions?.sleeves),
+    [vendorTailoringOptions?.sleeves],
+  );
+
+  const trouserOptions = useMemo(
+    () => normalizeStringList(vendorTailoringOptions?.trouser),
+    [vendorTailoringOptions?.trouser],
+  );
+
+  const hasAnyVendorStyleOptions = useMemo(() => {
+    return Boolean(blouseNeckOptions.length || sleeveOptions.length || trouserOptions.length);
+  }, [blouseNeckOptions.length, sleeveOptions.length, trouserOptions.length]);
+
   const canSave = useMemo(() => {
     if (!vendorId) return false;
     if (!selectedId) return false;
@@ -332,6 +613,8 @@ export default function UpdateProductScreen() {
       }
 
       if (tailoringEnabled) {
+        if (!vendorOffersTailoring) return false;
+
         const t = Number(tailoringCost ?? 0);
         if (!Number.isFinite(t) || t <= 0) return false;
 
@@ -356,6 +639,7 @@ export default function UpdateProductScreen() {
     tailoringEnabled,
     tailoringCost,
     tailoringTurnaroundDays,
+    vendorOffersTailoring,
   ]);
 
   async function saveUpdate() {
@@ -406,7 +690,7 @@ export default function UpdateProductScreen() {
         nextPrice.tailoring_cost_pkr = 0;
       }
 
-      const nextSpec: any = {
+      let nextSpec: any = {
         ...(prevSpec ?? {}),
       };
 
@@ -421,6 +705,12 @@ export default function UpdateProductScreen() {
         nextSpec.tailoring_turnaround_days = tailoringEnabled
           ? Math.max(0, Number(tailoringTurnaroundDays ?? 0))
           : 0;
+
+        if (tailoringEnabled) {
+          nextSpec = writeProductTailoringSelections(nextSpec, selectedTailoringStyles);
+        } else {
+          nextSpec = clearProductTailoringSelections(nextSpec);
+        }
       } else {
         nextSpec.dyeing_enabled = false;
         nextSpec.dyeing_cost_pkr = 0;
@@ -428,6 +718,7 @@ export default function UpdateProductScreen() {
         nextSpec.tailoring_enabled = false;
         nextSpec.tailoring_cost_pkr = 0;
         nextSpec.tailoring_turnaround_days = 0;
+        nextSpec = clearProductTailoringSelections(nextSpec);
       }
 
       const updatePayload: any = {
@@ -821,31 +1112,26 @@ export default function UpdateProductScreen() {
               maxLength={80}
             />
 
-            {selected ? (
-              <>
-                <Text style={styles.label}>Inventory Quantity *</Text>
+            <Text style={styles.label}>Inventory Quantity *</Text>
 
-                {Boolean(selected.made_on_order) ? (
-                  <View style={styles.madeOnOrderPill}>
-                    <Text style={styles.madeOnOrderText}>Made on Order</Text>
-                  </View>
-                ) : (
-                  <TextInput
-                    value={String(inventoryQty ?? 0)}
-                    onChangeText={(t) => setInventoryQty(Number(sanitizeNumber(t) || "0"))}
-                    placeholder="e.g., 10"
-                    placeholderTextColor={stylesVars.placeholder}
-                    style={styles.input}
-                    keyboardType="number-pad"
-                    maxLength={10}
-                  />
-                )}
-              </>
-            ) : null}
-
+            {Boolean(selected.made_on_order) ? (
+              <View style={styles.madeOnOrderPill}>
+                <Text style={styles.madeOnOrderText}>Made on Order</Text>
+              </View>
+            ) : (
+              <TextInput
+                value={String(inventoryQty ?? 0)}
+                onChangeText={(t) => setInventoryQty(Number(sanitizeNumber(t) || "0"))}
+                placeholder="e.g., 10"
+                placeholderTextColor={stylesVars.placeholder}
+                style={styles.input}
+                keyboardType="number-pad"
+                maxLength={10}
+              />
+            )}
             <Text style={styles.label}>Cost Mode</Text>
-            <View style={styles.fixedPill}>
-              <Text style={styles.fixedPillText}>
+            <View style={styles.readonlyField}>
+              <Text style={styles.readonlyValue}>
                 {priceMode === "unstitched_per_meter"
                   ? "Unstitched (PKR/meter)"
                   : "Stitched / Ready-to-wear"}
@@ -883,7 +1169,7 @@ export default function UpdateProductScreen() {
                 />
 
                 <Text style={styles.hint}>
-                  Dyeing & stitching services apply only to unstitched products.
+                  Dyeing and stitching services apply only to unstitched products.
                 </Text>
               </>
             ) : (
@@ -899,7 +1185,7 @@ export default function UpdateProductScreen() {
                   maxLength={12}
                 />
 
-                <View style={styles.dyeRow}>
+                <View style={styles.inlineToggleRow}>
                   <Text style={[styles.label, { marginTop: 0 }]}>Dyeable</Text>
 
                   <Pressable
@@ -908,13 +1194,16 @@ export default function UpdateProductScreen() {
                       setDyeingEnabled((v) => !v);
                     }}
                     style={({ pressed }) => [
-                      styles.dyePill,
-                      dyeingEnabled ? styles.dyePillOn : null,
+                      styles.inlineTogglePill,
+                      dyeingEnabled ? styles.inlineTogglePillOn : null,
                       pressed ? styles.pressed : null,
                     ]}
                   >
                     <Text
-                      style={[styles.dyePillText, dyeingEnabled ? styles.dyePillTextOn : null]}
+                      style={[
+                        styles.inlineTogglePillText,
+                        dyeingEnabled ? styles.inlineTogglePillTextOn : null,
+                      ]}
                     >
                       {dyeingEnabled ? "Yes" : "No"}
                     </Text>
@@ -923,8 +1212,8 @@ export default function UpdateProductScreen() {
 
                 {dyeingEnabled ? (
                   <>
-                    <Text style={styles.dyeHint}>
-                      Buyer will pick a dye shade at checkout (only for dyeable unstitched cloth).
+                    <Text style={styles.hint}>
+                      Buyer will pick a dye shade at checkout.
                     </Text>
 
                     <Text style={styles.label}>Dyeing Cost (PKR) *</Text>
@@ -940,24 +1229,31 @@ export default function UpdateProductScreen() {
                   </>
                 ) : null}
 
-                <View style={styles.tailorRow}>
+                <View style={styles.inlineToggleRow}>
                   <Text style={[styles.label, { marginTop: 0 }]}>Stitching available</Text>
 
                   <Pressable
                     onPress={() => {
                       if (!isUnstitched) return;
+                      if (!vendorOffersTailoring) {
+                        Alert.alert(
+                          "Tailoring not enabled",
+                          "This vendor profile does not offer tailoring.",
+                        );
+                        return;
+                      }
                       setTailoringEnabled((v) => !v);
                     }}
                     style={({ pressed }) => [
-                      styles.tailorPill,
-                      tailoringEnabled ? styles.tailorPillOn : null,
+                      styles.inlineTogglePill,
+                      tailoringEnabled ? styles.inlineTogglePillOn : null,
                       pressed ? styles.pressed : null,
                     ]}
                   >
                     <Text
                       style={[
-                        styles.tailorPillText,
-                        tailoringEnabled ? styles.tailorPillTextOn : null,
+                        styles.inlineTogglePillText,
+                        tailoringEnabled ? styles.inlineTogglePillTextOn : null,
                       ]}
                     >
                       {tailoringEnabled ? "Yes" : "No"}
@@ -965,10 +1261,24 @@ export default function UpdateProductScreen() {
                   </Pressable>
                 </View>
 
+                {vendorLoading ? (
+                  <View style={styles.loadingRow}>
+                    <ActivityIndicator />
+                    <Text style={styles.loadingText}>Loading tailoring options…</Text>
+                  </View>
+                ) : null}
+
+                {!vendorLoading && !vendorOffersTailoring ? (
+                  <Text style={styles.hint}>
+                    Vendor profile currently does not offer tailoring.
+                  </Text>
+                ) : null}
+
                 {tailoringEnabled ? (
                   <>
-                    <Text style={styles.tailorHint}>
-                      Buyer will choose “Yes/No” for stitching at checkout (unstitched only).
+                    <Text style={styles.hint}>
+                      Pick only the styles this product should offer to buyers. Keep selections
+                      small and relevant.
                     </Text>
 
                     <Text style={styles.label}>Tailoring Cost (PKR) *</Text>
@@ -994,6 +1304,64 @@ export default function UpdateProductScreen() {
                       keyboardType="number-pad"
                       maxLength={3}
                     />
+
+                    <Text style={styles.label}>Neck Styles</Text>
+                    {blouseNeckOptions.length ? (
+                      <View style={styles.optionWrap}>
+                        {blouseNeckOptions.map((item) => (
+                          <SelectionPill
+                            key={`neck-${item}`}
+                            label={item}
+                            selected={selectedTailoringStyles.blouse_neck.includes(item)}
+                            onPress={() => toggleStyle("blouse_neck", item)}
+                          />
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={styles.emptyInline}>No neck styles found in vendor profile.</Text>
+                    )}
+
+                    <Text style={styles.label}>Sleeve Styles</Text>
+                    {sleeveOptions.length ? (
+                      <View style={styles.optionWrap}>
+                        {sleeveOptions.map((item) => (
+                          <SelectionPill
+                            key={`sleeve-${item}`}
+                            label={item}
+                            selected={selectedTailoringStyles.sleeves.includes(item)}
+                            onPress={() => toggleStyle("sleeves", item)}
+                          />
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={styles.emptyInline}>
+                        No sleeve styles found in vendor profile.
+                      </Text>
+                    )}
+
+                    <Text style={styles.label}>Trouser Styles</Text>
+                    {trouserOptions.length ? (
+                      <View style={styles.optionWrap}>
+                        {trouserOptions.map((item) => (
+                          <SelectionPill
+                            key={`trouser-${item}`}
+                            label={item}
+                            selected={selectedTailoringStyles.trouser.includes(item)}
+                            onPress={() => toggleStyle("trouser", item)}
+                          />
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={styles.emptyInline}>
+                        No trouser styles found in vendor profile.
+                      </Text>
+                    )}
+
+                    {!hasAnyVendorStyleOptions ? (
+                      <Text style={styles.hint}>
+                        Add tailoring style options in vendor profile first, then return here.
+                      </Text>
+                    ) : null}
                   </>
                 ) : null}
               </>
@@ -1007,7 +1375,7 @@ export default function UpdateProductScreen() {
           <Text style={styles.sectionTitle}>Media</Text>
 
           {selected ? (
-            <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={styles.mediaActionRow}>
               <Pressable
                 onPress={() => pickAndUpload("image")}
                 disabled={savingMedia}
@@ -1159,7 +1527,6 @@ const stylesVars = {
   dangerSoft: "#FEE2E2",
   dangerBorder: "#FCA5A5",
   overlayDark: "rgba(0,0,0,0.58)",
-  overlaySoft: "rgba(255,255,255,0.14)",
   white: "#FFFFFF",
   black: "#000000",
 };
@@ -1223,6 +1590,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: stylesVars.text,
     marginBottom: 2,
+    flex: 1,
   },
 
   selectedBox: {
@@ -1249,10 +1617,10 @@ const styles = StyleSheet.create({
   },
 
   smallBtn: {
-    minHeight: 40,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
+    minHeight: 34,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
     borderColor: "#D7E3FF",
@@ -1294,22 +1662,21 @@ const styles = StyleSheet.create({
     minHeight: 120,
     paddingTop: 12,
   },
-
-  fixedPill: {
+  readonlyField: {
     marginTop: 8,
-    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: stylesVars.borderSoft,
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: stylesVars.blueSoft,
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
+    backgroundColor: "#F8FAFC",
   },
 
-  fixedPillText: {
-    color: stylesVars.blue,
-    fontWeight: "700",
-    fontSize: 12,
+  readonlyValue: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: stylesVars.text,
   },
 
   madeOnOrderPill: {
@@ -1427,7 +1794,7 @@ const styles = StyleSheet.create({
   },
 
   hint: {
-    marginTop: 10,
+    marginTop: 8,
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
@@ -1548,12 +1915,12 @@ const styles = StyleSheet.create({
   emptyInline: {
     marginTop: 8,
     color: stylesVars.mutedText,
-    fontSize: 13,
+    fontSize: 12,
     lineHeight: 18,
     fontWeight: "500",
   },
 
-  dyeRow: {
+  inlineToggleRow: {
     marginTop: 12,
     flexDirection: "row",
     alignItems: "center",
@@ -1561,76 +1928,75 @@ const styles = StyleSheet.create({
     gap: 10,
   },
 
-  dyePill: {
+  inlineTogglePill: {
+    minHeight: 34,
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: stylesVars.white,
-  },
-
-  dyePillOn: {
     borderColor: "#D7E3FF",
     backgroundColor: stylesVars.blueSoft,
-  },
-
-  dyePillText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: stylesVars.text,
-  },
-
-  dyePillTextOn: {
-    color: stylesVars.blue,
-  },
-
-  dyeHint: {
-    marginTop: 8,
-    color: stylesVars.mutedText,
-    fontWeight: "500",
-    fontSize: 13,
-    lineHeight: 18,
-  },
-
-  tailorRow: {
-    marginTop: 12,
-    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
+    justifyContent: "center",
   },
 
-  tailorPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: stylesVars.white,
+  inlineTogglePillOn: {
+    borderColor: stylesVars.blue,
+    backgroundColor: stylesVars.blue,
   },
 
-  tailorPillOn: {
-    borderColor: "#D7E3FF",
-    backgroundColor: stylesVars.blueSoft,
-  },
-
-  tailorPillText: {
+  inlineTogglePillText: {
     fontSize: 12,
     fontWeight: "700",
-    color: stylesVars.text,
-  },
-
-  tailorPillTextOn: {
     color: stylesVars.blue,
   },
 
-  tailorHint: {
+  inlineTogglePillTextOn: {
+    color: stylesVars.white,
+  },
+
+  optionWrap: {
     marginTop: 8,
-    color: stylesVars.mutedText,
-    fontWeight: "500",
-    fontSize: 13,
-    lineHeight: 18,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+
+  optionPill: {
+    minHeight: 32,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: stylesVars.blueSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  optionPillOn: {
+    borderColor: stylesVars.blue,
+    backgroundColor: stylesVars.blue,
+  },
+
+  optionPillDisabled: {
+    opacity: 0.5,
+  },
+
+  optionPillText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: stylesVars.blue,
+  },
+
+  optionPillTextOn: {
+    color: stylesVars.white,
+  },
+
+  mediaActionRow: {
+    flexDirection: "row",
+    gap: 8,
+    flexWrap: "wrap",
   },
 
   pressed: {

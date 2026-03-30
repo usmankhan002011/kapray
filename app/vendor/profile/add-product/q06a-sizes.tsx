@@ -92,7 +92,7 @@ export default function Q06ASizes() {
       return;
     }
 
-    router.push("/vendor/profile/add-product/q09-images" as any);
+    router.push("/vendor/profile/add-product/q06c-shipping" as any);
   }
 
   return (

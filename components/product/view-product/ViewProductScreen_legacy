@@ -6,9 +6,11 @@ import {
   Alert,
   BackHandler,
   Dimensions,
+  Image,
   Pressable,
   ScrollView,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from "expo-router";
@@ -18,13 +20,6 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setSelectedVendor } from "@/store/vendorSlice";
 import { FooterBar, MediaBlock, useProductMedia } from "./ViewProduct.media";
 import { makeViewProductStyles, stylesVars } from "./ViewProduct.styles";
-import ViewProductTailoringSelection, {
-  TailoringSelection,
-} from "./ViewProduct.tailoring.selection";
-import {
-  normalizeTailoringPresetArray,
-  safeInt0,
-} from "./ViewProduct.tailoring.helpers";
 import {
   clearCachedDyeSelection,
   getCachedDyeSelection,
@@ -97,6 +92,27 @@ type ProductRow = {
   created_at?: string | null;
   updated_at?: string | null;
   vendor?: VendorRow | null;
+};
+
+type TailoringPresetImage = {
+  uri?: string | null;
+  url?: string | null;
+  path?: string | null;
+};
+
+type TailoringStylePreset = {
+  id: string;
+  title: string;
+  note?: string;
+  extra_cost_pkr?: number;
+  images: TailoringPresetImage[];
+  default_neck?: string;
+  default_sleeve?: string;
+  default_trouser?: string;
+  allowed_neck_variations?: string[];
+  allowed_sleeve_variations?: string[];
+  allowed_trouser_variations?: string[];
+  allow_custom_note?: boolean;
 };
 
 function safeText(v: unknown) {
@@ -175,6 +191,29 @@ function normalizeIdList(v: unknown): string[] {
   return out;
 }
 
+function normalizeStyleOptions(v: unknown): string[] {
+  const list = normalizeLabelList(v);
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const item of list) {
+    const s = String(item).trim();
+    if (!s) continue;
+    const key = s.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+
+  return out;
+}
+
+function safeInt0(v: unknown) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.trunc(n));
+}
+
 function safePositiveNumber(v: unknown) {
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) return 0;
@@ -246,6 +285,59 @@ function encodeJsonParam(v: unknown) {
   } catch {
     return "";
   }
+}
+
+function normalizeTailoringPresetArray(v: unknown): TailoringStylePreset[] {
+  const arr = Array.isArray(v) ? v : [];
+  const out: TailoringStylePreset[] = [];
+
+  for (const item of arr) {
+    const obj = (item ?? {}) as any;
+    const id = String(obj?.id ?? "").trim();
+    const title = String(obj?.title ?? "").trim();
+    const images = Array.isArray(obj?.images) ? obj.images : [];
+
+    if (!id && !title && !images.length) continue;
+
+    out.push({
+      id: id || `style_${out.length + 1}`,
+      title,
+      note: String(obj?.note ?? "").trim(),
+      extra_cost_pkr: safeInt0(obj?.extra_cost_pkr),
+      images,
+      default_neck: String(obj?.default_neck ?? "").trim(),
+      default_sleeve: String(obj?.default_sleeve ?? "").trim(),
+      default_trouser: String(obj?.default_trouser ?? "").trim(),
+      allowed_neck_variations: normalizeStyleOptions(obj?.allowed_neck_variations),
+      allowed_sleeve_variations: normalizeStyleOptions(obj?.allowed_sleeve_variations),
+      allowed_trouser_variations: normalizeStyleOptions(obj?.allowed_trouser_variations),
+      allow_custom_note: Boolean(obj?.allow_custom_note),
+    });
+  }
+
+  return out;
+}
+
+function firstResolvedPresetImageUrl(
+  preset: TailoringStylePreset | null | undefined,
+  resolvePublicUrl: (path: string | null | undefined) => string | null,
+) {
+  if (!preset) return "";
+
+  const images = Array.isArray(preset.images) ? preset.images : [];
+  for (const img of images) {
+    const rawUrl = String((img as any)?.url ?? "").trim();
+    const rawUri = String((img as any)?.uri ?? "").trim();
+    const rawPath = String((img as any)?.path ?? "").trim();
+
+    if (rawUrl && isHttpUrl(rawUrl)) return rawUrl;
+    if (rawUri && isHttpUrl(rawUri)) return rawUri;
+
+    const fromPath = resolvePublicUrl(rawPath || null);
+    if (fromPath) return fromPath;
+  }
+
+  return "";
 }
 
 export default function ViewProductScreen() {
@@ -333,16 +425,17 @@ export default function ViewProductScreen() {
   const [buyerWantsTailoring, _setBuyerWantsTailoring] = useState(false);
   const [buyerWantsDyeing, _setBuyerWantsDyeing] = useState(false);
 
-  const [tailoringSelection, setTailoringSelection] = useState<TailoringSelection | null>(null);
+  const [selectedTailoringStyleId, setSelectedTailoringStyleId] = useState("");
+  const [selectedNeckStyle, setSelectedNeckStyle] = useState("");
+  const [selectedSleeveStyle, setSelectedSleeveStyle] = useState("");
+  const [selectedTrouserStyle, setSelectedTrouserStyle] = useState("");
+  const [customTailoringNote, setCustomTailoringNote] = useState("");
 
   const setBuyerWantsTailoring = useCallback(
     (next: boolean) => {
       _setBuyerWantsTailoring(next);
       if (choiceKey) {
         BUYER_TAILORING_CHOICE_CACHE.set(choiceKey, next);
-      }
-      if (!next) {
-        setTailoringSelection(null);
       }
     },
     [choiceKey],
@@ -381,10 +474,14 @@ export default function ViewProductScreen() {
   const resetBuyerSelections = useCallback(() => {
     _setBuyerWantsTailoring(false);
     _setBuyerWantsDyeing(false);
-    setTailoringSelection(null);
     setSelectedDyeShadeId("");
     setSelectedDyeHex("");
     setSelectedDyeLabel("");
+    setSelectedTailoringStyleId("");
+    setSelectedNeckStyle("");
+    setSelectedSleeveStyle("");
+    setSelectedTrouserStyle("");
+    setCustomTailoringNote("");
 
     if (choiceKey) {
       BUYER_TAILORING_CHOICE_CACHE.delete(choiceKey);
@@ -470,6 +567,7 @@ export default function ViewProductScreen() {
       if (label) setSelectedDyeLabel(label);
       else if (hex) setSelectedDyeLabel(hex);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
 
   const resolvePublicUrl = useCallback((path: string | null | undefined) => {
@@ -516,7 +614,8 @@ export default function ViewProductScreen() {
       setActiveVideoUrl(it.url);
       setVideoCoverVisible(true);
     }
-  }, [mediaItems, selectedMediaIndex, activeVideoUrl]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mediaItems, selectedMediaIndex]);
 
   const fetchProduct = useCallback(async () => {
     if (!productId && !productCode) {
@@ -763,7 +862,7 @@ export default function ViewProductScreen() {
 
     return (
       <View style={styles.specRow}>
-        <Text style={[styles.specLabel, { color: stylesVars.blue }]}>{title}:</Text>
+        <Text style={styles.specLabel}>{title}:</Text>
         <Text style={styles.specValue}>{list.join(", ")}</Text>
       </View>
     );
@@ -787,9 +886,9 @@ export default function ViewProductScreen() {
         style={({ pressed }) => [
           styles.linkBtnInline,
           {
-            minHeight: 24,
-            paddingVertical: 4,
-            paddingHorizontal: 6,
+            minHeight: 34,
+            paddingVertical: 7,
+            paddingHorizontal: 10,
             borderRadius: 999,
             borderWidth: 1,
             borderColor: selected ? stylesVars.blue : "#D7E3FF",
@@ -803,7 +902,7 @@ export default function ViewProductScreen() {
           style={[
             styles.linkText,
             {
-              fontSize: 10,
+              fontSize: 12,
               fontWeight: "700",
               color: selected ? "#FFFFFF" : stylesVars.blue,
             },
@@ -985,6 +1084,41 @@ export default function ViewProductScreen() {
     return tailoringStylePresets.length > 0;
   }, [tailoringStylePresets]);
 
+  const selectedPreset = useMemo(() => {
+    return tailoringStylePresets.find((p) => p.id === selectedTailoringStyleId) ?? null;
+  }, [selectedTailoringStyleId, tailoringStylePresets]);
+
+  const resolvedSelectedPresetImage = useMemo(() => {
+    return firstResolvedPresetImageUrl(selectedPreset, resolvePublicUrl);
+  }, [selectedPreset, resolvePublicUrl]);
+
+  const activeNeckOptions = useMemo(() => {
+    if (!selectedPreset) return [];
+    const arr = normalizeStyleOptions(selectedPreset.allowed_neck_variations);
+    const withDefault = selectedPreset.default_neck
+      ? normalizeStyleOptions([...arr, selectedPreset.default_neck])
+      : arr;
+    return withDefault;
+  }, [selectedPreset]);
+
+  const activeSleeveOptions = useMemo(() => {
+    if (!selectedPreset) return [];
+    const arr = normalizeStyleOptions(selectedPreset.allowed_sleeve_variations);
+    const withDefault = selectedPreset.default_sleeve
+      ? normalizeStyleOptions([...arr, selectedPreset.default_sleeve])
+      : arr;
+    return withDefault;
+  }, [selectedPreset]);
+
+  const activeTrouserOptions = useMemo(() => {
+    if (!selectedPreset || !tailoringIncludesTrouser) return [];
+    const arr = normalizeStyleOptions(selectedPreset.allowed_trouser_variations);
+    const withDefault = selectedPreset.default_trouser
+      ? normalizeStyleOptions([...arr, selectedPreset.default_trouser])
+      : arr;
+    return withDefault;
+  }, [selectedPreset, tailoringIncludesTrouser]);
+
   const sizeLengthMap = useMemo(() => {
     return ((product as any)?.spec?.size_length_m ?? {}) as Record<string, unknown>;
   }, [product]);
@@ -1057,6 +1191,34 @@ export default function ViewProductScreen() {
     }
   }, [buyerWantsTailoring, setBuyerWantsTailoring, tailoringEligible]);
 
+  useEffect(() => {
+    if (!buyerWantsTailoring) {
+      setSelectedTailoringStyleId("");
+      setSelectedNeckStyle("");
+      setSelectedSleeveStyle("");
+      setSelectedTrouserStyle("");
+      setCustomTailoringNote("");
+    }
+  }, [buyerWantsTailoring]);
+
+  useEffect(() => {
+    if (!selectedPreset) {
+      setSelectedNeckStyle("");
+      setSelectedSleeveStyle("");
+      setSelectedTrouserStyle("");
+      setCustomTailoringNote("");
+      return;
+    }
+
+    setSelectedNeckStyle(selectedPreset.default_neck || "");
+    setSelectedSleeveStyle(selectedPreset.default_sleeve || "");
+    setSelectedTrouserStyle(tailoringIncludesTrouser ? selectedPreset.default_trouser || "" : "");
+
+    if (!selectedPreset.allow_custom_note) {
+      setCustomTailoringNote("");
+    }
+  }, [selectedPreset, tailoringIncludesTrouser]);
+
   const showTailoringSection = useMemo(() => {
     return Boolean(product) && showBuyerActions && isUnstitched;
   }, [isUnstitched, product, showBuyerActions]);
@@ -1108,28 +1270,46 @@ export default function ViewProductScreen() {
     if (!product) return;
 
     if (tailoringEligible && buyerWantsTailoring) {
-      if (!tailoringSelection?.presetId) {
+      if (!selectedPreset) {
         Alert.alert("Select tailoring style", "Please select a tailoring style card.");
         return;
       }
-
-      if (!tailoringSelection?.neck) {
+      if (!selectedNeckStyle) {
         Alert.alert("Select neck variation", "Please select a neck variation.");
         return;
       }
-
-      if (!tailoringSelection?.sleeve) {
+      if (!selectedSleeveStyle) {
         Alert.alert("Select sleeve variation", "Please select a sleeve variation.");
         return;
       }
-
-      if (tailoringIncludesTrouser && !tailoringSelection?.trouser) {
+      if (tailoringIncludesTrouser && !selectedTrouserStyle) {
         Alert.alert("Select trouser variation", "Please select a trouser variation.");
         return;
       }
     }
 
     const imageUrl = imageUrls.length ? imageUrls[0] : "";
+    const selectedStyleTitle = selectedPreset?.title || "";
+    const selectedStyleImageUrl = resolvedSelectedPresetImage || "";
+
+    const selectedStyleSnapshot =
+      selectedPreset != null
+        ? {
+            id: selectedPreset.id,
+            title: selectedPreset.title,
+            note: selectedPreset.note || "",
+            extra_cost_pkr: safeInt0(selectedPreset.extra_cost_pkr),
+            default_neck: selectedPreset.default_neck || "",
+            default_sleeve: selectedPreset.default_sleeve || "",
+            default_trouser: tailoringIncludesTrouser ? selectedPreset.default_trouser || "" : "",
+            selected_neck_variation: selectedNeckStyle || "",
+            selected_sleeve_variation: selectedSleeveStyle || "",
+            selected_trouser_variation: tailoringIncludesTrouser ? selectedTrouserStyle || "" : "",
+            image_url: selectedStyleImageUrl || "",
+            allow_custom_note: Boolean(selectedPreset.allow_custom_note),
+            custom_note: selectedPreset.allow_custom_note ? customTailoringNote.trim() : "",
+          }
+        : null;
 
     router.push({
       pathname: "/flow/purchase/size" as any,
@@ -1173,81 +1353,63 @@ export default function ViewProductScreen() {
           ? encodeURIComponent(String(tailoringTurnaroundDays))
           : "",
         tailoring_selected: tailoringEligible && buyerWantsTailoring ? "1" : "0",
+
         selected_tailoring_style_id:
-          tailoringEligible &&
-          buyerWantsTailoring &&
-          tailoringSelection?.presetId
-            ? encodeURIComponent(String(tailoringSelection.presetId))
+          tailoringEligible && buyerWantsTailoring && selectedPreset?.id
+            ? encodeURIComponent(String(selectedPreset.id))
             : "",
-            
         selected_tailoring_style_title:
-          tailoringEligible &&
-          buyerWantsTailoring &&
-          tailoringSelection?.title
-            ? encodeURIComponent(String(tailoringSelection.title))
+          tailoringEligible && buyerWantsTailoring && selectedStyleTitle
+            ? encodeURIComponent(selectedStyleTitle)
             : "",
         selected_tailoring_style_image:
-          tailoringEligible &&
-          buyerWantsTailoring &&
-          tailoringSelection?.imageUrl
-            ? encodeURIComponent(String(tailoringSelection.imageUrl))
+          tailoringEligible && buyerWantsTailoring && selectedStyleImageUrl
+            ? encodeURIComponent(selectedStyleImageUrl)
             : "",
         selected_tailoring_style_snapshot:
-          tailoringEligible && buyerWantsTailoring && tailoringSelection
-            ? encodeJsonParam(tailoringSelection)
-            : "",
-        tailoring_style_extra_cost_pkr:
-          tailoringEligible &&
-          buyerWantsTailoring &&
-          (tailoringSelection?.extraCostPkr ?? 0) > 0
-            ? encodeURIComponent(String(tailoringSelection?.extraCostPkr))
+          tailoringEligible && buyerWantsTailoring && selectedStyleSnapshot
+            ? encodeJsonParam(selectedStyleSnapshot)
             : "",
 
         selected_neck_variation:
-          tailoringEligible &&
-          buyerWantsTailoring &&
-          tailoringSelection?.neck
-            ? encodeURIComponent(String(tailoringSelection.neck))
+          tailoringEligible && buyerWantsTailoring && selectedNeckStyle
+            ? encodeURIComponent(selectedNeckStyle)
             : "",
         selected_sleeve_variation:
-          tailoringEligible &&
-          buyerWantsTailoring &&
-          tailoringSelection?.sleeve
-            ? encodeURIComponent(String(tailoringSelection.sleeve))
+          tailoringEligible && buyerWantsTailoring && selectedSleeveStyle
+            ? encodeURIComponent(selectedSleeveStyle)
             : "",
         selected_trouser_variation:
           tailoringEligible &&
           buyerWantsTailoring &&
           tailoringIncludesTrouser &&
-          tailoringSelection?.trouser
-            ? encodeURIComponent(String(tailoringSelection.trouser))
+          selectedTrouserStyle
+            ? encodeURIComponent(selectedTrouserStyle)
             : "",
 
+        // backward compatibility
         selected_neck_style:
-          tailoringEligible &&
-          buyerWantsTailoring &&
-          tailoringSelection?.neck
-            ? encodeURIComponent(String(tailoringSelection.neck))
+          tailoringEligible && buyerWantsTailoring && selectedNeckStyle
+            ? encodeURIComponent(selectedNeckStyle)
             : "",
         selected_sleeve_style:
-          tailoringEligible &&
-          buyerWantsTailoring &&
-          tailoringSelection?.sleeve
-            ? encodeURIComponent(String(tailoringSelection.sleeve))
+          tailoringEligible && buyerWantsTailoring && selectedSleeveStyle
+            ? encodeURIComponent(selectedSleeveStyle)
             : "",
         selected_trouser_style:
           tailoringEligible &&
           buyerWantsTailoring &&
           tailoringIncludesTrouser &&
-          tailoringSelection?.trouser
-            ? encodeURIComponent(String(tailoringSelection.trouser))
+          selectedTrouserStyle
+            ? encodeURIComponent(selectedTrouserStyle)
             : "",
 
         custom_tailoring_note:
           tailoringEligible &&
           buyerWantsTailoring &&
-          tailoringSelection?.note
-            ? encodeURIComponent(String(tailoringSelection.note).trim())
+          selectedPreset?.allow_custom_note &&
+          customTailoringNote.trim()
+            ? encodeURIComponent(customTailoringNote.trim())
             : "",
 
         exports_enabled: vendorExportsEnabled ? "1" : "0",
@@ -1260,6 +1422,7 @@ export default function ViewProductScreen() {
   }, [
     buyerWantsDyeing,
     buyerWantsTailoring,
+    customTailoringNote,
     dyeingCostPkr,
     hasAnySizeLengthMap,
     imageUrls,
@@ -1268,10 +1431,15 @@ export default function ViewProductScreen() {
     pricePerMeterPkr,
     product,
     productCategory,
+    resolvedSelectedPresetImage,
     router,
     selectedDyeHex,
     selectedDyeLabel,
     selectedDyeShadeId,
+    selectedNeckStyle,
+    selectedPreset,
+    selectedSleeveStyle,
+    selectedTrouserStyle,
     shippingWeightKg,
     showDyeing,
     sizeLengthMap,
@@ -1279,7 +1447,6 @@ export default function ViewProductScreen() {
     tailoringCostPkr,
     tailoringEligible,
     tailoringIncludesTrouser,
-    tailoringSelection,
     tailoringTurnaroundDays,
     vendorExportRegions,
     vendorExportsEnabled,
@@ -1311,6 +1478,7 @@ export default function ViewProductScreen() {
   };
 
   const titleLine = useMemo(() => compactLineValue(product?.title), [product?.title]);
+
   const categoryLine = useMemo(() => compactLineValue(categoryText), [categoryText]);
 
   const inventoryLine = useMemo(() => {
@@ -1362,7 +1530,7 @@ export default function ViewProductScreen() {
 
         {missingParam ? (
           <View style={styles.card}>
-            <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>Missing product</Text>
+            <Text style={styles.sectionTitle}>Missing product</Text>
             <Text style={styles.meta} selectable>
               Provide route params as either:
               {"\n"}• /vendor/profile/view-product?id=123
@@ -1415,6 +1583,7 @@ export default function ViewProductScreen() {
 
           {isUnstitched ? (
             <>
+              <CompactLine text={sizeLengthLine ? `Fabric length by size: ${sizeLengthLine}` : null} />
               <CompactLine text={tailoringAvailabilityLine} />
             </>
           ) : null}
@@ -1424,10 +1593,350 @@ export default function ViewProductScreen() {
               Size-length mapping not available.
             </Text>
           ) : null}
+
+          {showTailoringSection ? (
+            <View style={{ marginTop: 12 }}>
+              <Text style={styles.label}>Do you want stitching?</Text>
+
+              <View style={{ flexDirection: "row", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+                <SelectPill
+                  label={`Yes${tailoringEligible ? ` • +PKR ${tailoringCostPkr}` : ""}`}
+                  selected={buyerWantsTailoring}
+                  disabled={!tailoringEligible}
+                  onPress={() => {
+                    if (!tailoringEligible) {
+                      Alert.alert(
+                        "Stitching not available",
+                        "This product is not eligible for stitching.",
+                      );
+                      return;
+                    }
+                    setBuyerWantsTailoring(true);
+                  }}
+                />
+
+                <SelectPill
+                  label="No"
+                  selected={!buyerWantsTailoring}
+                  onPress={() => setBuyerWantsTailoring(false)}
+                />
+              </View>
+
+              {!tailoringEligible ? (
+                <Text style={[styles.meta, { marginTop: 6 }]}>
+                  Stitching is not available for this product.
+                </Text>
+              ) : null}
+
+              {buyerWantsTailoring && tailoringEligible ? (
+                <View style={{ marginTop: 12 }}>
+                  {hasTailoringStylePresets ? (
+                    <>
+                      <Text style={styles.label}>Select a tailoring style</Text>
+                      <Text style={styles.meta}>
+                        Choose one style card first. Then select only the allowed variations inside
+                        that chosen style. Trouser variation appears only where trouser is included.
+                      </Text>
+
+                      <View style={{ marginTop: 10, gap: 12 }}>
+                        {tailoringStylePresets.map((preset) => {
+                          const imageUrl = firstResolvedPresetImageUrl(preset, resolvePublicUrl);
+                          const isSelected = selectedTailoringStyleId === preset.id;
+                          const extraCost = safeInt0(preset.extra_cost_pkr);
+
+                          return (
+                            <Pressable
+                              key={preset.id}
+                              onPress={() => setSelectedTailoringStyleId(preset.id)}
+                              style={({ pressed }) => [
+                                {
+                                  borderRadius: 16,
+                                  borderWidth: 1,
+                                  borderColor: isSelected ? stylesVars.blue : "#D7E3FF",
+                                  backgroundColor: isSelected ? "#F3F8FF" : "#FFFFFF",
+                                  overflow: "hidden",
+                                },
+                                pressed ? styles.pressed : null,
+                              ]}
+                            >
+                              {imageUrl ? (
+                                <Image
+                                  source={{ uri: imageUrl }}
+                                  style={{ width: "100%", height: 180, backgroundColor: "#EEF2F7" }}
+                                  resizeMode="cover"
+                                />
+                              ) : (
+                                <View
+                                  style={{
+                                    width: "100%",
+                                    height: 120,
+                                    backgroundColor: "#EEF2F7",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                  }}
+                                >
+                                  <Text style={styles.meta}>No image</Text>
+                                </View>
+                              )}
+
+                              <View style={{ padding: 12 }}>
+                                <View
+                                  style={{
+                                    flexDirection: "row",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    gap: 10,
+                                  }}
+                                >
+                                  <Text
+                                    style={{
+                                      fontSize: 14,
+                                      fontWeight: "700",
+                                      color: stylesVars.text,
+                                      flex: 1,
+                                    }}
+                                  >
+                                    {preset.title || "Untitled style"}
+                                  </Text>
+
+                                  {isSelected ? (
+                                    <View
+                                      style={{
+                                        paddingHorizontal: 10,
+                                        paddingVertical: 5,
+                                        borderRadius: 999,
+                                        backgroundColor: stylesVars.blue,
+                                      }}
+                                    >
+                                      <Text style={{ color: "#fff", fontWeight: "700", fontSize: 11 }}>
+                                        Selected
+                                      </Text>
+                                    </View>
+                                  ) : null}
+                                </View>
+
+                                {preset.note ? (
+                                  <Text style={[styles.meta, { marginTop: 6 }]}>{preset.note}</Text>
+                                ) : null}
+
+                                <View style={{ marginTop: 8, gap: 4 }}>
+                                  {preset.default_neck ? (
+                                    <Text style={styles.meta}>
+                                      Neck: <Text style={styles.specValue}>{preset.default_neck}</Text>
+                                    </Text>
+                                  ) : null}
+                                  {preset.default_sleeve ? (
+                                    <Text style={styles.meta}>
+                                      Sleeve:{" "}
+                                      <Text style={styles.specValue}>{preset.default_sleeve}</Text>
+                                    </Text>
+                                  ) : null}
+                                  {tailoringIncludesTrouser && preset.default_trouser ? (
+                                    <Text style={styles.meta}>
+                                      Trouser:{" "}
+                                      <Text style={styles.specValue}>{preset.default_trouser}</Text>
+                                    </Text>
+                                  ) : null}
+                                </View>
+
+                                {extraCost > 0 ? (
+                                  <Text style={[styles.meta, { marginTop: 8 }]}>
+                                    Extra for this style:{" "}
+                                    <Text style={styles.specValue}>PKR {extraCost}</Text>
+                                  </Text>
+                                ) : null}
+                              </View>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+
+                      {selectedPreset ? (
+                        <View
+                          style={{
+                            marginTop: 14,
+                            padding: 12,
+                            borderRadius: 14,
+                            backgroundColor: "#FFFFFF",
+                            borderWidth: 1,
+                            borderColor: "#D7E3FF",
+                          }}
+                        >
+                          <Text style={styles.label}>Selected style variations</Text>
+
+                          <Text style={[styles.meta, { marginTop: 4 }]}>
+                            You selected:{" "}
+                            <Text style={styles.specValue}>
+                              {selectedPreset.title || "Untitled style"}
+                            </Text>
+                          </Text>
+
+                          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+                            {activeNeckOptions.map((item) => (
+                              <SelectPill
+                                key={`neck-${item}`}
+                                label={item}
+                                selected={selectedNeckStyle === item}
+                                onPress={() => setSelectedNeckStyle(item)}
+                              />
+                            ))}
+                          </View>
+                          <Text style={[styles.meta, { marginTop: 6 }]}>
+                            Neck: <Text style={styles.specValue}>{selectedNeckStyle || "Not selected"}</Text>
+                          </Text>
+
+                          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+                            {activeSleeveOptions.map((item) => (
+                              <SelectPill
+                                key={`sleeve-${item}`}
+                                label={item}
+                                selected={selectedSleeveStyle === item}
+                                onPress={() => setSelectedSleeveStyle(item)}
+                              />
+                            ))}
+                          </View>
+                          <Text style={[styles.meta, { marginTop: 6 }]}>
+                            Sleeve:{" "}
+                            <Text style={styles.specValue}>{selectedSleeveStyle || "Not selected"}</Text>
+                          </Text>
+
+                          {tailoringIncludesTrouser ? (
+                            <>
+                              <Text style={[styles.meta, { marginTop: 12 }]}>
+                                Trouser applies to this product because trouser is included.
+                              </Text>
+                              <View
+                                style={{
+                                  flexDirection: "row",
+                                  flexWrap: "wrap",
+                                  gap: 8,
+                                  marginTop: 8,
+                                }}
+                              >
+                                {activeTrouserOptions.map((item) => (
+                                  <SelectPill
+                                    key={`trouser-${item}`}
+                                    label={item}
+                                    selected={selectedTrouserStyle === item}
+                                    onPress={() => setSelectedTrouserStyle(item)}
+                                  />
+                                ))}
+                              </View>
+                              <Text style={[styles.meta, { marginTop: 6 }]}>
+                                Trouser:{" "}
+                                <Text style={styles.specValue}>
+                                  {selectedTrouserStyle || "Not selected"}
+                                </Text>
+                              </Text>
+                            </>
+                          ) : (
+                            <Text style={[styles.meta, { marginTop: 12 }]}>
+                              Trouser variation is not applicable because this product does not include
+                              trouser.
+                            </Text>
+                          )}
+
+                          {selectedPreset.allow_custom_note ? (
+                            <View style={{ marginTop: 14 }}>
+                              <Text style={styles.label}>Additional note for vendor</Text>
+                              <TextInput
+                                value={customTailoringNote}
+                                onChangeText={setCustomTailoringNote}
+                                placeholder="Optional instruction for this selected style"
+                                placeholderTextColor="#94A3B8"
+                                multiline
+                                style={{
+                                  marginTop: 8,
+                                  minHeight: 90,
+                                  borderWidth: 1,
+                                  borderColor: "#D7E3FF",
+                                  borderRadius: 14,
+                                  paddingHorizontal: 12,
+                                  paddingVertical: 10,
+                                  color: stylesVars.text,
+                                  backgroundColor: "#FFFFFF",
+                                  textAlignVertical: "top",
+                                }}
+                              />
+                            </View>
+                          ) : null}
+                        </View>
+                      ) : (
+                        <Text style={[styles.meta, { marginTop: 10 }]}>
+                          Select one style card to continue.
+                        </Text>
+                      )}
+                    </>
+                  ) : (
+                    <Text style={[styles.meta, { marginTop: 6 }]}>
+                      Tailoring style cards are not available for this product yet.
+                    </Text>
+                  )}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {showBuyerActions && showDyeing ? (
+            <View style={{ marginTop: 12 }}>
+              <Text style={styles.label}>Do you want dyeing?</Text>
+
+              <View style={{ flexDirection: "row", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+                <SelectPill
+                  label={`Yes • +PKR ${dyeingCostPkr}`}
+                  selected={buyerWantsDyeing}
+                  onPress={() => {
+                    setBuyerWantsDyeing(true);
+                    onOpenDyeing();
+                  }}
+                />
+
+                <SelectPill
+                  label="No"
+                  selected={!buyerWantsDyeing}
+                  onPress={() => {
+                    setBuyerWantsDyeing(false);
+                    setSelectedDyeShadeId("");
+                    setSelectedDyeHex("");
+                    setSelectedDyeLabel("");
+                    clearCachedDyeSelection(
+                      productId != null ? String(productId) : null,
+                      productCode ?? "",
+                    );
+
+                    router.setParams({
+                      dyeing_selected: "0",
+                      dye_shade_id: undefined,
+                      dye_hex: undefined,
+                      dye_label: undefined,
+                    } as any);
+                  }}
+                />
+              </View>
+
+              {buyerWantsDyeing && selectedDyeHex ? (
+                <View style={{ marginTop: 14 }}>
+                  <Text style={styles.label}>Selected Colour</Text>
+
+                  <View
+                    style={{
+                      marginTop: 8,
+                      width: 60,
+                      height: 60,
+                      borderRadius: 14,
+                      backgroundColor: selectedDyeHex,
+                      borderWidth: 1,
+                      borderColor: "#CBD5E1",
+                    }}
+                  />
+                </View>
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>Product Details</Text>
+          <Text style={styles.sectionTitle}>Product Details</Text>
 
           <ChipRow
             title="Dress Type"
@@ -1504,128 +2013,14 @@ export default function ViewProductScreen() {
 
           {safeText((product as any)?.spec?.more_description ?? "").trim() !== "—" ? (
             <View style={{ marginTop: 12 }}>
-              <Text style={[styles.specTitle, { color: stylesVars.blue }]}>More Description</Text>
+              <Text style={styles.specTitle}>More Description</Text>
               <Text style={styles.moreDescText}>{moreDescriptionText}</Text>
             </View>
           ) : null}
         </View>
 
-        {showBuyerActions && showDyeing ? (
-          <View style={styles.card}>
-            <Text style={[styles.label, { color: stylesVars.blue }]}>Do you want dyeing?</Text>
-        <View style={{ marginTop: 10 }}>
-          <View style={{ flexDirection: "row", gap: 12, flexWrap: "wrap" }}>
-            <Pressable
-              onPress={() => {
-                setBuyerWantsDyeing(true);
-                onOpenDyeing();
-              }}
-              style={({ pressed }) => [
-                {
-                  paddingVertical: 10,
-                  paddingHorizontal: 14,
-                  borderRadius: 14,
-                  borderWidth: 1.5,
-                  borderColor: buyerWantsDyeing ? stylesVars.blue : "#D7E3FF",
-                  backgroundColor: buyerWantsDyeing ? stylesVars.blue : "#EEF4FF",
-                },
-                pressed ? styles.pressed : null,
-              ]}
-            >
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "800",
-                  color: buyerWantsDyeing ? "#FFFFFF" : stylesVars.blue,
-                }}
-              >
-                Yes • +PKR {dyeingCostPkr}
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => {
-                setBuyerWantsDyeing(false);
-                setSelectedDyeShadeId("");
-                setSelectedDyeHex("");
-                setSelectedDyeLabel("");
-                clearCachedDyeSelection(
-                  productId != null ? String(productId) : null,
-                  productCode ?? "",
-                );
-
-                router.setParams({
-                  dyeing_selected: "0",
-                  dye_shade_id: undefined,
-                  dye_hex: undefined,
-                  dye_label: undefined,
-                } as any);
-              }}
-              style={({ pressed }) => [
-                {
-                  paddingVertical: 10,
-                  paddingHorizontal: 14,
-                  borderRadius: 14,
-                  borderWidth: 1.5,
-                  borderColor: !buyerWantsDyeing ? stylesVars.blue : "#D7E3FF",
-                  backgroundColor: !buyerWantsDyeing ? stylesVars.blue : "#EEF4FF",
-                },
-                pressed ? styles.pressed : null,
-              ]}
-            >
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "800",
-                  color: !buyerWantsDyeing ? "#FFFFFF" : stylesVars.blue,
-                }}
-              >
-                No
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-
-            {buyerWantsDyeing && selectedDyeHex ? (
-              <View style={{ marginTop: 14 }}>
-                <Text style={[styles.label, { color: stylesVars.blue }]}>Selected Colour</Text>
-
-                <View
-                  style={{
-                    marginTop: 8,
-                    width: 60,
-                    height: 60,
-                    borderRadius: 14,
-                    backgroundColor: selectedDyeHex,
-                    borderWidth: 1,
-                    borderColor: "#CBD5E1",
-                  }}
-                />
-              </View>
-            ) : null}
-          </View>
-        ) : null}
-
-        {showTailoringSection ? (
-          <View style={styles.card}>
-            <ViewProductTailoringSelection
-              styles={styles}
-              stylesVars={stylesVars}
-              tailoringEligible={tailoringEligible}
-              tailoringCostPkr={tailoringCostPkr}
-              tailoringIncludesTrouser={tailoringIncludesTrouser}
-              tailoringStylePresets={tailoringStylePresets}
-              hasTailoringStylePresets={hasTailoringStylePresets}
-              buyerWantsTailoring={buyerWantsTailoring}
-              setBuyerWantsTailoring={setBuyerWantsTailoring}
-              onChange={setTailoringSelection}
-              resolvePublicUrl={resolvePublicUrl}
-            />
-          </View>
-        ) : null}
-
         <View style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>Meta</Text>
+          <Text style={styles.sectionTitle}>Meta</Text>
           {uploadedDate ? (
             <Text style={styles.metaLine}>Date uploaded: {uploadedDate}</Text>
           ) : null}

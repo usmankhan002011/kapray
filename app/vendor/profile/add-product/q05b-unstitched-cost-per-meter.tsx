@@ -5,12 +5,6 @@ import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
 
-type ProductCategory =
-  | "unstitched_plain"
-  | "unstitched_dyeing"
-  | "unstitched_dyeing_tailoring"
-  | "stitched_ready";
-
 function sanitizeNumber(input: string) {
   const cleaned = input.replace(/[^\d.]/g, "");
   const parts = cleaned.split(".");
@@ -22,31 +16,6 @@ function safeInt(v: any) {
   const n = Number(v);
   if (!Number.isFinite(n)) return null;
   return Math.trunc(n);
-}
-
-function safeStr(v: any) {
-  return String(v ?? "").trim();
-}
-
-function inferCategoryFromDraft(draft: any): ProductCategory {
-  const spec = draft?.spec ?? {};
-  const price = draft?.price ?? {};
-  const fromSpec = safeStr((spec as any)?.product_category ?? "");
-  if (
-    fromSpec === "unstitched_plain" ||
-    fromSpec === "unstitched_dyeing" ||
-    fromSpec === "unstitched_dyeing_tailoring" ||
-    fromSpec === "stitched_ready"
-  ) {
-    return fromSpec as ProductCategory;
-  }
-  const mode = safeStr(price?.mode ?? "");
-  if (mode === "stitched_total") return "stitched_ready";
-  const dye = Boolean(spec?.dyeing_enabled);
-  const tail = Boolean(spec?.tailoring_enabled);
-  if (tail) return "unstitched_dyeing_tailoring";
-  if (dye) return "unstitched_dyeing";
-  return "unstitched_plain";
 }
 
 export default function Q05BUnstitchedCostPerMeter() {
@@ -66,16 +35,12 @@ export default function Q05BUnstitchedCostPerMeter() {
 
   const [text, setText] = useState<string>(String(draft?.price?.cost_pkr_per_meter ?? ""));
 
-  const category = inferCategoryFromDraft(draft);
-  const needsServices = category === "unstitched_dyeing" || category === "unstitched_dyeing_tailoring";
-
   const canContinue = useMemo(() => {
     if (!vendorId) return false;
     const n = Number(text);
     return Number.isFinite(n) && n > 0;
   }, [vendorId, text]);
 
-  // ✅ Auto focus when screen becomes active
   useFocusEffect(
     React.useCallback(() => {
       const timer = setTimeout(() => {
@@ -84,6 +49,14 @@ export default function Q05BUnstitchedCostPerMeter() {
       return () => clearTimeout(timer);
     }, [])
   );
+
+  function closeScreen() {
+    if (returnTo) {
+      router.replace(returnTo as any);
+      return;
+    }
+    router.back();
+  }
 
   function onContinue() {
     if (!vendorId) {
@@ -105,12 +78,7 @@ export default function Q05BUnstitchedCostPerMeter() {
       return;
     }
 
-    if (needsServices) {
-      router.push("/vendor/profile/add-product/q06b-services-costs" as any);
-      return;
-    }
-
-    router.push("/vendor/profile/add-product/q09-images" as any);
+    router.push("/vendor/profile/add-product/q05c-unstitched-fabric-length" as any);
   }
 
   return (
@@ -124,7 +92,7 @@ export default function Q05BUnstitchedCostPerMeter() {
           <Text style={apStyles.title}>Cost per meter</Text>
 
           <Pressable
-            onPress={() => router.back()}
+            onPress={closeScreen}
             style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
           >
             <Text style={apStyles.linkText}>Close</Text>
@@ -146,15 +114,11 @@ export default function Q05BUnstitchedCostPerMeter() {
             returnKeyType="done"
           />
 
-          {/* <Text style={apStyles.metaHint}>
-            Category: <Text style={{ fontWeight: "900", color: apColors.text }}>{category}</Text>
-          </Text> */}
-
           <Pressable
             style={({ pressed }) => [
               apStyles.primaryBtn,
               !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null
+              pressed ? apStyles.pressed : null,
             ]}
             onPress={onContinue}
             disabled={!canContinue}

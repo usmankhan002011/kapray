@@ -101,6 +101,7 @@ npx expo run:android
 >> 
 >> }
 
+
 kapray
 ├── .idea
 │   ├── caches
@@ -189,7 +190,9 @@ kapray
 │   │   │   │   ├── q05a-stitched-total-cost.tsx
 │   │   │   │   ├── q05b-unstitched-cost-per-meter.tsx
 │   │   │   │   ├── q06a-sizes.tsx
+│   │   │   │   ├── q06b2-tailoring-styles.tsx
 │   │   │   │   ├── q06b-services-costs.tsx
+│   │   │   │   ├── q06c-shipping.tsx
 │   │   │   │   ├── q09-images.tsx
 │   │   │   │   ├── q10-videos.tsx
 │   │   │   │   ├── q11-description.tsx
@@ -230,54 +233,16 @@ kapray
 │   └── work-density.tsx
 ├── assets
 │   ├── dress-types-images
-│   │   ├── blouse 10.png
-│   │   ├── BLOUSE 3.png
 │   │   ├── BLOUSE.png
-│   │   ├── BLOUSE_1.png
-│   │   ├── BLOUSE_3.png
-│   │   ├── BLOUSE_4.png
-│   │   ├── BLOUSE1.png
-│   │   ├── BLOUSE20.png
-│   │   ├── blouse40.png
-│   │   ├── BLOUSE56.png
-│   │   ├── blousr6.png
 │   │   ├── DUPATTA.png
-│   │   ├── DUPATTA_1.png
-│   │   ├── DUPATTA_14.png
-│   │   ├── DUPATTA_2.png
-│   │   ├── DUPATTA_6.png
-│   │   ├── DUPATTA_8.png
-│   │   ├── DUPATTA+3.png
-│   │   ├── DUPATTA4.png
 │   │   ├── FARCHI_LEHNGA.png
-│   │   ├── FARCHI_LEHNGA_1.png
-│   │   ├── FARCHI_LEHNGA_4.png
-│   │   ├── FARCHI_LEHNGA_9.png
 │   │   ├── GHARARA.png
-│   │   ├── GHARARA_1.png
-│   │   ├── LEHNGA_SET.jpg
 │   │   ├── LEHNGA_SET.png
-│   │   ├── LEHNGA_SET_1.png
-│   │   ├── LEHNGA_SET2.png
-│   │   ├── LEHNGA_SET6.png
-│   │   ├── LEHNGA_SET9.png
-│   │   ├── MAXI_GOWN.jpg
 │   │   ├── MAXI_GOWN.png
-│   │   ├── MAXI_GOWN_1.png
 │   │   ├── PESHWAS_FROCK.png
-│   │   ├── PESHWAS_FROCK_1.png
-│   │   ├── PESHWAS_FROCK2.png
 │   │   ├── SAREE.png
-│   │   ├── SAREE_1.png
-│   │   ├── SAREE_4.png
 │   │   ├── SHARARA.png
-│   │   ├── SHARARA_1.jpg
-│   │   ├── SHARARA_1.png
-│   │   ├── SHIRT_AND_BOTTOM_SET.jpg
-│   │   ├── SHIRT_AND_BOTTOM_SET.png
-│   │   ├── SHIRT_AND_BOTTOM_SET_1.png
-│   │   ├── SHIRT_AND_BOTTOM_SET_10.png
-│   │   └── SHIRT_AND_BOTTOM_SET_8.png
+│   │   └── SHIRT_AND_BOTTOM_SET.png
 │   ├── fabric-types-images
 │   │   ├── CHIFFON.jpg
 │   │   ├── COTTON_SILK.jpg
@@ -349,17 +314,9 @@ kapray
 │   │   │   └── sitara.jpg
 │   │   ├── stone
 │   │   │   ├── bead_work.jpg
-│   │   │   ├── bead_work.png
-│   │   │   ├── bead_work_2.jpg
-│   │   │   ├── bead_work_2.png
 │   │   │   ├── cut_dana.jpg
-│   │   │   ├── cut_dana_2.jpg
-│   │   │   ├── cutdana 2.png
-│   │   │   ├── cutdana 3.jpg
-│   │   │   ├── cutdana.png
 │   │   │   ├── pearl_work.jpg
 │   │   │   ├── rhinestones.jpg
-│   │   │   ├── rhinestones.png
 │   │   │   └── swarovski_crystal.jpg
 │   │   └── thread
 │   │       ├── chickenkari.png
@@ -373,9 +330,14 @@ kapray
 ├── components
 │   ├── product
 │   │   ├── view-product
+│   │   │   ├── TailoringStylePickerModal.tsx
 │   │   │   ├── ViewProduct.media.tsx
 │   │   │   ├── ViewProduct.screen.tsx
-│   │   │   └── ViewProduct.styles.ts
+│   │   │   ├── ViewProduct.styles.ts
+│   │   │   ├── ViewProduct.tailoring.helpers.ts
+│   │   │   ├── ViewProduct.tailoring.selection.tsx
+│   │   │   ├── ViewProduct.tailoring.tsx
+│   │   │   └── ViewProductScreen_legacy
 │   │   ├── addProductStyles.ts
 │   │   ├── ProductDraftContext.tsx
 │   │   └── useAutoFocus.ts
@@ -399,6 +361,12 @@ kapray
 ├── constants
 │   └── theme.ts
 ├── data
+│   ├── kapray
+│   │   ├── courierSlabs.ts
+│   │   ├── exportRegions.ts
+│   │   ├── pakistanCities.ts
+│   │   ├── productTypes.ts
+│   │   └── tailoringOptions.ts
 │   ├── products.data.ts
 │   └── workSubTypes.ts
 ├── hooks
@@ -415,6 +383,10 @@ kapray
 ├── utils
 │   ├── helpers
 │   │   └── wizardHelpers.ts
+│   ├── kapray
+│   │   ├── delivery.ts
+│   │   ├── pricing.ts
+│   │   └── purchaseUi.ts
 │   └── supabase
 │       ├── client.ts
 │       ├── consumer.ts
@@ -443,7 +415,7 @@ kapray
 ├── tree-app.txt
 └── tsconfig.json
 PS C:\DEV\kapray\kapray>
-as on 16Mar26
+as on 24Mar26
 
 -------------------------------------------------------------------------------------------------------------
 strategy
@@ -510,4 +482,13 @@ In one line:
 Do not redesign per file; make every file visually conform to makeViewProductStyles while preserving its original style names and functional layout.
 
 -------------------------------------------------------------------------------------------------------------------------------------------------------
+
+rule1:
+a. write full file or block whichever is required. 
+b. only make the discussed and agreed upon changes. 
+c. dont remove anything else. 
+d. dont add anything else. 
+e. inform if any changes done other than the prediscussed and agreed upon changhes
+
+********************************************************************************************************************************************************
 

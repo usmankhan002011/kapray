@@ -1,5 +1,5 @@
 import { getDressTypes, DressTypeItem } from "@/utils/supabase/dressType";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Image,
   Pressable,
@@ -9,7 +9,6 @@ import {
   View
 } from "react-native";
 import { SelectOption } from "@/components/ui/select-panel";
-import { useRouter } from "expo-router";
 import { useAppDispatch } from "@/store/hooks";
 import { setDressTypeIds } from "@/store/filtersSlice";
 
@@ -30,8 +29,20 @@ const DRESS_TYPE_LOCAL_IMAGES: Record<string, any> = {
   blouse: require("@/assets/dress-types-images/BLOUSE.png")
 };
 
+const FOOTER_HEIGHT = 96;
+
+function formatDressLabel(name: string) {
+  return name
+    .replace(/_/g, " ")
+    .replace(/\band\b/gi, "&")
+    .replace(/\bfarchi\b/gi, "Farshi")
+    .replace(/\s+set\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 export default function Wizard({ onClose }: Props) {
-  const router = useRouter();
   const dispatch = useAppDispatch();
 
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
@@ -39,38 +50,30 @@ export default function Wizard({ onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-
-    setLoading(true);
-    setLoadError(null);
-
-    getDressTypes()
-      .then((types) => {
-        if (!alive) return;
-        setDressTypes(types ?? []);
-      })
-      .catch((error: any) => {
-        if (!alive) return;
-        setDressTypes([]);
-        setLoadError(error?.message ?? "Failed to load dress types");
-      })
-      .finally(() => {
-        if (!alive) return;
-        setLoading(false);
-      });
-
-    return () => {
-      alive = false;
-    };
+  const loadDressTypes = useCallback(async () => {
+    try {
+      setLoading(true);
+      setLoadError(null);
+      const types = await getDressTypes();
+      setDressTypes(types ?? []);
+    } catch (error: any) {
+      setDressTypes([]);
+      setLoadError(error?.message ?? "Failed to load dress types");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadDressTypes();
+  }, [loadDressTypes]);
 
   const selectedSet = useMemo(() => new Set(selectedTypes), [selectedTypes]);
 
   const dressTypeOptions = useMemo<SelectOption[]>(() => {
     return dressTypes.map((type) => ({
       key: String(type.id),
-      label: String(type.name),
+      label: formatDressLabel(String(type.name)),
       icon: String(type.code)
     }));
   }, [dressTypes]);
@@ -78,6 +81,12 @@ export default function Wizard({ onClose }: Props) {
   const dressTypeMap = useMemo(() => {
     return new Map(dressTypes.map((item) => [String(item.id), item]));
   }, [dressTypes]);
+
+  const selectionLabel = useMemo(() => {
+    if (selectedTypes.length === 0) return "No dress type selected";
+    if (selectedTypes.length === 1) return "1 dress type selected";
+    return `${selectedTypes.length} dress types selected`;
+  }, [selectedTypes.length]);
 
   function toggleSelected(typeKey: string) {
     setSelectedTypes((prev) => {
@@ -88,206 +97,441 @@ export default function Wizard({ onClose }: Props) {
     });
   }
 
-  const DuolingoSelectPanel: React.FC<{
-    options: SelectOption[];
-    selectedKeys: Set<string>;
-    onToggle: (selected: string) => void;
-  }> = ({ options, selectedKeys, onToggle }) => (
-    <View style={styles.duoPanel}>
-      {options.map((opt) => {
-        const isSelected = selectedKeys.has(opt.key);
-        const item = dressTypeMap.get(opt.key);
-        const localImage = item ? DRESS_TYPE_LOCAL_IMAGES[item.code] : null;
+  const renderSkeletons = () => {
+    return (
+      <View style={styles.grid}>
+        {Array.from({ length: 6 }).map((_, index) => (
+          <View key={`skeleton-${index}`} style={styles.card}>
+            <View style={[styles.imageWrap, styles.skeletonBlock]} />
+            <View style={[styles.skeletonLine, styles.skeletonLineWide]} />
+            <View style={[styles.skeletonLine, styles.skeletonLineNarrow]} />
+          </View>
+        ))}
+      </View>
+    );
+  };
 
-        return (
-          <Pressable
-            key={opt.key}
-            style={[styles.duoOption, isSelected && styles.duoSelected]}
-            onPress={() => onToggle(opt.key)}
-          >
-            <View style={styles.iconWrap}>
-              {localImage ? (
-                <Image
-                  source={localImage}
-                  style={styles.iconImg}
-                  resizeMode="cover"
-                />
-              ) : (
-                <View style={styles.iconFallback}>
-                  <Text style={styles.iconFallbackText}>No Image</Text>
+  const renderErrorState = () => {
+    return (
+      <View style={styles.stateCard}>
+        <Text style={styles.stateTitle}>Unable to load dress types</Text>
+        <Text style={styles.stateText}>
+          Please try again to continue with dress type selection.
+        </Text>
+
+        <Pressable style={styles.retryBtn} onPress={loadDressTypes}>
+          <Text style={styles.retryBtnText}>Retry</Text>
+        </Pressable>
+      </View>
+    );
+  };
+
+  const renderEmptyState = () => {
+    return (
+      <View style={styles.stateCard}>
+        <Text style={styles.stateTitle}>No dress types available</Text>
+        <Text style={styles.stateText}>
+          Dress types are not available right now. Please try again shortly.
+        </Text>
+      </View>
+    );
+  };
+
+  const renderGrid = () => {
+    return (
+      <View style={styles.grid}>
+        {dressTypeOptions.map((opt) => {
+          const isSelected = selectedSet.has(opt.key);
+          const item = dressTypeMap.get(opt.key);
+          const localImage = item ? DRESS_TYPE_LOCAL_IMAGES[item.code] : null;
+
+          return (
+            <Pressable
+              key={opt.key}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isSelected }}
+              onPress={() => toggleSelected(opt.key)}
+              style={({ pressed }) => [
+                styles.card,
+                isSelected && styles.cardSelected,
+                pressed && styles.cardPressed
+              ]}
+            >
+              <View style={styles.imageWrap}>
+                {localImage ? (
+                  <Image
+                    source={localImage}
+                    style={styles.image}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.imageFallback}>
+                    <Text style={styles.imageFallbackText}>Image unavailable</Text>
+                  </View>
+                )}
+
+                <View style={styles.imageOverlay} />
+
+                {isSelected ? (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>✓</Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.labelOverlay}>
+                  <Text
+                    style={[
+                      styles.cardLabel,
+                      isSelected && styles.cardLabelSelected
+                    ]}
+                    numberOfLines={2}
+                  >
+                    {opt.label}
+                  </Text>
                 </View>
-              )}
-            </View>
-
-            <Text style={[styles.duoLabel, isSelected && styles.duoSelectedLabel]}>
-              {opt.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+    );
+  };
 
   return (
-    <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-      <Text style={styles.heading}>Select Dress Type</Text>
-
-      {loading ? <Text style={styles.infoText}>Loading...</Text> : null}
-      {loadError ? <Text style={styles.infoText}>{loadError}</Text> : null}
-
-      <DuolingoSelectPanel
-        options={dressTypeOptions}
-        selectedKeys={selectedSet}
-        onToggle={(typeKey) => {
-          toggleSelected(typeKey);
-        }}
-      />
-
-      <Pressable
-        style={[styles.primaryBtn, selectedTypes.length === 0 && styles.disabledBtn]}
-        disabled={selectedTypes.length === 0}
-        onPress={() => {
-          dispatch(setDressTypeIds(selectedTypes));
-
-          if (onClose) {
-            onClose();
-            return;
-          }
-
-          router.replace("/results");
-        }}
+    <View style={styles.screen}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+        bounces
       >
-        <Text style={styles.primaryText}>Continue</Text>
-      </Pressable>
-    </ScrollView>
+        <View style={styles.header}>
+          <Text style={styles.heading}>Select Dress Type</Text>
+          <Text style={styles.subHeading}>
+            Choose one or more dress types to continue
+          </Text>
+          <View style={styles.countPill}>
+            <Text style={styles.countPillText}>{selectionLabel}</Text>
+          </View>
+        </View>
+
+        {loading
+          ? renderSkeletons()
+          : loadError
+            ? renderErrorState()
+            : dressTypeOptions.length === 0
+              ? renderEmptyState()
+              : renderGrid()}
+      </ScrollView>
+
+      <View style={styles.footer}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.primaryBtn,
+            selectedTypes.length === 0 && styles.disabledBtn,
+            pressed && selectedTypes.length > 0 && styles.primaryBtnPressed
+          ]}
+          disabled={selectedTypes.length === 0}
+          onPress={() => {
+            dispatch(setDressTypeIds(selectedTypes));
+
+            if (onClose) {
+              onClose();
+            }
+          }}
+        >
+          <Text style={styles.primaryText}>
+            {selectedTypes.length > 0
+              ? `Continue (${selectedTypes.length})`
+              : "Continue"}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
 const stylesVars = {
-  bg: "#F8FAFC",
+  pageBg: "#F8FAFC",
   cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
+  border: "#E2E8F0",
+  borderStrong: "#CBD5E1",
   blue: "#2563EB",
   blueSoft: "#EEF4FF",
+  blueBorder: "#93C5FD",
   text: "#0F172A",
   subText: "#475569",
   mutedText: "#64748B",
-  placeholder: "#94A3B8",
-  danger: "#B91C1C",
-  dangerSoft: "#FEE2E2",
-  dangerBorder: "#FCA5A5",
-  overlayDark: "rgba(0,0,0,0.58)",
-  overlaySoft: "rgba(255,255,255,0.14)",
   white: "#FFFFFF",
-  black: "#000000"
+  black: "#000000",
+  overlay: "rgba(15, 23, 42, 0.12)",
+  skeleton: "#E2E8F0",
+  skeletonSoft: "#F1F5F9",
+  success: "#1D4ED8"
 };
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: stylesVars.pageBg
+  },
+
   container: {
-    minWidth: 320,
-    paddingBottom: 16,
-    backgroundColor: stylesVars.cardBg
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: FOOTER_HEIGHT + 20
+  },
+
+  header: {
+    marginBottom: 18,
+    alignItems: "center"
   },
 
   heading: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 8,
-    textAlign: "center",
-    color: stylesVars.text
-  },
-
-  infoText: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: stylesVars.mutedText,
-    fontWeight: "500",
-    marginBottom: 8,
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: "800",
+    color: stylesVars.text,
     textAlign: "center"
   },
 
-  duoPanel: {
+  subHeading: {
+    marginTop: 6,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "500",
+    color: stylesVars.subText,
+    textAlign: "center"
+  },
+
+  countPill: {
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: stylesVars.blueBorder
+  },
+
+  countPillText: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "700",
+    color: stylesVars.blue
+  },
+
+  grid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
-    justifyContent: "center"
+    justifyContent: "space-between",
+    rowGap: 16
   },
 
-  duoOption: {
-    width: "43%",
-    padding: 11,
-    borderRadius: 18,
+  card: {
+    width: "48%",
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg
+    backgroundColor: stylesVars.cardBg,
+    padding: 10,
+    shadowColor: stylesVars.black,
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2
   },
 
-  duoSelected: {
-    borderColor: stylesVars.blue,
+  cardPressed: {
+    transform: [{ scale: 0.98 }]
+  },
+
+  cardSelected: {
     borderWidth: 2,
-    backgroundColor: stylesVars.blueSoft
+    borderColor: stylesVars.blue,
+    backgroundColor: stylesVars.blueSoft,
+    shadowColor: stylesVars.blue,
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5
   },
 
-  iconWrap: {
+  imageWrap: {
     width: "100%",
-    aspectRatio: 3 / 4.6,
-    marginBottom: 9,
-    borderRadius: 12,
+    aspectRatio: 3 / 4.3,
+    borderRadius: 16,
     overflow: "hidden",
-    backgroundColor: "#F1F5F9",
-    alignItems: "center",
-    justifyContent: "center"
+    backgroundColor: stylesVars.skeletonSoft,
+    justifyContent: "flex-end"
   },
 
-  iconImg: {
+  image: {
+    ...StyleSheet.absoluteFillObject,
     width: "100%",
     height: "100%"
   },
 
-  iconFallback: {
-    width: "100%",
-    height: "100%",
+  imageFallback: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
+    backgroundColor: "#E2E8F0",
+    paddingHorizontal: 12
   },
 
-  iconFallbackText: {
+  imageFallbackText: {
     fontSize: 12,
+    lineHeight: 16,
     fontWeight: "600",
-    color: stylesVars.mutedText
+    color: stylesVars.mutedText,
+    textAlign: "center"
   },
 
-  duoLabel: {
+  imageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: stylesVars.overlay
+  },
+
+  badge: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: stylesVars.success,
+    borderWidth: 2,
+    borderColor: stylesVars.white
+  },
+
+  badgeText: {
+    color: stylesVars.white,
     fontSize: 14,
-    lineHeight: 18,
+    fontWeight: "800"
+  },
+  labelOverlay: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    backgroundColor: "rgba(255,255,255,0.98)"
+  },
+
+  cardLabel: {
+    fontSize: 13,
+    lineHeight: 16,
     fontWeight: "700",
     textAlign: "center",
     color: stylesVars.text
   },
 
-  duoSelectedLabel: {
+  cardLabelSelected: {
     color: stylesVars.blue
   },
 
+  footer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
+    backgroundColor: "rgba(248,250,252,0.97)",
+    borderTopWidth: 1,
+    borderTopColor: stylesVars.border
+  },
+
   primaryBtn: {
-    marginTop: 16,
-    marginHorizontal: 12,
-    minHeight: 48,
-    backgroundColor: stylesVars.blue,
-    paddingVertical: 12,
-    borderRadius: 14,
+    minHeight: 52,
+    borderRadius: 16,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
+    backgroundColor: stylesVars.blue,
+    shadowColor: stylesVars.blue,
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4
+  },
+
+  primaryBtnPressed: {
+    transform: [{ scale: 0.99 }]
   },
 
   primaryText: {
     color: stylesVars.white,
-    fontWeight: "700",
-    fontSize: 14
+    fontWeight: "800",
+    fontSize: 15
   },
 
   disabledBtn: {
-    opacity: 0.6
+    opacity: 0.55
+  },
+
+  stateCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: stylesVars.borderStrong,
+    backgroundColor: stylesVars.cardBg,
+    padding: 20,
+    alignItems: "center"
+  },
+
+  stateTitle: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: "800",
+    color: stylesVars.text,
+    textAlign: "center"
+  },
+
+  stateText: {
+    marginTop: 6,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "500",
+    color: stylesVars.subText,
+    textAlign: "center"
+  },
+
+  retryBtn: {
+    marginTop: 14,
+    minHeight: 42,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: stylesVars.blueBorder
+  },
+
+  retryBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: stylesVars.blue
+  },
+
+  skeletonBlock: {
+    backgroundColor: stylesVars.skeleton
+  },
+
+  skeletonLine: {
+    borderRadius: 999,
+    backgroundColor: stylesVars.skeleton,
+    marginTop: 10,
+    alignSelf: "center"
+  },
+
+  skeletonLineWide: {
+    width: "74%",
+    height: 12
+  },
+
+  skeletonLineNarrow: {
+    width: "52%",
+    height: 10,
+    marginTop: 8
   }
 });

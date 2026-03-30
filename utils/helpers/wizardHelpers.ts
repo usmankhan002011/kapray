@@ -1,9 +1,7 @@
 import { decode } from "base64-arraybuffer";
 import * as FileSystem from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
-import {
-    Alert
-} from "react-native";
+import { Alert } from "react-native";
 
 import { supabase } from "@/utils/supabase/client";
 
@@ -18,6 +16,15 @@ export type VendorWizardData = {
   address: string;
   locationUrl: string;
   offersTailoring: boolean;
+
+  exportsEnabled: boolean;
+  exportRegions: string[];
+  tailoringOptions: {
+    blouse_neck: string[];
+    sleeves: string[];
+    trouser: string[];
+  };
+
   profile: Picked | null;
   govPermission: Picked | null;
   banner: Picked | null;
@@ -46,48 +53,48 @@ export const STEPS: StepConfig[] = [
   {
     id: "owner",
     title: "Who owns this shop?",
-    subtitle: "Write the owner name."
+    subtitle: "Write the owner name.",
   },
   {
     id: "email",
     title: "What is the shop email?",
-    subtitle: "Add the main email customers can use."
+    subtitle: "Add the main email customers can use.",
   },
   {
     id: "mobile",
     title: "What is the mobile number?",
-    subtitle: "Add the primary mobile contact number."
+    subtitle: "Add the primary mobile contact number.",
   },
   {
     id: "shop",
     title: "What is the shop name?",
-    subtitle: "Add the name of the shop."
+    subtitle: "Add the name of the shop.",
   },
   {
     id: "address",
     title: "Where is the shop located?",
-    subtitle: "Enter the full address visible to users."
+    subtitle: "Enter the full address visible to users.",
   },
   {
     id: "location",
     title: "Attach a map location",
-    subtitle: "You can paste a map link or use the current location."
+    subtitle: "You can paste a map link or use the current location.",
   },
   {
     id: "tailoring",
-    title: "Does this shop offer tailoring?",
-    subtitle: "Choose whether stitching or tailoring is available."
+    title: "Tailoring and export services",
+    subtitle: "Set tailoring capability, styles, and export regions.",
   },
   {
     id: "media",
     title: "Add photos and videos",
-    subtitle: "Upload profile, shop banner, images, and videos."
+    subtitle: "Upload profile, shop banner, images, and videos.",
   },
   {
     id: "review",
     title: "Review and submit",
-    subtitle: "Check everything once before creating the vendor."
-  }
+    subtitle: "Check everything once before creating the vendor.",
+  },
 ];
 
 export function prettyNameFromPicked(p: Picked, fallback: string) {
@@ -107,7 +114,7 @@ export async function pickImages(multiple: boolean) {
   const res = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ["images"] as any,
     allowsMultipleSelection: multiple,
-    quality: 0.85
+    quality: 0.85,
   });
 
   if (res.canceled) return [] as Picked[];
@@ -115,7 +122,7 @@ export async function pickImages(multiple: boolean) {
   return (res.assets ?? []).map((a: any) => ({
     uri: a.uri,
     mimeType: a.mimeType,
-    fileName: a.fileName
+    fileName: a.fileName,
   })) as Picked[];
 }
 
@@ -128,7 +135,7 @@ export async function pickVideos(multiple: boolean) {
 
   const res = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ["videos"] as any,
-    allowsMultipleSelection: multiple
+    allowsMultipleSelection: multiple,
   });
 
   if (res.canceled) return [] as Picked[];
@@ -136,7 +143,7 @@ export async function pickVideos(multiple: boolean) {
   return (res.assets ?? []).map((a: any) => ({
     uri: a.uri,
     mimeType: a.mimeType,
-    fileName: a.fileName
+    fileName: a.fileName,
   })) as Picked[];
 }
 
@@ -150,7 +157,7 @@ export async function uploadToBucket(
     const contentType = file.mimeType || fallbackContentType;
 
     const base64 = await FileSystem.readAsStringAsync(file.uri, {
-      encoding: FileSystem.EncodingType.Base64
+      encoding: FileSystem.EncodingType.Base64,
     });
     const buffer = decode(base64);
 

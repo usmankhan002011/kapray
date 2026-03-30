@@ -14,7 +14,7 @@ import {
   View,
   Dimensions,
   BackHandler,
-  ActivityIndicator
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
@@ -27,12 +27,24 @@ import { optionStyles } from "@/components/ui/StandardFilterDisplay";
 import * as Location from "expo-location";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import { VideoView, useVideoPlayer } from "expo-video";
+import { EXPORT_REGIONS } from "@/data/kapray/exportRegions";
+import {
+  BLOUSE_NECK_PATTERNS,
+  BLOUSE_SLEEVE_PATTERNS,
+  TROUSER_STYLES,
+} from "@/data/kapray/tailoringOptions";
 
 const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
 const SETTINGS_ROUTE = "/vendor/profile/settings";
 
 type Picked = { uri: string; mimeType?: string; fileName?: string };
+
+type VendorTailoringOptions = {
+  blouse_neck?: string[] | null;
+  sleeves?: string[] | null;
+  trouser?: string[] | null;
+};
 
 type VendorRow = {
   id: number;
@@ -54,8 +66,10 @@ type VendorRow = {
 
   status: string | null;
 
-  // ✅ NEW: vendor-wide tailoring offering
   offers_tailoring?: boolean | null;
+  exports_enabled?: boolean | null;
+  export_regions?: string[] | null;
+  tailoring_options?: VendorTailoringOptions | null;
 
   // legacy
   location?: string | null;
@@ -103,7 +117,7 @@ async function uploadToBucket(
     const contentType = file.mimeType || fallbackContentType;
 
     const base64 = await FileSystem.readAsStringAsync(file.uri, {
-      encoding: FileSystem.EncodingType.Base64
+      encoding: FileSystem.EncodingType.Base64,
     });
     const buffer = decode(base64);
 
@@ -123,6 +137,22 @@ async function uploadToBucket(
   }
 }
 
+function joinOrDash(items?: string[] | null) {
+  return Array.isArray(items) && items.length ? items.join(", ") : "—";
+}
+
+const EMPTY_TAILORING_OPTIONS = {
+  blouse_neck: [] as string[],
+  sleeves: [] as string[],
+  trouser: [] as string[],
+};
+
+const DEFAULT_TAILORING_OPTIONS = {
+  blouse_neck: [...BLOUSE_NECK_PATTERNS],
+  sleeves: [...BLOUSE_SLEEVE_PATTERNS],
+  trouser: [...TROUSER_STYLES],
+};
+
 export default function EditVendorScreen() {
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -134,7 +164,8 @@ export default function EditVendorScreen() {
 
   const vendorId = selectedVendor?.id ?? null;
 
-  // Prefill from selected vendor
+  const [openTailoring, setOpenTailoring] = useState(false);
+  const [openExport, setOpenExport] = useState(false);
   const [shopName, setShopName] = useState(selectedVendor?.shop_name ?? "");
   const [ownerName, setOwnerName] = useState(selectedVendor?.name ?? "");
   const [email, setEmail] = useState(selectedVendor?.email ?? "");
@@ -145,12 +176,31 @@ export default function EditVendorScreen() {
   );
   const [locationUrl, setLocationUrl] = useState(selectedVendor?.location_url ?? "");
 
-  // ✅ NEW: Vendor-wide tailoring offering
   const [offersTailoring, setOffersTailoring] = useState<boolean>(
-    Boolean((selectedVendor as any)?.offers_tailoring)
+    Boolean(selectedVendor?.offers_tailoring)
   );
+  const [exportsEnabled, setExportsEnabled] = useState<boolean>(
+    Boolean(selectedVendor?.exports_enabled)
+  );
+  const [exportRegions, setExportRegions] = useState<string[]>(
+    Array.isArray(selectedVendor?.export_regions) ? selectedVendor!.export_regions! : []
+  );
+  const [tailoringOptions, setTailoringOptions] = useState<{
+    blouse_neck: string[];
+    sleeves: string[];
+    trouser: string[];
+  }>({
+    blouse_neck: Array.isArray(selectedVendor?.tailoring_options?.blouse_neck)
+      ? (selectedVendor?.tailoring_options?.blouse_neck as string[])
+      : [],
+    sleeves: Array.isArray(selectedVendor?.tailoring_options?.sleeves)
+      ? (selectedVendor?.tailoring_options?.sleeves as string[])
+      : [],
+    trouser: Array.isArray(selectedVendor?.tailoring_options?.trouser)
+      ? (selectedVendor?.tailoring_options?.trouser as string[])
+      : [],
+  });
 
-  // ✅ Media (editable like update-product: add/remove single items)
   const [profilePath, setProfilePath] = useState<string | null>(
     selectedVendor?.profile_image_path ?? null
   );
@@ -167,7 +217,6 @@ export default function EditVendorScreen() {
     Array.isArray(selectedVendor?.shop_video_paths) ? selectedVendor!.shop_video_paths! : []
   );
 
-  // Keep state in sync if redux vendor changes
   useEffect(() => {
     setShopName(selectedVendor?.shop_name ?? "");
     setOwnerName(selectedVendor?.name ?? "");
@@ -176,7 +225,23 @@ export default function EditVendorScreen() {
     setLandline(selectedVendor?.landline ?? "");
     setAddress((selectedVendor?.address ?? selectedVendor?.location ?? "") as any);
     setLocationUrl(selectedVendor?.location_url ?? "");
-    setOffersTailoring(Boolean((selectedVendor as any)?.offers_tailoring));
+
+    setOffersTailoring(Boolean(selectedVendor?.offers_tailoring));
+    setExportsEnabled(Boolean(selectedVendor?.exports_enabled));
+    setExportRegions(
+      Array.isArray(selectedVendor?.export_regions) ? selectedVendor!.export_regions! : []
+    );
+    setTailoringOptions({
+      blouse_neck: Array.isArray(selectedVendor?.tailoring_options?.blouse_neck)
+        ? (selectedVendor?.tailoring_options?.blouse_neck as string[])
+        : [],
+      sleeves: Array.isArray(selectedVendor?.tailoring_options?.sleeves)
+        ? (selectedVendor?.tailoring_options?.sleeves as string[])
+        : [],
+      trouser: Array.isArray(selectedVendor?.tailoring_options?.trouser)
+        ? (selectedVendor?.tailoring_options?.trouser as string[])
+        : [],
+    });
 
     setProfilePath(selectedVendor?.profile_image_path ?? null);
     setBannerPath(selectedVendor?.banner_path ?? null);
@@ -200,7 +265,6 @@ export default function EditVendorScreen() {
     router.replace(SETTINGS_ROUTE);
   }, [router]);
 
-  // Existing resolved URLs (for previous media)
   const resolvePublicUrl = useCallback((path: string | null | undefined) => {
     if (!path) return null;
     if (isHttpUrl(path)) return path;
@@ -237,7 +301,6 @@ export default function EditVendorScreen() {
     Linking.openURL(u);
   }
 
-  // Fullscreen viewer (images only, for existing + picked)
   const [viewerVisible, setViewerVisible] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [gallery, setGallery] = useState<string[]>([]);
@@ -261,7 +324,7 @@ export default function EditVendorScreen() {
       try {
         flatListRef.current?.scrollToIndex({
           index: currentIndex,
-          animated: false
+          animated: false,
         });
       } catch {
         // ignore
@@ -271,7 +334,6 @@ export default function EditVendorScreen() {
     return () => clearTimeout(t);
   }, [viewerVisible, currentIndex, gallery.length]);
 
-  // ✅ Ensure BOTH header back + Android hardware back always go to Settings
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       if (viewerVisible) {
@@ -285,7 +347,6 @@ export default function EditVendorScreen() {
     return () => sub.remove();
   }, [goToSettings, viewerVisible]);
 
-  // Video thumbnails (existing, no limit)
   const [videoThumbs, setVideoThumbs] = useState<Record<string, string>>({});
   const [thumbLoading, setThumbLoading] = useState<Record<string, boolean>>({});
 
@@ -319,14 +380,12 @@ export default function EditVendorScreen() {
   );
 
   useEffect(() => {
-    // generate thumbs for all existing videos (sequential)
     const list = (shopVideoUrls ?? []).filter(Boolean);
     let cancelled = false;
 
     (async () => {
       for (let i = 0; i < list.length; i++) {
         if (cancelled) return;
-        // eslint-disable-next-line no-await-in-loop
         await ensureVideoThumb(list[i]);
       }
     })();
@@ -336,7 +395,6 @@ export default function EditVendorScreen() {
     };
   }, [ensureVideoThumb, JSON.stringify(shopVideoUrls)]);
 
-  // ✅ NEW: Play videos like View Profile (embedded player + selectable tiles)
   const [selectedVideoUrl, setSelectedVideoUrl] = useState<string>("");
 
   useEffect(() => {
@@ -363,7 +421,6 @@ export default function EditVendorScreen() {
     return (shopVideoUrls ?? []).map((v, idx) => ({ videoUrl: v, idx }));
   }, [shopVideoUrls]);
 
-  // Compact UI: tap to expand each input (create-shop pattern)
   const [openOwner, setOpenOwner] = useState(true);
   const [openEmail, setOpenEmail] = useState(false);
   const [openMobile, setOpenMobile] = useState(false);
@@ -413,6 +470,12 @@ export default function EditVendorScreen() {
     focusSoon(locationRef);
   };
 
+  const toggleExportRegion = useCallback((region: string) => {
+    setExportRegions((prev) =>
+      prev.includes(region) ? prev.filter((r) => r !== region) : [...prev, region]
+    );
+  }, []);
+
   const canSubmit = useMemo(() => {
     return (
       !!vendorId &&
@@ -421,22 +484,30 @@ export default function EditVendorScreen() {
       email.trim().length > 0 &&
       mobile.trim().length > 0 &&
       address.trim().length > 0 &&
+      (!exportsEnabled || exportRegions.length > 0) &&
       !saving &&
       !savingMedia
     );
-  }, [vendorId, shopName, ownerName, email, mobile, address, saving, savingMedia]);
+  }, [
+    vendorId,
+    shopName,
+    ownerName,
+    email,
+    mobile,
+    address,
+    exportsEnabled,
+    exportRegions.length,
+    saving,
+    savingMedia,
+  ]);
 
   const FieldHeader = ({
     label,
-    onPress
+    onPress,
   }: {
     label: string;
     onPress: () => void;
-  }) => (
-    <Text style={styles.fieldBtnBlue} onPress={onPress}>
-      {label}
-    </Text>
-  );
+  }) => <Text style={styles.fieldBtnBlue} onPress={onPress}>{label}</Text>;
 
   const setCurrentLocation = async () => {
     try {
@@ -447,7 +518,7 @@ export default function EditVendorScreen() {
         return;
       }
       const pos = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced
+        accuracy: Location.Accuracy.Balanced,
       });
       const lat = pos.coords.latitude.toFixed(6);
       const lng = pos.coords.longitude.toFixed(6);
@@ -467,41 +538,43 @@ export default function EditVendorScreen() {
     try {
       setSavingMedia(true);
 
-    const { data, error } = await supabase
-      .from("vendor")
-      .update(next as any)
-      .eq("id", vendorId)
-      .select(
-        [
-          "id",
-          "created_at",
-          "name",
-          "email",
-          "mobile",
-          "landline",
-          "shop_name",
-          "address",
-          "location_url",
-          "profile_image_path",
-          "banner_path",
-          "certificate_paths",
-          "shop_image_paths",
-          "shop_video_paths",
-          "status",
-          "location",
-          "offers_tailoring"
-        ].join(",")
-      )
-      .single();
+      const { data, error } = await supabase
+        .from("vendor")
+        .update(next as any)
+        .eq("id", vendorId)
+        .select(
+          [
+            "id",
+            "created_at",
+            "name",
+            "email",
+            "mobile",
+            "landline",
+            "shop_name",
+            "address",
+            "location_url",
+            "profile_image_path",
+            "banner_path",
+            "certificate_paths",
+            "shop_image_paths",
+            "shop_video_paths",
+            "status",
+            "location",
+            "offers_tailoring",
+            "exports_enabled",
+            "export_regions",
+            "tailoring_options",
+          ].join(",")
+        )
+        .single();
 
       if (error) {
         Alert.alert("Media update failed", error.message);
         return;
       }
 
-     const row = data as unknown as VendorRow;
+      const row = data as unknown as VendorRow;
 
-      // keep local in sync
       setProfilePath(row.profile_image_path ?? null);
       setBannerPath(row.banner_path ?? null);
       setCertificatePaths(Array.isArray(row.certificate_paths) ? row.certificate_paths : []);
@@ -512,7 +585,7 @@ export default function EditVendorScreen() {
         setSelectedVendor({
           ...(row as any),
           created_at: row.created_at ?? undefined,
-          image: null as any
+          image: null as any,
         } as any)
       );
     } catch (e: any) {
@@ -536,14 +609,13 @@ export default function EditVendorScreen() {
     }
 
     const isVideo = kind === "shop_video";
-    const isMultiImage = kind === "certificate" || kind === "shop_image";
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: isVideo
         ? ImagePicker.MediaTypeOptions.Videos
         : ImagePicker.MediaTypeOptions.Images,
       quality: !isVideo ? 0.9 : undefined,
-      allowsEditing: false
+      allowsEditing: false,
     });
 
     if (result.canceled) return;
@@ -568,12 +640,12 @@ export default function EditVendorScreen() {
         kind === "profile"
           ? "profile"
           : kind === "banner"
-            ? "banner"
-            : kind === "certificate"
-              ? "certificates"
-              : kind === "shop_image"
-                ? "shop-images"
-                : "shop-videos";
+          ? "banner"
+          : kind === "certificate"
+          ? "certificates"
+          : kind === "shop_image"
+          ? "shop-images"
+          : "shop-videos";
 
       const filename = `${Date.now()}_${Math.random().toString(16).slice(2)}.${ext}`;
       const storagePath = `vendors/${vendorId}/${folder}/${filename}`;
@@ -615,11 +687,6 @@ export default function EditVendorScreen() {
         const next = [...(shopVideoPaths ?? [])];
         next.push(uploadedPath);
         await saveVendorMedia({ shop_video_paths: next });
-        return;
-      }
-
-      if (!isMultiImage) {
-        // no-op
       }
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not upload media.");
@@ -651,7 +718,6 @@ export default function EditVendorScreen() {
 
     await saveVendorMedia({ shop_video_paths: list.length ? list : null });
 
-    // if removed is currently selected, select first remaining
     try {
       const removed = String(removedUrl || "").trim();
       if (removed && removed === String(selectedVideoUrl || "").trim()) {
@@ -669,12 +735,27 @@ export default function EditVendorScreen() {
       return;
     }
 
-    if (!canSubmit) {
+    if (!shopName.trim() || !ownerName.trim() || !email.trim() || !mobile.trim() || !address.trim()) {
       Alert.alert("Missing", "Fill required fields.");
       return;
     }
 
+    if (exportsEnabled && exportRegions.length === 0) {
+      Alert.alert("Missing", "Please select at least one export region.");
+      return;
+    }
+
     setSaving(true);
+
+    const normalizedTailoringOptions = offersTailoring
+      ? {
+          blouse_neck: [...BLOUSE_NECK_PATTERNS],
+          sleeves: [...BLOUSE_SLEEVE_PATTERNS],
+          trouser: [...TROUSER_STYLES],
+        }
+      : EMPTY_TAILORING_OPTIONS;
+
+    const normalizedExportRegions = exportsEnabled ? exportRegions : [];
 
     const updatePayload = {
       name: ownerName.trim(),
@@ -686,17 +767,18 @@ export default function EditVendorScreen() {
       address: address.trim(),
       location_url: locationUrl.trim() || null,
 
-      // ✅ NEW: vendor-wide tailoring offering
       offers_tailoring: Boolean(offersTailoring),
+      exports_enabled: Boolean(exportsEnabled),
+      export_regions: normalizedExportRegions,
+      tailoring_options: normalizedTailoringOptions,
 
       location: address.trim(),
 
-      // ✅ media (already editable live; keep current snapshot on submit too)
       profile_image_path: profilePath,
       banner_path: bannerPath,
       certificate_paths: certificatePaths.length ? certificatePaths : null,
       shop_image_paths: shopImagePaths.length ? shopImagePaths : null,
-      shop_video_paths: shopVideoPaths.length ? shopVideoPaths : null
+      shop_video_paths: shopVideoPaths.length ? shopVideoPaths : null,
     };
 
     const { data, error } = await supabase
@@ -721,7 +803,10 @@ export default function EditVendorScreen() {
           "shop_video_paths",
           "status",
           "location",
-          "offers_tailoring"
+          "offers_tailoring",
+          "exports_enabled",
+          "export_regions",
+          "tailoring_options",
         ].join(",")
       )
       .single();
@@ -739,7 +824,7 @@ export default function EditVendorScreen() {
       setSelectedVendor({
         ...(row as any),
         created_at: row.created_at ?? undefined,
-        image: null as any
+        image: null as any,
       } as any)
     );
 
@@ -761,7 +846,7 @@ export default function EditVendorScreen() {
   const showSetCurrentLocation = (locationUrl || "").trim().length === 0;
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#fff" }}>
+    <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.topBar}>
           <Text style={styles.backBtn} onPress={goToSettings}>
@@ -831,24 +916,140 @@ export default function EditVendorScreen() {
           </View>
         )}
 
-        {/* ✅ NEW: Offers tailoring toggle */}
-        <View style={styles.tailoringRow}>
-          <Text style={styles.tailoringLabel}>Offers stitching / tailoring</Text>
+        <FieldHeader
+          label="Tailoring service"
+          onPress={() => setOpenTailoring((prev) => !prev)}
+        />
+        {openTailoring && (
+          <View style={styles.serviceBox}>
+            <View style={styles.serviceHeaderRow}>
+              <Text style={styles.serviceTitle}>Tailoring service</Text>
 
-          <Pressable
-            onPress={() => setOffersTailoring((v) => !v)}
-            style={({ pressed }) => [
-              styles.tailoringPill,
-              offersTailoring ? styles.tailoringPillOn : null,
-              pressed ? styles.pressed : null
-            ]}
-          >
-            <Text style={[styles.tailoringText, offersTailoring ? styles.tailoringTextOn : null]}>
-              {offersTailoring ? "Yes" : "No"}
-            </Text>
-          </Pressable>
-        </View>
+              <View style={styles.choiceGrid}>
+                <Pressable
+                  onPress={() => {
+                    setOffersTailoring(true);
+                    setTailoringOptions(DEFAULT_TAILORING_OPTIONS);
+                  }}
+                  style={({ pressed }) => [
+                    styles.choiceCard,
+                    offersTailoring && styles.choiceCardActive,
+                    pressed ? styles.choiceCardPressed : null,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.choiceCardTitle,
+                      offersTailoring && styles.choiceCardTitleActive,
+                    ]}
+                  >
+                    Yes
+                  </Text>
+                </Pressable>
 
+                <Pressable
+                  onPress={() => {
+                    setOffersTailoring(false);
+                    setTailoringOptions(EMPTY_TAILORING_OPTIONS);
+                  }}
+                  style={({ pressed }) => [
+                    styles.choiceCard,
+                    !offersTailoring && styles.choiceCardActive,
+                    pressed ? styles.choiceCardPressed : null,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.choiceCardTitle,
+                      !offersTailoring && styles.choiceCardTitleActive,
+                    ]}
+                  >
+                    No
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        )}
+
+        <FieldHeader
+          label="Export service"
+          onPress={() => setOpenExport((prev) => !prev)}
+        />
+        {openExport && (
+          <View style={styles.serviceBox}>
+            <View style={styles.serviceHeaderRow}>
+              <Text style={styles.serviceTitle}>Export service</Text>
+
+              <View style={styles.choiceGrid}>
+                <Pressable
+                  onPress={() => setExportsEnabled(true)}
+                  style={({ pressed }) => [
+                    styles.choiceCard,
+                    exportsEnabled && styles.choiceCardActive,
+                    pressed ? styles.choiceCardPressed : null,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.choiceCardTitle,
+                      exportsEnabled && styles.choiceCardTitleActive,
+                    ]}
+                  >
+                    Yes
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    setExportsEnabled(false);
+                    setExportRegions([]);
+                  }}
+                  style={({ pressed }) => [
+                    styles.choiceCard,
+                    !exportsEnabled && styles.choiceCardActive,
+                    pressed ? styles.choiceCardPressed : null,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.choiceCardTitle,
+                      !exportsEnabled && styles.choiceCardTitleActive,
+                    ]}
+                  >
+                    No
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+
+            {exportsEnabled ? (
+              <>
+                <Text style={styles.optionGroupTitle}>Select export regions</Text>
+                <View style={styles.chipWrap}>
+                  {EXPORT_REGIONS.map((region) => {
+                    const selected = exportRegions.includes(region);
+                    return (
+                      <Pressable
+                        key={region}
+                        style={({ pressed }) => [
+                          styles.choiceChip,
+                          selected ? styles.choiceChipActive : null,
+                          pressed ? styles.pressed : null,
+                        ]}
+                        onPress={() => toggleExportRegion(region)}
+                      >
+                        <Text style={[styles.choiceChipText, selected && styles.choiceChipTextActive]}>
+                          {region}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            ) : null}
+          </View>
+        )}
         <FieldHeader label="Landline" onPress={openAndFocusLandline} />
         {openLandline && (
           <View style={optionStyles.card}>
@@ -907,7 +1108,6 @@ export default function EditVendorScreen() {
           </>
         )}
 
-        {/* MEDIA */}
         <View style={styles.mediaHeaderRow}>
           <Text style={styles.section}>Media</Text>
 
@@ -919,7 +1119,6 @@ export default function EditVendorScreen() {
           ) : null}
         </View>
 
-        {/* ✅ Profile (segregated) */}
         <View style={styles.existingBox}>
           <View style={styles.mediaSectionHeaderRow}>
             <Text style={styles.existingTitle}>Profile / Logo</Text>
@@ -930,7 +1129,7 @@ export default function EditVendorScreen() {
               style={({ pressed }) => [
                 styles.smallBtn,
                 savingMedia ? styles.smallBtnDisabled : null,
-                pressed ? styles.pressed : null
+                pressed ? styles.pressed : null,
               ]}
             >
               <Text style={styles.smallBtnText}>Update Profile</Text>
@@ -949,7 +1148,6 @@ export default function EditVendorScreen() {
           )}
         </View>
 
-        {/* ✅ Banner (segregated) */}
         <View style={styles.existingBox}>
           <View style={styles.mediaSectionHeaderRow}>
             <Text style={styles.existingTitle}>Shop Banner</Text>
@@ -960,7 +1158,7 @@ export default function EditVendorScreen() {
               style={({ pressed }) => [
                 styles.smallBtn,
                 savingMedia ? styles.smallBtnDisabled : null,
-                pressed ? styles.pressed : null
+                pressed ? styles.pressed : null,
               ]}
             >
               <Text style={styles.smallBtnText}>Update Banner</Text>
@@ -979,7 +1177,6 @@ export default function EditVendorScreen() {
           )}
         </View>
 
-        {/* Certificates (add/remove) */}
         <View style={styles.existingBox}>
           <View style={styles.mediaSectionHeaderRow}>
             <Text style={styles.existingTitle}>Certificates</Text>
@@ -990,7 +1187,7 @@ export default function EditVendorScreen() {
               style={({ pressed }) => [
                 styles.smallBtn,
                 savingMedia ? styles.smallBtnDisabled : null,
-                pressed ? styles.pressed : null
+                pressed ? styles.pressed : null,
               ]}
             >
               <Text style={styles.smallBtnText}>+ Add Certificate</Text>
@@ -1025,7 +1222,6 @@ export default function EditVendorScreen() {
           )}
         </View>
 
-        {/* Shop Images (add/remove) */}
         <View style={styles.existingBox}>
           <View style={styles.mediaSectionHeaderRow}>
             <Text style={styles.existingTitle}>Shop Images</Text>
@@ -1036,7 +1232,7 @@ export default function EditVendorScreen() {
               style={({ pressed }) => [
                 styles.smallBtn,
                 savingMedia ? styles.smallBtnDisabled : null,
-                pressed ? styles.pressed : null
+                pressed ? styles.pressed : null,
               ]}
             >
               <Text style={styles.smallBtnText}>+ Add Image</Text>
@@ -1071,7 +1267,6 @@ export default function EditVendorScreen() {
           )}
         </View>
 
-        {/* ✅ Shop Videos (add/remove + thumbs + embedded player like View Profile) */}
         <View style={styles.existingBox}>
           <View style={styles.mediaSectionHeaderRow}>
             <Text style={styles.existingTitle}>Shop Videos</Text>
@@ -1082,7 +1277,7 @@ export default function EditVendorScreen() {
               style={({ pressed }) => [
                 styles.smallBtn,
                 savingMedia ? styles.smallBtnDisabled : null,
-                pressed ? styles.pressed : null
+                pressed ? styles.pressed : null,
               ]}
             >
               <Text style={styles.smallBtnText}>+ Add Video</Text>
@@ -1121,7 +1316,7 @@ export default function EditVendorScreen() {
                           style={({ pressed }) => [
                             styles.thumbPress,
                             isOn ? styles.videoThumbOn : null,
-                            pressed ? styles.pressed : null
+                            pressed ? styles.pressed : null,
                           ]}
                         >
                           {thumbUri ? (
@@ -1165,7 +1360,6 @@ export default function EditVendorScreen() {
         </Text>
       </ScrollView>
 
-      {/* Fullscreen Viewer (images only) */}
       <Modal visible={viewerVisible} transparent onRequestClose={() => setViewerVisible(false)}>
         <View style={styles.viewerContainer}>
           <FlatList
@@ -1177,7 +1371,7 @@ export default function EditVendorScreen() {
             getItemLayout={(_, i) => ({
               length: width,
               offset: width * i,
-              index: i
+              index: i,
             })}
             initialScrollIndex={Math.max(0, Math.min(currentIndex, Math.max(0, gallery.length - 1)))}
             onScrollToIndexFailed={() => {
@@ -1209,14 +1403,14 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
     paddingBottom: 24,
-    backgroundColor: "#F8FAFC"
+    backgroundColor: "#F8FAFC",
   },
 
   topBar: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginBottom: 8
+    marginBottom: 8,
   },
 
   backBtn: {
@@ -1231,68 +1425,68 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D7E3FF",
     textAlignVertical: "center",
-    overflow: "hidden"
+    overflow: "hidden",
   },
 
   title: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#0F172A"
+    color: "#0F172A",
   },
 
   section: {
     marginTop: 18,
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F172A"
+    color: "#0F172A",
   },
 
   mediaHeaderRow: {
     flexDirection: "row",
     alignItems: "flex-end",
     justifyContent: "space-between",
-    gap: 10
+    gap: 10,
   },
 
   mediaLoadingRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8
+    gap: 8,
   },
 
   mediaLoadingText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#64748B"
+    color: "#64748B",
   },
 
   fieldBtnBlue: {
     marginTop: 12,
     fontSize: 14,
     fontWeight: "700",
-    color: "#2563EB"
+    color: "#2563EB",
   },
 
   input: {
     fontSize: 14,
     fontWeight: "500",
-    color: "#0F172A"
+    color: "#0F172A",
   },
 
   multi: {
     minHeight: 90,
-    textAlignVertical: "top"
+    textAlignVertical: "top",
   },
 
   blueBtn: {
     marginTop: 14,
     fontSize: 14,
     fontWeight: "700",
-    color: "#2563EB"
+    color: "#2563EB",
   },
 
   disabledText: {
-    opacity: 0.6
+    opacity: 0.6,
   },
 
   orText: {
@@ -1300,45 +1494,108 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 13,
     fontWeight: "700",
-    color: "#64748B"
+    color: "#64748B",
   },
 
-  tailoringRow: {
+  serviceBox: {
     marginTop: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    backgroundColor: "#FFFFFF",
+    padding: 18,
+  },
+
+  serviceHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12
+    gap: 12,
   },
 
-  tailoringLabel: {
-    fontSize: 13,
+  serviceTitle: {
+    fontSize: 15,
     fontWeight: "700",
-    color: "#0F172A"
+    color: "#0F172A",
   },
 
-  tailoringPill: {
+  choiceGrid: {
+    flexDirection: "row",
+    gap: 10,
+  },
+
+  choiceCard: {
+    minHeight: 34,
+    paddingVertical: 7,
     paddingHorizontal: 12,
-    paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF"
-  },
-
-  tailoringPillOn: {
     borderColor: "#D7E3FF",
-    backgroundColor: "#EEF4FF"
+    backgroundColor: "#EEF4FF",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
-  tailoringText: {
+  choiceCardActive: {
+    backgroundColor: "#2563EB",
+    borderColor: "#2563EB",
+  },
+
+  choiceCardPressed: {
+    opacity: 0.82,
+  },
+
+  choiceCardTitle: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#0F172A"
+    color: "#2563EB",
+    textAlign: "center",
   },
 
-  tailoringTextOn: {
-    color: "#2563EB"
+  choiceCardTitleActive: {
+    color: "#FFFFFF",
+  },
+
+  optionGroupTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#334155",
+    marginTop: 14,
+    marginBottom: 10,
+  },
+
+  chipWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+
+  choiceChip: {
+    minHeight: 34,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: "#EEF4FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  choiceChipActive: {
+    backgroundColor: "#2563EB",
+    borderColor: "#2563EB",
+  },
+
+  choiceChipText: {
+    color: "#2563EB",
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+
+  choiceChipTextActive: {
+    color: "#FFFFFF",
   },
 
   meta: {
@@ -1346,7 +1603,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: "#64748B",
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   card: {
@@ -1355,7 +1612,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E7EB",
     backgroundColor: "#FFFFFF",
-    padding: 18
+    padding: 18,
   },
 
   existingBox: {
@@ -1364,27 +1621,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E7EB",
     padding: 18,
-    backgroundColor: "#FFFFFF"
+    backgroundColor: "#FFFFFF",
   },
 
   mediaSectionHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 10
+    gap: 10,
   },
 
   existingTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F172A"
+    color: "#0F172A",
   },
 
   subHead: {
     marginTop: 12,
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A"
+    color: "#0F172A",
   },
 
   empty: {
@@ -1392,7 +1649,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "500",
-    color: "#64748B"
+    color: "#64748B",
   },
 
   emptyInline: {
@@ -1400,25 +1657,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "500",
-    color: "#64748B"
+    color: "#64748B",
   },
 
   previewWrap: {
     marginTop: 10,
     borderRadius: 16,
-    overflow: "hidden"
+    overflow: "hidden",
   },
 
   previewImg: {
     width: "100%",
-    height: 160
+    height: 160,
   },
 
   hRow: {
     flexDirection: "row",
     gap: 10,
     paddingTop: 10,
-    paddingBottom: 4
+    paddingBottom: 4,
   },
 
   smallBtn: {
@@ -1430,17 +1687,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D7E3FF",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   smallBtnDisabled: {
-    opacity: 0.6
+    opacity: 0.6,
   },
 
   smallBtnText: {
     color: "#2563EB",
     fontWeight: "700",
-    fontSize: 12
+    fontSize: 12,
   },
 
   thumbWrap: {
@@ -1450,17 +1707,17 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF"
+    backgroundColor: "#FFFFFF",
   },
 
   thumbPress: {
     width: "100%",
-    height: "100%"
+    height: "100%",
   },
 
   thumb: {
     width: "100%",
-    height: "100%"
+    height: "100%",
   },
 
   thumbX: {
@@ -1474,13 +1731,13 @@ const styles = StyleSheet.create({
     height: 26,
     borderRadius: 13,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   thumbXText: {
     color: "#B91C1C",
     fontWeight: "700",
-    fontSize: 12
+    fontSize: 12,
   },
 
   videoPlaceholder: {
@@ -1488,13 +1745,13 @@ const styles = StyleSheet.create({
     height: "100%",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EEF4FF"
+    backgroundColor: "#EEF4FF",
   },
 
   videoPlaceholderText: {
     color: "#2563EB",
     fontWeight: "700",
-    fontSize: 12
+    fontSize: 12,
   },
 
   playBadge: {
@@ -1506,13 +1763,13 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: "rgba(0,0,0,0.58)",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   playBadgeText: {
     color: "#FFFFFF",
     fontWeight: "700",
-    fontSize: 12
+    fontSize: 12,
   },
 
   videoBox: {
@@ -1520,12 +1777,12 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#E5E7EB"
+    borderColor: "#E5E7EB",
   },
 
   video: {
     width: "100%",
-    height: 220
+    height: 220,
   },
 
   videoMeta: {
@@ -1533,12 +1790,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: "#64748B",
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   videoThumbOn: {
     borderColor: "#2563EB",
-    borderWidth: 2
+    borderWidth: 2,
   },
 
   hint: {
@@ -1546,11 +1803,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: "#64748B",
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   pressed: {
-    opacity: 0.82
+    opacity: 0.82,
   },
 
   submitBtn: {
@@ -1565,23 +1822,23 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: "hidden",
     textAlign: "center",
-    textAlignVertical: "center"
+    textAlignVertical: "center",
   },
 
   disabledBtn: {
-    opacity: 0.6
+    opacity: 0.6,
   },
 
   viewerContainer: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.95)",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   viewerImage: {
     width,
     height: "100%",
-    resizeMode: "contain"
+    resizeMode: "contain",
   },
 
   closeButton: {
@@ -1593,13 +1850,13 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: "rgba(255,255,255,0.14)",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   closeText: {
     color: "#FFFFFF",
     fontSize: 20,
-    fontWeight: "900"
+    fontWeight: "900",
   },
 
   indexCaption: {
@@ -1609,12 +1866,12 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.14)",
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 999
+    borderRadius: 999,
   },
 
   indexText: {
     color: "#FFFFFF",
     fontWeight: "900",
-    fontSize: 14
-  }
+    fontSize: 14,
+  },
 });

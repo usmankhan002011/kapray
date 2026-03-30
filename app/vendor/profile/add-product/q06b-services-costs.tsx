@@ -1,6 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
+
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { supabase } from "@/utils/supabase/client";
@@ -74,7 +83,8 @@ export default function Q06BServicesCosts() {
 
   const category = inferCategoryFromDraft(draft);
 
-  const needsDyeing = category === "unstitched_dyeing" || category === "unstitched_dyeing_tailoring";
+  const needsDyeing =
+    category === "unstitched_dyeing" || category === "unstitched_dyeing_tailoring";
   const needsTailoring = category === "unstitched_dyeing_tailoring";
 
   const [vendorOffersTailoring, setVendorOffersTailoring] = useState<boolean>(false);
@@ -164,23 +174,33 @@ export default function Q06BServicesCosts() {
 
   useEffect(() => {
     if (category === "unstitched_plain" || category === "stitched_ready") {
-      patchSpec({ dyeing_enabled: false, tailoring_enabled: false, tailoring_turnaround_days: 0 });
+      patchSpec({
+        dyeing_enabled: false,
+        tailoring_enabled: false,
+        tailoring_turnaround_days: 0,
+        includes_trouser: false,
+        tailoring_style_presets: [],
+      });
       patchPrice({ dyeing_cost_pkr: 0, tailoring_cost_pkr: 0 });
       return;
     }
 
     patchSpec({
       dyeing_enabled: needsDyeing,
-      tailoring_enabled: needsTailoring
+      tailoring_enabled: needsTailoring,
     });
 
     if (!needsDyeing) patchPrice({ dyeing_cost_pkr: 0 });
+
     if (!needsTailoring) {
       patchPrice({ tailoring_cost_pkr: 0 });
-      patchSpec({ tailoring_turnaround_days: 0 });
+      patchSpec({
+        tailoring_turnaround_days: 0,
+        includes_trouser: false,
+        tailoring_style_presets: [],
+      });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category]);
+  }, [category, needsDyeing, needsTailoring]);
 
   const canContinue = useMemo(() => {
     if (!vendorId) return false;
@@ -201,7 +221,23 @@ export default function Q06BServicesCosts() {
     }
 
     return true;
-  }, [vendorId, needsDyeing, dyeingCost, needsTailoring, vendorOffersTailoring, tailoringCost, turnaroundDays]);
+  }, [
+    vendorId,
+    needsDyeing,
+    dyeingCost,
+    needsTailoring,
+    vendorOffersTailoring,
+    tailoringCost,
+    turnaroundDays,
+  ]);
+
+  function closeScreen() {
+    if (returnTo) {
+      router.replace(returnTo as any);
+      return;
+    }
+    router.back();
+  }
 
   function onContinue() {
     if (!vendorId) {
@@ -212,7 +248,7 @@ export default function Q06BServicesCosts() {
     if (needsTailoring && !vendorOffersTailoring) {
       Alert.alert(
         "Tailoring not enabled",
-        "You cannot continue because your vendor profile does not offer tailoring. Enable “Stitching / Tailoring” in your profile first."
+        "You cannot continue because your vendor profile does not offer tailoring. Enable stitching / tailoring in your profile first.",
       );
       return;
     }
@@ -233,6 +269,7 @@ export default function Q06BServicesCosts() {
         Alert.alert("Invalid tailoring cost", "Please enter a valid tailoring cost (PKR).");
         return;
       }
+
       const days = turnaroundDays === "" ? 0 : Number(sanitizeNumber(turnaroundDays) || "0");
       if (!Number.isFinite(days) || days < 0) {
         Alert.alert("Invalid turnaround", "Turnaround days must be 0 or more.");
@@ -240,7 +277,17 @@ export default function Q06BServicesCosts() {
       }
 
       patchPrice({ tailoring_cost_pkr: t });
-      patchSpec({ tailoring_turnaround_days: Math.max(0, Math.trunc(days)) });
+      patchSpec({
+        tailoring_turnaround_days: Math.max(0, Math.trunc(days)),
+      });
+
+      if (returnTo) {
+        router.replace(returnTo as any);
+        return;
+      }
+
+      router.push("/vendor/profile/add-product/q06b2-tailoring-styles" as any);
+      return;
     }
 
     if (returnTo) {
@@ -248,7 +295,7 @@ export default function Q06BServicesCosts() {
       return;
     }
 
-    router.push("/vendor/profile/add-product/q09-images" as any);
+    router.push("/vendor/profile/add-product/q06c-shipping" as any);
   }
 
   useFocusEffect(
@@ -263,7 +310,7 @@ export default function Q06BServicesCosts() {
         }
       }, 100);
       return () => clearTimeout(timer);
-    }, [needsDyeing, needsTailoring])
+    }, [needsDyeing, needsTailoring]),
   );
 
   return (
@@ -277,7 +324,7 @@ export default function Q06BServicesCosts() {
           <Text style={apStyles.title}>Services & Costs</Text>
 
           <Pressable
-            onPress={() => router.back()}
+            onPress={closeScreen}
             style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
           >
             <Text style={apStyles.linkText}>Close</Text>
@@ -314,6 +361,35 @@ export default function Q06BServicesCosts() {
 
           {needsTailoring ? (
             <>
+              {!vendorOffersTailoring ? (
+                <View
+                  style={{
+                    marginTop: 4,
+                    marginBottom: 12,
+                    padding: 12,
+                    borderRadius: 14,
+                    backgroundColor: apColors.blueSoft,
+                    borderWidth: 1,
+                    borderColor: "#D7E3FF",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "700",
+                      color: apColors.text,
+                      marginBottom: 4,
+                    }}
+                  >
+                    Tailoring is not enabled in vendor profile
+                  </Text>
+                  <Text style={apStyles.metaHint}>
+                    Enable stitching / tailoring in vendor profile before using this product
+                    category.
+                  </Text>
+                </View>
+              ) : null}
+
               <Text style={apStyles.label}>Tailoring cost (PKR) *</Text>
               <TextInput
                 ref={tailoringRef}
@@ -345,7 +421,7 @@ export default function Q06BServicesCosts() {
             style={({ pressed }) => [
               apStyles.primaryBtn,
               !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null
+              pressed ? apStyles.pressed : null,
             ]}
             onPress={onContinue}
             disabled={!canContinue}

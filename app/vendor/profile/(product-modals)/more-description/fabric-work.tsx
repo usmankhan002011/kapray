@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { apStyles } from "@/components/product/addProductStyles";
+import { useProductDraft } from "@/components/product/ProductDraftContext";
 
 function safeStr(v: any) {
   return String(v ?? "").trim();
@@ -10,6 +11,7 @@ function safeStr(v: any) {
 export default function FabricWorkModal() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { draft } = useProductDraft() as any;
 
   const q12Path = safeStr((params as any)?.q12Path) || "/vendor/profile/add-product/q12-more-description";
   const parentReturnTo = safeStr((params as any)?.parentReturnTo);
@@ -29,14 +31,19 @@ export default function FabricWorkModal() {
     "Embellished sleeves add extra elegance to the overall look."
   ];
 
-  // Show fewer by default so it fits one screen
   const primaryOptions = options.slice(0, 7);
   const extraOptions = options.slice(7);
+
+  const alreadyPicked: string[] = useMemo(() => {
+    const parts = (draft?.spec as any)?.more_description_parts;
+    return Array.isArray(parts) ? parts : [];
+  }, [draft?.spec]);
 
   const [picked, setPicked] = useState<string[]>([]);
   const [showMore, setShowMore] = useState<boolean>(false);
 
   function toggle(s: string) {
+    if (alreadyPicked.includes(s)) return;
     setPicked((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
   }
 
@@ -93,17 +100,23 @@ export default function FabricWorkModal() {
 
         {visibleOptions.map((o) => {
           const isPicked = picked.includes(o);
+          const isAlready = alreadyPicked.includes(o);
 
           return (
             <Pressable
               key={o}
               onPress={() => toggle(o)}
-              style={[apStyles.card, isPicked ? { borderWidth: 1, borderColor: "#111" } : null]}
+              style={[
+                apStyles.card,
+                isPicked ? { borderWidth: 1, borderColor: "#111" } : null,
+                isAlready ? { opacity: 0.55 } : null
+              ]}
             >
               <Text style={apStyles.label}>
                 {isPicked ? "✓ " : ""}
                 {o}
               </Text>
+              {isAlready ? <Text style={apStyles.metaHint}>Already added</Text> : null}
             </Pressable>
           );
         })}

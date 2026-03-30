@@ -30,6 +30,12 @@ import {
 import GradientInputCard from "@/components/Wizard/GradientInputCard";
 import VendorReviewSummary from "@/components/Wizard/VendorReviewSummary";
 import WizardScaffold from "@/components/Wizard/WizardScraffold";
+import { EXPORT_REGIONS } from "@/data/kapray/exportRegions";
+import {
+  BLOUSE_NECK_PATTERNS,
+  BLOUSE_SLEEVE_PATTERNS,
+  TROUSER_STYLES,
+} from "@/data/kapray/tailoringOptions";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setSelectedVendor } from "@/store/vendorSlice";
 import {
@@ -45,6 +51,18 @@ import { supabase } from "@/utils/supabase/client";
 const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
 
+const EMPTY_TAILORING_OPTIONS = {
+  blouse_neck: [] as string[],
+  sleeves: [] as string[],
+  trouser: [] as string[],
+};
+
+const DEFAULT_TAILORING_OPTIONS = {
+  blouse_neck: [...BLOUSE_NECK_PATTERNS],
+  sleeves: [...BLOUSE_SLEEVE_PATTERNS],
+  trouser: [...TROUSER_STYLES],
+};
+
 const initialForm: VendorWizardData = {
   ownerName: "",
   email: "",
@@ -54,6 +72,9 @@ const initialForm: VendorWizardData = {
   address: "",
   locationUrl: "",
   offersTailoring: false,
+  exportsEnabled: false,
+  exportRegions: [],
+  tailoringOptions: EMPTY_TAILORING_OPTIONS,
   profile: null,
   govPermission: null,
   banner: null,
@@ -77,32 +98,32 @@ export default function CreateShopScreen() {
   const currentStep = STEPS[stepIndex];
   const isLastStep = stepIndex === STEPS.length - 1;
 
-    const ownerRef = useRef<TextInput>(null);
-    const emailRef = useRef<TextInput>(null);
-    const mobileRef = useRef<TextInput>(null);
-    const landlineRef = useRef<TextInput>(null);
-    const shopRef = useRef<TextInput>(null);
-    const addressRef = useRef<TextInput>(null);
-    const locationRef = useRef<TextInput>(null);
+  const ownerRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+  const mobileRef = useRef<TextInput>(null);
+  const landlineRef = useRef<TextInput>(null);
+  const shopRef = useRef<TextInput>(null);
+  const addressRef = useRef<TextInput>(null);
+  const locationRef = useRef<TextInput>(null);
 
-    useEffect(() => {
-      if (stepIndex !== 0) return;
+  useEffect(() => {
+    if (stepIndex !== 0) return;
 
-      const t = setTimeout(() => {
-        ownerRef.current?.focus();
-      }, 250);
+    const t = setTimeout(() => {
+      ownerRef.current?.focus();
+    }, 250);
 
-      return () => clearTimeout(t);
-    }, [stepIndex]);
+    return () => clearTimeout(t);
+  }, [stepIndex]);
 
-    useEffect(() => {
-      const onBackPress = () => {
+  useEffect(() => {
+    const onBackPress = () => {
       if (stepIndex > 0) {
         setStepIndex((prev) => prev - 1);
-        return true; // prevent default navigation
+        return true;
       }
 
-      return false; // allow navigation if first step
+      return false;
     };
 
     const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
@@ -116,6 +137,19 @@ export default function CreateShopScreen() {
     },
     [],
   );
+
+  const toggleExportRegion = useCallback((region: string) => {
+    setForm((prev) => {
+      const exists = prev.exportRegions.includes(region);
+
+      return {
+        ...prev,
+        exportRegions: exists
+          ? prev.exportRegions.filter((r) => r !== region)
+          : [...prev.exportRegions, region],
+      };
+    });
+  }, []);
 
   const setCurrentLocation = useCallback(async () => {
     try {
@@ -183,6 +217,14 @@ export default function CreateShopScreen() {
           }
           return true;
 
+        case "tailoring":
+          if (form.exportsEnabled && (form.exportRegions?.length ?? 0) === 0) {
+            Alert.alert("Missing", "Please select at least one export region.");
+            return false;
+          }
+
+          return true;
+
         default:
           return true;
       }
@@ -218,7 +260,26 @@ export default function CreateShopScreen() {
   }, [router, stepIndex]);
 
   const submitVendor = useCallback(async () => {
+    if (form.exportsEnabled && (form.exportRegions?.length ?? 0) === 0) {
+      Alert.alert("Missing", "Please select at least one export region.");
+      return;
+    }
+
     setSaving(true);
+
+    const normalizedTailoringOptions = form.offersTailoring
+      ? {
+          blouse_neck: [...BLOUSE_NECK_PATTERNS],
+          sleeves: [...BLOUSE_SLEEVE_PATTERNS],
+          trouser: [...TROUSER_STYLES],
+        }
+      : {
+          blouse_neck: [],
+          sleeves: [],
+          trouser: [],
+        };
+
+    const normalizedExportRegions = form.exportsEnabled ? form.exportRegions : [];
 
     const { data: vendorRow, error: insErr } = await supabase
       .from("vendor")
@@ -231,6 +292,9 @@ export default function CreateShopScreen() {
         address: form.address.trim(),
         location_url: form.locationUrl.trim() || null,
         offers_tailoring: Boolean(form.offersTailoring),
+        exports_enabled: Boolean(form.exportsEnabled),
+        export_regions: normalizedExportRegions,
+        tailoring_options: normalizedTailoringOptions,
         location: form.address.trim(),
         status: "pending",
       })
@@ -306,6 +370,9 @@ export default function CreateShopScreen() {
         shop_image_paths: imagePaths.length ? imagePaths : null,
         shop_video_paths: videoPaths.length ? videoPaths : null,
         offers_tailoring: Boolean(form.offersTailoring),
+        exports_enabled: Boolean(form.exportsEnabled),
+        export_regions: normalizedExportRegions,
+        tailoring_options: normalizedTailoringOptions,
         status: "pending",
       })
       .eq("id", vendor_id);
@@ -334,6 +401,9 @@ export default function CreateShopScreen() {
         shop_image_paths: imagePaths.length ? imagePaths : null,
         shop_video_paths: videoPaths.length ? videoPaths : null,
         offers_tailoring: Boolean(form.offersTailoring),
+        exports_enabled: Boolean(form.exportsEnabled),
+        export_regions: normalizedExportRegions,
+        tailoring_options: normalizedTailoringOptions,
         status: "pending",
         location: form.address.trim(),
         image: null,
@@ -347,8 +417,7 @@ export default function CreateShopScreen() {
     if (!validateStep(currentStep.id)) return;
 
     if (editingStepIndex !== null) {
-      // user came from review
-      setStepIndex(STEPS.length - 1); // go back to review
+      setStepIndex(STEPS.length - 1);
       setEditingStepIndex(null);
       return;
     }
@@ -359,7 +428,7 @@ export default function CreateShopScreen() {
     }
 
     setStepIndex((prev) => prev + 1);
-  }, [currentStep.id, isLastStep, submitVendor, validateStep]);
+  }, [currentStep.id, editingStepIndex, isLastStep, submitVendor, validateStep]);
 
   const [viewerVisible, setViewerVisible] = useState(false);
   const [gallery, setGallery] = useState<string[]>([]);
@@ -416,9 +485,9 @@ export default function CreateShopScreen() {
     form.profile?.uri,
   ]);
 
-  const [videoThumbByUri, setVideoThumbByUri] = useState<
-    Record<string, string>
-  >({});
+  const [videoThumbByUri, setVideoThumbByUri] = useState<Record<string, string>>(
+    {},
+  );
   const [selectedVideoUri, setSelectedVideoUri] = useState<string>("");
 
   const ensureVideoThumb = useCallback(
@@ -597,45 +666,170 @@ export default function CreateShopScreen() {
 
       case "tailoring":
         return (
-          <View style={styles.choiceGrid}>
-            <Pressable
-              onPress={() => {
-                updateForm("offersTailoring", true);
-                goNext();
-              }}
-              style={({ pressed }) => [
-                styles.choiceCard,
-                pressed && styles.choiceCardPressed,
-              ]}
-            >
-              <Text style={styles.choiceCardTitle}>Yes</Text>
-              <Text style={styles.choiceCardSubtitle}>
-                This shop offers tailoring services for their unstiched products
-              </Text>
-            </Pressable>
+          <View>
+            <View style={styles.previewCard}>
+              <Text style={styles.previewLabel}>Does this shop offer tailoring?</Text>
 
-            <Pressable
-              onPress={() => {
-                updateForm("offersTailoring", false);
-                goNext();
-              }}
-              style={({ pressed }) => [
-                styles.choiceCard,
-                pressed && styles.choiceCardPressed,
-              ]}
-            >
-              <Text style={styles.choiceCardTitle}>No</Text>
-              <Text style={styles.choiceCardSubtitle}>
-                The shop only sells unstitched or ready-made items
-              </Text>
-            </Pressable>
+              <View style={styles.choiceGrid}>
+                <Pressable
+                  onPress={() =>
+                    setForm((prev) => ({
+                      ...prev,
+                      offersTailoring: true,
+                      tailoringOptions: DEFAULT_TAILORING_OPTIONS,
+                    }))
+                  }
+                  style={({ pressed }) => [
+                    styles.choiceCard,
+                    form.offersTailoring && styles.choiceCardActive,
+                    pressed && styles.choiceCardPressed,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.choiceCardTitle,
+                      form.offersTailoring && styles.choiceCardTitleActive,
+                    ]}
+                  >
+                    Yes
+                  </Text>
+                  <Text
+                    style={[
+                      styles.choiceCardSubtitle,
+                      form.offersTailoring && styles.choiceCardSubtitleActive,
+                    ]}
+                  >
+                    This shop offers tailoring services for their unstitched products
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() =>
+                    setForm((prev) => ({
+                      ...prev,
+                      offersTailoring: false,
+                      tailoringOptions: EMPTY_TAILORING_OPTIONS,
+                    }))
+                  }
+                  style={({ pressed }) => [
+                    styles.choiceCard,
+                    !form.offersTailoring && styles.choiceCardActive,
+                    pressed && styles.choiceCardPressed,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.choiceCardTitle,
+                      !form.offersTailoring && styles.choiceCardTitleActive,
+                    ]}
+                  >
+                    No
+                  </Text>
+                  <Text
+                    style={[
+                      styles.choiceCardSubtitle,
+                      !form.offersTailoring && styles.choiceCardSubtitleActive,
+                    ]}
+                  >
+                    The shop only sells unstitched or ready-made items
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+
+            <View style={styles.previewCard}>
+              <Text style={styles.previewLabel}>Do you export?</Text>
+
+              <View style={styles.choiceGrid}>
+                <Pressable
+                  onPress={() => updateForm("exportsEnabled", true)}
+                  style={({ pressed }) => [
+                    styles.choiceCard,
+                    form.exportsEnabled && styles.choiceCardActive,
+                    pressed && styles.choiceCardPressed,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.choiceCardTitle,
+                      form.exportsEnabled && styles.choiceCardTitleActive,
+                    ]}
+                  >
+                    Yes
+                  </Text>
+                  <Text
+                    style={[
+                      styles.choiceCardSubtitle,
+                      form.exportsEnabled && styles.choiceCardSubtitleActive,
+                    ]}
+                  >
+                    This shop exports internationally
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    updateForm("exportsEnabled", false);
+                    updateForm("exportRegions", []);
+                  }}
+                  style={({ pressed }) => [
+                    styles.choiceCard,
+                    !form.exportsEnabled && styles.choiceCardActive,
+                    pressed && styles.choiceCardPressed,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.choiceCardTitle,
+                      !form.exportsEnabled && styles.choiceCardTitleActive,
+                    ]}
+                  >
+                    No
+                  </Text>
+                  <Text
+                    style={[
+                      styles.choiceCardSubtitle,
+                      !form.exportsEnabled && styles.choiceCardSubtitleActive,
+                    ]}
+                  >
+                    This shop only delivers locally
+                  </Text>
+                </Pressable>
+              </View>
+
+              {form.exportsEnabled ? (
+                <>
+                  <Text style={styles.optionGroupTitle}>Select export regions</Text>
+                  <View style={styles.chipWrap}>
+                    {EXPORT_REGIONS.map((region) => {
+                      const selected = form.exportRegions?.includes(region);
+                      return (
+                        <Pressable
+                          key={region}
+                          style={[styles.choiceChip, selected && styles.choiceChipActive]}
+                          onPress={() => toggleExportRegion(region)}
+                        >
+                          <Text
+                            style={[
+                              styles.choiceChipText,
+                              selected && styles.choiceChipTextActive,
+                            ]}
+                          >
+                            {region}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </>
+              ) : null}
+            </View>
           </View>
         );
 
       case "media":
         return (
           <>
-            {/* PROFILE */}
             <View style={styles.mediaCard}>
               <Text style={styles.mediaTitle}>Vendor profile / logo</Text>
 
@@ -664,7 +858,6 @@ export default function CreateShopScreen() {
               )}
             </View>
 
-            {/* PERMISSION */}
             <View style={styles.mediaCard}>
               <Text style={styles.mediaTitle}>Authority permission</Text>
 
@@ -695,7 +888,6 @@ export default function CreateShopScreen() {
               )}
             </View>
 
-            {/* BANNER */}
             <View style={styles.mediaCard}>
               <Text style={styles.mediaTitle}>Shop banner</Text>
 
@@ -724,7 +916,6 @@ export default function CreateShopScreen() {
               )}
             </View>
 
-            {/* SHOP IMAGES */}
             <View style={styles.mediaCard}>
               <Text style={styles.mediaTitle}>Shop photos</Text>
 
@@ -761,7 +952,6 @@ export default function CreateShopScreen() {
               )}
             </View>
 
-            {/* SHOP VIDEOS */}
             <View style={styles.mediaCard}>
               <Text style={styles.mediaTitle}>Shop videos</Text>
 
@@ -920,7 +1110,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     marginBottom: 14,
   },
-
   secondaryActionButton: {
     marginTop: 14,
     minHeight: 48,
@@ -931,11 +1120,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D7E3FF",
   },
-
   secondaryActionButtonDisabled: {
     opacity: 0.6,
   },
-
   secondaryActionButtonText: {
     color: "#2563EB",
     fontSize: 14,
@@ -943,44 +1130,81 @@ const styles = StyleSheet.create({
   },
   choiceGrid: {
     flexDirection: "row",
-    gap: 16,
+    gap: 10,
   },
-
   choiceCard: {
     flex: 1,
     minHeight: 140,
-    borderRadius: 18,
-    padding: 20,
-
-    backgroundColor: "#FFFFFF",
+    borderRadius: 999,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: "#EEF4FF",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-
+    borderColor: "#D7E3FF",
     justifyContent: "center",
-
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-
-    elevation: 2,
   },
-
+  choiceCardActive: {
+    backgroundColor: "#2563EB",
+    borderColor: "#2563EB",
+  },
   choiceCardPressed: {
-    transform: [{ scale: 0.97 }],
+    opacity: 0.82,
   },
-
   choiceCardTitle: {
-    fontSize: 18,
+    fontSize: 12,
     fontWeight: "700",
-    color: "#0F172A",
-    marginBottom: 6,
+    color: "#2563EB",
+    marginBottom: 4,
+    textAlign: "center",
   },
-
+  choiceCardTitleActive: {
+    color: "#FFFFFF",
+  },
   choiceCardSubtitle: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: "#64748B",
+    fontSize: 10,
+    lineHeight: 14,
+    color: "#2563EB",
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  choiceCardSubtitleActive: {
+    color: "#FFFFFF",
+  },
+  optionGroupTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#334155",
+    marginTop: 14,
+    marginBottom: 10,
+  },
+  chipWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  choiceChip: {
+    minHeight: 34,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: "#EEF4FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  choiceChipActive: {
+    backgroundColor: "#2563EB",
+    borderColor: "#2563EB",
+  },
+  choiceChipText: {
+    color: "#2563EB",
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  choiceChipTextActive: {
+    color: "#FFFFFF",
   },
   mediaCard: {
     marginBottom: 20,
@@ -990,14 +1214,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E7EB",
   },
-
   mediaTitle: {
     fontSize: 15,
     fontWeight: "700",
     color: "#0F172A",
     marginBottom: 12,
   },
-
   uploadButton: {
     minHeight: 48,
     borderRadius: 12,
@@ -1007,19 +1229,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D7E3FF",
   },
-
   uploadButtonText: {
     color: "#2563EB",
     fontSize: 14,
     fontWeight: "700",
   },
-
   thumbRow: {
     flexDirection: "row",
     gap: 10,
     marginTop: 14,
   },
-
   thumb: {
     width: 88,
     height: 88,
@@ -1092,7 +1311,6 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.82,
   },
-
   viewerContainer: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.95)",

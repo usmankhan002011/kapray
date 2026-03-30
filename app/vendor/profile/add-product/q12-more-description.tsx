@@ -92,7 +92,9 @@ export default function Q12MoreDescription() {
 
   useFocusEffect(
     React.useCallback(() => {
-      const toAdd = [...appendMany, ...(appendOne ? [appendOne] : [])].filter(Boolean);
+      const toAdd = [...appendMany, ...(appendOne ? [appendOne] : [])]
+        .map((x) => safeStr(x))
+        .filter(Boolean);
 
       if (toAdd.length) {
         const parts = Array.isArray((draft?.spec as any)?.more_description_parts)
@@ -109,11 +111,14 @@ export default function Q12MoreDescription() {
             )
           : currentText;
 
-        patchSpec({ more_description_parts: nextParts, more_description: safeStr(nextText) });
+        patchSpec({
+          more_description_parts: nextParts,
+          more_description: safeStr(nextText)
+        });
+
         setSelectedSentences(nextParts);
         setText(nextText);
 
-        // clear append params
         router.replace({
           pathname: "/vendor/profile/add-product/q12-more-description",
           params: returnTo ? { returnTo } : undefined
@@ -133,13 +138,13 @@ export default function Q12MoreDescription() {
       }, 100);
 
       return () => clearTimeout(timer);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [appendManyRaw, appendOne, draft, returnTo])
+    }, [appendManyRaw, appendOne, returnTo])
   );
 
   function onChangeText(next: string) {
-    setText(next);
-    patchSpec({ more_description: safeStr(next) });
+    const cleaned = safeStr(next);
+    setText(cleaned);
+    patchSpec({ more_description: cleaned });
   }
 
   function removeSentence(sentence: string) {

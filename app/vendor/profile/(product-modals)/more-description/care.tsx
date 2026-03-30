@@ -8,25 +8,27 @@ function safeStr(v: any) {
   return String(v ?? "").trim();
 }
 
-export default function DisclaimerModal() {
+export default function CareModal() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { draft } = useProductDraft() as any;
 
-  const q12Path = safeStr((params as any)?.q12Path) || "/vendor/profile/add-product/q12-more-description";
+  const q12Path =
+    safeStr((params as any)?.q12Path) ||
+    "/vendor/profile/add-product/q12-more-description";
   const parentReturnTo = safeStr((params as any)?.parentReturnTo);
 
   const options = [
-    "This is an unstitched outfit.",
-    "Slight variation in color may occur due to lighting effects.",
-    "Accessories shown are not included.",
-    "Custom stitching options are available upon request.",
-    "Actual product color may vary slightly from the image.",
-    "Semi-stitched design for easy customization.",
-    "Ready-to-wear option available in standard sizes.",
-    "Alteration facility available for perfect fitting.",
-    "Unstitched fabric allows personalized tailoring.",
-    "Embroidery and embellishments are crafted with precision."
+    "Dry clean recommended to maintain fabric quality.",
+    "Handle with care to preserve delicate embellishments.",
+    "Do not bleach or use harsh detergents.",
+    "Iron on low heat from the reverse side.",
+    "Store in a cool, dry place away from direct sunlight.",
+    "Avoid wringing to maintain fabric texture.",
+    "Keep away from moisture to prevent damage.",
+    "Steam iron recommended for best results.",
+    "Professional cleaning ensures long-lasting finish.",
+    "Handle embroidery and embellishments with extra care."
   ];
 
   const primaryOptions = options.slice(0, 6);
@@ -42,7 +44,9 @@ export default function DisclaimerModal() {
 
   function toggle(s: string) {
     if (alreadyPicked.includes(s)) return;
-    setPicked((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
+    setPicked((prev) =>
+      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
+    );
   }
 
   const pickedCount = useMemo(() => picked.length, [picked]);
@@ -70,7 +74,7 @@ export default function DisclaimerModal() {
     <View style={apStyles.screen}>
       <ScrollView contentContainerStyle={apStyles.content}>
         <View style={[apStyles.headerRow, { alignItems: "center" }]}>
-          <Text style={apStyles.title}>Stitching & Disclaimer</Text>
+          <Text style={apStyles.title}>Care & Instructions</Text>
 
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Pressable
@@ -87,14 +91,19 @@ export default function DisclaimerModal() {
 
             <Pressable
               onPress={closeModal}
-              style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
+              style={({ pressed }) => [
+                apStyles.linkBtn,
+                pressed ? apStyles.pressed : null
+              ]}
             >
               <Text style={apStyles.linkText}>Close</Text>
             </Pressable>
           </View>
         </View>
 
-        <Text style={apStyles.metaHint}>Tap to select multiple, then press Add.</Text>
+        <Text style={apStyles.metaHint}>
+          Select care instructions to guide customers.
+        </Text>
 
         {visibleOptions.map((o) => {
           const isPicked = picked.includes(o);
@@ -114,7 +123,9 @@ export default function DisclaimerModal() {
                 {isPicked ? "✓ " : ""}
                 {o}
               </Text>
-              {isAlready ? <Text style={apStyles.metaHint}>Already added</Text> : null}
+              {isAlready ? (
+                <Text style={apStyles.metaHint}>Already added</Text>
+              ) : null}
             </Pressable>
           );
         })}
@@ -122,9 +133,14 @@ export default function DisclaimerModal() {
         {extraOptions.length ? (
           <Pressable
             onPress={() => setShowMore((v) => !v)}
-            style={({ pressed }) => [apStyles.secondaryBtn, pressed ? apStyles.pressed : null]}
+            style={({ pressed }) => [
+              apStyles.secondaryBtn,
+              pressed ? apStyles.pressed : null
+            ]}
           >
-            <Text style={apStyles.secondaryText}>{showMore ? "Show less" : "Show more"}</Text>
+            <Text style={apStyles.secondaryText}>
+              {showMore ? "Show less" : "Show more"}
+            </Text>
           </Pressable>
         ) : null}
       </ScrollView>
