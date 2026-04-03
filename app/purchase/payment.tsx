@@ -181,7 +181,7 @@ function buildAddressPreview(args: {
   return [address, cityLine, endCountry].filter(Boolean).join(", ");
 }
 
-function SectionCard({
+function Card({
   title,
   subtitle,
   children,
@@ -197,6 +197,29 @@ function SectionCard({
         {!!subtitle && <Text style={styles.sectionSubtitle}>{subtitle}</Text>}
       </View>
       {children}
+    </View>
+  );
+}
+
+function PlainSection({
+  title,
+  subtitle,
+  children,
+  withDivider = true,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+  withDivider?: boolean;
+}) {
+  return (
+    <View style={styles.plainSection}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {!!subtitle && <Text style={styles.sectionSubtitle}>{subtitle}</Text>}
+      </View>
+      {children}
+      {withDivider ? <View style={styles.sectionDivider} /> : null}
     </View>
   );
 }
@@ -623,7 +646,7 @@ export default function PaymentScreen() {
             <Text style={styles.pageSubtitle}>Review your order and confirm payment.</Text>
           </View>
 
-          <SectionCard title="Product Summary">
+          <Card title="Product Summary">
             <View style={styles.productRow}>
               <View style={styles.imageBox}>
                 {data.imageUrl ? (
@@ -659,9 +682,9 @@ export default function PaymentScreen() {
                 <Text style={styles.helper}>Sold by {data.vendorName}</Text>
               </View>
             </View>
-          </SectionCard>
+          </Card>
 
-          <SectionCard title="Customization">
+          <PlainSection title="Customization">
             <KVRow
               label="Size"
               value={data.mode === "exact" ? "Exact measurements" : data.sizeLabel}
@@ -756,7 +779,7 @@ export default function PaymentScreen() {
 
                     {data.tailoringStyleExtraCostPkr > 0 ? (
                       <KVRow
-                        label="Additional style cost"
+                        label="Additional style tailoring cost"
                         value={formatMoney(data.currency, data.tailoringStyleExtraCostPkr)}
                       />
                     ) : null}
@@ -771,11 +794,12 @@ export default function PaymentScreen() {
                 ) : null}
               </View>
             ) : null}
-          </SectionCard>
+          </PlainSection>
 
-          <SectionCard title="Delivery">
+          <PlainSection title="Delivery">
             <KVRow label="Buyer" value={data.buyerName || "—"} />
             <KVRow label="Mobile" value={data.buyerMobile || "—"} />
+
             {!!data.addressPreview ? (
               <View style={styles.previewBox}>
                 <Text style={styles.previewLabel}>Address</Text>
@@ -788,9 +812,9 @@ export default function PaymentScreen() {
             <KVRow label="Delivery type" value={data.destinationType || "inland"} />
             <KVRow label="Region" value={data.exportRegion} muted />
             {!!data.notes && <KVRow label="Notes" value={data.notes} muted />}
-          </SectionCard>
+          </PlainSection>
 
-          <SectionCard title="Price Summary">
+          <Card title="Price Summary">
             <PriceRow
               label="Product"
               value={formatMoney(
@@ -804,7 +828,10 @@ export default function PaymentScreen() {
             ) : null}
 
             {data.tailoringSelected ? (
-              <PriceRow label="Tailoring" value={formatMoney(data.currency, data.tailoringCostPkr)} />
+              <PriceRow
+                label="Tailoring"
+                value={formatMoney(data.currency, data.tailoringCostPkr)}
+              />
             ) : null}
 
             {data.tailoringStyleExtraCostPkr > 0 ? (
@@ -817,15 +844,15 @@ export default function PaymentScreen() {
             <PriceRow label="Shipping" value={formatMoney(data.currency, data.deliveryCostPkr)} />
             <View style={styles.divider} />
             <PriceRow label="Total" value={formatMoney(data.currency, data.totalPkrSafe)} strong />
-          </SectionCard>
+          </Card>
 
-          <SectionCard title="Payment Method">
+          <Card title="Payment Method">
             <PaymentMethodCard
               title="Cash on Delivery (Dummy)"
               description="For now this completes the flow and creates the order."
               selected
             />
-          </SectionCard>
+          </Card>
 
           <Pressable
             onPress={() => router.back()}
@@ -840,7 +867,9 @@ export default function PaymentScreen() {
         <View style={styles.footerBar}>
           <View style={styles.footerTotalWrap}>
             <Text style={styles.footerTotalLabel}>Total</Text>
-            <Text style={styles.footerTotalValue}>{formatMoney(data.currency, data.totalPkrSafe)}</Text>
+            <Text style={styles.footerTotalValue}>
+              {formatMoney(data.currency, data.totalPkrSafe)}
+            </Text>
           </View>
 
           <Pressable
@@ -871,7 +900,6 @@ const stylesVars = {
   blueSoft: "#EEF4FF",
   text: "#0F172A",
   mutedText: "#64748B",
-  placeholder: "#94A3B8",
   white: "#FFFFFF",
 };
 
@@ -898,6 +926,7 @@ const styles = StyleSheet.create({
 
   pageHeader: {
     gap: 4,
+    marginBottom: 2,
   },
 
   title: {
@@ -922,6 +951,11 @@ const styles = StyleSheet.create({
     backgroundColor: stylesVars.cardBg,
   },
 
+  plainSection: {
+    gap: 12,
+    paddingTop: 2,
+  },
+
   sectionHeader: {
     gap: 3,
   },
@@ -937,6 +971,12 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     color: stylesVars.mutedText,
     fontWeight: "500",
+  },
+
+  sectionDivider: {
+    height: 1,
+    backgroundColor: stylesVars.border,
+    marginTop: 4,
   },
 
   productRow: {

@@ -1,9 +1,15 @@
-// File: app/purchase/size.tsx
-
 import React, { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import Svg, { Circle, Line, Path, Text as SvgText } from "react-native-svg";
 
 const STANDARD_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"] as const;
 
@@ -11,38 +17,42 @@ type Mode = "standard" | "exact";
 type Unit = "cm" | "in";
 
 type MeasureKey =
-  | "a"
-  | "b"
-  | "c"
-  | "d"
-  | "e"
-  | "f"
-  | "g"
-  | "h"
-  | "i"
-  | "j"
-  | "k"
-  | "l"
-  | "m"
-  | "n"
-  | "o";
+  | "m1"
+  | "m2"
+  | "m3"
+  | "m4"
+  | "m5"
+  | "m6"
+  | "m7"
+  | "m8"
+  | "m9"
+  | "m10"
+  | "m11"
+  | "m12"
+  | "m13"
+  | "m14"
+  | "m15"
+  | "m16"
+  | "m17";
 
 const MEASURE_LABELS: Record<MeasureKey, { code: string; title: string; hint: string }> = {
-  a: { code: "A", title: "Neck circumference", hint: "Around base of neck" },
-  b: { code: "B", title: "Shoulder width", hint: "Shoulder tip to shoulder tip" },
-  c: { code: "C", title: "Bust / Chest circumference", hint: "Fullest bust/chest" },
-  d: { code: "D", title: "Under-bust circumference", hint: "Just under bust" },
-  e: { code: "E", title: "Waist circumference", hint: "Natural waist" },
-  f: { code: "F", title: "Hips circumference", hint: "Fullest hips/seat" },
-  g: { code: "G", title: "Shoulder to waist", hint: "Shoulder seam to waist" },
-  h: { code: "H", title: "Sleeve length", hint: "Shoulder tip to wrist" },
-  i: { code: "I", title: "Bicep circumference", hint: "Fullest upper arm" },
-  j: { code: "J", title: "Wrist circumference", hint: "Around wrist bone" },
-  k: { code: "K", title: "Full height", hint: "Top of head to floor" },
-  l: { code: "L", title: "Waist to floor", hint: "Waist down to floor" },
-  m: { code: "M", title: "Inseam", hint: "Crotch to ankle/floor" },
-  n: { code: "N", title: "Outseam", hint: "Waist to ankle/floor (outside)" },
-  o: { code: "O", title: "Thigh circumference", hint: "Fullest upper thigh" },
+  m1: { code: "1", title: "Neck", hint: "Neck" },
+  m2: { code: "2", title: "Across front", hint: "Across front" },
+  m3: { code: "3", title: "Bust", hint: "Bust" },
+  m4: { code: "4", title: "Under bust", hint: "Under bust" },
+  m5: { code: "5", title: "Waist", hint: "Waist" },
+  m6: { code: "6", title: "Hips", hint: "Hips" },
+  m7: { code: "7", title: "Thigh", hint: "Thigh" },
+  m8: { code: "8", title: "Upper arm", hint: "Upper arm" },
+  m9: { code: "9", title: "Elbow", hint: "Elbow" },
+  m10: { code: "10", title: "Wrist", hint: "Wrist" },
+  m11: { code: "11", title: "Shoulder to waist", hint: "Shoulder to waist" },
+  m12: { code: "12", title: "Shoulder to floor", hint: "Shoulder to floor" },
+  m13: { code: "13", title: "Shoulder to shoulder", hint: "Shoulder width" },
+  m14: { code: "14", title: "Back neck to waist", hint: "Back neck to waist" },
+  m15: { code: "15", title: "Across back", hint: "Across back" },
+  m16: { code: "16", title: "Inner arm length", hint: "Armhole to wrist" },
+  m17: { code: "17", title: "Ankle", hint: "Ankle" },
 };
 
 const stylesVars = {
@@ -108,205 +118,30 @@ function getFabricLengthFromSize(size: string, sizeMap: Record<string, unknown>)
   return safePositiveNumber(sizeMap?.[size]);
 }
 
-function BodyMeasureSvg() {
-  const BLUE = "#1E5EFF";
-  const RED = "#D11F1F";
-  const GREEN = "#138A36";
-  const OUTLINE = "#111";
-
-  const labelFill = (c: string) => c;
-
+function BodyMeasurePhoto({
+  onOpen,
+}: {
+  onOpen: () => void;
+}) {
   return (
     <View style={styles.svgCard}>
-      <Text style={styles.svgTitle}>Measure Guide (A–O)</Text>
+      <View style={styles.guideHeaderRow}>
+        <Text style={styles.svgTitle}>Measurement Guide</Text>
 
-      <Svg width="100%" height={440} viewBox="0 0 360 580">
-        <Circle cx="180" cy="60" r="30" stroke={OUTLINE} strokeWidth="2" fill="none" />
-        <Path d="M165 88 C170 100, 190 100, 195 88" stroke={OUTLINE} strokeWidth="2" fill="none" />
-
-        <Path
-          d="
-            M 125 128
-            C 145 112, 160 108, 180 108
-            C 200 108, 215 112, 235 128
-
-            C 250 142, 252 165, 248 195
-            C 244 220, 238 235, 236 252
-
-            C 233 278, 240 295, 254 312
-            C 268 328, 268 350, 255 370
-            C 240 395, 234 420, 234 460
-            C 234 498, 224 525, 210 538
-            C 198 548, 190 544, 186 536
-
-            C 182 528, 182 504, 180 488
-            C 178 504, 178 528, 174 536
-            C 170 544, 162 548, 150 538
-            C 136 525, 126 498, 126 460
-            C 126 420, 120 395, 105 370
-            C 92 350, 92 328, 106 312
-            C 120 295, 127 278, 124 252
-
-            C 122 235, 116 220, 112 195
-            C 108 165, 110 142, 125 128
-          "
-          stroke={OUTLINE}
-          strokeWidth="2"
-          fill="none"
-        />
-
-        <Path
-          d="
-            M 105 146
-            C 75 176, 72 225, 82 265
-            C 90 300, 90 330, 82 360
-          "
-          stroke={OUTLINE}
-          strokeWidth="2"
-          fill="none"
-        />
-        <Path
-          d="
-            M 255 146
-            C 285 176, 288 225, 278 265
-            C 270 300, 270 330, 278 360
-          "
-          stroke={OUTLINE}
-          strokeWidth="2"
-          fill="none"
-        />
-
-        <Line x1="160" y1="98" x2="200" y2="98" stroke={GREEN} strokeWidth="2.5" />
-        <Circle cx="160" cy="98" r="3.5" fill={GREEN} />
-        <Circle cx="200" cy="98" r="3.5" fill={GREEN} />
-        <Line x1="200" y1="98" x2="285" y2="98" stroke={GREEN} strokeWidth="1.8" />
-        <SvgText x="296" y="103" fontSize="16" fontWeight="800" fill={labelFill(GREEN)}>
-          A
-        </SvgText>
-
-        <Line x1="138" y1="132" x2="222" y2="132" stroke={GREEN} strokeWidth="2.5" />
-        <Circle cx="138" cy="132" r="3.5" fill={GREEN} />
-        <Circle cx="222" cy="132" r="3.5" fill={GREEN} />
-        <Line x1="222" y1="132" x2="285" y2="132" stroke={GREEN} strokeWidth="1.8" />
-        <SvgText x="296" y="137" fontSize="16" fontWeight="800" fill={labelFill(GREEN)}>
-          B
-        </SvgText>
-
-        <Line x1="140" y1="194" x2="220" y2="194" stroke={GREEN} strokeWidth="2.5" />
-        <Circle cx="140" cy="194" r="3.5" fill={GREEN} />
-        <Circle cx="220" cy="194" r="3.5" fill={GREEN} />
-        <Line x1="220" y1="194" x2="285" y2="194" stroke={GREEN} strokeWidth="1.8" />
-        <SvgText x="296" y="199" fontSize="16" fontWeight="800" fill={labelFill(GREEN)}>
-          C
-        </SvgText>
-
-        <Line x1="148" y1="224" x2="212" y2="224" stroke={GREEN} strokeWidth="2.5" />
-        <Circle cx="148" cy="224" r="3.5" fill={GREEN} />
-        <Circle cx="212" cy="224" r="3.5" fill={GREEN} />
-        <Line x1="212" y1="224" x2="285" y2="224" stroke={GREEN} strokeWidth="1.8" />
-        <SvgText x="296" y="229" fontSize="16" fontWeight="800" fill={labelFill(GREEN)}>
-          D
-        </SvgText>
-
-        <Line x1="118" y1="266" x2="242" y2="266" stroke={GREEN} strokeWidth="3" />
-        <Circle cx="118" cy="266" r="3.8" fill={GREEN} />
-        <Circle cx="242" cy="266" r="3.8" fill={GREEN} />
-        <Line x1="242" y1="266" x2="285" y2="266" stroke={GREEN} strokeWidth="1.8" />
-        <SvgText x="296" y="271" fontSize="16" fontWeight="900" fill={labelFill(GREEN)}>
-          E
-        </SvgText>
-
-        <Line x1="120" y1="322" x2="240" y2="322" stroke={GREEN} strokeWidth="2.5" />
-        <Circle cx="120" cy="322" r="3.5" fill={GREEN} />
-        <Circle cx="240" cy="322" r="3.5" fill={GREEN} />
-        <Line x1="240" y1="322" x2="285" y2="322" stroke={GREEN} strokeWidth="1.8" />
-        <SvgText x="296" y="327" fontSize="16" fontWeight="800" fill={labelFill(GREEN)}>
-          F
-        </SvgText>
-
-        <Line x1="140" y1="372" x2="220" y2="372" stroke={GREEN} strokeWidth="2.5" />
-        <Circle cx="140" cy="372" r="3.5" fill={GREEN} />
-        <Circle cx="220" cy="372" r="3.5" fill={GREEN} />
-        <Line x1="220" y1="372" x2="285" y2="372" stroke={GREEN} strokeWidth="1.8" />
-        <SvgText x="296" y="377" fontSize="16" fontWeight="800" fill={labelFill(GREEN)}>
-          O
-        </SvgText>
-
-        <Line x1="62" y1="132" x2="62" y2="266" stroke={RED} strokeWidth="2.5" />
-        <Circle cx="62" cy="132" r="3.5" fill={RED} />
-        <Circle cx="62" cy="266" r="3.5" fill={RED} />
-        <Line x1="62" y1="200" x2="98" y2="200" stroke={RED} strokeWidth="1.8" />
-        <SvgText x="40" y="205" fontSize="16" fontWeight="800" fill={labelFill(RED)}>
-          G
-        </SvgText>
-
-        <Line x1="304" y1="150" x2="304" y2="360" stroke={RED} strokeWidth="2.5" />
-        <Circle cx="304" cy="150" r="3.5" fill={RED} />
-        <Circle cx="304" cy="360" r="3.5" fill={RED} />
-        <SvgText x="318" y="262" fontSize="16" fontWeight="800" fill={labelFill(RED)}>
-          H
-        </SvgText>
-
-        <Line x1="78" y1="220" x2="112" y2="220" stroke={BLUE} strokeWidth="2.5" />
-        <Circle cx="78" cy="220" r="3.5" fill={BLUE} />
-        <Circle cx="112" cy="220" r="3.5" fill={BLUE} />
-        <Line x1="78" y1="220" x2="44" y2="220" stroke={BLUE} strokeWidth="1.8" />
-        <SvgText x="26" y="225" fontSize="16" fontWeight="800" fill={labelFill(BLUE)}>
-          I
-        </SvgText>
-
-        <Line x1="84" y1="356" x2="108" y2="356" stroke={BLUE} strokeWidth="2.5" />
-        <Circle cx="84" cy="356" r="3.5" fill={BLUE} />
-        <Circle cx="108" cy="356" r="3.5" fill={BLUE} />
-        <Line x1="84" y1="356" x2="44" y2="356" stroke={BLUE} strokeWidth="1.8" />
-        <SvgText x="26" y="361" fontSize="16" fontWeight="800" fill={labelFill(BLUE)}>
-          J
-        </SvgText>
-
-        <Line x1="334" y1="28" x2="334" y2="540" stroke={RED} strokeWidth="2.5" />
-        <SvgText x="346" y="295" fontSize="16" fontWeight="800" fill={labelFill(RED)}>
-          K
-        </SvgText>
-
-        <Line x1="318" y1="266" x2="318" y2="540" stroke={RED} strokeWidth="2.5" />
-        <SvgText x="330" y="430" fontSize="16" fontWeight="800" fill={labelFill(RED)}>
-          L
-        </SvgText>
-
-        <Line x1="180" y1="352" x2="180" y2="522" stroke={RED} strokeWidth="2.5" />
-        <Circle cx="180" cy="352" r="3.5" fill={RED} />
-        <Circle cx="180" cy="522" r="3.5" fill={RED} />
-        <Line x1="180" y1="438" x2="214" y2="438" stroke={RED} strokeWidth="1.8" />
-        <SvgText x="224" y="443" fontSize="16" fontWeight="800" fill={labelFill(RED)}>
-          M
-        </SvgText>
-
-        <Line x1="244" y1="266" x2="244" y2="522" stroke={RED} strokeWidth="2.5" />
-        <Circle cx="244" cy="266" r="3.5" fill={RED} />
-        <Circle cx="244" cy="522" r="3.5" fill={RED} />
-        <Line x1="244" y1="394" x2="285" y2="394" stroke={RED} strokeWidth="1.8" />
-        <SvgText x="296" y="399" fontSize="16" fontWeight="800" fill={labelFill(RED)}>
-          N
-        </SvgText>
-      </Svg>
-
-      <View style={styles.legend}>
-        <Text style={styles.legendText}>A Neck</Text>
-        <Text style={styles.legendText}>B Shoulder</Text>
-        <Text style={styles.legendText}>C Bust</Text>
-        <Text style={styles.legendText}>D Under-bust</Text>
-        <Text style={styles.legendText}>E Waist</Text>
-        <Text style={styles.legendText}>F Hips</Text>
-        <Text style={styles.legendText}>O Thigh</Text>
-        <Text style={styles.legendText}>G Shoulder→Waist</Text>
-        <Text style={styles.legendText}>H Sleeve length</Text>
-        <Text style={styles.legendText}>I Bicep</Text>
-        <Text style={styles.legendText}>J Wrist</Text>
-        <Text style={styles.legendText}>K Height</Text>
-        <Text style={styles.legendText}>L Waist→Floor</Text>
-        <Text style={styles.legendText}>M Inseam</Text>
-        <Text style={styles.legendText}>N Outseam</Text>
+        <Pressable onPress={onOpen} style={styles.zoomBtn}>
+          <Text style={styles.zoomBtnText}>Zoom</Text>
+        </Pressable>
       </View>
+
+      <Pressable onPress={onOpen}>
+        <Image
+          source={require("../../assets/body measurement chart.jpg")}
+          style={styles.measureGuideImage}
+          resizeMode="contain"
+        />
+      </Pressable>
+
+      <Text style={styles.guideHint}>Tap image to open larger view</Text>
     </View>
   );
 }
@@ -314,72 +149,76 @@ function BodyMeasureSvg() {
 export default function SizeScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
-  returnTo?: string;
-  productId?: string;
-  product_id?: string;
-  productCode?: string;
-  product_code?: string;
-  productName?: string;
-  product_category?: string;
+    returnTo?: string;
+    productId?: string;
+    product_id?: string;
+    productCode?: string;
+    product_code?: string;
+    productName?: string;
+    product_category?: string;
 
-  price_per_meter_pkr?: string;
-  stitched_total_pkr?: string;
-  currency?: string;
-  imageUrl?: string;
+    price_per_meter_pkr?: string;
+    stitched_total_pkr?: string;
+    currency?: string;
+    imageUrl?: string;
 
-  size_length_m?: string;
+    size_length_m?: string;
 
-  dyeing_available?: string;
-  dyeing_selected?: string;
-  dye_shade_id?: string;
-  dye_hex?: string;
-  dye_label?: string;
-  dyeing_cost_pkr?: string;
+    dyeing_available?: string;
+    dyeing_selected?: string;
+    dye_shade_id?: string;
+    dye_hex?: string;
+    dye_label?: string;
+    dyeing_cost_pkr?: string;
 
-  tailoring_cost_pkr?: string;
-  tailoring_turnaround_days?: string;
-  tailoring_selected?: string;
-  tailoring_available?: string;
+    tailoring_cost_pkr?: string;
+    tailoring_turnaround_days?: string;
+    tailoring_selected?: string;
+    tailoring_available?: string;
 
-  selected_tailoring_style_id?: string;
-  selected_tailoring_style_title?: string;
-  selected_tailoring_style_image?: string;
-  selected_tailoring_style_snapshot?: string;
-  selected_neck_variation?: string;
-  selected_sleeve_variation?: string;
-  selected_trouser_variation?: string;
-  custom_tailoring_note?: string;
-  tailoring_style_extra_cost_pkr?: string;
+    selected_tailoring_style_id?: string;
+    selected_tailoring_style_title?: string;
+    selected_tailoring_style_image?: string;
+    selected_tailoring_style_snapshot?: string;
+    selected_neck_variation?: string;
+    selected_sleeve_variation?: string;
+    selected_trouser_variation?: string;
+    custom_tailoring_note?: string;
+    tailoring_style_extra_cost_pkr?: string;
 
-  exports_enabled?: string;
-  export_regions?: string;
-  weight_kg?: string;
-  package_cm?: string;
+    exports_enabled?: string;
+    export_regions?: string;
+    weight_kg?: string;
+    package_cm?: string;
 
-  selectedSize?: string;
-  selected_unstitched_size?: string;
-  selected_fabric_length_m?: string;
-  fabric_cost_pkr?: string;
+    selectedSize?: string;
+    selected_unstitched_size?: string;
+    selected_fabric_length_m?: string;
+    fabric_cost_pkr?: string;
 
-  mode?: string;
-  unit?: string;
+    mode?: string;
+    unit?: string;
 
-  a?: string;
-  b?: string;
-  c?: string;
-  d?: string;
-  e?: string;
-  f?: string;
-  g?: string;
-  h?: string;
-  i?: string;
-  j?: string;
-  k?: string;
-  l?: string;
-  m?: string;
-  n?: string;
-  o?: string;
-}>();
+    m1?: string;
+    m2?: string;
+    m3?: string;
+    m4?: string;
+    m5?: string;
+    m6?: string;
+    m7?: string;
+    m8?: string;
+    m9?: string;
+    m10?: string;
+    m11?: string;
+    m12?: string;
+    m13?: string;
+    m14?: string;
+    m15?: string;
+    m16?: string;
+    m17?: string;
+  }>();
+
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const returnTo = useMemo(
     () => (params.returnTo ? String(params.returnTo) : "/purchase/place-order"),
@@ -390,6 +229,7 @@ export default function SizeScreen() {
     () => norm(params.productId ?? params.product_id),
     [params.productId, params.product_id],
   );
+
   const productCode = useMemo(
     () => norm(params.productCode ?? params.product_code),
     [params.productCode, params.product_code],
@@ -402,6 +242,7 @@ export default function SizeScreen() {
     () => safePositiveNumber(params.price_per_meter_pkr),
     [params.price_per_meter_pkr],
   );
+
   const stitchedTotalPkr = useMemo(
     () => safePositiveNumber(params.stitched_total_pkr),
     [params.stitched_total_pkr],
@@ -432,21 +273,23 @@ export default function SizeScreen() {
   const [unit, setUnit] = useState<Unit>(initialUnit);
   const unitSuffix = useMemo(() => (unit === "in" ? " (inch)" : " (cm)"), [unit]);
 
-  const [a, setA] = useState<string>(norm(params.a));
-  const [b, setB] = useState<string>(norm(params.b));
-  const [c, setC] = useState<string>(norm(params.c));
-  const [d, setD] = useState<string>(norm(params.d));
-  const [e, setE] = useState<string>(norm(params.e));
-  const [f, setF] = useState<string>(norm(params.f));
-  const [g, setG] = useState<string>(norm(params.g));
-  const [h, setH] = useState<string>(norm(params.h));
-  const [i, setI] = useState<string>(norm(params.i));
-  const [j, setJ] = useState<string>(norm(params.j));
-  const [k, setK] = useState<string>(norm(params.k));
-  const [l, setL] = useState<string>(norm(params.l));
-  const [m, setM] = useState<string>(norm(params.m));
-  const [n, setN] = useState<string>(norm(params.n));
-  const [o, setO] = useState<string>(norm(params.o));
+  const [m1, setM1] = useState<string>(norm(params.m1));
+  const [m2, setM2] = useState<string>(norm(params.m2));
+  const [m3, setM3] = useState<string>(norm(params.m3));
+  const [m4, setM4] = useState<string>(norm(params.m4));
+  const [m5, setM5] = useState<string>(norm(params.m5));
+  const [m6, setM6] = useState<string>(norm(params.m6));
+  const [m7, setM7] = useState<string>(norm(params.m7));
+  const [m8, setM8] = useState<string>(norm(params.m8));
+  const [m9, setM9] = useState<string>(norm(params.m9));
+  const [m10, setM10] = useState<string>(norm(params.m10));
+  const [m11, setM11] = useState<string>(norm(params.m11));
+  const [m12, setM12] = useState<string>(norm(params.m12));
+  const [m13, setM13] = useState<string>(norm(params.m13));
+  const [m14, setM14] = useState<string>(norm(params.m14));
+  const [m15, setM15] = useState<string>(norm(params.m15));
+  const [m16, setM16] = useState<string>(norm(params.m16));
+  const [m17, setM17] = useState<string>(norm(params.m17));
 
   const selectedStandardSize = useMemo(
     () => safeDecode(params.selected_unstitched_size || params.selectedSize),
@@ -472,26 +315,28 @@ export default function SizeScreen() {
     return Number.isFinite(num) && num > 0;
   };
 
-  const exactHasAny = [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o].some(
-    (x) => norm(x).length > 0,
-  );
+  const exactValues = [
+    m1,
+    m2,
+    m3,
+    m4,
+    m5,
+    m6,
+    m7,
+    m8,
+    m9,
+    m10,
+    m11,
+    m12,
+    m13,
+    m14,
+    m15,
+    m16,
+    m17,
+  ];
 
-  const invalid =
-    !isValidNumberOrEmpty(a) ||
-    !isValidNumberOrEmpty(b) ||
-    !isValidNumberOrEmpty(c) ||
-    !isValidNumberOrEmpty(d) ||
-    !isValidNumberOrEmpty(e) ||
-    !isValidNumberOrEmpty(f) ||
-    !isValidNumberOrEmpty(g) ||
-    !isValidNumberOrEmpty(h) ||
-    !isValidNumberOrEmpty(i) ||
-    !isValidNumberOrEmpty(j) ||
-    !isValidNumberOrEmpty(k) ||
-    !isValidNumberOrEmpty(l) ||
-    !isValidNumberOrEmpty(m) ||
-    !isValidNumberOrEmpty(n) ||
-    !isValidNumberOrEmpty(o);
+  const exactHasAny = exactValues.some((x) => norm(x).length > 0);
+  const invalid = exactValues.some((x) => !isValidNumberOrEmpty(x));
 
   const goPlaceOrder = (p: Record<string, string>) => {
     router.replace({
@@ -518,21 +363,23 @@ export default function SizeScreen() {
         isUnstitched && fabricLengthM > 0 ? encodeURIComponent(String(fabricLengthM)) : "",
       fabric_cost_pkr: isUnstitched && fabricCostPkr > 0 ? String(fabricCostPkr) : "",
       unit,
-      a: "",
-      b: "",
-      c: "",
-      d: "",
-      e: "",
-      f: "",
-      g: "",
-      h: "",
-      i: "",
-      j: "",
-      k: "",
-      l: "",
-      m: "",
-      n: "",
-      o: "",
+      m1: "",
+      m2: "",
+      m3: "",
+      m4: "",
+      m5: "",
+      m6: "",
+      m7: "",
+      m8: "",
+      m9: "",
+      m10: "",
+      m11: "",
+      m12: "",
+      m13: "",
+      m14: "",
+      m15: "",
+      m16: "",
+      m17: "",
     });
   };
 
@@ -546,21 +393,23 @@ export default function SizeScreen() {
       selected_fabric_length_m: "",
       fabric_cost_pkr: "",
       unit,
-      a: a.trim(),
-      b: b.trim(),
-      c: c.trim(),
-      d: d.trim(),
-      e: e.trim(),
-      f: f.trim(),
-      g: g.trim(),
-      h: h.trim(),
-      i: i.trim(),
-      j: j.trim(),
-      k: k.trim(),
-      l: l.trim(),
-      m: m.trim(),
-      n: n.trim(),
-      o: o.trim(),
+      m1: m1.trim(),
+      m2: m2.trim(),
+      m3: m3.trim(),
+      m4: m4.trim(),
+      m5: m5.trim(),
+      m6: m6.trim(),
+      m7: m7.trim(),
+      m8: m8.trim(),
+      m9: m9.trim(),
+      m10: m10.trim(),
+      m11: m11.trim(),
+      m12: m12.trim(),
+      m13: m13.trim(),
+      m14: m14.trim(),
+      m15: m15.trim(),
+      m16: m16.trim(),
+      m17: m17.trim(),
     });
   };
 
@@ -577,204 +426,250 @@ export default function SizeScreen() {
   }, [isUnstitched, mode, selectedStandardFabricCost]);
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.container}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Text style={styles.title}>Select Size</Text>
+    <>
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.title}>Select Size</Text>
 
-      {!!productCategory ? (
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryText}>
-            Category: <Text style={styles.summaryStrong}>{prettyCategory(productCategory)}</Text>
-          </Text>
-
-          {isUnstitched ? (
-            <>
-              <Text style={styles.summaryText}>
-                Cost per meter:{" "}
-                <Text style={styles.summaryStrong}>PKR {pricePerMeterPkr || 0} / meter</Text>
-              </Text>
-              {availableUnstitchedSizes.length ? (
-                <Text style={styles.summaryText}>
-                  Available mapped sizes:{" "}
-                  <Text style={styles.summaryStrong}>{availableUnstitchedSizes.join(", ")}</Text>
-                </Text>
-              ) : (
-                <Text style={styles.summaryText}>
-                  Available mapped sizes: <Text style={styles.summaryStrong}>Not available</Text>
-                </Text>
-              )}
-            </>
-          ) : (
+        {!!productCategory ? (
+          <View style={styles.summaryCard}>
             <Text style={styles.summaryText}>
-              Product total: <Text style={styles.summaryStrong}>PKR {stitchedTotalPkr || 0}</Text>
+              Category: <Text style={styles.summaryStrong}>{prettyCategory(productCategory)}</Text>
             </Text>
-          )}
-        </View>
-      ) : null}
 
-      <View style={styles.toggleRow}>
-        <Pressable
-          onPress={() => setMode("standard")}
-          style={[styles.toggleBtn, mode === "standard" ? styles.toggleActive : null]}
-        >
-          <Text style={[styles.toggleText, mode === "standard" ? styles.toggleTextActive : null]}>
-            Standard
-          </Text>
-        </Pressable>
+            {isUnstitched ? (
+              <>
+                <Text style={styles.summaryText}>
+                  Cost per meter:{" "}
+                  <Text style={styles.summaryStrong}>PKR {pricePerMeterPkr || 0} / meter</Text>
+                </Text>
 
-        <Pressable
-          onPress={() => setMode("exact")}
-          style={[styles.toggleBtn, mode === "exact" ? styles.toggleActive : null]}
-        >
-          <Text style={[styles.toggleText, mode === "exact" ? styles.toggleTextActive : null]}>
-            Exact (A–O)
-          </Text>
-        </Pressable>
-      </View>
-
-      {mode === "standard" ? (
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Choose standard size</Text>
-
-          <View style={styles.sizeGrid}>
-            {(isUnstitched ? availableUnstitchedSizes : STANDARD_SIZES).map((s) => {
-              const isOn = selectedStandardSize === s;
-
-              return (
-                <Pressable
-                  key={s}
-                  onPress={() => onSelectStandard(s)}
-                  style={[styles.sizePill, isOn ? styles.sizePillOn : null]}
-                >
-                  <Text style={[styles.sizeText, isOn ? styles.sizeTextOn : null]}>{s}</Text>
-                </Pressable>
-              );
-            })}
+                {availableUnstitchedSizes.length ? (
+                  <Text style={styles.summaryText}>
+                    Available mapped sizes:{" "}
+                    <Text style={styles.summaryStrong}>{availableUnstitchedSizes.join(", ")}</Text>
+                  </Text>
+                ) : (
+                  <Text style={styles.summaryText}>
+                    Available mapped sizes: <Text style={styles.summaryStrong}>Not available</Text>
+                  </Text>
+                )}
+              </>
+            ) : (
+              <Text style={styles.summaryText}>
+                Product total: <Text style={styles.summaryStrong}>PKR {stitchedTotalPkr || 0}</Text>
+              </Text>
+            )}
           </View>
+        ) : null}
 
-          {isUnstitched && !availableUnstitchedSizes.length ? (
-            <Text style={styles.validation}>
-              Size-length map is missing for this unstitched product.
+        <View style={styles.toggleRow}>
+          <Pressable
+            onPress={() => setMode("standard")}
+            style={[styles.toggleBtn, mode === "standard" ? styles.toggleActive : null]}
+          >
+            <Text
+              style={[styles.toggleText, mode === "standard" ? styles.toggleTextActive : null]}
+            >
+              Standard
             </Text>
-          ) : null}
+          </Pressable>
 
-          {isUnstitched && !!selectedStandardSize && previewLengthM > 0 ? (
-            <View style={styles.costCard}>
-              <Text style={styles.costLine}>
-                Cost per meter: <Text style={styles.costStrong}>PKR {pricePerMeterPkr} / meter</Text>
-              </Text>
-              <Text style={styles.costLine}>
-                Selected size: <Text style={styles.costStrong}>{selectedStandardSize}</Text>
-              </Text>
-              <Text style={styles.costLine}>
-                Fabric length: <Text style={styles.costStrong}>{previewLengthM} meter(s)</Text>
-              </Text>
-              <Text style={styles.costLine}>
-                Total fabric cost: <Text style={styles.costStrong}>PKR {previewFabricCostPkr}</Text>
-              </Text>
+          <Pressable
+            onPress={() => setMode("exact")}
+            style={[styles.toggleBtn, mode === "exact" ? styles.toggleActive : null]}
+          >
+            <Text style={[styles.toggleText, mode === "exact" ? styles.toggleTextActive : null]}>
+              Exact (1–17)
+            </Text>
+          </Pressable>
+        </View>
+
+        {mode === "standard" ? (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Choose standard size</Text>
+
+            <View style={styles.sizeGrid}>
+              {(isUnstitched ? availableUnstitchedSizes : STANDARD_SIZES).map((s) => {
+                const isOn = selectedStandardSize === s;
+
+                return (
+                  <Pressable
+                    key={s}
+                    onPress={() => onSelectStandard(s)}
+                    style={[styles.sizePill, isOn ? styles.sizePillOn : null]}
+                  >
+                    <Text style={[styles.sizeText, isOn ? styles.sizeTextOn : null]}>{s}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
-          ) : null}
-        </View>
-      ) : (
-        <View style={styles.exactWrap}>
-          <BodyMeasureSvg />
 
-          <Text style={styles.helper}>
-            Enter measurements in one unit only. Standard size is better for quick checkout. Exact
-            measurements are mainly useful where stitching/tailoring is involved.
-          </Text>
-
-          <View style={styles.unitRow}>
-            <Pressable
-              onPress={() => setUnit("cm")}
-              style={[styles.unitPill, unit === "cm" ? styles.unitActive : null]}
-            >
-              <Text style={[styles.unitText, unit === "cm" ? styles.unitTextActive : null]}>
-                cm
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => setUnit("in")}
-              style={[styles.unitPill, unit === "in" ? styles.unitActive : null]}
-            >
-              <Text style={[styles.unitText, unit === "in" ? styles.unitTextActive : null]}>
-                inch
-              </Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.inputs}>
-            {(Object.keys(MEASURE_LABELS) as MeasureKey[]).map((key) => {
-              const valueMap: Record<MeasureKey, string> = {
-                a,
-                b,
-                c,
-                d,
-                e,
-                f,
-                g,
-                h,
-                i,
-                j,
-                k,
-                l,
-                m,
-                n,
-                o,
-              };
-
-              const setterMap: Record<MeasureKey, (v: string) => void> = {
-                a: setA,
-                b: setB,
-                c: setC,
-                d: setD,
-                e: setE,
-                f: setF,
-                g: setG,
-                h: setH,
-                i: setI,
-                j: setJ,
-                k: setK,
-                l: setL,
-                m: setM,
-                n: setN,
-                o: setO,
-              };
-
-              const item = MEASURE_LABELS[key];
-
-              return (
-                <MeasureRow
-                  key={key}
-                  code={item.code}
-                  value={valueMap[key]}
-                  onChange={setterMap[key]}
-                  placeholder={`${item.title}${unitSuffix}`}
-                />
-              );
-            })}
-
-            <Pressable onPress={onSaveExact} style={styles.primaryBtn}>
-              <Text style={styles.primaryText}>Continue</Text>
-            </Pressable>
-
-            {invalid ? (
+            {isUnstitched && !availableUnstitchedSizes.length ? (
               <Text style={styles.validation}>
-                Please enter valid positive numbers only, or leave a field blank.
+                Size-length map is missing for this unstitched product.
               </Text>
             ) : null}
+
+            {isUnstitched && !!selectedStandardSize && previewLengthM > 0 ? (
+              <View style={styles.costCard}>
+                <Text style={styles.costLine}>
+                  Cost per meter:{" "}
+                  <Text style={styles.costStrong}>PKR {pricePerMeterPkr} / meter</Text>
+                </Text>
+                <Text style={styles.costLine}>
+                  Selected size: <Text style={styles.costStrong}>{selectedStandardSize}</Text>
+                </Text>
+                <Text style={styles.costLine}>
+                  Fabric length: <Text style={styles.costStrong}>{previewLengthM} meter(s)</Text>
+                </Text>
+                <Text style={styles.costLine}>
+                  Total fabric cost:{" "}
+                  <Text style={styles.costStrong}>PKR {previewFabricCostPkr}</Text>
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : (
+          <View style={styles.exactWrap}>
+            <BodyMeasurePhoto onOpen={() => setGuideOpen(true)} />
+
+            <Text style={styles.helper}>Enter measurements</Text>
+
+            <View style={styles.unitRow}>
+              <Pressable
+                onPress={() => setUnit("cm")}
+                style={[styles.unitPill, unit === "cm" ? styles.unitActive : null]}
+              >
+                <Text style={[styles.unitText, unit === "cm" ? styles.unitTextActive : null]}>
+                  cm
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setUnit("in")}
+                style={[styles.unitPill, unit === "in" ? styles.unitActive : null]}
+              >
+                <Text style={[styles.unitText, unit === "in" ? styles.unitTextActive : null]}>
+                  inch
+                </Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.inputs}>
+              {(Object.keys(MEASURE_LABELS) as MeasureKey[]).map((key) => {
+                const valueMap: Record<MeasureKey, string> = {
+                  m1,
+                  m2,
+                  m3,
+                  m4,
+                  m5,
+                  m6,
+                  m7,
+                  m8,
+                  m9,
+                  m10,
+                  m11,
+                  m12,
+                  m13,
+                  m14,
+                  m15,
+                  m16,
+                  m17,
+                };
+
+                const setterMap: Record<MeasureKey, (v: string) => void> = {
+                  m1: setM1,
+                  m2: setM2,
+                  m3: setM3,
+                  m4: setM4,
+                  m5: setM5,
+                  m6: setM6,
+                  m7: setM7,
+                  m8: setM8,
+                  m9: setM9,
+                  m10: setM10,
+                  m11: setM11,
+                  m12: setM12,
+                  m13: setM13,
+                  m14: setM14,
+                  m15: setM15,
+                  m16: setM16,
+                  m17: setM17,
+                };
+
+                const item = MEASURE_LABELS[key];
+
+                return (
+                  <MeasureRow
+                    key={key}
+                    code={item.code}
+                    value={valueMap[key]}
+                    onChange={setterMap[key]}
+                    placeholder={`${item.title}${unitSuffix}`}
+                  />
+                );
+              })}
+
+              <Pressable onPress={onSaveExact} style={styles.primaryBtn}>
+                <Text style={styles.primaryText}>Continue</Text>
+              </Pressable>
+
+              {invalid ? (
+                <Text style={styles.validation}>
+                  Please enter valid positive numbers only, or leave a field blank.
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        )}
+
+        <Pressable onPress={() => router.back()} style={styles.closeBtn}>
+          <Text style={styles.link}>Close</Text>
+        </Pressable>
+      </ScrollView>
+
+      <Modal
+        visible={guideOpen}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setGuideOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Measurement Guide</Text>
+
+              <Pressable onPress={() => setGuideOpen(false)} style={styles.modalCloseBtn}>
+                <Text style={styles.modalCloseText}>Close</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.zoomScrollContent}
+            >
+              <ScrollView
+                showsHorizontalScrollIndicator={false}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.zoomScrollContent}
+              >
+                <Image
+                  source={require("../../assets/body measurement chart.jpg")}
+                  style={styles.zoomGuideImage}
+                  resizeMode="contain"
+                />
+              </ScrollView>
+            </ScrollView>
           </View>
         </View>
-      )}
-
-      <Pressable onPress={() => router.back()} style={styles.closeBtn}>
-        <Text style={styles.link}>Close</Text>
-      </Pressable>
-    </ScrollView>
+      </Modal>
+    </>
   );
 }
 
@@ -791,7 +686,7 @@ function MeasureRow({
 }) {
   return (
     <View style={styles.inputRow}>
-      <Text style={styles.inputLabel}>{code}</Text>
+      <Text style={styles.inputLabel}>{code}.</Text>
       <TextInput
         value={value}
         onChangeText={onChange}
@@ -1004,19 +899,45 @@ const styles = StyleSheet.create({
     backgroundColor: stylesVars.cardBg,
   },
 
+  guideHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+
   svgTitle: {
     fontSize: 14,
     fontWeight: "700",
-    marginBottom: 8,
     color: stylesVars.text,
   },
 
-  legend: {
-    marginTop: 8,
-    gap: 4,
+  zoomBtn: {
+    minHeight: 30,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
-  legendText: {
+  zoomBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: stylesVars.blue,
+  },
+
+  measureGuideImage: {
+    width: "100%",
+    height: 520,
+    borderRadius: 12,
+  },
+
+  guideHint: {
+    marginTop: 8,
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
@@ -1034,7 +955,7 @@ const styles = StyleSheet.create({
   },
 
   inputLabel: {
-    width: 24,
+    width: 28,
     fontSize: 14,
     fontWeight: "700",
     color: stylesVars.text,
@@ -1092,5 +1013,63 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: stylesVars.blue,
     fontWeight: "700",
+  },
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.72)",
+    justifyContent: "center",
+    padding: 16,
+  },
+
+  modalCard: {
+    backgroundColor: stylesVars.cardBg,
+    borderRadius: 18,
+    overflow: "hidden",
+    maxHeight: "88%",
+  },
+
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: stylesVars.border,
+  },
+
+  modalTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: stylesVars.text,
+  },
+
+  modalCloseBtn: {
+    minHeight: 30,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  modalCloseText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: stylesVars.blue,
+  },
+
+  zoomScrollContent: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  zoomGuideImage: {
+    width: 900,
+    height: 1400,
   },
 });
