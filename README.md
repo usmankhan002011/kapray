@@ -128,6 +128,9 @@ kapray
 │   │   │   ├── purchase
 │   │   │   │   ├── _layout.tsx
 │   │   │   │   ├── cart.tsx
+│   │   │   │   ├── exact-measurements.modal.tsx
+│   │   │   │   ├── exact-measurements.sheet.tsx
+│   │   │   │   ├── exact-measurements.tsx
 │   │   │   │   ├── payment.tsx
 │   │   │   │   ├── place-order.tsx
 │   │   │   │   └── size.tsx
@@ -327,8 +330,7 @@ kapray
 │   │       ├── resham.png
 │   │       └── sozni.jpg
 │   ├── body measurement chart.jpg
-│   ├── filter funnel emoji.jpg
-│   └── sizes outline.jpg
+│   └── filter funnel emoji.jpg
 ├── components
 │   ├── product
 │   │   ├── view-product
@@ -417,7 +419,7 @@ kapray
 ├── tree-app.txt
 └── tsconfig.json
 PS C:\DEV\kapray\kapray>
-as on 30Mar26
+as on 4apr26
 
 -------------------------------------------------------------------------------------------------------------
 strategy

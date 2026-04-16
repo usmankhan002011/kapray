@@ -8,9 +8,9 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  View
+  View,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { useAppSelector } from "@/store/hooks";
 
@@ -24,6 +24,8 @@ type ProductRow = {
   product_code: string | null;
   title: string | null;
   created_at?: string | null;
+  inventory_qty?: number | null;
+  made_on_order?: boolean | null;
   media?: any;
   banner_url?: string | null;
 };
@@ -88,7 +90,9 @@ export default function VendorProductsScreen() {
 
       const { data, error } = await supabase
         .from(PRODUCTS_TABLE)
-        .select("id, product_code, title, created_at, media")
+        .select(
+          "id, product_code, title, created_at, inventory_qty, made_on_order, media",
+        )
         .eq("vendor_id", vendorId)
         .order("created_at", { ascending: false })
         .range(0, PAGE_SIZE - 1);
@@ -103,7 +107,7 @@ export default function VendorProductsScreen() {
         const imgPath = firstImagePath((r as any).media);
         return {
           ...r,
-          banner_url: publicUrlForStoragePath(imgPath)
+          banner_url: publicUrlForStoragePath(imgPath),
         };
       });
 
@@ -129,7 +133,9 @@ export default function VendorProductsScreen() {
 
       const { data, error } = await supabase
         .from(PRODUCTS_TABLE)
-        .select("id, product_code, title, created_at, media")
+        .select(
+          "id, product_code, title, created_at, inventory_qty, made_on_order, media",
+        )
         .eq("vendor_id", vendorId)
         .order("created_at", { ascending: false })
         .range(from, to);
@@ -144,7 +150,7 @@ export default function VendorProductsScreen() {
         const imgPath = firstImagePath((r as any).media);
         return {
           ...r,
-          banner_url: publicUrlForStoragePath(imgPath)
+          banner_url: publicUrlForStoragePath(imgPath),
         };
       });
 
@@ -162,12 +168,13 @@ export default function VendorProductsScreen() {
     }
   }
 
-  useEffect(() => {
-    setProducts([]);
-    setHasMore(true);
-    if (vendorId) fetchProductsReset();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vendorId]);
+  useFocusEffect(
+    React.useCallback(() => {
+      if (vendorId) {
+        void fetchProductsReset();
+      }
+    }, [vendorId]),
+  );
 
   // If we returned here with a new product_id, fetch and insert it at the top immediately
   useEffect(() => {
@@ -181,7 +188,9 @@ export default function VendorProductsScreen() {
       try {
         const { data, error } = await supabase
           .from(PRODUCTS_TABLE)
-          .select("id, product_code, title, created_at, media")
+          .select(
+            "id, product_code, title, created_at, inventory_qty, made_on_order, media",
+          )
           .eq("id", newId)
           .eq("vendor_id", vendorId)
           .single();
@@ -218,8 +227,8 @@ export default function VendorProductsScreen() {
         onPress={() =>
           router.push(
             `/vendor/profile/view-product?product_id=${encodeURIComponent(
-              item.id
-            )}` as any
+              item.id,
+            )}` as any,
           )
         }
       >
@@ -238,6 +247,32 @@ export default function VendorProductsScreen() {
           <Text style={styles.itemTitle} numberOfLines={1}>
             {title}
           </Text>
+
+          <Text
+            style={{
+              marginTop: 2,
+              fontSize: 12,
+              color: "#64748B",
+              fontWeight: "600",
+            }}
+          >
+            {item?.made_on_order
+              ? "Made on order"
+              : `Qty: ${Math.max(0, Number(item?.inventory_qty ?? 0))}`}
+          </Text>
+
+          {!item?.made_on_order && Number(item?.inventory_qty ?? 0) <= 0 ? (
+            <Text
+              style={{
+                marginTop: 2,
+                fontSize: 12,
+                color: "#B91C1C",
+                fontWeight: "700",
+              }}
+            >
+              Out of stock
+            </Text>
+          ) : null}
         </View>
 
         <Text style={styles.itemArrow}>›</Text>
@@ -269,13 +304,15 @@ export default function VendorProductsScreen() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.meta}>Add products & manage inventory here.</Text>
+            <Text style={styles.meta}>
+              Add products & manage inventory here.
+            </Text>
 
             <View style={styles.btnRow}>
               <Pressable
                 style={({ pressed }) => [
                   styles.primaryBtn,
-                  pressed ? styles.pressed : null
+                  pressed ? styles.pressed : null,
                 ]}
                 onPress={() => router.push("/vendor/profile/add-product")}
               >
@@ -285,7 +322,7 @@ export default function VendorProductsScreen() {
               <Pressable
                 style={({ pressed }) => [
                   styles.secondaryBtn,
-                  pressed ? styles.pressed : null
+                  pressed ? styles.pressed : null,
                 ]}
                 onPress={() => router.push("/vendor/profile/update-product")}
               >
@@ -329,7 +366,7 @@ export default function VendorProductsScreen() {
                 onPress={fetchMore}
                 style={({ pressed }) => [
                   styles.loadMoreBtn,
-                  pressed ? styles.pressed : null
+                  pressed ? styles.pressed : null,
                 ]}
               >
                 <Text style={styles.loadMoreText}>Load more</Text>
@@ -363,37 +400,37 @@ const stylesVars = {
   overlayDark: "rgba(0,0,0,0.58)",
   overlaySoft: "rgba(255,255,255,0.14)",
   white: "#FFFFFF",
-  black: "#000000"
+  black: "#000000",
 };
 
 const styles = StyleSheet.create({
   content: {
     padding: 16,
     paddingBottom: 24,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
   topBar: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    gap: 12
+    gap: 12,
   },
 
   title: {
     fontSize: 18,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   refresh: {
     fontSize: 14,
     fontWeight: "700",
-    color: stylesVars.blue
+    color: stylesVars.blue,
   },
 
   disabledText: {
-    opacity: 0.6
+    opacity: 0.6,
   },
 
   card: {
@@ -402,7 +439,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
-    padding: 18
+    padding: 18,
   },
 
   meta: {
@@ -410,12 +447,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   btnRow: {
     marginTop: 14,
-    gap: 10
+    gap: 10,
   },
 
   primaryBtn: {
@@ -425,13 +462,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     backgroundColor: stylesVars.blue,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   primaryText: {
     color: stylesVars.white,
     fontWeight: "700",
-    fontSize: 14
+    fontSize: 14,
   },
 
   secondaryBtn: {
@@ -443,20 +480,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D7E3FF",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   secondaryText: {
     color: stylesVars.blue,
     fontWeight: "700",
-    fontSize: 14
+    fontSize: 14,
   },
 
   section: {
     marginTop: 18,
     fontSize: 15,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   listCard: {
@@ -465,7 +502,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
-    padding: 18
+    padding: 18,
   },
 
   item: {
@@ -478,7 +515,7 @@ const styles = StyleSheet.create({
     backgroundColor: stylesVars.cardBg,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
   },
 
   thumbWrap: {
@@ -488,35 +525,35 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: "#F1F5F9",
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: stylesVars.border,
   },
 
   thumb: {
     width: 54,
-    height: 54
+    height: 54,
   },
 
   thumbFallback: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   thumbFallbackText: {
     color: stylesVars.mutedText,
     fontWeight: "600",
-    fontSize: 10
+    fontSize: 10,
   },
 
   itemMid: {
     flex: 1,
-    paddingHorizontal: 10
+    paddingHorizontal: 10,
   },
 
   itemCode: {
     fontSize: 12,
     fontWeight: "700",
-    color: stylesVars.blue
+    color: stylesVars.blue,
   },
 
   itemTitle: {
@@ -524,38 +561,38 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "500",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   itemArrow: {
     fontSize: 22,
     fontWeight: "700",
-    color: stylesVars.subText
+    color: stylesVars.subText,
   },
 
   empty: {
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   loadingRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingVertical: 6
+    paddingVertical: 6,
   },
 
   loadingText: {
     fontSize: 13,
     color: stylesVars.mutedText,
-    fontWeight: "600"
+    fontWeight: "600",
   },
 
   footer: {
     paddingTop: 8,
-    paddingBottom: 10
+    paddingBottom: 10,
   },
 
   loadMoreBtn: {
@@ -568,13 +605,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D7E3FF",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   loadMoreText: {
     color: stylesVars.blue,
     fontWeight: "700",
-    fontSize: 14
+    fontSize: 14,
   },
 
   endText: {
@@ -583,10 +620,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   pressed: {
-    opacity: 0.82
-  }
+    opacity: 0.82,
+  },
 });

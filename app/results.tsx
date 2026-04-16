@@ -9,7 +9,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  View
+  View,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
@@ -33,6 +33,7 @@ type ProductRow = {
   product_code?: string | null;
   title?: string | null;
   created_at?: string | null;
+  inventory_qty?: number | null;
   made_on_order?: boolean;
   product_category?:
     | "unstitched_plain"
@@ -67,9 +68,7 @@ function safeText(v: any) {
 
 function normalizeIds(arr: any): string[] {
   if (!Array.isArray(arr)) return [];
-  return arr
-    .map((x) => String(x ?? "").trim())
-    .filter((x) => x.length > 0);
+  return arr.map((x) => String(x ?? "").trim()).filter((x) => x.length > 0);
 }
 
 // empty selection => ANY (pass)
@@ -132,7 +131,8 @@ function formatPrice(price: any): string {
   }
 
   if (typeof total === "number") return `PKR ${total.toLocaleString()}`;
-  if (typeof perMeter === "number") return `PKR ${perMeter.toLocaleString()} / meter`;
+  if (typeof perMeter === "number")
+    return `PKR ${perMeter.toLocaleString()} / meter`;
 
   return "Price not set";
 }
@@ -156,7 +156,11 @@ function idsToNames(ids: string[], map: Map<string, string>): string[] {
 }
 
 // ✅ if user selected IDs but names not loaded yet, show Loading… (not Any)
-function namesOrLoading(label: string, selectedIds: any[], names: string[]): string {
+function namesOrLoading(
+  label: string,
+  selectedIds: any[],
+  names: string[],
+): string {
   const hasSelection = Array.isArray(selectedIds) && selectedIds.length > 0;
   if (!hasSelection) return `${label}: Any`;
   if (!names.length) return `${label}: Loading…`;
@@ -167,10 +171,15 @@ function formatPKR(n: number) {
   return `PKR ${Math.round(n).toLocaleString()}`;
 }
 
-function priceRangeSummary(minCostPkr: number | null, maxCostPkr: number | null) {
+function priceRangeSummary(
+  minCostPkr: number | null,
+  maxCostPkr: number | null,
+) {
   if (minCostPkr === null && maxCostPkr === null) return "Price: Any";
-  if (minCostPkr !== null && maxCostPkr === null) return `Price: ${formatPKR(minCostPkr)}+`;
-  if (minCostPkr === null && maxCostPkr !== null) return `Price: Up to ${formatPKR(maxCostPkr)}`;
+  if (minCostPkr !== null && maxCostPkr === null)
+    return `Price: ${formatPKR(minCostPkr)}+`;
+  if (minCostPkr === null && maxCostPkr !== null)
+    return `Price: Up to ${formatPKR(maxCostPkr)}`;
   return `Price: ${formatPKR(minCostPkr as number)} – ${formatPKR(maxCostPkr as number)}`;
 }
 
@@ -201,24 +210,38 @@ export default function ResultsScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(RESULTS_CACHE?.hasMore ?? true);
 
-  const [products, setProducts] = useState<ProductRow[]>(RESULTS_CACHE?.products ?? []);
+  const [products, setProducts] = useState<ProductRow[]>(
+    RESULTS_CACHE?.products ?? [],
+  );
 
   // lookups (names only)
-  const [dressTypes, setDressTypes] = useState<NameRow[]>(RESULTS_CACHE?.dressTypes ?? []);
-  const [fabricTypes, setFabricTypes] = useState<NameRow[]>(RESULTS_CACHE?.fabricTypes ?? []);
-  const [workTypes, setWorkTypes] = useState<NameRow[]>(RESULTS_CACHE?.workTypes ?? []);
-  const [workDensities, setWorkDensities] = useState<NameRow[]>(
-    RESULTS_CACHE?.workDensities ?? []
+  const [dressTypes, setDressTypes] = useState<NameRow[]>(
+    RESULTS_CACHE?.dressTypes ?? [],
   );
-  const [originCities, setOriginCities] = useState<NameRow[]>(RESULTS_CACHE?.originCities ?? []);
-  const [wearStates, setWearStates] = useState<NameRow[]>(RESULTS_CACHE?.wearStates ?? []);
+  const [fabricTypes, setFabricTypes] = useState<NameRow[]>(
+    RESULTS_CACHE?.fabricTypes ?? [],
+  );
+  const [workTypes, setWorkTypes] = useState<NameRow[]>(
+    RESULTS_CACHE?.workTypes ?? [],
+  );
+  const [workDensities, setWorkDensities] = useState<NameRow[]>(
+    RESULTS_CACHE?.workDensities ?? [],
+  );
+  const [originCities, setOriginCities] = useState<NameRow[]>(
+    RESULTS_CACHE?.originCities ?? [],
+  );
+  const [wearStates, setWearStates] = useState<NameRow[]>(
+    RESULTS_CACHE?.wearStates ?? [],
+  );
 
   // ✅ local favourites (heart turns red). No DB yet.
   const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
 
   // ✅ sort (default: cost ascending)
   const [sortOpen, setSortOpen] = useState(false);
-  const [sortMode, setSortMode] = useState<"cost_asc" | "cost_desc" | "date">("cost_asc");
+  const [sortMode, setSortMode] = useState<"cost_asc" | "cost_desc" | "date">(
+    "cost_asc",
+  );
 
   function toggleFavorite(productId: number) {
     setFavoriteIds((prev) => {
@@ -233,7 +256,7 @@ export default function ResultsScreen() {
     return supabase
       .from(PRODUCTS_TABLE)
       .select(
-        "id, vendor_id, product_code, title, created_at, made_on_order, product_category, spec, price, media"
+        "id, vendor_id, product_code, title, created_at, inventory_qty, made_on_order, product_category, spec, price, media",
       )
       .order("created_at", { ascending: false })
       .range(from, to);
@@ -256,16 +279,22 @@ export default function ResultsScreen() {
           workRes,
           densityRes,
           originRes,
-          wearRes
+          wearRes,
         ] = await Promise.all([
           fetchPage(0, PAGE_SIZE - 1),
 
-          (supabase as any).from(TABLE_DRESS_TYPE).select("id, name").order("id", { ascending: true }),
+          (supabase as any)
+            .from(TABLE_DRESS_TYPE)
+            .select("id, name")
+            .order("id", { ascending: true }),
           supabase
             .from(TABLE_FABRIC_TYPES)
             .select("id, name")
             .order("sort_order", { ascending: true }),
-          supabase.from(TABLE_WORK_TYPES).select("id, name").order("name", { ascending: true }),
+          supabase
+            .from(TABLE_WORK_TYPES)
+            .select("id, name")
+            .order("name", { ascending: true }),
           supabase
             .from(TABLE_WORK_DENSITIES)
             .select("id, name")
@@ -274,7 +303,10 @@ export default function ResultsScreen() {
             .from(TABLE_ORIGIN_CITIES)
             .select("id, name")
             .order("name", { ascending: true }),
-          supabase.from(TABLE_WEAR_STATES).select("id, name").order("name", { ascending: true })
+          supabase
+            .from(TABLE_WEAR_STATES)
+            .select("id, name")
+            .order("name", { ascending: true }),
         ]);
 
         if (!alive) return;
@@ -292,14 +324,15 @@ export default function ResultsScreen() {
             workDensities: (((densityRes as any).data as any) ?? []) as any,
             originCities: (((originRes as any).data as any) ?? []) as any,
             wearStates: (((wearRes as any).data as any) ?? []) as any,
-            hasMore: false
+            hasMore: false,
           };
-                } else {
+        } else {
           const rows = (((prodRes as any).data as any) ?? []) as ProductRow[];
           const nextDress = (((dressRes as any).data as any) ?? []) as any[];
           const nextFabric = (((fabricRes as any).data as any) ?? []) as any[];
           const nextWork = (((workRes as any).data as any) ?? []) as any[];
-          const nextDensity = (((densityRes as any).data as any) ?? []) as any[];
+          const nextDensity = (((densityRes as any).data as any) ??
+            []) as any[];
           const nextOrigin = (((originRes as any).data as any) ?? []) as any[];
           const nextWear = (((wearRes as any).data as any) ?? []) as any[];
           const nextHasMore = rows.length === PAGE_SIZE;
@@ -323,7 +356,7 @@ export default function ResultsScreen() {
             workDensities: nextDensity,
             originCities: nextOrigin,
             wearStates: nextWear,
-            hasMore: nextHasMore
+            hasMore: nextHasMore,
           };
         }
 
@@ -395,7 +428,7 @@ export default function ResultsScreen() {
           RESULTS_CACHE = {
             ...RESULTS_CACHE,
             products: next,
-            hasMore: rows.length === PAGE_SIZE
+            hasMore: rows.length === PAGE_SIZE,
           };
         } else {
           RESULTS_CACHE = {
@@ -406,7 +439,7 @@ export default function ResultsScreen() {
             workDensities,
             originCities,
             wearStates,
-            hasMore: rows.length === PAGE_SIZE
+            hasMore: rows.length === PAGE_SIZE,
           };
         }
 
@@ -423,7 +456,10 @@ export default function ResultsScreen() {
   const dressMap = useMemo(() => buildNameMap(dressTypes), [dressTypes]);
   const fabricMap = useMemo(() => buildNameMap(fabricTypes), [fabricTypes]);
   const workMap = useMemo(() => buildNameMap(workTypes), [workTypes]);
-  const densityMap = useMemo(() => buildNameMap(workDensities), [workDensities]);
+  const densityMap = useMemo(
+    () => buildNameMap(workDensities),
+    [workDensities],
+  );
   const originMap = useMemo(() => buildNameMap(originCities), [originCities]);
   const wearMap = useMemo(() => buildNameMap(wearStates), [wearStates]);
 
@@ -432,10 +468,17 @@ export default function ResultsScreen() {
       const spec = p?.spec ?? {};
       const price = p?.price ?? {};
 
+      const madeOnOrder = Boolean(p?.made_on_order);
+      const inventoryQty = Number(p?.inventory_qty ?? 0);
+
+      if (!madeOnOrder && inventoryQty <= 0) return false;
+
       // ✅ vendor filter (multi-select). Empty => ANY
       if (vendorIds.length) {
         const vid =
-          p?.vendor_id === null || p?.vendor_id === undefined ? "" : String(p.vendor_id);
+          p?.vendor_id === null || p?.vendor_id === undefined
+            ? ""
+            : String(p.vendor_id);
         if (!vid || !vendorIds.includes(vid)) return false;
       }
 
@@ -471,7 +514,7 @@ export default function ResultsScreen() {
     originCityIds,
     wearStateIds,
     minCostPkr,
-    maxCostPkr
+    maxCostPkr,
   ]);
 
   // ✅ apply sort (cost asc/desc or date)
@@ -529,7 +572,9 @@ export default function ResultsScreen() {
     const wearNames = idsToNames(wearStateIds, wearMap);
 
     // colors are already names in Redux/spec
-    const colorNames = (colorShadeIds ?? []).map((x) => String(x).trim()).filter((x) => x.length > 0);
+    const colorNames = (colorShadeIds ?? [])
+      .map((x) => String(x).trim())
+      .filter((x) => x.length > 0);
 
     return [
       namesOrLoading("Dress", dressTypeIds, dressNames),
@@ -539,7 +584,7 @@ export default function ResultsScreen() {
       namesOrLoading("Density", workDensityIds, densityNames),
       namesOrLoading("Origin", originCityIds, originNames),
       namesOrLoading("Wear", wearStateIds, wearNames),
-      priceRangeSummary(minCostPkr, maxCostPkr)
+      priceRangeSummary(minCostPkr, maxCostPkr),
     ].join("  |  ");
   }, [
     dressTypeIds,
@@ -556,7 +601,7 @@ export default function ResultsScreen() {
     wearStateIds,
     wearMap,
     minCostPkr,
-    maxCostPkr
+    maxCostPkr,
   ]);
 
   function openProduct(p: ProductRow) {
@@ -585,29 +630,38 @@ export default function ResultsScreen() {
         <View style={styles.topActions}>
           <Pressable
             onPress={() => setSortOpen(true)}
-            style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
+            style={({ pressed }) => [
+              styles.iconBtn,
+              pressed ? { opacity: 0.7 } : null,
+            ]}
           >
             <Text style={styles.iconText}>↕️</Text>
           </Pressable>
 
           <Pressable
             onPress={() =>
-            router.push({
-              pathname: "/flow/results-filters" as any,
-            })
-          }
-            style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
+              router.push({
+                pathname: "/flow/results-filters" as any,
+              })
+            }
+            style={({ pressed }) => [
+              styles.iconBtn,
+              pressed ? { opacity: 0.7 } : null,
+            ]}
           >
             <Text style={styles.iconText}>🔍</Text>
           </Pressable>
 
           <Pressable
             onPress={() =>
-            router.push({
-              pathname: "/flow/orders/track" as any,
-            })
-          }
-            style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
+              router.push({
+                pathname: "/flow/orders/track" as any,
+              })
+            }
+            style={({ pressed }) => [
+              styles.iconBtn,
+              pressed ? { opacity: 0.7 } : null,
+            ]}
           >
             <Text style={styles.iconText}>📦</Text>
           </Pressable>
@@ -628,12 +682,18 @@ export default function ResultsScreen() {
         animationType="fade"
         onRequestClose={() => setSortOpen(false)}
       >
-        <Pressable style={styles.modalBackdrop} onPress={() => setSortOpen(false)}>
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setSortOpen(false)}
+        >
           <Pressable style={styles.modalCard} onPress={() => {}}>
             <Text style={styles.modalTitle}>Sort</Text>
 
             <Pressable
-              style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
+              style={({ pressed }) => [
+                styles.modalItem,
+                pressed ? { opacity: 0.7 } : null,
+              ]}
               onPress={() => {
                 setSortMode("cost_asc");
                 setSortOpen(false);
@@ -646,13 +706,18 @@ export default function ResultsScreen() {
                   <Text style={styles.modalItemSub}>Low to high</Text>
                 </View>
               </View>
-              <Text style={styles.modalRight}>{sortMode === "cost_asc" ? "✅" : ""}</Text>
+              <Text style={styles.modalRight}>
+                {sortMode === "cost_asc" ? "✅" : ""}
+              </Text>
             </Pressable>
 
             <View style={styles.divider} />
 
             <Pressable
-              style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
+              style={({ pressed }) => [
+                styles.modalItem,
+                pressed ? { opacity: 0.7 } : null,
+              ]}
               onPress={() => {
                 setSortMode("cost_desc");
                 setSortOpen(false);
@@ -665,13 +730,18 @@ export default function ResultsScreen() {
                   <Text style={styles.modalItemSub}>High to low</Text>
                 </View>
               </View>
-              <Text style={styles.modalRight}>{sortMode === "cost_desc" ? "✅" : ""}</Text>
+              <Text style={styles.modalRight}>
+                {sortMode === "cost_desc" ? "✅" : ""}
+              </Text>
             </Pressable>
 
             <View style={styles.divider} />
 
             <Pressable
-              style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
+              style={({ pressed }) => [
+                styles.modalItem,
+                pressed ? { opacity: 0.7 } : null,
+              ]}
               onPress={() => {
                 setSortMode("date");
                 setSortOpen(false);
@@ -684,18 +754,23 @@ export default function ResultsScreen() {
                   <Text style={styles.modalItemSub}>Newest first</Text>
                 </View>
               </View>
-              <Text style={styles.modalRight}>{sortMode === "date" ? "✅" : ""}</Text>
+              <Text style={styles.modalRight}>
+                {sortMode === "date" ? "✅" : ""}
+              </Text>
             </Pressable>
 
             <View style={styles.divider} />
 
             <Pressable
-              style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
+              style={({ pressed }) => [
+                styles.modalItem,
+                pressed ? { opacity: 0.7 } : null,
+              ]}
               onPress={() => {
                 setSortOpen(false);
                 Alert.alert(
                   "Coming soon",
-                  "⭐ Sort by vendor rating is a feature coming soon."
+                  "⭐ Sort by vendor rating is a feature coming soon.",
                 );
               }}
             >
@@ -709,7 +784,10 @@ export default function ResultsScreen() {
               <Text style={styles.soonPill}>Soon</Text>
             </Pressable>
 
-            <Pressable style={styles.modalCloseBtn} onPress={() => setSortOpen(false)}>
+            <Pressable
+              style={styles.modalCloseBtn}
+              onPress={() => setSortOpen(false)}
+            >
               <Text style={styles.modalCloseText}>Close</Text>
             </Pressable>
           </Pressable>
@@ -718,7 +796,9 @@ export default function ResultsScreen() {
 
       {sorted.length === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.emptyTitle}>No matching products (loaded so far)</Text>
+          <Text style={styles.emptyTitle}>
+            No matching products (loaded so far)
+          </Text>
           <Text style={styles.muted}>
             Tip: press “Load more” to search more products, or broaden filters.
           </Text>
@@ -770,7 +850,8 @@ export default function ResultsScreen() {
                           : "Unstitched"}
                       </Text>
 
-                      {item?.product_category === "unstitched_dyeing_tailoring" ? (
+                      {item?.product_category ===
+                      "unstitched_dyeing_tailoring" ? (
                         <Text style={styles.cardSub} numberOfLines={1}>
                           Tailoring available
                         </Text>
@@ -781,12 +862,23 @@ export default function ResultsScreen() {
                           Dyeing available
                         </Text>
                       ) : null}
+
+                      <Text style={styles.cardSub} numberOfLines={1}>
+                        In Stock:{" "}
+                        {Math.max(0, Number(item?.inventory_qty ?? 0))}
+                      </Text>
                     </>
                   )}
                 </View>
+
                 <View style={styles.actionRow}>
-                  <Pressable onPress={() => toggleFavorite(item.id)} style={styles.actionBtn}>
-                    <Text style={[styles.actionText, isFav ? styles.heartOn : null]}>
+                  <Pressable
+                    onPress={() => toggleFavorite(item.id)}
+                    style={styles.actionBtn}
+                  >
+                    <Text
+                      style={[styles.actionText, isFav ? styles.heartOn : null]}
+                    >
                       {isFav ? "❤️" : "🤍"}
                     </Text>
                   </Pressable>
@@ -833,13 +925,13 @@ const stylesVars = {
   overlayDark: "rgba(0,0,0,0.58)",
   overlaySoft: "rgba(255,255,255,0.14)",
   white: "#FFFFFF",
-  black: "#000000"
+  black: "#000000",
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
   topRow: {
@@ -849,13 +941,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12
+    gap: 12,
   },
 
   link: {
     fontSize: 14,
     color: stylesVars.blue,
-    fontWeight: "700"
+    fontWeight: "700",
   },
 
   title: {
@@ -864,13 +956,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     color: stylesVars.text,
-    paddingHorizontal: 10
+    paddingHorizontal: 10,
   },
 
   topActions: {
     flexDirection: "row",
     gap: 8,
-    alignItems: "center"
+    alignItems: "center",
   },
 
   iconBtn: {
@@ -881,31 +973,31 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: "#D7E3FF"
+    borderColor: "#D7E3FF",
   },
 
   iconText: {
     fontSize: 15,
     fontWeight: "700",
-    color: stylesVars.blue
+    color: stylesVars.blue,
   },
 
   summaryBar: {
     paddingHorizontal: 16,
-    paddingBottom: 10
+    paddingBottom: 10,
   },
 
   summaryText: {
     fontSize: 12,
     color: stylesVars.mutedText,
-    fontWeight: "600"
+    fontWeight: "600",
   },
 
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.55)",
     padding: 20,
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   modalCard: {
@@ -913,7 +1005,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: stylesVars.border,
   },
 
   modalTitle: {
@@ -922,7 +1014,7 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     fontSize: 18,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   modalItem: {
@@ -930,41 +1022,41 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
   },
 
   modalLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10
+    gap: 10,
   },
 
   modalEmoji: {
-    fontSize: 18
+    fontSize: 18,
   },
 
   modalItemTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   modalItemSub: {
     fontSize: 12,
     fontWeight: "500",
     color: stylesVars.mutedText,
-    marginTop: 2
+    marginTop: 2,
   },
 
   modalRight: {
     fontSize: 14,
     fontWeight: "700",
-    color: stylesVars.blue
+    color: stylesVars.blue,
   },
 
   divider: {
     height: 1,
-    backgroundColor: stylesVars.border
+    backgroundColor: stylesVars.border,
   },
 
   soonPill: {
@@ -976,7 +1068,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: "#D7E3FF"
+    borderColor: "#D7E3FF",
   },
 
   modalCloseBtn: {
@@ -988,38 +1080,38 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: "#D7E3FF"
+    borderColor: "#D7E3FF",
   },
 
   modalCloseText: {
     color: stylesVars.blue,
     fontWeight: "700",
-    fontSize: 14
+    fontSize: 14,
   },
 
   center: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 20
+    padding: 20,
   },
 
   loadingScreen: {
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
   emptyTitle: {
     fontSize: 18,
     fontWeight: "700",
     color: stylesVars.text,
-    marginBottom: 8
+    marginBottom: 8,
   },
 
   muted: {
     fontSize: 14,
     lineHeight: 20,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   card: {
@@ -1029,13 +1121,13 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: "hidden",
     backgroundColor: stylesVars.cardBg,
-    marginBottom: 10
+    marginBottom: 10,
   },
 
   image: {
     width: "100%",
     height: 140,
-    backgroundColor: "#F1F5F9"
+    backgroundColor: "#F1F5F9",
   },
 
   imagePlaceholder: {
@@ -1043,7 +1135,7 @@ const styles = StyleSheet.create({
     height: 140,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F1F5F9"
+    backgroundColor: "#F1F5F9",
   },
 
   cardTitle: {
@@ -1051,7 +1143,7 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     fontSize: 15,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   cardPrice: {
@@ -1059,7 +1151,7 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     fontSize: 13,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   cardSub: {
@@ -1069,7 +1161,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 14,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   actionRow: {
@@ -1077,28 +1169,28 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-start"
+    justifyContent: "flex-start",
   },
 
   actionBtn: {
-    flex: 1
+    flex: 1,
   },
 
   actionText: {
     fontSize: 13,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   heartOn: {
-    color: "#D11A2A"
+    color: "#D11A2A",
   },
 
   loadingRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingVertical: 10
+    paddingVertical: 10,
   },
 
   loadMoreBtn: {
@@ -1111,13 +1203,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D7E3FF",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   loadMoreText: {
     color: stylesVars.blue,
     fontWeight: "700",
-    fontSize: 14
+    fontSize: 14,
   },
 
   endText: {
@@ -1126,6 +1218,6 @@ const styles = StyleSheet.create({
     color: stylesVars.mutedText,
     fontWeight: "500",
     fontSize: 13,
-    lineHeight: 18
-  }
+    lineHeight: 18,
+  },
 });

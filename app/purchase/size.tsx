@@ -1,59 +1,12 @@
 import React, { useMemo, useState } from "react";
-import {
-  Image,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import ExactMeasurementsModal from "../(tabs)/flow/purchase/exact-measurements-modal";
+import type { ExactMeasurementSheetRow } from "../(tabs)/flow/purchase/exact-measurements-sheet";
 
 const STANDARD_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"] as const;
 
-type Mode = "standard" | "exact";
 type Unit = "cm" | "in";
-
-type MeasureKey =
-  | "m1"
-  | "m2"
-  | "m3"
-  | "m4"
-  | "m5"
-  | "m6"
-  | "m7"
-  | "m8"
-  | "m9"
-  | "m10"
-  | "m11"
-  | "m12"
-  | "m13"
-  | "m14"
-  | "m15"
-  | "m16"
-  | "m17";
-
-const MEASURE_LABELS: Record<MeasureKey, { code: string; title: string; hint: string }> = {
-  m1: { code: "1", title: "Neck", hint: "Neck" },
-  m2: { code: "2", title: "Across front", hint: "Across front" },
-  m3: { code: "3", title: "Bust", hint: "Bust" },
-  m4: { code: "4", title: "Under bust", hint: "Under bust" },
-  m5: { code: "5", title: "Waist", hint: "Waist" },
-  m6: { code: "6", title: "Hips", hint: "Hips" },
-  m7: { code: "7", title: "Thigh", hint: "Thigh" },
-  m8: { code: "8", title: "Upper arm", hint: "Upper arm" },
-  m9: { code: "9", title: "Elbow", hint: "Elbow" },
-  m10: { code: "10", title: "Wrist", hint: "Wrist" },
-  m11: { code: "11", title: "Shoulder to waist", hint: "Shoulder to waist" },
-  m12: { code: "12", title: "Shoulder to floor", hint: "Shoulder to floor" },
-  m13: { code: "13", title: "Shoulder to shoulder", hint: "Shoulder width" },
-  m14: { code: "14", title: "Back neck to waist", hint: "Back neck to waist" },
-  m15: { code: "15", title: "Across back", hint: "Across back" },
-  m16: { code: "16", title: "Inner arm length", hint: "Armhole to wrist" },
-  m17: { code: "17", title: "Ankle", hint: "Ankle" },
-};
 
 const stylesVars = {
   bg: "#F8FAFC",
@@ -68,6 +21,8 @@ const stylesVars = {
   placeholder: "#94A3B8",
   danger: "#B91C1C",
   white: "#FFFFFF",
+  green: "#065F46",
+  greenSoft: "#ECFDF5",
 };
 
 function norm(v: unknown) {
@@ -116,34 +71,6 @@ function isUnstitchedCategory(v: unknown) {
 function getFabricLengthFromSize(size: string, sizeMap: Record<string, unknown>) {
   if (!size) return 0;
   return safePositiveNumber(sizeMap?.[size]);
-}
-
-function BodyMeasurePhoto({
-  onOpen,
-}: {
-  onOpen: () => void;
-}) {
-  return (
-    <View style={styles.svgCard}>
-      <View style={styles.guideHeaderRow}>
-        <Text style={styles.svgTitle}>Measurement Guide</Text>
-
-        <Pressable onPress={onOpen} style={styles.zoomBtn}>
-          <Text style={styles.zoomBtnText}>Zoom</Text>
-        </Pressable>
-      </View>
-
-      <Pressable onPress={onOpen}>
-        <Image
-          source={require("../../assets/body measurement chart.jpg")}
-          style={styles.measureGuideImage}
-          resizeMode="contain"
-        />
-      </Pressable>
-
-      <Text style={styles.guideHint}>Tap image to open larger view</Text>
-    </View>
-  );
 }
 
 export default function SizeScreen() {
@@ -216,9 +143,18 @@ export default function SizeScreen() {
     m15?: string;
     m16?: string;
     m17?: string;
+
+    custom_label_1?: string;
+    custom_value_1?: string;
+    custom_label_2?: string;
+    custom_value_2?: string;
+    custom_label_3?: string;
+    custom_value_3?: string;
+    custom_label_4?: string;
+    custom_value_4?: string;
   }>();
 
-  const [guideOpen, setGuideOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
   const returnTo = useMemo(
     () => (params.returnTo ? String(params.returnTo) : "/purchase/place-order"),
@@ -258,38 +194,10 @@ export default function SizeScreen() {
     return order.filter((size) => getFabricLengthFromSize(size, sizeLengthMap) > 0);
   }, [sizeLengthMap]);
 
-  const initialMode: Mode = useMemo(() => {
-    const m = norm(params.mode);
-    return m === "exact" ? "exact" : "standard";
-  }, [params.mode]);
-
-  const [mode, setMode] = useState<Mode>(initialMode);
-
-  const initialUnit: Unit = useMemo(() => {
+  const unit = useMemo<Unit>(() => {
     const u = norm(params.unit).toLowerCase();
     return u === "in" ? "in" : "cm";
   }, [params.unit]);
-
-  const [unit, setUnit] = useState<Unit>(initialUnit);
-  const unitSuffix = useMemo(() => (unit === "in" ? " (inch)" : " (cm)"), [unit]);
-
-  const [m1, setM1] = useState<string>(norm(params.m1));
-  const [m2, setM2] = useState<string>(norm(params.m2));
-  const [m3, setM3] = useState<string>(norm(params.m3));
-  const [m4, setM4] = useState<string>(norm(params.m4));
-  const [m5, setM5] = useState<string>(norm(params.m5));
-  const [m6, setM6] = useState<string>(norm(params.m6));
-  const [m7, setM7] = useState<string>(norm(params.m7));
-  const [m8, setM8] = useState<string>(norm(params.m8));
-  const [m9, setM9] = useState<string>(norm(params.m9));
-  const [m10, setM10] = useState<string>(norm(params.m10));
-  const [m11, setM11] = useState<string>(norm(params.m11));
-  const [m12, setM12] = useState<string>(norm(params.m12));
-  const [m13, setM13] = useState<string>(norm(params.m13));
-  const [m14, setM14] = useState<string>(norm(params.m14));
-  const [m15, setM15] = useState<string>(norm(params.m15));
-  const [m16, setM16] = useState<string>(norm(params.m16));
-  const [m17, setM17] = useState<string>(norm(params.m17));
 
   const selectedStandardSize = useMemo(
     () => safeDecode(params.selected_unstitched_size || params.selectedSize),
@@ -309,34 +217,133 @@ export default function SizeScreen() {
     [params.fabric_cost_pkr],
   );
 
-  const isValidNumberOrEmpty = (v: string) => {
-    if (!v.trim()) return true;
-    const num = Number(v);
-    return Number.isFinite(num) && num > 0;
-  };
+  const exactValues = useMemo(
+    () => [
+      norm(params.m1),
+      norm(params.m2),
+      norm(params.m3),
+      norm(params.m4),
+      norm(params.m5),
+      norm(params.m6),
+      norm(params.m7),
+      norm(params.m8),
+      norm(params.m9),
+      norm(params.m10),
+      norm(params.m11),
+      norm(params.m12),
+      norm(params.m13),
+      norm(params.m14),
+      norm(params.m15),
+      norm(params.m16),
+      norm(params.m17),
+    ],
+    [
+      params.m1,
+      params.m2,
+      params.m3,
+      params.m4,
+      params.m5,
+      params.m6,
+      params.m7,
+      params.m8,
+      params.m9,
+      params.m10,
+      params.m11,
+      params.m12,
+      params.m13,
+      params.m14,
+      params.m15,
+      params.m16,
+      params.m17,
+    ],
+  );
 
-  const exactValues = [
-    m1,
-    m2,
-    m3,
-    m4,
-    m5,
-    m6,
-    m7,
-    m8,
-    m9,
-    m10,
-    m11,
-    m12,
-    m13,
-    m14,
-    m15,
-    m16,
-    m17,
-  ];
+  const exactHasAny = useMemo(() => exactValues.some((x) => x.length > 0), [exactValues]);
 
-  const exactHasAny = exactValues.some((x) => norm(x).length > 0);
-  const invalid = exactValues.some((x) => !isValidNumberOrEmpty(x));
+  const customRows = useMemo(
+    () =>
+      [
+        {
+          label: safeDecode(params.custom_label_1),
+          value: safeDecode(params.custom_value_1),
+        },
+        {
+          label: safeDecode(params.custom_label_2),
+          value: safeDecode(params.custom_value_2),
+        },
+        {
+          label: safeDecode(params.custom_label_3),
+          value: safeDecode(params.custom_value_3),
+        },
+        {
+          label: safeDecode(params.custom_label_4),
+          value: safeDecode(params.custom_value_4),
+        },
+      ].filter((row) => row.label && row.value),
+    [
+      params.custom_label_1,
+      params.custom_label_2,
+      params.custom_label_3,
+      params.custom_label_4,
+      params.custom_value_1,
+      params.custom_value_2,
+      params.custom_value_3,
+      params.custom_value_4,
+    ],
+  );
+
+  const exactEnteredCount = useMemo(
+    () => exactValues.filter((x) => x.length > 0).length,
+    [exactValues],
+  );
+
+  const dimensionRows = useMemo<ExactMeasurementSheetRow[]>(
+    () =>
+      [
+        { order: 1, label: "1. Neck", value: norm(params.m1) },
+        { order: 2, label: "2. Across front", value: norm(params.m2) },
+        { order: 3, label: "3. Bust", value: norm(params.m3) },
+        { order: 4, label: "4. Under bust", value: norm(params.m4) },
+        { order: 5, label: "5. Waist", value: norm(params.m5) },
+        { order: 6, label: "6. Hips", value: norm(params.m6) },
+        { order: 7, label: "7. Thigh", value: norm(params.m7) },
+        { order: 8, label: "8. Upper arm", value: norm(params.m8) },
+        { order: 9, label: "9. Elbow", value: norm(params.m9) },
+        { order: 10, label: "10. Wrist", value: norm(params.m10) },
+        { order: 11, label: "11. Shoulder to waist", value: norm(params.m11) },
+        { order: 12, label: "12. Shoulder to floor", value: norm(params.m12) },
+        { order: 13, label: "13. Shoulder to shoulder", value: norm(params.m13) },
+        { order: 14, label: "14. Back neck to waist", value: norm(params.m14) },
+        { order: 15, label: "15. Across back", value: norm(params.m15) },
+        { order: 16, label: "16. Inner arm length", value: norm(params.m16) },
+        { order: 17, label: "17. Ankle", value: norm(params.m17) },
+        ...customRows.map((row, index) => ({
+          order: 100 + index,
+          label: row.label,
+          value: row.value,
+        })),
+      ].filter((row) => row.value),
+    [
+      params.m1,
+      params.m2,
+      params.m3,
+      params.m4,
+      params.m5,
+      params.m6,
+      params.m7,
+      params.m8,
+      params.m9,
+      params.m10,
+      params.m11,
+      params.m12,
+      params.m13,
+      params.m14,
+      params.m15,
+      params.m16,
+      params.m17,
+      customRows,
+    ],
+  );
 
   const goPlaceOrder = (p: Record<string, string>) => {
     router.replace({
@@ -362,7 +369,7 @@ export default function SizeScreen() {
       selected_fabric_length_m:
         isUnstitched && fabricLengthM > 0 ? encodeURIComponent(String(fabricLengthM)) : "",
       fabric_cost_pkr: isUnstitched && fabricCostPkr > 0 ? String(fabricCostPkr) : "",
-      unit,
+
       m1: "",
       m2: "",
       m3: "",
@@ -380,50 +387,29 @@ export default function SizeScreen() {
       m15: "",
       m16: "",
       m17: "",
+
+      custom_label_1: "",
+      custom_value_1: "",
+      custom_label_2: "",
+      custom_value_2: "",
+      custom_label_3: "",
+      custom_value_3: "",
+      custom_label_4: "",
+      custom_value_4: "",
     });
   };
 
-  const onSaveExact = () => {
-    if (invalid || !exactHasAny) return;
-
-    goPlaceOrder({
-      mode: "exact",
-      selectedSize: "",
-      selected_unstitched_size: "",
-      selected_fabric_length_m: "",
-      fabric_cost_pkr: "",
-      unit,
-      m1: m1.trim(),
-      m2: m2.trim(),
-      m3: m3.trim(),
-      m4: m4.trim(),
-      m5: m5.trim(),
-      m6: m6.trim(),
-      m7: m7.trim(),
-      m8: m8.trim(),
-      m9: m9.trim(),
-      m10: m10.trim(),
-      m11: m11.trim(),
-      m12: m12.trim(),
-      m13: m13.trim(),
-      m14: m14.trim(),
-      m15: m15.trim(),
-      m16: m16.trim(),
-      m17: m17.trim(),
+  const openExactMeasurements = () => {
+    router.push({
+      pathname: "/flow/purchase/exact-measurements" as any,
+      params: {
+        ...(params as any),
+        returnTo: "/flow/purchase/size",
+        nextAfterSave: returnTo,
+        mode: "exact",
+      },
     });
   };
-
-  const previewLengthM = useMemo(() => {
-    if (!isUnstitched) return 0;
-    if (mode !== "standard") return 0;
-    return selectedStandardFabricLength;
-  }, [isUnstitched, mode, selectedStandardFabricLength]);
-
-  const previewFabricCostPkr = useMemo(() => {
-    if (!isUnstitched) return 0;
-    if (mode !== "standard") return 0;
-    return selectedStandardFabricCost;
-  }, [isUnstitched, mode, selectedStandardFabricCost]);
 
   return (
     <>
@@ -467,235 +453,133 @@ export default function SizeScreen() {
         ) : null}
 
         <View style={styles.toggleRow}>
-          <Pressable
-            onPress={() => setMode("standard")}
-            style={[styles.toggleBtn, mode === "standard" ? styles.toggleActive : null]}
-          >
-            <Text
-              style={[styles.toggleText, mode === "standard" ? styles.toggleTextActive : null]}
-            >
-              Standard
-            </Text>
+          <Pressable onPress={() => {}} style={[styles.toggleBtn, styles.toggleActive]}>
+            <Text style={[styles.toggleText, styles.toggleTextActive]}>Standard</Text>
           </Pressable>
 
-          <Pressable
-            onPress={() => setMode("exact")}
-            style={[styles.toggleBtn, mode === "exact" ? styles.toggleActive : null]}
-          >
-            <Text style={[styles.toggleText, mode === "exact" ? styles.toggleTextActive : null]}>
-              Exact (1–17)
-            </Text>
+          <Pressable onPress={openExactMeasurements} style={styles.toggleBtn}>
+            <Text style={styles.toggleText}>Exact</Text>
           </Pressable>
         </View>
 
-        {mode === "standard" ? (
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Choose standard size</Text>
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Choose standard size</Text>
 
-            <View style={styles.sizeGrid}>
-              {(isUnstitched ? availableUnstitchedSizes : STANDARD_SIZES).map((s) => {
-                const isOn = selectedStandardSize === s;
+          <View style={styles.sizeGrid}>
+            {(isUnstitched ? availableUnstitchedSizes : STANDARD_SIZES).map((s) => {
+              const isOn = selectedStandardSize === s;
 
-                return (
-                  <Pressable
-                    key={s}
-                    onPress={() => onSelectStandard(s)}
-                    style={[styles.sizePill, isOn ? styles.sizePillOn : null]}
-                  >
-                    <Text style={[styles.sizeText, isOn ? styles.sizeTextOn : null]}>{s}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+              return (
+                <Pressable
+                  key={s}
+                  onPress={() => onSelectStandard(s)}
+                  style={[styles.sizePill, isOn ? styles.sizePillOn : null]}
+                >
+                  <Text style={[styles.sizeText, isOn ? styles.sizeTextOn : null]}>{s}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
-            {isUnstitched && !availableUnstitchedSizes.length ? (
-              <Text style={styles.validation}>
-                Size-length map is missing for this unstitched product.
+          {isUnstitched && !availableUnstitchedSizes.length ? (
+            <Text style={styles.validation}>
+              Size-length map is missing for this unstitched product.
+            </Text>
+          ) : null}
+
+          {isUnstitched && !!selectedStandardSize && selectedStandardFabricLength > 0 ? (
+            <View style={styles.costCard}>
+              <Text style={styles.costLine}>
+                Cost per meter:{" "}
+                <Text style={styles.costStrong}>PKR {pricePerMeterPkr} / meter</Text>
               </Text>
-            ) : null}
-
-            {isUnstitched && !!selectedStandardSize && previewLengthM > 0 ? (
-              <View style={styles.costCard}>
-                <Text style={styles.costLine}>
-                  Cost per meter:{" "}
-                  <Text style={styles.costStrong}>PKR {pricePerMeterPkr} / meter</Text>
-                </Text>
-                <Text style={styles.costLine}>
-                  Selected size: <Text style={styles.costStrong}>{selectedStandardSize}</Text>
-                </Text>
-                <Text style={styles.costLine}>
-                  Fabric length: <Text style={styles.costStrong}>{previewLengthM} meter(s)</Text>
-                </Text>
-                <Text style={styles.costLine}>
-                  Total fabric cost:{" "}
-                  <Text style={styles.costStrong}>PKR {previewFabricCostPkr}</Text>
-                </Text>
-              </View>
-            ) : null}
-          </View>
-        ) : (
-          <View style={styles.exactWrap}>
-            <BodyMeasurePhoto onOpen={() => setGuideOpen(true)} />
-
-            <Text style={styles.helper}>Enter measurements</Text>
-
-            <View style={styles.unitRow}>
-              <Pressable
-                onPress={() => setUnit("cm")}
-                style={[styles.unitPill, unit === "cm" ? styles.unitActive : null]}
-              >
-                <Text style={[styles.unitText, unit === "cm" ? styles.unitTextActive : null]}>
-                  cm
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => setUnit("in")}
-                style={[styles.unitPill, unit === "in" ? styles.unitActive : null]}
-              >
-                <Text style={[styles.unitText, unit === "in" ? styles.unitTextActive : null]}>
-                  inch
-                </Text>
-              </Pressable>
+              <Text style={styles.costLine}>
+                Selected size: <Text style={styles.costStrong}>{selectedStandardSize}</Text>
+              </Text>
+              <Text style={styles.costLine}>
+                Fabric length:{" "}
+                <Text style={styles.costStrong}>{selectedStandardFabricLength} meter(s)</Text>
+              </Text>
+              <Text style={styles.costLine}>
+                Total fabric cost:{" "}
+                <Text style={styles.costStrong}>PKR {selectedStandardFabricCost}</Text>
+              </Text>
             </View>
+          ) : null}
+        </View>
 
-            <View style={styles.inputs}>
-              {(Object.keys(MEASURE_LABELS) as MeasureKey[]).map((key) => {
-                const valueMap: Record<MeasureKey, string> = {
-                  m1,
-                  m2,
-                  m3,
-                  m4,
-                  m5,
-                  m6,
-                  m7,
-                  m8,
-                  m9,
-                  m10,
-                  m11,
-                  m12,
-                  m13,
-                  m14,
-                  m15,
-                  m16,
-                  m17,
-                };
+        {exactHasAny ? (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Last saved exact measurements</Text>
 
-                const setterMap: Record<MeasureKey, (v: string) => void> = {
-                  m1: setM1,
-                  m2: setM2,
-                  m3: setM3,
-                  m4: setM4,
-                  m5: setM5,
-                  m6: setM6,
-                  m7: setM7,
-                  m8: setM8,
-                  m9: setM9,
-                  m10: setM10,
-                  m11: setM11,
-                  m12: setM12,
-                  m13: setM13,
-                  m14: setM14,
-                  m15: setM15,
-                  m16: setM16,
-                  m17: setM17,
-                };
+            <View style={styles.exactSummaryCard}>
+              <Text style={styles.resultLine}>
+                Unit: <Text style={styles.resultStrong}>{unit}</Text>
+              </Text>
 
-                const item = MEASURE_LABELS[key];
+              <Text style={styles.resultLine}>
+                Entered main measurements:{" "}
+                <Text style={styles.resultStrong}>{exactEnteredCount} / 17</Text>
+              </Text>
 
-                return (
-                  <MeasureRow
-                    key={key}
-                    code={item.code}
-                    value={valueMap[key]}
-                    onChange={setterMap[key]}
-                    placeholder={`${item.title}${unitSuffix}`}
-                  />
-                );
-              })}
+              <Text style={styles.resultLine}>
+                Custom dimensions: <Text style={styles.resultStrong}>{customRows.length} / 4</Text>
+              </Text>
 
-              <Pressable onPress={onSaveExact} style={styles.primaryBtn}>
-                <Text style={styles.primaryText}>Continue</Text>
-              </Pressable>
-
-              {invalid ? (
-                <Text style={styles.validation}>
-                  Please enter valid positive numbers only, or leave a field blank.
+              <Text style={styles.resultLine}>
+                Estimated standard size:{" "}
+                <Text style={styles.resultStrong}>
+                  {safeDecode(params.selected_unstitched_size || params.selectedSize) || "—"}
                 </Text>
+              </Text>
+
+              {isUnstitched ? (
+                <>
+                  <Text style={styles.resultLine}>
+                    Fabric length:{" "}
+                    <Text style={styles.resultStrong}>{selectedStandardFabricLength || 0} m</Text>
+                  </Text>
+
+                  <Text style={styles.resultLine}>
+                    Fabric cost:{" "}
+                    <Text style={styles.resultStrong}>PKR {selectedStandardFabricCost || 0}</Text>
+                  </Text>
+                </>
               ) : null}
+
+              <View style={styles.exactActionsRow}>
+                <Pressable
+                  onPress={() => setSummaryOpen(true)}
+                  style={styles.secondaryInlineBtn}
+                >
+                  <Text style={styles.secondaryInlineText}>View exact measurements</Text>
+                </Pressable>
+
+                <Pressable onPress={openExactMeasurements} style={styles.primaryInlineBtn}>
+                  <Text style={styles.primaryInlineText}>Edit</Text>
+                </Pressable>
+              </View>
             </View>
           </View>
-        )}
+        ) : null}
 
         <Pressable onPress={() => router.back()} style={styles.closeBtn}>
           <Text style={styles.link}>Close</Text>
         </Pressable>
       </ScrollView>
 
-      <Modal
-        visible={guideOpen}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setGuideOpen(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Measurement Guide</Text>
-
-              <Pressable onPress={() => setGuideOpen(false)} style={styles.modalCloseBtn}>
-                <Text style={styles.modalCloseText}>Close</Text>
-              </Pressable>
-            </View>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.zoomScrollContent}
-            >
-              <ScrollView
-                showsHorizontalScrollIndicator={false}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.zoomScrollContent}
-              >
-                <Image
-                  source={require("../../assets/body measurement chart.jpg")}
-                  style={styles.zoomGuideImage}
-                  resizeMode="contain"
-                />
-              </ScrollView>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-    </>
-  );
-}
-
-function MeasureRow({
-  code,
-  value,
-  onChange,
-  placeholder,
-}: {
-  code: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-}) {
-  return (
-    <View style={styles.inputRow}>
-      <Text style={styles.inputLabel}>{code}.</Text>
-      <TextInput
-        value={value}
-        onChangeText={onChange}
-        placeholder={placeholder}
-        placeholderTextColor={stylesVars.placeholder}
-        keyboardType="numeric"
-        style={styles.input}
+      <ExactMeasurementsModal
+        visible={summaryOpen}
+        onClose={() => setSummaryOpen(false)}
+        title="Exact Measurements"
+        rows={dimensionRows}
+        inferredSize={safeDecode(params.selected_unstitched_size || params.selectedSize) || ""}
+        unit={unit}
+        fabricLengthM={selectedStandardFabricLength}
+        fabricCostPkr={selectedStandardFabricCost}
+        showGuideImage
       />
-    </View>
+    </>
   );
 }
 
@@ -789,6 +673,13 @@ const styles = StyleSheet.create({
     color: stylesVars.text,
   },
 
+  helper: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "500",
+  },
+
   sizeGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -846,147 +737,67 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  exactWrap: {
-    gap: 10,
-    marginTop: 8,
+  exactSummaryCard: {
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+    borderRadius: 16,
+    padding: 14,
+    backgroundColor: stylesVars.greenSoft,
+    gap: 6,
   },
 
-  helper: {
+  resultLine: {
     fontSize: 12,
     lineHeight: 18,
-    color: stylesVars.mutedText,
+    color: stylesVars.subText,
     fontWeight: "500",
   },
 
-  unitRow: {
+  resultStrong: {
+    fontSize: 12,
+    color: stylesVars.text,
+    fontWeight: "700",
+  },
+
+  exactActionsRow: {
     flexDirection: "row",
     gap: 8,
     flexWrap: "wrap",
-  },
-
-  unitPill: {
-    minHeight: 34,
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
-    backgroundColor: stylesVars.blueSoft,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  unitActive: {
-    backgroundColor: stylesVars.blue,
-    borderColor: stylesVars.blue,
-  },
-
-  unitText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: stylesVars.blue,
-  },
-
-  unitTextActive: {
-    color: stylesVars.white,
-  },
-
-  svgCard: {
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    borderRadius: 18,
-    padding: 12,
-    backgroundColor: stylesVars.cardBg,
-  },
-
-  guideHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-
-  svgTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: stylesVars.text,
-  },
-
-  zoomBtn: {
-    minHeight: 30,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: stylesVars.blueSoft,
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  zoomBtnText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: stylesVars.blue,
-  },
-
-  measureGuideImage: {
-    width: "100%",
-    height: 520,
-    borderRadius: 12,
-  },
-
-  guideHint: {
-    marginTop: 8,
-    fontSize: 12,
-    lineHeight: 18,
-    color: stylesVars.mutedText,
-    fontWeight: "500",
-  },
-
-  inputs: {
-    gap: 10,
-  },
-
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-
-  inputLabel: {
-    width: 28,
-    fontSize: 14,
-    fontWeight: "700",
-    color: stylesVars.text,
-  },
-
-  input: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: stylesVars.borderSoft,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 13,
-    color: stylesVars.text,
-    backgroundColor: stylesVars.white,
-  },
-
-  primaryBtn: {
     marginTop: 4,
-    minHeight: 46,
-    paddingVertical: 12,
-    borderRadius: 14,
+  },
+
+  primaryInlineBtn: {
+    minHeight: 38,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
     backgroundColor: stylesVars.blue,
     alignItems: "center",
     justifyContent: "center",
   },
 
-  primaryText: {
+  primaryInlineText: {
     color: stylesVars.white,
+    fontSize: 12,
     fontWeight: "700",
-    fontSize: 14,
+  },
+
+  secondaryInlineBtn: {
+    minHeight: 38,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: stylesVars.white,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  secondaryInlineText: {
+    color: stylesVars.blue,
+    fontSize: 12,
+    fontWeight: "700",
   },
 
   validation: {
@@ -1013,63 +824,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: stylesVars.blue,
     fontWeight: "700",
-  },
-
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.72)",
-    justifyContent: "center",
-    padding: 16,
-  },
-
-  modalCard: {
-    backgroundColor: stylesVars.cardBg,
-    borderRadius: 18,
-    overflow: "hidden",
-    maxHeight: "88%",
-  },
-
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: stylesVars.border,
-  },
-
-  modalTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: stylesVars.text,
-  },
-
-  modalCloseBtn: {
-    minHeight: 30,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: stylesVars.blueSoft,
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  modalCloseText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: stylesVars.blue,
-  },
-
-  zoomScrollContent: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  zoomGuideImage: {
-    width: 900,
-    height: 1400,
   },
 });

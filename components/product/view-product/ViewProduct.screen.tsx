@@ -1,6 +1,12 @@
 // File: components/product/view-product/ViewProduct.screen.tsx
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -11,7 +17,12 @@ import {
   Text,
   View,
 } from "react-native";
-import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from "expo-router";
+import {
+  useFocusEffect,
+  useLocalSearchParams,
+  useRouter,
+  useSegments,
+} from "expo-router";
 
 import { supabase } from "@/utils/supabase/client";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -261,7 +272,9 @@ export default function ViewProductScreen() {
   }, [segments]);
 
   const vendorIdFromVendor = useAppSelector((s: any) => s?.vendor?.id ?? null);
-  const vendorIdFromVendorSlice = useAppSelector((s: any) => s?.vendorSlice?.id ?? null);
+  const vendorIdFromVendorSlice = useAppSelector(
+    (s: any) => s?.vendorSlice?.id ?? null,
+  );
   const vendorIdFromVendorSliceVendor = useAppSelector(
     (s: any) => s?.vendorSlice?.vendor?.id ?? null,
   );
@@ -272,7 +285,9 @@ export default function ViewProductScreen() {
     vendorIdFromVendorSliceVendor;
 
   const productId = useMemo<number | null>(() => {
-    const raw = firstParam((params as any)?.id ?? (params as any)?.product_id ?? null);
+    const raw = firstParam(
+      (params as any)?.id ?? (params as any)?.product_id ?? null,
+    );
     if (!raw) return null;
 
     const decoded = safeDecode(raw);
@@ -283,7 +298,9 @@ export default function ViewProductScreen() {
   }, [params]);
 
   const productCode = useMemo<string | null>(() => {
-    const raw = firstParam((params as any)?.code ?? (params as any)?.product_code ?? null);
+    const raw = firstParam(
+      (params as any)?.code ?? (params as any)?.product_code ?? null,
+    );
     if (!raw) return null;
     return safeDecode(raw);
   }, [params]);
@@ -333,7 +350,8 @@ export default function ViewProductScreen() {
   const [buyerWantsTailoring, _setBuyerWantsTailoring] = useState(false);
   const [buyerWantsDyeing, _setBuyerWantsDyeing] = useState(false);
 
-  const [tailoringSelection, setTailoringSelection] = useState<TailoringSelection | null>(null);
+  const [tailoringSelection, setTailoringSelection] =
+    useState<TailoringSelection | null>(null);
 
   const setBuyerWantsTailoring = useCallback(
     (next: boolean) => {
@@ -509,7 +527,10 @@ export default function ViewProductScreen() {
       return;
     }
 
-    const safeIdx = Math.max(0, Math.min(selectedMediaIndex, mediaItems.length - 1));
+    const safeIdx = Math.max(
+      0,
+      Math.min(selectedMediaIndex, mediaItems.length - 1),
+    );
     const it = mediaItems[safeIdx];
 
     if (it?.kind === "video" && activeVideoUrl !== it.url) {
@@ -530,9 +551,7 @@ export default function ViewProductScreen() {
       setMissingParam(false);
       setLoading(true);
 
-      let q = supabase
-        .from("products")
-        .select(`
+      let q = supabase.from("products").select(`
           id,
           vendor_id,
           product_code,
@@ -686,23 +705,38 @@ export default function ViewProductScreen() {
         return;
       }
 
-      const dressTypeIds = normalizeIdList(spec?.dressTypeIds ?? spec?.dressTypes ?? []);
-      const fabricTypeIds = normalizeIdList(spec?.fabricTypeIds ?? spec?.fabricTypes ?? []);
-      const workTypeIds = normalizeIdList(spec?.workTypeIds ?? spec?.workTypes ?? []);
-      const densityIds = normalizeIdList(spec?.workDensityIds ?? spec?.workDensities ?? []);
-      const originIds = normalizeIdList(spec?.originCityIds ?? spec?.originCities ?? []);
-      const wearIds = normalizeIdList(spec?.wearStateIds ?? spec?.wearStates ?? []);
-      const colorIds = normalizeIdList(spec?.colorShadeIds ?? spec?.colorShades ?? []);
+      const dressTypeIds = normalizeIdList(
+        spec?.dressTypeIds ?? spec?.dressTypes ?? [],
+      );
+      const fabricTypeIds = normalizeIdList(
+        spec?.fabricTypeIds ?? spec?.fabricTypes ?? [],
+      );
+      const workTypeIds = normalizeIdList(
+        spec?.workTypeIds ?? spec?.workTypes ?? [],
+      );
+      const densityIds = normalizeIdList(
+        spec?.workDensityIds ?? spec?.workDensities ?? [],
+      );
+      const originIds = normalizeIdList(
+        spec?.originCityIds ?? spec?.originCities ?? [],
+      );
+      const wearIds = normalizeIdList(
+        spec?.wearStateIds ?? spec?.wearStates ?? [],
+      );
+      const colorIds = normalizeIdList(
+        spec?.colorShadeIds ?? spec?.colorShades ?? [],
+      );
 
       try {
-        const [dressType, fabric, work, density, origin, wear] = await Promise.all([
-          resolveNamesByIds(LOOKUP.dressTypes, dressTypeIds),
-          resolveNamesByIds(LOOKUP.fabricTypes, fabricTypeIds),
-          resolveNamesByIds(LOOKUP.workTypes, workTypeIds),
-          resolveNamesByIds(LOOKUP.workDensities, densityIds),
-          resolveNamesByIds(LOOKUP.originCities, originIds),
-          resolveNamesByIds(LOOKUP.wearStates, wearIds),
-        ]);
+        const [dressType, fabric, work, density, origin, wear] =
+          await Promise.all([
+            resolveNamesByIds(LOOKUP.dressTypes, dressTypeIds),
+            resolveNamesByIds(LOOKUP.fabricTypes, fabricTypeIds),
+            resolveNamesByIds(LOOKUP.workTypes, workTypeIds),
+            resolveNamesByIds(LOOKUP.workDensities, densityIds),
+            resolveNamesByIds(LOOKUP.originCities, originIds),
+            resolveNamesByIds(LOOKUP.wearStates, wearIds),
+          ]);
 
         const color = resolveColorNames(colorIds);
 
@@ -752,7 +786,10 @@ export default function ViewProductScreen() {
         return true;
       };
 
-      const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+      const sub = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress,
+      );
       return () => sub.remove();
     }, [exitBuyerToResults, isBuyerRoute]),
   );
@@ -763,7 +800,9 @@ export default function ViewProductScreen() {
 
     return (
       <View style={styles.specRow}>
-        <Text style={[styles.specLabel, { color: stylesVars.blue }]}>{title}:</Text>
+        <Text style={[styles.specLabel, { color: stylesVars.blue }]}>
+          {title}:
+        </Text>
         <Text style={styles.specValue}>{list.join(", ")}</Text>
       </View>
     );
@@ -840,21 +879,46 @@ export default function ViewProductScreen() {
 
   const sizeText = useMemo(() => {
     const price = (product as any)?.price ?? {};
-    const sizes = Array.isArray(price?.available_sizes) ? price.available_sizes : [];
+    const sizes = Array.isArray(price?.available_sizes)
+      ? price.available_sizes
+      : [];
     return sizes.length ? sizes.join(", ") : "—";
   }, [product]);
 
   const inventoryText = useMemo(() => {
+    if (!product) return "—";
+
     const made =
       Boolean((product as any)?.made_on_order) ||
       Boolean((product as any)?.spec?.made_on_order);
 
     if (made) return "Made on order";
 
-    const n = Number((product as any)?.inventory_qty ?? 0);
+    const raw = (product as any)?.inventory_qty;
+    if (raw == null) return "—";
+
+    const n = Number(raw);
     if (!Number.isFinite(n)) return "—";
 
     return String(n);
+  }, [product]);
+
+  const isOutOfStock = useMemo(() => {
+    if (!product) return false;
+
+    const made =
+      Boolean((product as any)?.made_on_order) ||
+      Boolean((product as any)?.spec?.made_on_order);
+
+    if (made) return false;
+
+    const raw = (product as any)?.inventory_qty;
+    if (raw == null) return false;
+
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return false;
+
+    return n <= 0;
   }, [product]);
 
   const moreDescriptionText = useMemo(() => {
@@ -870,8 +934,11 @@ export default function ViewProductScreen() {
     return String(product.vendor_id) === String(vendorId);
   }, [isBuyerRoute, product?.vendor_id, vendorId]);
 
-  const showBuyerActions = isBuyerRoute ? true : !isVendorSelf;
+  const showVendorOutOfStockWarning = useMemo(() => {
+    return Boolean(product) && !loading && isVendorSelf && isOutOfStock;
+  }, [product, loading, isVendorSelf, isOutOfStock]);
 
+  const showBuyerActions = isBuyerRoute ? true : !isVendorSelf;
   const productCategory = useMemo<ProductCategory | null>(() => {
     const fromDb = (product as any)?.product_category;
     if (isProductCategory(fromDb)) return fromDb;
@@ -970,9 +1037,9 @@ export default function ViewProductScreen() {
     const spec = (product as any)?.spec ?? {};
     return Boolean(
       spec?.includes_trouser ??
-        spec?.has_trouser ??
-        spec?.product_has_trouser ??
-        false,
+      spec?.has_trouser ??
+      spec?.product_has_trouser ??
+      false,
     );
   }, [product]);
 
@@ -986,7 +1053,10 @@ export default function ViewProductScreen() {
   }, [tailoringStylePresets]);
 
   const sizeLengthMap = useMemo(() => {
-    return ((product as any)?.spec?.size_length_m ?? {}) as Record<string, unknown>;
+    return ((product as any)?.spec?.size_length_m ?? {}) as Record<
+      string,
+      unknown
+    >;
   }, [product]);
 
   const hasAnySizeLengthMap = useMemo(() => {
@@ -1001,7 +1071,8 @@ export default function ViewProductScreen() {
   const tailoringAvailabilityLine = useMemo(() => {
     if (!isUnstitched) return "Tailoring: not applicable";
     if (!vendorOffersTailoring) return "Tailoring: vendor does not offer";
-    if (!productTailoringEnabled) return "Tailoring: not enabled for this product";
+    if (!productTailoringEnabled)
+      return "Tailoring: not enabled for this product";
     if (tailoringCostPkr <= 0) return "Tailoring: not available";
     return `Tailoring: available • PKR ${tailoringCostPkr}`;
   }, [
@@ -1086,7 +1157,9 @@ export default function ViewProductScreen() {
         ? "/(buyer)/dye_palette_modal"
         : "/vendor/profile/(product-modals)/dyeing/dye_palette_modal",
       params: {
-        returnPath: isBuyerRoute ? "/flow/view-product" : "/vendor/profile/view-product",
+        returnPath: isBuyerRoute
+          ? "/flow/view-product"
+          : "/vendor/profile/view-product",
         productId: String(product.id),
         productCode: String(product.product_code || ""),
         dyeing_selected: "1",
@@ -1109,7 +1182,10 @@ export default function ViewProductScreen() {
 
     if (tailoringEligible && buyerWantsTailoring) {
       if (!tailoringSelection?.presetId) {
-        Alert.alert("Select tailoring style", "Please select a tailoring style card.");
+        Alert.alert(
+          "Select tailoring style",
+          "Please select a tailoring style card.",
+        );
         return;
       }
 
@@ -1119,12 +1195,18 @@ export default function ViewProductScreen() {
       }
 
       if (!tailoringSelection?.sleeve) {
-        Alert.alert("Select sleeve variation", "Please select a sleeve variation.");
+        Alert.alert(
+          "Select sleeve variation",
+          "Please select a sleeve variation.",
+        );
         return;
       }
 
       if (tailoringIncludesTrouser && !tailoringSelection?.trouser) {
-        Alert.alert("Select trouser variation", "Please select a trouser variation.");
+        Alert.alert(
+          "Select trouser variation",
+          "Please select a trouser variation.",
+        );
         return;
       }
     }
@@ -1142,11 +1224,14 @@ export default function ViewProductScreen() {
         currency: "PKR",
         imageUrl,
 
-        price_per_meter_pkr: isUnstitched && pricePerMeterPkr > 0 ? String(pricePerMeterPkr) : "",
+        price_per_meter_pkr:
+          isUnstitched && pricePerMeterPkr > 0 ? String(pricePerMeterPkr) : "",
         stitched_total_pkr:
           !isUnstitched && stitchedTotalPkr > 0 ? String(stitchedTotalPkr) : "",
 
-        size_length_m: hasAnySizeLengthMap ? encodeJsonParam(sizeLengthMap) : "",
+        size_length_m: hasAnySizeLengthMap
+          ? encodeJsonParam(sizeLengthMap)
+          : "",
 
         dyeing_available: showDyeing ? "1" : "0",
         dyeing_selected: showDyeing && buyerWantsDyeing ? "1" : "0",
@@ -1155,7 +1240,9 @@ export default function ViewProductScreen() {
             ? encodeURIComponent(selectedDyeShadeId)
             : "",
         dye_hex:
-          buyerWantsDyeing && selectedDyeHex ? encodeURIComponent(selectedDyeHex) : "",
+          buyerWantsDyeing && selectedDyeHex
+            ? encodeURIComponent(selectedDyeHex)
+            : "",
         dye_label:
           buyerWantsDyeing && selectedDyeLabel
             ? encodeURIComponent(selectedDyeLabel)
@@ -1172,18 +1259,17 @@ export default function ViewProductScreen() {
         tailoring_turnaround_days: tailoringEligible
           ? encodeURIComponent(String(tailoringTurnaroundDays))
           : "",
-        tailoring_selected: tailoringEligible && buyerWantsTailoring ? "1" : "0",
+        tailoring_selected:
+          tailoringEligible && buyerWantsTailoring ? "1" : "0",
         selected_tailoring_style_id:
           tailoringEligible &&
           buyerWantsTailoring &&
           tailoringSelection?.presetId
             ? encodeURIComponent(String(tailoringSelection.presetId))
             : "",
-            
+
         selected_tailoring_style_title:
-          tailoringEligible &&
-          buyerWantsTailoring &&
-          tailoringSelection?.title
+          tailoringEligible && buyerWantsTailoring && tailoringSelection?.title
             ? encodeURIComponent(String(tailoringSelection.title))
             : "",
         selected_tailoring_style_image:
@@ -1204,15 +1290,11 @@ export default function ViewProductScreen() {
             : "",
 
         selected_neck_variation:
-          tailoringEligible &&
-          buyerWantsTailoring &&
-          tailoringSelection?.neck
+          tailoringEligible && buyerWantsTailoring && tailoringSelection?.neck
             ? encodeURIComponent(String(tailoringSelection.neck))
             : "",
         selected_sleeve_variation:
-          tailoringEligible &&
-          buyerWantsTailoring &&
-          tailoringSelection?.sleeve
+          tailoringEligible && buyerWantsTailoring && tailoringSelection?.sleeve
             ? encodeURIComponent(String(tailoringSelection.sleeve))
             : "",
         selected_trouser_variation:
@@ -1224,15 +1306,11 @@ export default function ViewProductScreen() {
             : "",
 
         selected_neck_style:
-          tailoringEligible &&
-          buyerWantsTailoring &&
-          tailoringSelection?.neck
+          tailoringEligible && buyerWantsTailoring && tailoringSelection?.neck
             ? encodeURIComponent(String(tailoringSelection.neck))
             : "",
         selected_sleeve_style:
-          tailoringEligible &&
-          buyerWantsTailoring &&
-          tailoringSelection?.sleeve
+          tailoringEligible && buyerWantsTailoring && tailoringSelection?.sleeve
             ? encodeURIComponent(String(tailoringSelection.sleeve))
             : "",
         selected_trouser_style:
@@ -1244,14 +1322,14 @@ export default function ViewProductScreen() {
             : "",
 
         custom_tailoring_note:
-          tailoringEligible &&
-          buyerWantsTailoring &&
-          tailoringSelection?.note
+          tailoringEligible && buyerWantsTailoring && tailoringSelection?.note
             ? encodeURIComponent(String(tailoringSelection.note).trim())
             : "",
 
         exports_enabled: vendorExportsEnabled ? "1" : "0",
-        export_regions: vendorExportRegions.length ? encodeJsonParam(vendorExportRegions) : "",
+        export_regions: vendorExportRegions.length
+          ? encodeJsonParam(vendorExportRegions)
+          : "",
 
         weight_kg: shippingWeightKg > 0 ? String(shippingWeightKg) : "",
         package_cm: packageCm ? encodeJsonParam(packageCm) : "",
@@ -1298,7 +1376,7 @@ export default function ViewProductScreen() {
     });
   }, [router, vendorRow]);
 
-  const purchaseDisabled = !product || loading || missingParam;
+  const purchaseDisabled = !product || loading || missingParam || isOutOfStock;
 
   const CompactLine = ({ text }: { text: string | null }) => {
     if (!text) return null;
@@ -1310,14 +1388,20 @@ export default function ViewProductScreen() {
     );
   };
 
-  const titleLine = useMemo(() => compactLineValue(product?.title), [product?.title]);
-  const categoryLine = useMemo(() => compactLineValue(categoryText), [categoryText]);
+  const titleLine = useMemo(
+    () => compactLineValue(product?.title),
+    [product?.title],
+  );
+  const categoryLine = useMemo(
+    () => compactLineValue(categoryText),
+    [categoryText],
+  );
 
   const inventoryLine = useMemo(() => {
     const s = compactLineValue(inventoryText);
     if (!s) return null;
     if (s === "Made on order") return s;
-    return `Qty: ${s}`;
+    return `In Stock: ${s}`;
   }, [inventoryText]);
 
   const priceLine = useMemo(() => compactLineValue(priceText), [priceText]);
@@ -1328,8 +1412,14 @@ export default function ViewProductScreen() {
     return `Sizes: ${s}`;
   }, [sizeText]);
 
-  const uploadedDate = useMemo(() => formatDateOnly(product?.created_at), [product?.created_at]);
-  const modifiedDate = useMemo(() => formatDateOnly(product?.updated_at), [product?.updated_at]);
+  const uploadedDate = useMemo(
+    () => formatDateOnly(product?.created_at),
+    [product?.created_at],
+  );
+  const modifiedDate = useMemo(
+    () => formatDateOnly(product?.updated_at),
+    [product?.updated_at],
+  );
 
   const onTogglePlayPause = useCallback(() => {
     showControlsBriefly();
@@ -1354,7 +1444,10 @@ export default function ViewProductScreen() {
               }
               router.back();
             }}
-            style={({ pressed }) => [styles.linkBtn, pressed ? styles.pressed : null]}
+            style={({ pressed }) => [
+              styles.linkBtn,
+              pressed ? styles.pressed : null,
+            ]}
           >
             <Text style={styles.linkText}>Close</Text>
           </Pressable>
@@ -1362,7 +1455,9 @@ export default function ViewProductScreen() {
 
         {missingParam ? (
           <View style={styles.card}>
-            <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>Missing product</Text>
+            <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>
+              Missing product
+            </Text>
             <Text style={styles.meta} selectable>
               Provide route params as either:
               {"\n"}• /vendor/profile/view-product?id=123
@@ -1382,8 +1477,8 @@ export default function ViewProductScreen() {
         !!product?.vendor_id &&
         String(product.vendor_id) !== String(vendorId) ? (
           <Text style={styles.warn}>
-            Note: This product belongs to a different vendor_id than the current vendor
-            session.
+            Note: This product belongs to a different vendor_id than the current
+            vendor session.
           </Text>
         ) : null}
 
@@ -1413,6 +1508,37 @@ export default function ViewProductScreen() {
           <CompactLine text={sizesLine} />
           <CompactLine text={inventoryLine} />
 
+          {product && !loading && isOutOfStock && !isVendorSelf ? (
+            <Text style={{ color: "#B91C1C", fontWeight: "700", marginTop: 8 }}>
+              Out of stock
+            </Text>
+          ) : null}
+
+          {showVendorOutOfStockWarning ? (
+            <View
+              style={{
+                marginTop: 10,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#FCA5A5",
+                backgroundColor: "#FEE2E2",
+                padding: 12,
+              }}
+            >
+              <Text
+                style={{
+                  color: "#B91C1C",
+                  fontWeight: "800",
+                  fontSize: 13,
+                  lineHeight: 18,
+                }}
+              >
+                Out of stock — update inventory to make this product visible
+                again
+              </Text>
+            </View>
+          ) : null}
+
           {isUnstitched ? (
             <>
               <CompactLine text={tailoringAvailabilityLine} />
@@ -1427,16 +1553,18 @@ export default function ViewProductScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>Product Details</Text>
+          <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>
+            Product Details
+          </Text>
 
           <ChipRow
             title="Dress Type"
             items={
               specNames.dressType.length
                 ? specNames.dressType
-                : (product as any)?.spec?.dressTypeNames ??
+                : ((product as any)?.spec?.dressTypeNames ??
                   (product as any)?.spec?.dressTypeLabels ??
-                  (product as any)?.spec?.dressTypeIds
+                  (product as any)?.spec?.dressTypeIds)
             }
           />
           <ChipRow
@@ -1444,9 +1572,9 @@ export default function ViewProductScreen() {
             items={
               specNames.fabric.length
                 ? specNames.fabric
-                : (product as any)?.spec?.fabricTypeNames ??
+                : ((product as any)?.spec?.fabricTypeNames ??
                   (product as any)?.spec?.fabricTypeLabels ??
-                  (product as any)?.spec?.fabricTypeIds
+                  (product as any)?.spec?.fabricTypeIds)
             }
           />
           <ChipRow
@@ -1454,9 +1582,9 @@ export default function ViewProductScreen() {
             items={
               specNames.color.length
                 ? specNames.color
-                : (product as any)?.spec?.colorShadeNames ??
+                : ((product as any)?.spec?.colorShadeNames ??
                   (product as any)?.spec?.colorShadeLabels ??
-                  (product as any)?.spec?.colorShadeIds
+                  (product as any)?.spec?.colorShadeIds)
             }
           />
           <ChipRow
@@ -1466,9 +1594,9 @@ export default function ViewProductScreen() {
                 ? (product as any)?.spec?.workSubTypeNames
                 : specNames.work.length
                   ? specNames.work
-                  : (product as any)?.spec?.workTypeNames ??
+                  : ((product as any)?.spec?.workTypeNames ??
                     (product as any)?.spec?.workTypeLabels ??
-                    (product as any)?.spec?.workTypeIds
+                    (product as any)?.spec?.workTypeIds)
             }
           />
           <ChipRow
@@ -1476,9 +1604,9 @@ export default function ViewProductScreen() {
             items={
               specNames.density.length
                 ? specNames.density
-                : (product as any)?.spec?.workDensityNames ??
+                : ((product as any)?.spec?.workDensityNames ??
                   (product as any)?.spec?.workDensityLabels ??
-                  (product as any)?.spec?.workDensityIds
+                  (product as any)?.spec?.workDensityIds)
             }
           />
           <ChipRow
@@ -1486,9 +1614,9 @@ export default function ViewProductScreen() {
             items={
               specNames.origin.length
                 ? specNames.origin
-                : (product as any)?.spec?.originCityNames ??
+                : ((product as any)?.spec?.originCityNames ??
                   (product as any)?.spec?.originCityLabels ??
-                  (product as any)?.spec?.originCityIds
+                  (product as any)?.spec?.originCityIds)
             }
           />
           <ChipRow
@@ -1496,15 +1624,18 @@ export default function ViewProductScreen() {
             items={
               specNames.wear.length
                 ? specNames.wear
-                : (product as any)?.spec?.wearStateNames ??
+                : ((product as any)?.spec?.wearStateNames ??
                   (product as any)?.spec?.wearStateLabels ??
-                  (product as any)?.spec?.wearStateIds
+                  (product as any)?.spec?.wearStateIds)
             }
           />
 
-          {safeText((product as any)?.spec?.more_description ?? "").trim() !== "—" ? (
+          {safeText((product as any)?.spec?.more_description ?? "").trim() !==
+          "—" ? (
             <View style={{ marginTop: 12 }}>
-              <Text style={[styles.specTitle, { color: stylesVars.blue }]}>More Description</Text>
+              <Text style={[styles.specTitle, { color: stylesVars.blue }]}>
+                More Description
+              </Text>
               <Text style={styles.moreDescText}>{moreDescriptionText}</Text>
             </View>
           ) : null}
@@ -1512,83 +1643,95 @@ export default function ViewProductScreen() {
 
         {showBuyerActions && showDyeing ? (
           <View style={styles.card}>
-            <Text style={[styles.label, { color: stylesVars.blue }]}>Do you want dyeing?</Text>
-        <View style={{ marginTop: 10 }}>
-          <View style={{ flexDirection: "row", gap: 12, flexWrap: "wrap" }}>
-            <Pressable
-              onPress={() => {
-                setBuyerWantsDyeing(true);
-                onOpenDyeing();
-              }}
-              style={({ pressed }) => [
-                {
-                  paddingVertical: 10,
-                  paddingHorizontal: 14,
-                  borderRadius: 14,
-                  borderWidth: 1.5,
-                  borderColor: buyerWantsDyeing ? stylesVars.blue : "#D7E3FF",
-                  backgroundColor: buyerWantsDyeing ? stylesVars.blue : "#EEF4FF",
-                },
-                pressed ? styles.pressed : null,
-              ]}
-            >
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "800",
-                  color: buyerWantsDyeing ? "#FFFFFF" : stylesVars.blue,
-                }}
-              >
-                Yes • +PKR {dyeingCostPkr}
-              </Text>
-            </Pressable>
+            <Text style={[styles.label, { color: stylesVars.blue }]}>
+              Do you want dyeing?
+            </Text>
+            <View style={{ marginTop: 10 }}>
+              <View style={{ flexDirection: "row", gap: 12, flexWrap: "wrap" }}>
+                <Pressable
+                  onPress={() => {
+                    setBuyerWantsDyeing(true);
+                    onOpenDyeing();
+                  }}
+                  style={({ pressed }) => [
+                    {
+                      paddingVertical: 10,
+                      paddingHorizontal: 14,
+                      borderRadius: 14,
+                      borderWidth: 1.5,
+                      borderColor: buyerWantsDyeing
+                        ? stylesVars.blue
+                        : "#D7E3FF",
+                      backgroundColor: buyerWantsDyeing
+                        ? stylesVars.blue
+                        : "#EEF4FF",
+                    },
+                    pressed ? styles.pressed : null,
+                  ]}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "800",
+                      color: buyerWantsDyeing ? "#FFFFFF" : stylesVars.blue,
+                    }}
+                  >
+                    Yes • +PKR {dyeingCostPkr}
+                  </Text>
+                </Pressable>
 
-            <Pressable
-              onPress={() => {
-                setBuyerWantsDyeing(false);
-                setSelectedDyeShadeId("");
-                setSelectedDyeHex("");
-                setSelectedDyeLabel("");
-                clearCachedDyeSelection(
-                  productId != null ? String(productId) : null,
-                  productCode ?? "",
-                );
+                <Pressable
+                  onPress={() => {
+                    setBuyerWantsDyeing(false);
+                    setSelectedDyeShadeId("");
+                    setSelectedDyeHex("");
+                    setSelectedDyeLabel("");
+                    clearCachedDyeSelection(
+                      productId != null ? String(productId) : null,
+                      productCode ?? "",
+                    );
 
-                router.setParams({
-                  dyeing_selected: "0",
-                  dye_shade_id: undefined,
-                  dye_hex: undefined,
-                  dye_label: undefined,
-                } as any);
-              }}
-              style={({ pressed }) => [
-                {
-                  paddingVertical: 10,
-                  paddingHorizontal: 14,
-                  borderRadius: 14,
-                  borderWidth: 1.5,
-                  borderColor: !buyerWantsDyeing ? stylesVars.blue : "#D7E3FF",
-                  backgroundColor: !buyerWantsDyeing ? stylesVars.blue : "#EEF4FF",
-                },
-                pressed ? styles.pressed : null,
-              ]}
-            >
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "800",
-                  color: !buyerWantsDyeing ? "#FFFFFF" : stylesVars.blue,
-                }}
-              >
-                No
-              </Text>
-            </Pressable>
-          </View>
-        </View>
+                    router.setParams({
+                      dyeing_selected: "0",
+                      dye_shade_id: undefined,
+                      dye_hex: undefined,
+                      dye_label: undefined,
+                    } as any);
+                  }}
+                  style={({ pressed }) => [
+                    {
+                      paddingVertical: 10,
+                      paddingHorizontal: 14,
+                      borderRadius: 14,
+                      borderWidth: 1.5,
+                      borderColor: !buyerWantsDyeing
+                        ? stylesVars.blue
+                        : "#D7E3FF",
+                      backgroundColor: !buyerWantsDyeing
+                        ? stylesVars.blue
+                        : "#EEF4FF",
+                    },
+                    pressed ? styles.pressed : null,
+                  ]}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "800",
+                      color: !buyerWantsDyeing ? "#FFFFFF" : stylesVars.blue,
+                    }}
+                  >
+                    No
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
 
             {buyerWantsDyeing && selectedDyeHex ? (
               <View style={{ marginTop: 14 }}>
-                <Text style={[styles.label, { color: stylesVars.blue }]}>Selected Colour</Text>
+                <Text style={[styles.label, { color: stylesVars.blue }]}>
+                  Selected Colour
+                </Text>
 
                 <View
                   style={{
@@ -1625,7 +1768,9 @@ export default function ViewProductScreen() {
         ) : null}
 
         <View style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>Meta</Text>
+          <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>
+            Meta
+          </Text>
           {uploadedDate ? (
             <Text style={styles.metaLine}>Date uploaded: {uploadedDate}</Text>
           ) : null}
@@ -1638,7 +1783,10 @@ export default function ViewProductScreen() {
       {showBuyerActions && (vendorRow as any)?.id != null ? (
         <Pressable
           onPress={onViewVendorProfile}
-          style={({ pressed }) => [styles.fabVendor, pressed ? styles.pressed : null]}
+          style={({ pressed }) => [
+            styles.fabVendor,
+            pressed ? styles.pressed : null,
+          ]}
         >
           <Text style={styles.fabVendorText}>Vendor</Text>
         </Pressable>
