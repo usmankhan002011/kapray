@@ -14,6 +14,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useSelector } from "react-redux";
 import { supabase } from "@/utils/supabase/client";
 import { getDeliveryCost } from "@/utils/kapray/delivery";
+import ExactMeasurementsModal from "../(tabs)/flow/purchase/exact-measurements-modal";
+import type { ExactMeasurementSheetRow } from "../(tabs)/flow/purchase/exact-measurements-sheet";
 
 const BUCKET_VENDOR = "vendor_images";
 
@@ -29,21 +31,32 @@ type Params = {
   selected_fabric_length_m?: string;
   fabric_cost_pkr?: string;
 
-  a?: string;
-  b?: string;
-  c?: string;
-  d?: string;
-  e?: string;
-  f?: string;
-  g?: string;
-  h?: string;
-  i?: string;
-  j?: string;
-  k?: string;
-  l?: string;
-  m?: string;
-  n?: string;
-  o?: string;
+  m1?: string;
+  m2?: string;
+  m3?: string;
+  m4?: string;
+  m5?: string;
+  m6?: string;
+  m7?: string;
+  m8?: string;
+  m9?: string;
+  m10?: string;
+  m11?: string;
+  m12?: string;
+  m13?: string;
+  m14?: string;
+  m15?: string;
+  m16?: string;
+  m17?: string;
+
+  custom_label_1?: string;
+  custom_value_1?: string;
+  custom_label_2?: string;
+  custom_value_2?: string;
+  custom_label_3?: string;
+  custom_value_3?: string;
+  custom_label_4?: string;
+  custom_value_4?: string;
 
   product_category?: string;
 
@@ -88,6 +101,7 @@ type Params = {
   export_regions?: string;
   weight_kg?: string;
   package_cm?: string;
+  unit?: string;
 };
 
 type VendorState = {
@@ -371,6 +385,7 @@ export default function PlaceOrderScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<Params>();
   const vendor = useSelector((s: any) => (s?.vendor ?? null)) as VendorState | null;
+  const [measurementsOpen, setMeasurementsOpen] = useState(false);
 
   const base = useMemo(() => {
     const productId = firstNonEmpty(params.productId, params.product_id);
@@ -382,41 +397,64 @@ export default function PlaceOrderScreen() {
     const selectedFabricLengthM = safePositiveNumber(safeDecode(params.selected_fabric_length_m));
     const fabricCostPkr = safePositiveNumber(params.fabric_cost_pkr);
 
-    const letters = {
-      a: norm(params.a),
-      b: norm(params.b),
-      c: norm(params.c),
-      d: norm(params.d),
-      e: norm(params.e),
-      f: norm(params.f),
-      g: norm(params.g),
-      h: norm(params.h),
-      i: norm(params.i),
-      j: norm(params.j),
-      k: norm(params.k),
-      l: norm(params.l),
-      m: norm(params.m),
-      n: norm(params.n),
-      o: norm(params.o),
+    const measurements = {
+      m1: norm(params.m1),
+      m2: norm(params.m2),
+      m3: norm(params.m3),
+      m4: norm(params.m4),
+      m5: norm(params.m5),
+      m6: norm(params.m6),
+      m7: norm(params.m7),
+      m8: norm(params.m8),
+      m9: norm(params.m9),
+      m10: norm(params.m10),
+      m11: norm(params.m11),
+      m12: norm(params.m12),
+      m13: norm(params.m13),
+      m14: norm(params.m14),
+      m15: norm(params.m15),
+      m16: norm(params.m16),
+      m17: norm(params.m17),
     };
 
     const exactPairs: [string, string][] = [
-      ["A", letters.a],
-      ["B", letters.b],
-      ["C", letters.c],
-      ["D", letters.d],
-      ["E", letters.e],
-      ["F", letters.f],
-      ["G", letters.g],
-      ["H", letters.h],
-      ["I", letters.i],
-      ["J", letters.j],
-      ["K", letters.k],
-      ["L", letters.l],
-      ["M", letters.m],
-      ["N", letters.n],
-      ["O", letters.o],
+      ["1", measurements.m1],
+      ["2", measurements.m2],
+      ["3", measurements.m3],
+      ["4", measurements.m4],
+      ["5", measurements.m5],
+      ["6", measurements.m6],
+      ["7", measurements.m7],
+      ["8", measurements.m8],
+      ["9", measurements.m9],
+      ["10", measurements.m10],
+      ["11", measurements.m11],
+      ["12", measurements.m12],
+      ["13", measurements.m13],
+      ["14", measurements.m14],
+      ["15", measurements.m15],
+      ["16", measurements.m16],
+      ["17", measurements.m17],
     ].filter((pair): pair is [string, string] => typeof pair[1] === "string" && pair[1].length > 0);
+
+    const customDimensions = [
+      {
+        label: safeDecode(params.custom_label_1),
+        value: safeDecode(params.custom_value_1),
+      },
+      {
+        label: safeDecode(params.custom_label_2),
+        value: safeDecode(params.custom_value_2),
+      },
+      {
+        label: safeDecode(params.custom_label_3),
+        value: safeDecode(params.custom_value_3),
+      },
+      {
+        label: safeDecode(params.custom_label_4),
+        value: safeDecode(params.custom_value_4),
+      },
+    ].filter((row) => row.label && row.value);
 
     const sizeLabel =
       mode === "exact"
@@ -472,7 +510,8 @@ export default function PlaceOrderScreen() {
       selectedFabricLengthM,
       fabricCostPkr,
       exactPairs,
-      letters,
+      measurements,
+      customDimensions,
 
       productName: firstNonEmpty(params.productName, params.product_name),
       productCategory: norm(params.product_category),
@@ -518,6 +557,36 @@ export default function PlaceOrderScreen() {
       sizeLabel,
     };
   }, [params]);
+
+  const measurementRows = useMemo<ExactMeasurementSheetRow[]>(() => {
+    const standardRows: ExactMeasurementSheetRow[] = [
+      { order: 1, label: "1. Neck", value: base.measurements.m1 },
+      { order: 2, label: "2. Across front", value: base.measurements.m2 },
+      { order: 3, label: "3. Bust", value: base.measurements.m3 },
+      { order: 4, label: "4. Under bust", value: base.measurements.m4 },
+      { order: 5, label: "5. Waist", value: base.measurements.m5 },
+      { order: 6, label: "6. Hips", value: base.measurements.m6 },
+      { order: 7, label: "7. Thigh", value: base.measurements.m7 },
+      { order: 8, label: "8. Upper arm", value: base.measurements.m8 },
+      { order: 9, label: "9. Elbow", value: base.measurements.m9 },
+      { order: 10, label: "10. Wrist", value: base.measurements.m10 },
+      { order: 11, label: "11. Shoulder to waist", value: base.measurements.m11 },
+      { order: 12, label: "12. Shoulder to floor", value: base.measurements.m12 },
+      { order: 13, label: "13. Shoulder to shoulder", value: base.measurements.m13 },
+      { order: 14, label: "14. Back neck to waist", value: base.measurements.m14 },
+      { order: 15, label: "15. Across back", value: base.measurements.m15 },
+      { order: 16, label: "16. Inner arm length", value: base.measurements.m16 },
+      { order: 17, label: "17. Ankle", value: base.measurements.m17 },
+    ].filter((row) => row.value);
+
+    const customRows: ExactMeasurementSheetRow[] = base.customDimensions.map((row, index) => ({
+      order: 100 + index,
+      label: row.label,
+      value: row.value,
+    }));
+
+    return [...standardRows, ...customRows];
+  }, [base.customDimensions, base.measurements]);
 
   const [loadingProduct, setLoadingProduct] = useState(false);
   const [fetchedProduct, setFetchedProduct] = useState<ProductRow | null>(null);
@@ -773,7 +842,32 @@ export default function PlaceOrderScreen() {
         selected_unstitched_size: base.selectedUnstitchedSize
           ? encodeURIComponent(base.selectedUnstitchedSize)
           : "",
-        ...base.letters,
+        ...base.measurements,
+
+        custom_label_1: base.customDimensions[0]?.label
+          ? encodeURIComponent(base.customDimensions[0].label)
+          : "",
+        custom_value_1: base.customDimensions[0]?.value
+          ? encodeURIComponent(base.customDimensions[0].value)
+          : "",
+        custom_label_2: base.customDimensions[1]?.label
+          ? encodeURIComponent(base.customDimensions[1].label)
+          : "",
+        custom_value_2: base.customDimensions[1]?.value
+          ? encodeURIComponent(base.customDimensions[1].value)
+          : "",
+        custom_label_3: base.customDimensions[2]?.label
+          ? encodeURIComponent(base.customDimensions[2].label)
+          : "",
+        custom_value_3: base.customDimensions[2]?.value
+          ? encodeURIComponent(base.customDimensions[2].value)
+          : "",
+        custom_label_4: base.customDimensions[3]?.label
+          ? encodeURIComponent(base.customDimensions[3].label)
+          : "",
+        custom_value_4: base.customDimensions[3]?.value
+          ? encodeURIComponent(base.customDimensions[3].value)
+          : "",
 
         destination_type: destinationType,
         export_region:
@@ -903,15 +997,21 @@ export default function PlaceOrderScreen() {
               value={base.mode === "exact" ? "Exact measurements" : base.sizeLabel}
             />
 
-            {base.mode === "exact" && base.exactPairs.length ? (
-              <View style={styles.measurementsWrap}>
-                {base.exactPairs.map(([k, v]) => (
-                  <View key={k} style={styles.measurementChip}>
-                    <Text style={styles.measurementChipText}>
-                      {k}: {v}
-                    </Text>
-                  </View>
-                ))}
+            {base.mode === "exact" && measurementRows.length ? (
+              <View style={styles.inlineActionRow}>
+                <Text style={styles.helper}>
+                  {measurementRows.length} dimensions saved
+                  {base.customDimensions.length
+                    ? ` • ${base.customDimensions.length} custom`
+                    : ""}
+                </Text>
+
+                <Pressable
+                  onPress={() => setMeasurementsOpen(true)}
+                  style={styles.secondaryInlineBtn}
+                >
+                  <Text style={styles.secondaryInlineText}>View Exact Measurements</Text>
+                </Pressable>
               </View>
             ) : null}
 
@@ -928,7 +1028,7 @@ export default function PlaceOrderScreen() {
                 />
               </>
             ) : null}
-                        
+
             {resolved.hasDyeing ? (
               <View style={styles.customBlock}>
                 <View style={styles.kvRow}>
@@ -1218,6 +1318,18 @@ export default function PlaceOrderScreen() {
             </Text>
           </View>
         ) : null}
+
+        <ExactMeasurementsModal
+          visible={measurementsOpen}
+          onClose={() => setMeasurementsOpen(false)}
+          title="Exact Measurements"
+          rows={measurementRows}
+          inferredSize={base.selectedUnstitchedSize || base.selectedSize}
+          unit={params.unit === "in" ? "in" : "cm"}
+          fabricLengthM={base.selectedFabricLengthM}
+          fabricCostPkr={base.fabricCostPkr}
+          showGuideImage
+        />
       </View>
     </SafeAreaView>
   );
@@ -1443,25 +1555,12 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
 
-  measurementsWrap: {
+  inlineActionRow: {
     flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
     flexWrap: "wrap",
-    gap: 8,
-  },
-
-  measurementChip: {
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    backgroundColor: stylesVars.blueSoft,
-  },
-
-  measurementChipText: {
-    fontSize: 12,
-    color: stylesVars.blue,
-    fontWeight: "800",
   },
 
   customBlock: {
@@ -1628,6 +1727,24 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+  },
+
+  secondaryInlineBtn: {
+    minHeight: 38,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: stylesVars.white,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  secondaryInlineText: {
+    color: stylesVars.blue,
+    fontSize: 12,
+    fontWeight: "700",
   },
 
   backBtn: {

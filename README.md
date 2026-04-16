@@ -101,7 +101,6 @@ npx expo run:android
 >> 
 >> }
 
-
 kapray
 ├── .idea
 │   ├── caches
@@ -129,6 +128,9 @@ kapray
 │   │   │   ├── purchase
 │   │   │   │   ├── _layout.tsx
 │   │   │   │   ├── cart.tsx
+│   │   │   │   ├── exact-measurements.modal.tsx
+│   │   │   │   ├── exact-measurements.sheet.tsx
+│   │   │   │   ├── exact-measurements.tsx
 │   │   │   │   ├── payment.tsx
 │   │   │   │   ├── place-order.tsx
 │   │   │   │   └── size.tsx
@@ -164,6 +166,7 @@ kapray
 │   │   │   │   │   ├── dye_palette_modal.tsx
 │   │   │   │   │   └── palette.ts
 │   │   │   │   ├── more-description
+│   │   │   │   │   ├── care.tsx
 │   │   │   │   │   ├── disclaimer.tsx
 │   │   │   │   │   ├── dupatta.tsx
 │   │   │   │   │   ├── fabric-work.tsx
@@ -189,6 +192,7 @@ kapray
 │   │   │   │   ├── q04-inventory.tsx
 │   │   │   │   ├── q05a-stitched-total-cost.tsx
 │   │   │   │   ├── q05b-unstitched-cost-per-meter.tsx
+│   │   │   │   ├── q05c-unstitched-fabric-length.tsx
 │   │   │   │   ├── q06a-sizes.tsx
 │   │   │   │   ├── q06b2-tailoring-styles.tsx
 │   │   │   │   ├── q06b-services-costs.tsx
@@ -325,8 +329,8 @@ kapray
 │   │       ├── resham.jpg
 │   │       ├── resham.png
 │   │       └── sozni.jpg
-│   ├── filter funnel emoji.jpg
-│   └── sizes outline.jpg
+│   ├── body measurement chart.jpg
+│   └── filter funnel emoji.jpg
 ├── components
 │   ├── product
 │   │   ├── view-product
@@ -415,7 +419,7 @@ kapray
 ├── tree-app.txt
 └── tsconfig.json
 PS C:\DEV\kapray\kapray>
-as on 24Mar26
+as on 4apr26
 
 -------------------------------------------------------------------------------------------------------------
 strategy

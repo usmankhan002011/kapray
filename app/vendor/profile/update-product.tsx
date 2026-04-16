@@ -153,14 +153,20 @@ function emptyTailoringSelections(): ProductTailoringSelections {
   };
 }
 
-function readProductTailoringSelections(specInput: unknown): ProductTailoringSelections {
+function readProductTailoringSelections(
+  specInput: unknown,
+): ProductTailoringSelections {
   const spec = safeJson(specInput);
 
   const nested =
     safeJson(spec?.tailoring_options).blouse_neck ||
     safeJson(spec?.tailoring_styles).blouse_neck ||
     safeJson(spec?.tailoring_style_options).blouse_neck
-      ? safeJson(spec?.tailoring_options ?? spec?.tailoring_styles ?? spec?.tailoring_style_options)
+      ? safeJson(
+          spec?.tailoring_options ??
+            spec?.tailoring_styles ??
+            spec?.tailoring_style_options,
+        )
       : {};
 
   const blouse_neck = normalizeStringList(
@@ -268,7 +274,12 @@ function SelectionPill({
         pressed ? styles.pressed : null,
       ]}
     >
-      <Text style={[styles.optionPillText, selected ? styles.optionPillTextOn : null]}>
+      <Text
+        style={[
+          styles.optionPillText,
+          selected ? styles.optionPillTextOn : null,
+        ]}
+      >
         {label}
       </Text>
     </Pressable>
@@ -303,9 +314,9 @@ export default function UpdateProductScreen() {
   const [moreDescription, setMoreDescription] = useState("");
   const [inventoryQty, setInventoryQty] = useState<number>(0);
 
-  const [priceMode, setPriceMode] = useState<"stitched_total" | "unstitched_per_meter">(
-    "unstitched_per_meter",
-  );
+  const [priceMode, setPriceMode] = useState<
+    "stitched_total" | "unstitched_per_meter"
+  >("unstitched_per_meter");
   const [priceTotal, setPriceTotal] = useState<number>(0);
   const [pricePerMeter, setPricePerMeter] = useState<number>(0);
   const [availableSizes, setAvailableSizes] = useState<string[]>([]);
@@ -315,14 +326,17 @@ export default function UpdateProductScreen() {
 
   const [tailoringEnabled, setTailoringEnabled] = useState<boolean>(false);
   const [tailoringCost, setTailoringCost] = useState<number>(0);
-  const [tailoringTurnaroundDays, setTailoringTurnaroundDays] = useState<number>(0);
+  const [tailoringTurnaroundDays, setTailoringTurnaroundDays] =
+    useState<number>(0);
 
-  const [vendorOffersTailoring, setVendorOffersTailoring] = useState<boolean>(false);
-  const [vendorTailoringOptions, setVendorTailoringOptions] = useState<VendorTailoringOptions>({
-    blouse_neck: [],
-    sleeves: [],
-    trouser: [],
-  });
+  const [vendorOffersTailoring, setVendorOffersTailoring] =
+    useState<boolean>(false);
+  const [vendorTailoringOptions, setVendorTailoringOptions] =
+    useState<VendorTailoringOptions>({
+      blouse_neck: [],
+      sleeves: [],
+      trouser: [],
+    });
 
   const [selectedTailoringStyles, setSelectedTailoringStyles] =
     useState<ProductTailoringSelections>(emptyTailoringSelections());
@@ -347,7 +361,9 @@ export default function UpdateProductScreen() {
 
         return {
           ...prev,
-          [group]: exists ? current.filter((x) => x !== clean) : [...current, clean],
+          [group]: exists
+            ? current.filter((x) => x !== clean)
+            : [...current, clean],
         };
       });
     },
@@ -376,7 +392,7 @@ export default function UpdateProductScreen() {
         return;
       }
 
-      setProducts(((data as unknown) as ProductRow[]) ?? []);
+      setProducts((data as unknown as ProductRow[]) ?? []);
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not load products.");
     } finally {
@@ -415,7 +431,9 @@ export default function UpdateProductScreen() {
       }
 
       setVendorOffersTailoring(Boolean((data as any)?.offers_tailoring));
-      setVendorTailoringOptions(readVendorTailoringOptions((data as any)?.tailoring_options));
+      setVendorTailoringOptions(
+        readVendorTailoringOptions((data as any)?.tailoring_options),
+      );
     } catch {
       setVendorOffersTailoring(false);
       setVendorTailoringOptions({
@@ -438,7 +456,9 @@ export default function UpdateProductScreen() {
     if (!selected) return;
 
     setTitle(safeText(selected.title));
-    setMoreDescription(safeText(safeJson(selected.spec)?.more_description ?? ""));
+    setMoreDescription(
+      safeText(safeJson(selected.spec)?.more_description ?? ""),
+    );
 
     const isMadeOnOrder = Boolean(selected.made_on_order);
     setInventoryQty(isMadeOnOrder ? 0 : safeNumOrZero(selected.inventory_qty));
@@ -456,7 +476,9 @@ export default function UpdateProductScreen() {
 
     setAvailableSizes(
       Array.isArray(price?.available_sizes)
-        ? price.available_sizes.map((x: any) => String(x).trim()).filter(Boolean)
+        ? price.available_sizes
+            .map((x: any) => String(x).trim())
+            .filter(Boolean)
         : [],
     );
 
@@ -472,7 +494,9 @@ export default function UpdateProductScreen() {
 
     const tailorCostFromPrice = safeNumOrZero(price?.tailoring_cost_pkr ?? 0);
     const tailorCostFromSpec = safeNumOrZero(spec?.tailoring_cost_pkr ?? 0);
-    setTailoringCost(tailorCostFromPrice > 0 ? tailorCostFromPrice : tailorCostFromSpec);
+    setTailoringCost(
+      tailorCostFromPrice > 0 ? tailorCostFromPrice : tailorCostFromSpec,
+    );
 
     const daysFromSpec = safeNumOrZero(spec?.tailoring_turnaround_days ?? 0);
     setTailoringTurnaroundDays(daysFromSpec);
@@ -526,17 +550,26 @@ export default function UpdateProductScreen() {
   );
 
   const imageUrls = useMemo(
-    () => imagePaths.map((p: string) => resolvePublicUrl(p)).filter(Boolean) as string[],
+    () =>
+      imagePaths
+        .map((p: string) => resolvePublicUrl(p))
+        .filter(Boolean) as string[],
     [imagePaths, resolvePublicUrl],
   );
 
   const videoUrls = useMemo(
-    () => videoPaths.map((p: string) => resolvePublicUrl(p)).filter(Boolean) as string[],
+    () =>
+      videoPaths
+        .map((p: string) => resolvePublicUrl(p))
+        .filter(Boolean) as string[],
     [videoPaths, resolvePublicUrl],
   );
 
   const thumbUrls = useMemo(
-    () => thumbPaths.map((p: string) => resolvePublicUrl(p)).filter(Boolean) as string[],
+    () =>
+      thumbPaths
+        .map((p: string) => resolvePublicUrl(p))
+        .filter(Boolean) as string[],
     [thumbPaths, resolvePublicUrl],
   );
 
@@ -549,7 +582,9 @@ export default function UpdateProductScreen() {
       if (videoThumbs[u]) return;
 
       try {
-        const { uri } = await VideoThumbnails.getThumbnailAsync(u, { time: 1500 });
+        const { uri } = await VideoThumbnails.getThumbnailAsync(u, {
+          time: 1500,
+        });
         if (cancelled) return;
         if (uri) {
           setVideoThumbs((prev) => (prev[u] ? prev : { ...prev, [u]: uri }));
@@ -595,7 +630,9 @@ export default function UpdateProductScreen() {
   );
 
   const hasAnyVendorStyleOptions = useMemo(() => {
-    return Boolean(blouseNeckOptions.length || sleeveOptions.length || trouserOptions.length);
+    return Boolean(
+      blouseNeckOptions.length || sleeveOptions.length || trouserOptions.length,
+    );
   }, [blouseNeckOptions.length, sleeveOptions.length, trouserOptions.length]);
 
   const canSave = useMemo(() => {
@@ -646,7 +683,10 @@ export default function UpdateProductScreen() {
     if (saving) return;
 
     if (!canSave) {
-      Alert.alert("Incomplete", "Please select a product and fill required fields.");
+      Alert.alert(
+        "Incomplete",
+        "Please select a product and fill required fields.",
+      );
       return;
     }
 
@@ -701,13 +741,18 @@ export default function UpdateProductScreen() {
         nextSpec.dyeing_cost_pkr = dyeingEnabled ? Number(dyeingCost ?? 0) : 0;
 
         nextSpec.tailoring_enabled = Boolean(tailoringEnabled);
-        nextSpec.tailoring_cost_pkr = tailoringEnabled ? Number(tailoringCost ?? 0) : 0;
+        nextSpec.tailoring_cost_pkr = tailoringEnabled
+          ? Number(tailoringCost ?? 0)
+          : 0;
         nextSpec.tailoring_turnaround_days = tailoringEnabled
           ? Math.max(0, Number(tailoringTurnaroundDays ?? 0))
           : 0;
 
         if (tailoringEnabled) {
-          nextSpec = writeProductTailoringSelections(nextSpec, selectedTailoringStyles);
+          nextSpec = writeProductTailoringSelections(
+            nextSpec,
+            selectedTailoringStyles,
+          );
         } else {
           nextSpec = clearProductTailoringSelections(nextSpec);
         }
@@ -750,9 +795,14 @@ export default function UpdateProductScreen() {
       }
 
       const updated = data as unknown as ProductRow;
-      setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      setProducts((prev) =>
+        prev.map((p) => (p.id === updated.id ? updated : p)),
+      );
 
-      Alert.alert("Updated", `Saved changes for ${safeText(updated.product_code)}`);
+      Alert.alert(
+        "Updated",
+        `Saved changes for ${safeText(updated.product_code)}`,
+      );
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not update product.");
     } finally {
@@ -788,7 +838,9 @@ export default function UpdateProductScreen() {
       }
 
       const updated = data as unknown as ProductRow;
-      setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      setProducts((prev) =>
+        prev.map((p) => (p.id === updated.id ? updated : p)),
+      );
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not update media.");
     } finally {
@@ -924,9 +976,12 @@ export default function UpdateProductScreen() {
           nextVideos.push(storagePath);
 
           try {
-            const { uri: thumbUri } = await VideoThumbnails.getThumbnailAsync(uri, {
-              time: 1500,
-            });
+            const { uri: thumbUri } = await VideoThumbnails.getThumbnailAsync(
+              uri,
+              {
+                time: 1500,
+              },
+            );
 
             if (thumbUri) {
               const thumbPath = await uploadOneAsset({
@@ -973,7 +1028,9 @@ export default function UpdateProductScreen() {
       }
 
       const updated = data as unknown as ProductRow;
-      setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      setProducts((prev) =>
+        prev.map((p) => (p.id === updated.id ? updated : p)),
+      );
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not upload media.");
     } finally {
@@ -988,7 +1045,10 @@ export default function UpdateProductScreen() {
 
         <Pressable
           onPress={() => router.back()}
-          style={({ pressed }) => [styles.linkBtn, pressed ? styles.pressed : null]}
+          style={({ pressed }) => [
+            styles.linkBtn,
+            pressed ? styles.pressed : null,
+          ]}
         >
           <Text style={styles.linkText}>Close</Text>
         </Pressable>
@@ -1007,16 +1067,23 @@ export default function UpdateProductScreen() {
           {selected ? (
             <Pressable
               onPress={() => setPickerOpen((v) => !v)}
-              style={({ pressed }) => [styles.smallBtn, pressed ? styles.pressed : null]}
+              style={({ pressed }) => [
+                styles.smallBtn,
+                pressed ? styles.pressed : null,
+              ]}
             >
-              <Text style={styles.smallBtnText}>{pickerOpen ? "Hide" : "Change Product"}</Text>
+              <Text style={styles.smallBtnText}>
+                {pickerOpen ? "Hide" : "Change Product"}
+              </Text>
             </Pressable>
           ) : null}
         </View>
 
         {selected ? (
           <View style={styles.selectedBox}>
-            <Text style={styles.selectedCode}>{safeText(selected.product_code)}</Text>
+            <Text style={styles.selectedCode}>
+              {safeText(selected.product_code)}
+            </Text>
             <Text style={styles.selectedTitle} numberOfLines={1}>
               {safeText(selected.title)}
             </Text>
@@ -1085,7 +1152,9 @@ export default function UpdateProductScreen() {
             )}
 
             {filtered.length > 30 ? (
-              <Text style={styles.hint}>Showing first 30 matches. Refine your search.</Text>
+              <Text style={styles.hint}>
+                Showing first 30 matches. Refine your search.
+              </Text>
             ) : null}
           </>
         ) : null}
@@ -1099,7 +1168,10 @@ export default function UpdateProductScreen() {
         ) : (
           <>
             <Text style={styles.metaLine}>
-              Selected: <Text style={styles.metaStrong}>{safeText(selected.product_code)}</Text>
+              Selected:{" "}
+              <Text style={styles.metaStrong}>
+                {safeText(selected.product_code)}
+              </Text>
             </Text>
 
             <Text style={styles.label}>Title *</Text>
@@ -1111,7 +1183,6 @@ export default function UpdateProductScreen() {
               style={styles.input}
               maxLength={80}
             />
-
             <Text style={styles.label}>Inventory Quantity *</Text>
 
             {Boolean(selected.made_on_order) ? (
@@ -1121,7 +1192,9 @@ export default function UpdateProductScreen() {
             ) : (
               <TextInput
                 value={String(inventoryQty ?? 0)}
-                onChangeText={(t) => setInventoryQty(Number(sanitizeNumber(t) || "0"))}
+                onChangeText={(t) =>
+                  setInventoryQty(Number(sanitizeNumber(t) || "0"))
+                }
                 placeholder="e.g., 10"
                 placeholderTextColor={stylesVars.placeholder}
                 style={styles.input}
@@ -1129,7 +1202,35 @@ export default function UpdateProductScreen() {
                 maxLength={10}
               />
             )}
+
+            {!Boolean(selected?.made_on_order) &&
+            Number(inventoryQty ?? 0) <= 0 ? (
+              <View
+                style={{
+                  marginTop: 10,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#FCA5A5",
+                  backgroundColor: "#FEE2E2",
+                  padding: 12,
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#B91C1C",
+                    fontWeight: "800",
+                    fontSize: 13,
+                    lineHeight: 18,
+                  }}
+                >
+                  Out of stock — update inventory to make this product visible
+                  again
+                </Text>
+              </View>
+            ) : null}
+
             <Text style={styles.label}>Cost Mode</Text>
+
             <View style={styles.readonlyField}>
               <Text style={styles.readonlyValue}>
                 {priceMode === "unstitched_per_meter"
@@ -1143,7 +1244,9 @@ export default function UpdateProductScreen() {
                 <Text style={styles.label}>Total Cost (PKR) *</Text>
                 <TextInput
                   value={String(priceTotal ?? "")}
-                  onChangeText={(t) => setPriceTotal(Number(sanitizeNumber(t) || "0"))}
+                  onChangeText={(t) =>
+                    setPriceTotal(Number(sanitizeNumber(t) || "0"))
+                  }
                   placeholder="e.g., 25000"
                   placeholderTextColor={stylesVars.placeholder}
                   style={styles.input}
@@ -1151,7 +1254,9 @@ export default function UpdateProductScreen() {
                   maxLength={12}
                 />
 
-                <Text style={styles.label}>Available Sizes (comma separated)</Text>
+                <Text style={styles.label}>
+                  Available Sizes (comma separated)
+                </Text>
                 <TextInput
                   value={(availableSizes ?? []).join(", ")}
                   onChangeText={(t) =>
@@ -1169,7 +1274,8 @@ export default function UpdateProductScreen() {
                 />
 
                 <Text style={styles.hint}>
-                  Dyeing and stitching services apply only to unstitched products.
+                  Dyeing and stitching services apply only to unstitched
+                  products.
                 </Text>
               </>
             ) : (
@@ -1177,7 +1283,9 @@ export default function UpdateProductScreen() {
                 <Text style={styles.label}>Cost per Meter (PKR) *</Text>
                 <TextInput
                   value={String(pricePerMeter ?? "")}
-                  onChangeText={(t) => setPricePerMeter(Number(sanitizeNumber(t) || "0"))}
+                  onChangeText={(t) =>
+                    setPricePerMeter(Number(sanitizeNumber(t) || "0"))
+                  }
                   placeholder="e.g., 1800"
                   placeholderTextColor={stylesVars.placeholder}
                   style={styles.input}
@@ -1219,7 +1327,9 @@ export default function UpdateProductScreen() {
                     <Text style={styles.label}>Dyeing Cost (PKR) *</Text>
                     <TextInput
                       value={String(dyeingCost ?? "")}
-                      onChangeText={(t) => setDyeingCost(Number(sanitizeNumber(t) || "0"))}
+                      onChangeText={(t) =>
+                        setDyeingCost(Number(sanitizeNumber(t) || "0"))
+                      }
                       placeholder="e.g., 800"
                       placeholderTextColor={stylesVars.placeholder}
                       style={styles.input}
@@ -1230,7 +1340,9 @@ export default function UpdateProductScreen() {
                 ) : null}
 
                 <View style={styles.inlineToggleRow}>
-                  <Text style={[styles.label, { marginTop: 0 }]}>Stitching available</Text>
+                  <Text style={[styles.label, { marginTop: 0 }]}>
+                    Stitching available
+                  </Text>
 
                   <Pressable
                     onPress={() => {
@@ -1264,7 +1376,9 @@ export default function UpdateProductScreen() {
                 {vendorLoading ? (
                   <View style={styles.loadingRow}>
                     <ActivityIndicator />
-                    <Text style={styles.loadingText}>Loading tailoring options…</Text>
+                    <Text style={styles.loadingText}>
+                      Loading tailoring options…
+                    </Text>
                   </View>
                 ) : null}
 
@@ -1277,14 +1391,16 @@ export default function UpdateProductScreen() {
                 {tailoringEnabled ? (
                   <>
                     <Text style={styles.hint}>
-                      Pick only the styles this product should offer to buyers. Keep selections
-                      small and relevant.
+                      Pick only the styles this product should offer to buyers.
+                      Keep selections small and relevant.
                     </Text>
 
                     <Text style={styles.label}>Tailoring Cost (PKR) *</Text>
                     <TextInput
                       value={String(tailoringCost ?? "")}
-                      onChangeText={(t) => setTailoringCost(Number(sanitizeNumber(t) || "0"))}
+                      onChangeText={(t) =>
+                        setTailoringCost(Number(sanitizeNumber(t) || "0"))
+                      }
                       placeholder="e.g., 2500"
                       placeholderTextColor={stylesVars.placeholder}
                       style={styles.input}
@@ -1292,11 +1408,15 @@ export default function UpdateProductScreen() {
                       maxLength={12}
                     />
 
-                    <Text style={styles.label}>Tailoring Turnaround (days)</Text>
+                    <Text style={styles.label}>
+                      Tailoring Turnaround (days)
+                    </Text>
                     <TextInput
                       value={String(tailoringTurnaroundDays ?? "")}
                       onChangeText={(t) =>
-                        setTailoringTurnaroundDays(Number(sanitizeNumber(t) || "0"))
+                        setTailoringTurnaroundDays(
+                          Number(sanitizeNumber(t) || "0"),
+                        )
                       }
                       placeholder="e.g., 12"
                       placeholderTextColor={stylesVars.placeholder}
@@ -1312,13 +1432,17 @@ export default function UpdateProductScreen() {
                           <SelectionPill
                             key={`neck-${item}`}
                             label={item}
-                            selected={selectedTailoringStyles.blouse_neck.includes(item)}
+                            selected={selectedTailoringStyles.blouse_neck.includes(
+                              item,
+                            )}
                             onPress={() => toggleStyle("blouse_neck", item)}
                           />
                         ))}
                       </View>
                     ) : (
-                      <Text style={styles.emptyInline}>No neck styles found in vendor profile.</Text>
+                      <Text style={styles.emptyInline}>
+                        No neck styles found in vendor profile.
+                      </Text>
                     )}
 
                     <Text style={styles.label}>Sleeve Styles</Text>
@@ -1328,7 +1452,9 @@ export default function UpdateProductScreen() {
                           <SelectionPill
                             key={`sleeve-${item}`}
                             label={item}
-                            selected={selectedTailoringStyles.sleeves.includes(item)}
+                            selected={selectedTailoringStyles.sleeves.includes(
+                              item,
+                            )}
                             onPress={() => toggleStyle("sleeves", item)}
                           />
                         ))}
@@ -1346,7 +1472,9 @@ export default function UpdateProductScreen() {
                           <SelectionPill
                             key={`trouser-${item}`}
                             label={item}
-                            selected={selectedTailoringStyles.trouser.includes(item)}
+                            selected={selectedTailoringStyles.trouser.includes(
+                              item,
+                            )}
                             onPress={() => toggleStyle("trouser", item)}
                           />
                         ))}
@@ -1359,7 +1487,8 @@ export default function UpdateProductScreen() {
 
                     {!hasAnyVendorStyleOptions ? (
                       <Text style={styles.hint}>
-                        Add tailoring style options in vendor profile first, then return here.
+                        Add tailoring style options in vendor profile first,
+                        then return here.
                       </Text>
                     ) : null}
                   </>
@@ -1404,7 +1533,9 @@ export default function UpdateProductScreen() {
         </View>
 
         {!selected ? (
-          <Text style={styles.empty}>Select a product above to edit media.</Text>
+          <Text style={styles.empty}>
+            Select a product above to edit media.
+          </Text>
         ) : (
           <>
             {savingMedia ? (
@@ -1424,7 +1555,10 @@ export default function UpdateProductScreen() {
                       <Pressable
                         onPress={() => removeImageAt(idx)}
                         disabled={savingMedia}
-                        style={({ pressed }) => [styles.thumbX, pressed ? styles.pressed : null]}
+                        style={({ pressed }) => [
+                          styles.thumbX,
+                          pressed ? styles.pressed : null,
+                        ]}
                       >
                         <Text style={styles.thumbXText}>✕</Text>
                       </Pressable>
@@ -1449,10 +1583,15 @@ export default function UpdateProductScreen() {
                         {t ? (
                           <Image source={{ uri: t }} style={styles.thumb} />
                         ) : fallback ? (
-                          <Image source={{ uri: fallback }} style={styles.thumb} />
+                          <Image
+                            source={{ uri: fallback }}
+                            style={styles.thumb}
+                          />
                         ) : (
                           <View style={styles.videoPlaceholder}>
-                            <Text style={styles.videoPlaceholderText}>Video {idx + 1}</Text>
+                            <Text style={styles.videoPlaceholderText}>
+                              Video {idx + 1}
+                            </Text>
                           </View>
                         )}
 
@@ -1463,7 +1602,10 @@ export default function UpdateProductScreen() {
                         <Pressable
                           onPress={() => removeVideoAt(idx)}
                           disabled={savingMedia}
-                          style={({ pressed }) => [styles.thumbX, pressed ? styles.pressed : null]}
+                          style={({ pressed }) => [
+                            styles.thumbX,
+                            pressed ? styles.pressed : null,
+                          ]}
                         >
                           <Text style={styles.thumbXText}>✕</Text>
                         </Pressable>
@@ -1500,7 +1642,9 @@ export default function UpdateProductScreen() {
         onPress={saveUpdate}
         disabled={!canSave || saving}
       >
-        <Text style={styles.saveText}>{saving ? "Saving…" : "Save Changes"}</Text>
+        <Text style={styles.saveText}>
+          {saving ? "Saving…" : "Save Changes"}
+        </Text>
       </Pressable>
 
       {!vendorId ? (
