@@ -15,6 +15,9 @@ export type VendorState = {
   owner_user_id: string | null;
   auth_user_id: string | null;
 
+  // Onboarding / routing gate
+  has_shop: boolean;
+
   // DB fields (match public.vendor columns)
   name: string | null;
   email: string | null;
@@ -62,6 +65,8 @@ const initialState: VendorState = {
   owner_user_id: null,
   auth_user_id: null,
 
+  has_shop: false,
+
   name: null,
   email: null,
   mobile: null,
@@ -108,6 +113,11 @@ const vendorSlice = createSlice({
         tailoring_options:
           action.payload.tailoring_options ?? state.tailoring_options,
       };
+
+      // Derive has_shop if not explicitly provided
+      if (action.payload.has_shop == null) {
+        next.has_shop = Boolean(next.shop_name);
+      }
 
       // Keep aliases in sync (so old UI code keeps working)
       if (next.owner_name == null && next.name != null) {

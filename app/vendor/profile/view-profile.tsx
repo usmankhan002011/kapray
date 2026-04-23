@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,6 +26,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setSelectedVendor } from "@/store/vendorSlice";
 import { VideoView, useVideoPlayer } from "expo-video";
 import * as VideoThumbnails from "expo-video-thumbnails";
+import ReviewSummaryCard from "@/components/vendor-reviews/ReviewSummaryCard";
 
 const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
@@ -61,6 +68,11 @@ type VendorRow = {
   location?: string | null;
 };
 
+type ReviewSummaryRow = {
+  average_rating: number;
+  review_count: number;
+};
+
 function safeText(v: any) {
   const t = String(v ?? "").trim();
   return t.length ? t : "—";
@@ -86,10 +98,13 @@ export default function VendorProfileScreen() {
   const vendorId = selectedVendor?.id ?? null;
 
   const [vendor, setVendor] = useState<VendorRow | null>(
-    selectedVendor ? (selectedVendor as any) : null
+    selectedVendor ? (selectedVendor as any) : null,
   );
 
   const [loading, setLoading] = useState(false);
+  const [reviewSummary, setReviewSummary] = useState<ReviewSummaryRow | null>(
+    null,
+  );
 
   const [profileUrl, setProfileUrl] = useState<string | null>(null);
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
@@ -150,7 +165,7 @@ export default function VendorProfileScreen() {
         .map((p) => resolvePublicUrl(String(p || "").trim()))
         .filter(Boolean) as string[];
     },
-    [resolvePublicUrl]
+    [resolvePublicUrl],
   );
 
   async function openExternal(url: string) {
@@ -198,7 +213,7 @@ export default function VendorProfileScreen() {
             "exports_enabled",
             "export_regions",
             "tailoring_options",
-          ].join(",")
+          ].join(","),
         )
         .eq("id", vendorId)
         .single();
@@ -215,7 +230,7 @@ export default function VendorProfileScreen() {
         setSelectedVendor({
           ...(row as any),
           image: null as any,
-        } as any)
+        } as any),
       );
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not load vendor.");
@@ -223,6 +238,19 @@ export default function VendorProfileScreen() {
       setLoading(false);
     }
   }
+
+  const fetchReviewSummary = useCallback(async () => {
+    if (!vendorId) return;
+
+    const { data, error } = await (supabase as any)
+      .from("vendor_review_summary")
+      .select("average_rating, review_count")
+      .eq("vendor_id", vendorId)
+      .maybeSingle();
+    if (!error) {
+      setReviewSummary((data as ReviewSummaryRow | null) ?? null);
+    }
+  }, [vendorId]);
 
   function hydrateMedia(v: VendorRow | null) {
     if (!v) {
@@ -257,6 +285,10 @@ export default function VendorProfileScreen() {
     JSON.stringify(vendor?.certificate_paths || []),
     JSON.stringify(vendor?.shop_video_paths || []),
   ]);
+
+  useEffect(() => {
+    fetchReviewSummary();
+  }, [fetchReviewSummary]);
 
   useEffect(() => {
     [
@@ -327,7 +359,9 @@ export default function VendorProfileScreen() {
       setThumbLoading((prev) => ({ ...prev, [u]: true }));
 
       try {
-        const { uri } = await VideoThumbnails.getThumbnailAsync(u, { time: 1000 });
+        const { uri } = await VideoThumbnails.getThumbnailAsync(u, {
+          time: 1000,
+        });
         if (cancelled) return;
 
         if (uri) {
@@ -400,9 +434,6 @@ export default function VendorProfileScreen() {
   const offersTailoring = Boolean(vendor?.offers_tailoring);
   const exportsEnabled = Boolean(vendor?.exports_enabled);
 
-  const blouseNeckOptions = vendor?.tailoring_options?.blouse_neck ?? [];
-  const sleeveOptions = vendor?.tailoring_options?.sleeves ?? [];
-  const trouserOptions = vendor?.tailoring_options?.trouser ?? [];
   const exportRegions = vendor?.export_regions ?? [];
 
   return (
@@ -424,7 +455,9 @@ export default function VendorProfileScreen() {
         <Text style={styles.title}>{heading}</Text>
 
         {!vendorId && (
-          <Text style={styles.hint}>No vendor selected. Create a vendor first.</Text>
+          <Text style={styles.hint}>
+            No vendor selected. Create a vendor first.
+          </Text>
         )}
 
         {!!loading && (
@@ -437,7 +470,10 @@ export default function VendorProfileScreen() {
         {!!bannerUrl && (
           <Pressable
             onPress={() => openViewerAt([bannerUrl], 0)}
-            style={({ pressed }) => [styles.bannerWrap, pressed ? styles.pressed : null]}
+            style={({ pressed }) => [
+              styles.bannerWrap,
+              pressed ? styles.pressed : null,
+            ]}
           >
             <Image source={{ uri: bannerUrl }} style={styles.banner} />
           </Pressable>
@@ -448,7 +484,10 @@ export default function VendorProfileScreen() {
             {!!profileUrl ? (
               <Pressable
                 onPress={() => openViewerAt([profileUrl], 0)}
-                style={({ pressed }) => [styles.avatarPress, pressed ? styles.pressed : null]}
+                style={({ pressed }) => [
+                  styles.avatarPress,
+                  pressed ? styles.pressed : null,
+                ]}
               >
                 <Image source={{ uri: profileUrl }} style={styles.avatar} />
               </Pressable>
@@ -494,6 +533,12 @@ export default function VendorProfileScreen() {
           </View>
         </View>
 
+        <ReviewSummaryCard
+          title="Ratings"
+          averageRating={reviewSummary?.average_rating ?? null}
+          reviewCount={reviewSummary?.review_count ?? 0}
+        />
+
         <Text style={styles.section}>Contact</Text>
         <View style={styles.card}>
           <Field label="Email" value={vendor?.email} />
@@ -511,10 +556,12 @@ export default function VendorProfileScreen() {
         <View style={styles.card}>
           <Field
             label="Tailoring service"
-            value={offersTailoring ? "Yes, tailoring available" : "No tailoring service"}
+            value={
+              offersTailoring
+                ? "Yes, tailoring available"
+                : "No tailoring service"
+            }
           />
-
-          {offersTailoring ? null : null}
 
           <Field label="Exports" value={exportsEnabled ? "Yes" : "No"} />
 
@@ -530,7 +577,9 @@ export default function VendorProfileScreen() {
 
           {shopImageUrls.length ? (
             <>
-              <Text style={styles.meta}>Tap any image to view full screen.</Text>
+              <Text style={styles.meta}>
+                Tap any image to view full screen.
+              </Text>
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={styles.hRow}>
@@ -538,7 +587,10 @@ export default function VendorProfileScreen() {
                     <Pressable
                       key={`${u}-${idx}`}
                       onPress={() => openViewerAt(shopImageUrls, idx)}
-                      style={({ pressed }) => [styles.thumbWrap, pressed ? styles.pressed : null]}
+                      style={({ pressed }) => [
+                        styles.thumbWrap,
+                        pressed ? styles.pressed : null,
+                      ]}
                     >
                       <Image source={{ uri: u }} style={styles.thumb} />
                       {idx === 0 ? (
@@ -561,7 +613,9 @@ export default function VendorProfileScreen() {
 
           {certificateUrls.length ? (
             <>
-              <Text style={styles.meta}>Tap any certificate to view full screen.</Text>
+              <Text style={styles.meta}>
+                Tap any certificate to view full screen.
+              </Text>
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={styles.hRow}>
@@ -569,7 +623,10 @@ export default function VendorProfileScreen() {
                     <Pressable
                       key={`${u}-${idx}`}
                       onPress={() => openViewerAt(certificateUrls, idx)}
-                      style={({ pressed }) => [styles.thumbWrap, pressed ? styles.pressed : null]}
+                      style={({ pressed }) => [
+                        styles.thumbWrap,
+                        pressed ? styles.pressed : null,
+                      ]}
                     >
                       <Image source={{ uri: u }} style={styles.thumb} />
                     </Pressable>
@@ -598,7 +655,9 @@ export default function VendorProfileScreen() {
                 </View>
               )}
 
-              <Text style={styles.meta}>Tap a tile to play. Long-press to open externally.</Text>
+              <Text style={styles.meta}>
+                Tap a tile to play. Long-press to open externally.
+              </Text>
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={styles.hRow}>
@@ -619,7 +678,10 @@ export default function VendorProfileScreen() {
                         ]}
                       >
                         {thumbUri ? (
-                          <Image source={{ uri: thumbUri }} style={styles.thumb} />
+                          <Image
+                            source={{ uri: thumbUri }}
+                            style={styles.thumb}
+                          />
                         ) : (
                           <View style={styles.videoPlaceholder}>
                             <Text style={styles.videoPlaceholderText}>
@@ -649,7 +711,11 @@ export default function VendorProfileScreen() {
         </View>
       </ScrollView>
 
-      <Modal visible={viewerVisible} transparent onRequestClose={() => setViewerVisible(false)}>
+      <Modal
+        visible={viewerVisible}
+        transparent
+        onRequestClose={() => setViewerVisible(false)}
+      >
         <View style={styles.viewerContainer}>
           <FlatList
             ref={flatListRef}
@@ -664,19 +730,25 @@ export default function VendorProfileScreen() {
             })}
             initialScrollIndex={Math.max(
               0,
-              Math.min(currentIndex, Math.max(0, gallery.length - 1))
+              Math.min(currentIndex, Math.max(0, gallery.length - 1)),
             )}
             onScrollToIndexFailed={() => {
               // ignore
             }}
             onMomentumScrollEnd={(e) => {
-              const next = Math.round(e.nativeEvent.contentOffset.x / width) || 0;
+              const next =
+                Math.round(e.nativeEvent.contentOffset.x / width) || 0;
               setCurrentIndex(next);
             }}
-            renderItem={({ item }) => <Image source={{ uri: item }} style={styles.viewerImage} />}
+            renderItem={({ item }) => (
+              <Image source={{ uri: item }} style={styles.viewerImage} />
+            )}
           />
 
-          <Pressable style={styles.closeButton} onPress={() => setViewerVisible(false)}>
+          <Pressable
+            style={styles.closeButton}
+            onPress={() => setViewerVisible(false)}
+          >
             <Text style={styles.closeText}>✕</Text>
           </Pressable>
 
@@ -870,7 +942,7 @@ const styles = StyleSheet.create({
   },
 
   statusTextOn: {
-    color: stylesVars.text, // changed from blue → black
+    color: stylesVars.text,
   },
 
   section: {

@@ -308,6 +308,9 @@ export default function OrderDetailScreen() {
   const [saving, setSaving] = useState(false);
   const [measurementsOpen, setMeasurementsOpen] = useState(false);
 
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [hasReviewed, setHasReviewed] = useState(false);
+
   const load = useCallback(async () => {
     if (!orderId) {
       setOrder(null);
@@ -404,9 +407,50 @@ export default function OrderDetailScreen() {
     }
   }, [orderId]);
 
+  const loadReviewState = useCallback(async () => {
+    if (!orderId) {
+      setHasReviewed(false);
+      return;
+    }
+
+    try {
+      setReviewLoading(true);
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user?.id) {
+        setHasReviewed(false);
+        return;
+      }
+
+      const { data, error } = await (supabase as any)
+        .from("vendor_reviews")
+        .select("id")
+        .eq("order_id", Number(orderId))
+        .eq("buyer_user_id", user.id)
+        .limit(1);
+
+      if (error) {
+        console.warn("review state load error:", error.message);
+        setHasReviewed(false);
+        return;
+      }
+
+      setHasReviewed(Array.isArray(data) && data.length > 0);
+    } catch (e: any) {
+      console.warn("review state load error:", e?.message ?? e);
+      setHasReviewed(false);
+    } finally {
+      setReviewLoading(false);
+    }
+  }, [orderId]);
+
   useEffect(() => {
     load();
-  }, [load]);
+    loadReviewState();
+  }, [load, loadReviewState]);
 
   const isBuyerTrackView = useMemo(() => {
     return (
@@ -427,6 +471,14 @@ export default function OrderDetailScreen() {
     if (isBuyerTrackView) return false;
     return isVendorView;
   }, [isBuyerTrackView, isVendorView]);
+
+  const canReview = useMemo(() => {
+    if (!order) return false;
+
+    const isDelivered = norm(order.status) === "delivered";
+
+    return isBuyerTrackView && isDelivered && !hasReviewed;
+  }, [order, isBuyerTrackView, hasReviewed]);
 
   const backTarget = useMemo(() => {
     if (fromParam === "track" || fromParam === "buyer-track")
@@ -1276,6 +1328,36 @@ export default function OrderDetailScreen() {
               />
             </SectionCard>
 
+            {isBuyerTrackView && norm(order.status) === "delivered" ? (
+              <SectionCard title="Review">
+                {hasReviewed ? (
+                  <Text style={styles.helper}>Review already submitted.</Text>
+                ) : (
+                  <Pressable
+                    onPress={() =>
+                      router.push({
+                        pathname: "/(buyer)/review-vendor-modal",
+                        params: {
+                          orderId: String(order.id),
+                          vendorId: String(order.vendor_id),
+                        },
+                      })
+                    }
+                    style={({ pressed }) => [
+                      styles.primaryBtn,
+                      pressed && styles.pressed,
+                      reviewLoading && styles.disabledBtn,
+                    ]}
+                    disabled={reviewLoading}
+                  >
+                    <Text style={styles.primaryText}>
+                      {reviewLoading ? "Checking..." : "Rate Vendor"}
+                    </Text>
+                  </Pressable>
+                )}
+              </SectionCard>
+            ) : null}
+
             {showVendorActions ? (
               <SectionCard title="Update Status">
                 {nextAction ? (
@@ -1454,6 +1536,10 @@ const styles = StyleSheet.create({
 
   pressed: {
     opacity: 0.82,
+  },
+
+  disabledBtn: {
+    opacity: 0.6,
   },
 
   loading: {

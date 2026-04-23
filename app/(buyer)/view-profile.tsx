@@ -1,5 +1,11 @@
 ﻿// app/(buyer)/view-profile.tsx
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -12,13 +18,17 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View
+  View,
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useAppDispatch } from "@/store/hooks";
 import { setSelectedVendor } from "@/store/vendorSlice";
+import ReviewSummaryCard from "@/components/vendor-reviews/ReviewSummaryCard";
+import ReviewList, {
+  ReviewListItem,
+} from "@/components/vendor-reviews/ReviewList";
 
 const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
@@ -52,6 +62,11 @@ type VendorRow = {
   export_regions?: string[] | null;
 };
 
+type ReviewSummaryRow = {
+  average_rating: number;
+  review_count: number;
+};
+
 function safeText(v: any) {
   const t = String(v ?? "").trim();
   return t.length ? t : "—";
@@ -77,7 +92,9 @@ export default function BuyerViewProfileScreen() {
   const dispatch = useAppDispatch();
 
   const vendorId = useMemo<number | null>(() => {
-    const raw = firstParam((params as any)?.vendorId ?? (params as any)?.id ?? null);
+    const raw = firstParam(
+      (params as any)?.vendorId ?? (params as any)?.id ?? null,
+    );
     if (!raw) return null;
 
     try {
@@ -93,6 +110,11 @@ export default function BuyerViewProfileScreen() {
   const [loading, setLoading] = useState(false);
   const [vendor, setVendor] = useState<VendorRow | null>(null);
   const [missingParam, setMissingParam] = useState(false);
+
+  const [reviewSummary, setReviewSummary] = useState<ReviewSummaryRow | null>(
+    null,
+  );
+  const [reviews, setReviews] = useState<ReviewListItem[]>([]);
 
   const [selectedVideoUrl, setSelectedVideoUrl] = useState<string>("");
 
@@ -115,32 +137,32 @@ export default function BuyerViewProfileScreen() {
         .map((p) => resolvePublicUrl(String(p || "").trim()))
         .filter(Boolean) as string[];
     },
-    [resolvePublicUrl]
+    [resolvePublicUrl],
   );
 
   const bannerUrl = useMemo(
     () => resolvePublicUrl(vendor?.banner_path ?? null),
-    [vendor, resolvePublicUrl]
+    [vendor, resolvePublicUrl],
   );
 
   const profileUrl = useMemo(
     () => resolvePublicUrl(vendor?.profile_image_path ?? null),
-    [vendor, resolvePublicUrl]
+    [vendor, resolvePublicUrl],
   );
 
   const certificateUrls = useMemo(
     () => resolveManyPublic(vendor?.certificate_paths ?? []),
-    [vendor, resolveManyPublic]
+    [vendor, resolveManyPublic],
   );
 
   const shopImageUrls = useMemo(
     () => resolveManyPublic(vendor?.shop_image_paths ?? []),
-    [vendor, resolveManyPublic]
+    [vendor, resolveManyPublic],
   );
 
   const shopVideoUrls = useMemo(
     () => resolveManyPublic(vendor?.shop_video_paths ?? []),
-    [vendor, resolveManyPublic]
+    [vendor, resolveManyPublic],
   );
 
   useEffect(() => {
@@ -199,7 +221,7 @@ export default function BuyerViewProfileScreen() {
       try {
         flatListRef.current?.scrollToIndex({
           index: currentIndex,
-          animated: false
+          animated: false,
         });
       } catch {
         // ignore
@@ -255,7 +277,7 @@ export default function BuyerViewProfileScreen() {
           offers_tailoring,
           exports_enabled,
           export_regions
-        `
+        `,
         )
         .eq("id", vendorId)
         .single();
@@ -292,8 +314,8 @@ export default function BuyerViewProfileScreen() {
           government_permission_url: null,
           images: row?.shop_image_paths ?? null,
           videos: row?.shop_video_paths ?? null,
-          status: row?.status ?? null
-        } as any)
+          status: row?.status ?? null,
+        } as any),
       );
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not load vendor.");
@@ -303,10 +325,54 @@ export default function BuyerViewProfileScreen() {
     }
   }, [vendorId, dispatch, resolvePublicUrl]);
 
+  const fetchReviewData = useCallback(async () => {
+    if (vendorId == null) {
+      setReviewSummary(null);
+      setReviews([]);
+      return;
+    }
+
+    try {
+      const [
+        { data: summaryData, error: summaryError },
+        { data: reviewsData, error: reviewsError },
+      ] = await Promise.all([
+        (supabase as any)
+          .from("vendor_review_summary")
+          .select("average_rating, review_count")
+          .eq("vendor_id", vendorId)
+          .maybeSingle(),
+        (supabase as any)
+          .from("vendor_reviews")
+          .select("id, created_at, rating, comment, vendor_reply")
+          .eq("vendor_id", vendorId)
+          .eq("is_public", true)
+          .eq("is_hidden", false)
+          .order("created_at", { ascending: false })
+          .limit(5),
+      ]);
+
+      if (summaryError) {
+        console.warn("Review summary load error:", summaryError.message);
+      } else {
+        setReviewSummary((summaryData as ReviewSummaryRow | null) ?? null);
+      }
+
+      if (reviewsError) {
+        console.warn("Reviews load error:", reviewsError.message);
+      } else {
+        setReviews((reviewsData as ReviewListItem[] | null) ?? []);
+      }
+    } catch (e: any) {
+      console.warn("Review data load error:", e?.message ?? "Unknown error");
+    }
+  }, [vendorId]);
+
   useFocusEffect(
     useCallback(() => {
       fetchVendor();
-    }, [fetchVendor])
+      fetchReviewData();
+    }, [fetchVendor, fetchReviewData]),
   );
 
   const Field = ({ label, value }: { label: string; value: any }) => (
@@ -324,7 +390,10 @@ export default function BuyerViewProfileScreen() {
 
           <Pressable
             onPress={() => router.back()}
-            style={({ pressed }) => [styles.linkBtn, pressed ? styles.pressed : null]}
+            style={({ pressed }) => [
+              styles.linkBtn,
+              pressed ? styles.pressed : null,
+            ]}
           >
             <Text style={styles.linkText}>Close</Text>
           </Pressable>
@@ -350,7 +419,10 @@ export default function BuyerViewProfileScreen() {
         {!!bannerUrl ? (
           <Pressable
             onPress={() => openViewerAt([bannerUrl], 0)}
-            style={({ pressed }) => [styles.mediaBlock, pressed ? styles.pressed : null]}
+            style={({ pressed }) => [
+              styles.mediaBlock,
+              pressed ? styles.pressed : null,
+            ]}
           >
             <View style={styles.heroWrap}>
               <Image source={{ uri: bannerUrl }} style={styles.heroImage} />
@@ -364,9 +436,15 @@ export default function BuyerViewProfileScreen() {
               {profileUrl ? (
                 <Pressable
                   onPress={() => openViewerAt([profileUrl], 0)}
-                  style={({ pressed }) => [styles.avatarPress, pressed ? styles.pressed : null]}
+                  style={({ pressed }) => [
+                    styles.avatarPress,
+                    pressed ? styles.pressed : null,
+                  ]}
                 >
-                  <Image source={{ uri: profileUrl }} style={styles.avatarImg} />
+                  <Image
+                    source={{ uri: profileUrl }}
+                    style={styles.avatarImg}
+                  />
                 </Pressable>
               ) : (
                 <View style={styles.avatarFallback}>
@@ -401,12 +479,28 @@ export default function BuyerViewProfileScreen() {
           {!!String(vendor?.location_url ?? "").trim() ? (
             <Pressable
               onPress={() => openExternal(String(vendor?.location_url))}
-              style={({ pressed }) => [styles.linkBtnInline, pressed ? styles.pressed : null]}
+              style={({ pressed }) => [
+                styles.linkBtnInline,
+                pressed ? styles.pressed : null,
+              ]}
             >
               <Text style={styles.linkText}>Open Location</Text>
             </Pressable>
           ) : null}
         </View>
+
+        <ReviewSummaryCard
+          title="Ratings & Reviews"
+          averageRating={reviewSummary?.average_rating ?? null}
+          reviewCount={reviewSummary?.review_count ?? 0}
+        />
+
+        <Text style={styles.section}>Recent Comments</Text>
+        <ReviewList
+          reviews={reviews}
+          emptyText="No reviews yet."
+          showVendorReply
+        />
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Services</Text>
@@ -431,14 +525,19 @@ export default function BuyerViewProfileScreen() {
           <Text style={styles.sectionTitle}>Certificates</Text>
           {certificateUrls.length ? (
             <>
-              <Text style={styles.meta}>Tap any certificate to view full screen.</Text>
+              <Text style={styles.meta}>
+                Tap any certificate to view full screen.
+              </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={styles.thumbRow}>
                   {certificateUrls.map((u, idx) => (
                     <Pressable
                       key={`${u}-${idx}`}
                       onPress={() => openViewerAt(certificateUrls, idx)}
-                      style={({ pressed }) => [styles.thumbWrap, pressed ? styles.pressed : null]}
+                      style={({ pressed }) => [
+                        styles.thumbWrap,
+                        pressed ? styles.pressed : null,
+                      ]}
                     >
                       <Image source={{ uri: u }} style={styles.thumb} />
                     </Pressable>
@@ -455,14 +554,19 @@ export default function BuyerViewProfileScreen() {
           <Text style={styles.sectionTitle}>Shop Images</Text>
           {shopImageUrls.length ? (
             <>
-              <Text style={styles.meta}>Tap any image to view full screen.</Text>
+              <Text style={styles.meta}>
+                Tap any image to view full screen.
+              </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View style={styles.thumbRow}>
                   {shopImageUrls.map((u, idx) => (
                     <Pressable
                       key={`${u}-${idx}`}
                       onPress={() => openViewerAt(shopImageUrls, idx)}
-                      style={({ pressed }) => [styles.thumbWrap, pressed ? styles.pressed : null]}
+                      style={({ pressed }) => [
+                        styles.thumbWrap,
+                        pressed ? styles.pressed : null,
+                      ]}
                     >
                       <Image source={{ uri: u }} style={styles.thumb} />
                     </Pressable>
@@ -505,7 +609,7 @@ export default function BuyerViewProfileScreen() {
                       style={({ pressed }) => [
                         styles.videoThumb,
                         selectedVideoUrl === v ? styles.videoThumbOn : null,
-                        pressed ? styles.pressed : null
+                        pressed ? styles.pressed : null,
                       ]}
                     >
                       <Text style={styles.videoThumbText}>Video {idx + 1}</Text>
@@ -526,7 +630,11 @@ export default function BuyerViewProfileScreen() {
         </View>
       </ScrollView>
 
-      <Modal visible={viewerVisible} transparent onRequestClose={() => setViewerVisible(false)}>
+      <Modal
+        visible={viewerVisible}
+        transparent
+        onRequestClose={() => setViewerVisible(false)}
+      >
         <View style={styles.viewerContainer}>
           <FlatList
             ref={flatListRef}
@@ -538,17 +646,18 @@ export default function BuyerViewProfileScreen() {
             getItemLayout={(_, i) => ({
               length: width,
               offset: width * i,
-              index: i
+              index: i,
             })}
             initialScrollIndex={Math.max(
               0,
-              Math.min(currentIndex, Math.max(0, gallery.length - 1))
+              Math.min(currentIndex, Math.max(0, gallery.length - 1)),
             )}
             onScrollToIndexFailed={() => {
               // ignore
             }}
             onMomentumScrollEnd={(e) => {
-              const next = Math.round(e.nativeEvent.contentOffset.x / width) || 0;
+              const next =
+                Math.round(e.nativeEvent.contentOffset.x / width) || 0;
               setCurrentIndex(next);
             }}
             renderItem={({ item }) => (
@@ -558,7 +667,10 @@ export default function BuyerViewProfileScreen() {
             )}
           />
 
-          <Pressable style={styles.closeButton} onPress={() => setViewerVisible(false)}>
+          <Pressable
+            style={styles.closeButton}
+            onPress={() => setViewerVisible(false)}
+          >
             <Text style={styles.closeText}>✕</Text>
           </Pressable>
 
@@ -590,32 +702,39 @@ const stylesVars = {
   overlayDark: "rgba(0,0,0,0.58)",
   overlaySoft: "rgba(255,255,255,0.14)",
   white: "#FFFFFF",
-  black: "#000000"
+  black: "#000000",
 };
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
   content: {
     padding: 16,
     paddingBottom: 24,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12
+    gap: 12,
   },
 
   title: {
     fontSize: 18,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
+  },
+
+  section: {
+    marginTop: 18,
+    fontSize: 15,
+    fontWeight: "700",
+    color: stylesVars.text,
   },
 
   linkBtn: {
@@ -627,7 +746,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D7E3FF",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   linkBtnInline: {
@@ -641,26 +760,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D7E3FF",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   linkText: {
     color: stylesVars.blue,
     fontSize: 14,
-    fontWeight: "700"
+    fontWeight: "700",
   },
 
   loadingRow: {
     marginTop: 12,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10
+    gap: 10,
   },
 
   loadingText: {
     fontSize: 13,
     color: stylesVars.mutedText,
-    fontWeight: "600"
+    fontWeight: "600",
   },
 
   card: {
@@ -669,14 +788,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
-    padding: 18
+    padding: 18,
   },
 
   sectionTitle: {
     fontSize: 15,
     fontWeight: "700",
     color: stylesVars.text,
-    marginBottom: 2
+    marginBottom: 2,
   },
 
   meta: {
@@ -684,18 +803,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   row: {
-    marginTop: 10
+    marginTop: 10,
   },
 
   label: {
     fontSize: 13,
     fontWeight: "700",
     color: stylesVars.text,
-    letterSpacing: 0.2
+    letterSpacing: 0.2,
   },
 
   value: {
@@ -703,7 +822,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     fontWeight: "500",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   mediaBlock: {
@@ -712,25 +831,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
-    overflow: "hidden"
+    overflow: "hidden",
   },
 
   heroWrap: {
     width: "100%",
-    backgroundColor: stylesVars.cardBg
+    backgroundColor: stylesVars.cardBg,
   },
 
   heroImage: {
     width: "100%",
     height: 230,
     resizeMode: "cover",
-    backgroundColor: "#F1F5F9"
+    backgroundColor: "#F1F5F9",
   },
 
   profileRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12
+    gap: 12,
   },
 
   avatarWrap: {
@@ -740,18 +859,18 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
     borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg
+    backgroundColor: stylesVars.cardBg,
   },
 
   avatarPress: {
     width: "100%",
-    height: "100%"
+    height: "100%",
   },
 
   avatarImg: {
     width: "100%",
     height: "100%",
-    resizeMode: "cover"
+    resizeMode: "cover",
   },
 
   avatarFallback: {
@@ -759,30 +878,30 @@ const styles = StyleSheet.create({
     height: "100%",
     backgroundColor: stylesVars.blue,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   avatarFallbackText: {
     fontSize: 28,
     fontWeight: "700",
-    color: stylesVars.white
+    color: stylesVars.white,
   },
 
   headerInfo: {
-    flex: 1
+    flex: 1,
   },
 
   nameText: {
     fontSize: 16,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   shopText: {
     marginTop: 2,
     fontSize: 13,
     fontWeight: "500",
-    color: stylesVars.mutedText
+    color: stylesVars.mutedText,
   },
 
   statusText: {
@@ -790,14 +909,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "500",
-    color: stylesVars.mutedText
+    color: stylesVars.mutedText,
   },
 
   thumbRow: {
     flexDirection: "row",
     gap: 10,
     paddingTop: 10,
-    paddingBottom: 4
+    paddingBottom: 4,
   },
 
   thumbWrap: {
@@ -807,20 +926,20 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
     borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg
+    backgroundColor: stylesVars.cardBg,
   },
 
   thumb: {
     width: "100%",
     height: "100%",
-    backgroundColor: "#F1F5F9"
+    backgroundColor: "#F1F5F9",
   },
 
   empty: {
     marginTop: 10,
     fontSize: 13,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   videoBox: {
@@ -829,12 +948,12 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
     borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg
+    backgroundColor: stylesVars.cardBg,
   },
 
   video: {
     width: "100%",
-    height: 220
+    height: 220,
   },
 
   videoThumb: {
@@ -845,42 +964,42 @@ const styles = StyleSheet.create({
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   videoThumbOn: {
     borderColor: stylesVars.blue,
     borderWidth: 2,
-    backgroundColor: stylesVars.blueSoft
+    backgroundColor: stylesVars.blueSoft,
   },
 
   videoThumbText: {
     color: stylesVars.blue,
     fontWeight: "700",
-    fontSize: 12
+    fontSize: 12,
   },
 
   pressed: {
-    opacity: 0.82
+    opacity: 0.82,
   },
 
   viewerContainer: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.95)",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   viewerSlide: {
     width,
     height: "100%",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   viewerImage: {
     width,
     height: "100%",
-    resizeMode: "contain"
+    resizeMode: "contain",
   },
 
   closeButton: {
@@ -892,13 +1011,13 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: stylesVars.overlaySoft,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   closeText: {
     color: stylesVars.white,
     fontSize: 20,
-    fontWeight: "900"
+    fontWeight: "900",
   },
 
   indexCaption: {
@@ -908,12 +1027,12 @@ const styles = StyleSheet.create({
     backgroundColor: stylesVars.overlaySoft,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 999
+    borderRadius: 999,
   },
 
   indexText: {
     color: stylesVars.white,
     fontWeight: "900",
-    fontSize: 14
-  }
+    fontSize: 14,
+  },
 });

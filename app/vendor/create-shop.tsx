@@ -86,7 +86,6 @@ export default function CreateShopScreen() {
   const router = useRouter();
   const dispatch = useAppDispatch();
 
-  const authUserId = useAppSelector((s) => s.user?.userDetails?.userId);
   const selectedVendor = useAppSelector((s) => s.vendor);
 
   const [stepIndex, setStepIndex] = useState(0);
@@ -267,6 +266,19 @@ export default function CreateShopScreen() {
 
     setSaving(true);
 
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      setSaving(false);
+      Alert.alert("Error", "Vendor session not found. Please sign in again.");
+      return;
+    }
+
+    const authUserId = user.id;
+
     const normalizedTailoringOptions = form.offersTailoring
       ? {
           blouse_neck: [...BLOUSE_NECK_PATTERNS],
@@ -279,35 +291,97 @@ export default function CreateShopScreen() {
           trouser: [],
         };
 
-    const normalizedExportRegions = form.exportsEnabled ? form.exportRegions : [];
+    const normalizedExportRegions = form.exportsEnabled
+      ? form.exportRegions
+      : [];
 
-    const { data: vendorRow, error: insErr } = await supabase
+    const { data: existingVendor, error: existingVendorError } = await supabase
       .from("vendor")
-      .insert({
-        name: form.ownerName.trim(),
-        email: form.email.trim(),
-        mobile: form.mobile.trim(),
-        landline: form.landline.trim() || null,
-        shop_name: form.shopName.trim(),
-        address: form.address.trim(),
-        location_url: form.locationUrl.trim() || null,
-        offers_tailoring: Boolean(form.offersTailoring),
-        exports_enabled: Boolean(form.exportsEnabled),
-        export_regions: normalizedExportRegions,
-        tailoring_options: normalizedTailoringOptions,
-        location: form.address.trim(),
-        status: "pending",
-      })
-      .select("id, created_at")
-      .single();
+      .select("id, created_at, auth_user_id")
+      .eq("auth_user_id", authUserId)
+      .maybeSingle();
 
-    if (insErr || !vendorRow?.id) {
+    if (existingVendorError) {
       setSaving(false);
-      Alert.alert("Error", insErr?.message ?? "Could not register vendor.");
+      Alert.alert(
+        "Error",
+        existingVendorError.message ?? "Could not check existing vendor.",
+      );
       return;
     }
 
-    const vendor_id = vendorRow.id;
+    let vendor_id: number;
+    let vendorCreatedAt: string | null = null;
+
+    if (existingVendor?.id) {
+      const { error: baseUpdateError } = await supabase
+        .from("vendor")
+        .update({
+          owner_user_id: authUserId,
+          auth_user_id: authUserId,
+          name: form.ownerName.trim(),
+          email: form.email.trim(),
+          mobile: form.mobile.trim(),
+          landline: form.landline.trim() || null,
+          shop_name: form.shopName.trim(),
+          address: form.address.trim(),
+          location_url: form.locationUrl.trim() || null,
+          offers_tailoring: Boolean(form.offersTailoring),
+          exports_enabled: Boolean(form.exportsEnabled),
+          export_regions: normalizedExportRegions,
+          tailoring_options: normalizedTailoringOptions,
+          location: form.address.trim(),
+          status: "pending",
+        })
+        .eq("id", existingVendor.id);
+
+      if (baseUpdateError) {
+        setSaving(false);
+        Alert.alert(
+          "Error",
+          baseUpdateError.message ?? "Could not update vendor.",
+        );
+        return;
+      }
+
+      vendor_id = Number(existingVendor.id);
+      vendorCreatedAt = existingVendor.created_at ?? null;
+    } else {
+      const { data: vendorRow, error: insertError } = await supabase
+        .from("vendor")
+        .insert({
+          owner_user_id: authUserId,
+          auth_user_id: authUserId,
+          name: form.ownerName.trim(),
+          email: form.email.trim(),
+          mobile: form.mobile.trim(),
+          landline: form.landline.trim() || null,
+          shop_name: form.shopName.trim(),
+          address: form.address.trim(),
+          location_url: form.locationUrl.trim() || null,
+          offers_tailoring: Boolean(form.offersTailoring),
+          exports_enabled: Boolean(form.exportsEnabled),
+          export_regions: normalizedExportRegions,
+          tailoring_options: normalizedTailoringOptions,
+          location: form.address.trim(),
+          status: "pending",
+        })
+        .select("id, created_at, auth_user_id")
+        .single();
+
+      if (insertError || !vendorRow?.id) {
+        setSaving(false);
+        Alert.alert(
+          "Error",
+          insertError?.message ?? "Could not register vendor.",
+        );
+        return;
+      }
+
+      vendor_id = Number(vendorRow.id);
+      vendorCreatedAt = vendorRow.created_at ?? null;
+    }
+
     const ts = Date.now();
 
     const profilePath = form.profile
@@ -317,7 +391,7 @@ export default function CreateShopScreen() {
           form.profile,
           "image/jpeg",
         )
-      : null;
+      : (selectedVendor?.profile_image_path ?? null);
 
     const certPath = form.govPermission
       ? await uploadToBucket(
@@ -326,7 +400,7 @@ export default function CreateShopScreen() {
           form.govPermission,
           "image/jpeg",
         )
-      : null;
+      : (selectedVendor?.certificate_paths?.[0] ?? null);
 
     const bannerPath = form.banner
       ? await uploadToBucket(
@@ -335,7 +409,7 @@ export default function CreateShopScreen() {
           form.banner,
           "image/jpeg",
         )
-      : null;
+      : (selectedVendor?.banner_path ?? null);
 
     const imagePaths: string[] = [];
     for (let i = 0; i < form.images.length; i++) {
@@ -364,11 +438,17 @@ export default function CreateShopScreen() {
     const { error: upErr } = await supabase
       .from("vendor")
       .update({
+        owner_user_id: authUserId,
+        auth_user_id: authUserId,
         profile_image_path: profilePath,
         banner_path: bannerPath,
         certificate_paths,
-        shop_image_paths: imagePaths.length ? imagePaths : null,
-        shop_video_paths: videoPaths.length ? videoPaths : null,
+        shop_image_paths: imagePaths.length
+          ? imagePaths
+          : (selectedVendor?.shop_image_paths ?? null),
+        shop_video_paths: videoPaths.length
+          ? videoPaths
+          : (selectedVendor?.shop_video_paths ?? null),
         offers_tailoring: Boolean(form.offersTailoring),
         exports_enabled: Boolean(form.exportsEnabled),
         export_regions: normalizedExportRegions,
@@ -387,7 +467,10 @@ export default function CreateShopScreen() {
     dispatch(
       setSelectedVendor({
         id: vendor_id,
-        created_at: vendorRow.created_at ?? null,
+        created_at: vendorCreatedAt,
+        owner_user_id: authUserId,
+        auth_user_id: authUserId,
+        has_shop: true,
         name: form.ownerName.trim(),
         email: form.email.trim(),
         mobile: form.mobile.trim(),
@@ -398,20 +481,32 @@ export default function CreateShopScreen() {
         profile_image_path: profilePath,
         banner_path: bannerPath,
         certificate_paths,
-        shop_image_paths: imagePaths.length ? imagePaths : null,
-        shop_video_paths: videoPaths.length ? videoPaths : null,
+        shop_image_paths: imagePaths.length
+          ? imagePaths
+          : (selectedVendor?.shop_image_paths ?? null),
+        shop_video_paths: videoPaths.length
+          ? videoPaths
+          : (selectedVendor?.shop_video_paths ?? null),
         offers_tailoring: Boolean(form.offersTailoring),
         exports_enabled: Boolean(form.exportsEnabled),
         export_regions: normalizedExportRegions,
         tailoring_options: normalizedTailoringOptions,
         status: "pending",
+        owner_name: form.ownerName.trim(),
+        banner_url: bannerPath,
+        images: imagePaths.length
+          ? imagePaths
+          : (selectedVendor?.images ?? null),
+        videos: videoPaths.length
+          ? videoPaths
+          : (selectedVendor?.videos ?? null),
+        image: profilePath,
         location: form.address.trim(),
-        image: null,
       }),
     );
 
-    router.replace("/vendor/confirmation");
-  }, [dispatch, form, router]);
+    router.replace("/vendor/profile/settings");
+  }, [dispatch, form, router, selectedVendor]);
 
   const goNext = useCallback(async () => {
     if (!validateStep(currentStep.id)) return;
@@ -428,7 +523,13 @@ export default function CreateShopScreen() {
     }
 
     setStepIndex((prev) => prev + 1);
-  }, [currentStep.id, editingStepIndex, isLastStep, submitVendor, validateStep]);
+  }, [
+    currentStep.id,
+    editingStepIndex,
+    isLastStep,
+    submitVendor,
+    validateStep,
+  ]);
 
   const [viewerVisible, setViewerVisible] = useState(false);
   const [gallery, setGallery] = useState<string[]>([]);
@@ -485,9 +586,9 @@ export default function CreateShopScreen() {
     form.profile?.uri,
   ]);
 
-  const [videoThumbByUri, setVideoThumbByUri] = useState<Record<string, string>>(
-    {},
-  );
+  const [videoThumbByUri, setVideoThumbByUri] = useState<
+    Record<string, string>
+  >({});
   const [selectedVideoUri, setSelectedVideoUri] = useState<string>("");
 
   const ensureVideoThumb = useCallback(
@@ -668,7 +769,9 @@ export default function CreateShopScreen() {
         return (
           <View>
             <View style={styles.previewCard}>
-              <Text style={styles.previewLabel}>Does this shop offer tailoring?</Text>
+              <Text style={styles.previewLabel}>
+                Does this shop offer tailoring?
+              </Text>
 
               <View style={styles.choiceGrid}>
                 <Pressable
@@ -699,7 +802,8 @@ export default function CreateShopScreen() {
                       form.offersTailoring && styles.choiceCardSubtitleActive,
                     ]}
                   >
-                    This shop offers tailoring services for their unstitched products
+                    This shop offers tailoring services for their unstitched
+                    products
                   </Text>
                 </Pressable>
 
@@ -799,14 +903,19 @@ export default function CreateShopScreen() {
 
               {form.exportsEnabled ? (
                 <>
-                  <Text style={styles.optionGroupTitle}>Select export regions</Text>
+                  <Text style={styles.optionGroupTitle}>
+                    Select export regions
+                  </Text>
                   <View style={styles.chipWrap}>
                     {EXPORT_REGIONS.map((region) => {
                       const selected = form.exportRegions?.includes(region);
                       return (
                         <Pressable
                           key={region}
-                          style={[styles.choiceChip, selected && styles.choiceChipActive]}
+                          style={[
+                            styles.choiceChip,
+                            selected && styles.choiceChipActive,
+                          ]}
                           onPress={() => toggleExportRegion(region)}
                         >
                           <Text
