@@ -62,15 +62,14 @@ export default function VendorProductsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
 
-  // vendor.id is bigint in your DB -> treat as number
   const vendorIdRaw =
     useAppSelector((s: any) => s?.vendorSlice?.vendor?.id ?? null) ??
     useAppSelector((s: any) => s?.vendor?.id ?? null);
 
   const vendorId = safeInt(vendorIdRaw);
 
-  const [loading, setLoading] = useState(false); // initial / refresh
-  const [loadingMore, setLoadingMore] = useState(false); // pagination
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [hasMore, setHasMore] = useState(true);
 
@@ -176,7 +175,6 @@ export default function VendorProductsScreen() {
     }, [vendorId]),
   );
 
-  // If we returned here with a new product_id, fetch and insert it at the top immediately
   useEffect(() => {
     const newIdRaw = String((params as any)?.new_product_id ?? "").trim();
     const newId = safeInt(newIdRaw);
@@ -217,66 +215,86 @@ export default function VendorProductsScreen() {
     };
   }, [params, vendorId]);
 
+  function openProduct(item: ProductRow) {
+    router.push(
+      `/vendor/profile/view-product?product_id=${encodeURIComponent(
+        item.id,
+      )}` as any,
+    );
+  }
+
+  function editProduct(item: ProductRow) {
+    router.push({
+      pathname: "/vendor/profile/update-product",
+      params: {
+        productId: item.id,
+        product_id: item.id,
+      },
+    } as any);
+  }
+
   function renderItem({ item }: { item: ProductRow }) {
     const code = safeText(item.product_code);
     const title = safeText(item.title);
 
     return (
-      <Pressable
-        style={({ pressed }) => [styles.item, pressed ? styles.pressed : null]}
-        onPress={() =>
-          router.push(
-            `/vendor/profile/view-product?product_id=${encodeURIComponent(
-              item.id,
-            )}` as any,
-          )
-        }
-      >
-        <View style={styles.thumbWrap}>
-          {item.banner_url ? (
-            <Image source={{ uri: item.banner_url }} style={styles.thumb} />
-          ) : (
-            <View style={styles.thumbFallback}>
-              <Text style={styles.thumbFallbackText}>No Image</Text>
-            </View>
-          )}
-        </View>
+      <View style={styles.item}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.itemMain,
+            pressed ? styles.pressed : null,
+          ]}
+          // onPress={() => openProduct(item)}
+        >
+          <View style={styles.thumbWrap}>
+            {item.banner_url ? (
+              <Image source={{ uri: item.banner_url }} style={styles.thumb} />
+            ) : (
+              <View style={styles.thumbFallback}>
+                <Text style={styles.thumbFallbackText}>No Image</Text>
+              </View>
+            )}
+          </View>
 
-        <View style={styles.itemMid}>
-          <Text style={styles.itemCode}>{code}</Text>
-          <Text style={styles.itemTitle} numberOfLines={1}>
-            {title}
-          </Text>
-
-          <Text
-            style={{
-              marginTop: 2,
-              fontSize: 12,
-              color: "#64748B",
-              fontWeight: "600",
-            }}
-          >
-            {item?.made_on_order
-              ? "Made on order"
-              : `Qty: ${Math.max(0, Number(item?.inventory_qty ?? 0))}`}
-          </Text>
-
-          {!item?.made_on_order && Number(item?.inventory_qty ?? 0) <= 0 ? (
-            <Text
-              style={{
-                marginTop: 2,
-                fontSize: 12,
-                color: "#B91C1C",
-                fontWeight: "700",
-              }}
-            >
-              Out of stock
+          <View style={styles.itemMid}>
+            <Text style={styles.itemCode}>{code}</Text>
+            <Text style={styles.itemTitle} numberOfLines={1}>
+              {title}
             </Text>
-          ) : null}
-        </View>
 
-        <Text style={styles.itemArrow}>›</Text>
-      </Pressable>
+            <Text style={styles.stockText}>
+              {item?.made_on_order
+                ? "Made on order"
+                : `Qty: ${Math.max(0, Number(item?.inventory_qty ?? 0))}`}
+            </Text>
+
+            {!item?.made_on_order && Number(item?.inventory_qty ?? 0) <= 0 ? (
+              <Text style={styles.outOfStockText}>Out of stock</Text>
+            ) : null}
+          </View>
+        </Pressable>
+        <View style={styles.itemActions}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionBtn,
+              pressed ? styles.pressed : null,
+            ]}
+            onPress={() => openProduct(item)}
+          >
+            <Text style={styles.actionText}>View</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionBtn,
+              pressed ? styles.pressed : null,
+            ]}
+            onPress={() => editProduct(item)}
+          >
+            <Text style={styles.actionText}>Edit</Text>
+          </Pressable>
+        </View>
+      </View>
     );
   }
 
@@ -305,30 +323,19 @@ export default function VendorProductsScreen() {
 
           <View style={styles.card}>
             <Text style={styles.meta}>
-              Add products & manage inventory here.
+              Add new products here. To update a product, tap Edit on any
+              product below.
             </Text>
 
-            <View style={styles.btnRow}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.primaryBtn,
-                  pressed ? styles.pressed : null,
-                ]}
-                onPress={() => router.push("/vendor/profile/add-product")}
-              >
-                <Text style={styles.primaryText}>Add New Product</Text>
-              </Pressable>
-
-              <Pressable
-                style={({ pressed }) => [
-                  styles.secondaryBtn,
-                  pressed ? styles.pressed : null,
-                ]}
-                onPress={() => router.push("/vendor/profile/update-product")}
-              >
-                <Text style={styles.secondaryText}>Update Product</Text>
-              </Pressable>
-            </View>
+            <Pressable
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                pressed ? styles.pressed : null,
+              ]}
+              onPress={() => router.push("/vendor/profile/add-product")}
+            >
+              <Text style={styles.primaryText}>Add New Product</Text>
+            </Pressable>
           </View>
 
           <Text style={styles.section}>Recent Products</Text>
@@ -382,25 +389,17 @@ export default function VendorProductsScreen() {
     />
   );
 }
-
 const stylesVars = {
   bg: "#F8FAFC",
   cardBg: "#FFFFFF",
   border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
   blue: "#2563EB",
   blueSoft: "#EEF4FF",
   text: "#0F172A",
   subText: "#475569",
   mutedText: "#64748B",
-  placeholder: "#94A3B8",
   danger: "#B91C1C",
-  dangerSoft: "#FEE2E2",
-  dangerBorder: "#FCA5A5",
-  overlayDark: "rgba(0,0,0,0.58)",
-  overlaySoft: "rgba(255,255,255,0.14)",
   white: "#FFFFFF",
-  black: "#000000",
 };
 
 const styles = StyleSheet.create({
@@ -443,16 +442,11 @@ const styles = StyleSheet.create({
   },
 
   meta: {
-    marginTop: 6,
+    marginBottom: 14,
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
-  },
-
-  btnRow: {
-    marginTop: 14,
-    gap: 10,
   },
 
   primaryBtn: {
@@ -467,24 +461,6 @@ const styles = StyleSheet.create({
 
   primaryText: {
     color: stylesVars.white,
-    fontWeight: "700",
-    fontSize: 14,
-  },
-
-  secondaryBtn: {
-    minHeight: 48,
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    backgroundColor: stylesVars.blueSoft,
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  secondaryText: {
-    color: stylesVars.blue,
     fontWeight: "700",
     fontSize: 14,
   },
@@ -510,12 +486,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: stylesVars.border,
     borderRadius: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
     backgroundColor: stylesVars.cardBg,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    overflow: "hidden",
+  },
+
+  itemMain: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingLeft: 10,
   },
 
   thumbWrap: {
@@ -564,10 +546,42 @@ const styles = StyleSheet.create({
     color: stylesVars.text,
   },
 
-  itemArrow: {
-    fontSize: 22,
+  stockText: {
+    marginTop: 2,
+    fontSize: 12,
+    color: stylesVars.mutedText,
+    fontWeight: "600",
+  },
+
+  outOfStockText: {
+    marginTop: 2,
+    fontSize: 12,
+    color: stylesVars.danger,
     fontWeight: "700",
-    color: stylesVars.subText,
+  },
+
+  itemActions: {
+    paddingRight: 10,
+    paddingLeft: 4,
+    justifyContent: "center",
+    gap: 6,
+  },
+
+  actionBtn: {
+    minWidth: 70,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  actionText: {
+    color: stylesVars.blue,
+    fontWeight: "800",
+    fontSize: 12,
   },
 
   empty: {

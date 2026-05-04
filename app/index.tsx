@@ -1,9 +1,11 @@
 import { Href, useRouter } from "expo-router";
 import { Button, StyleSheet, Text, View } from "react-native";
-import { useAppSelector } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { logoutBuyer } from "@/utils/auth/logout";
 
 export default function MainPage() {
   const router = useRouter();
+  const dispatch = useAppDispatch();
 
   const buyer = useAppSelector((s) => s.buyer);
   const vendor = useAppSelector((s) => s.vendor);
@@ -16,6 +18,11 @@ export default function MainPage() {
     : vendorLoggedIn
       ? "Continue to Shopping"
       : "Continue as Guest";
+
+  const handleBuyerLogout = async () => {
+    await logoutBuyer(dispatch);
+    router.replace("/" as Href);
+  };
 
   return (
     <View style={styles.container}>
@@ -34,12 +41,20 @@ export default function MainPage() {
             title="Login as Buyer"
             onPress={() => router.push("/(auth)/buyer/signin" as Href)}
           />
+
           <View style={{ height: 20 }} />
 
           <Button
             title="Login as Vendor"
             onPress={() => router.push("/(auth)/vendor/signin" as Href)}
           />
+        </>
+      ) : null}
+
+      {buyerLoggedIn ? (
+        <>
+          <View style={{ height: 20 }} />
+          <Button title="Logout Buyer" onPress={handleBuyerLogout} />
         </>
       ) : null}
 

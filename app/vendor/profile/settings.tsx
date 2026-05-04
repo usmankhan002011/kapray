@@ -57,11 +57,18 @@ export default function VendorSettingsScreen() {
         style={styles.container}
         contentContainerStyle={styles.content}
       >
-        <Text style={styles.title}>Vendor Settings</Text>
+        <View style={styles.header}>
+          <Text style={styles.title}>Vendor Settings</Text>
+
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={() => setLogoutVisible(true)}
+          >
+            <Text style={styles.logoutText}>Logout</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Shop</Text>
-
           <TouchableOpacity
             style={styles.placeholder}
             onPress={() => router.push("/vendor/profile/view-profile")}
@@ -81,17 +88,6 @@ export default function VendorSettingsScreen() {
             onPress={() => router.push("/vendor/profile/edit-vendor")}
           >
             <Text style={styles.actionText}>Edit Shop</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Account</Text>
-
-          <TouchableOpacity
-            style={styles.logoutButton}
-            onPress={() => setLogoutVisible(true)}
-          >
-            <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -171,7 +167,15 @@ const styles = StyleSheet.create({
     backgroundColor: stylesVars.bg,
   },
 
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
   title: {
+    flex: 1,
     fontSize: 18,
     fontWeight: "700",
     color: stylesVars.text,
@@ -184,14 +188,6 @@ const styles = StyleSheet.create({
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
     padding: 18,
-  },
-
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: stylesVars.subText,
-    marginBottom: 6,
-    letterSpacing: 0.2,
   },
 
   placeholder: {
@@ -213,19 +209,19 @@ const styles = StyleSheet.create({
   },
 
   logoutButton: {
-    minHeight: 48,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
+    minHeight: 32,
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+    borderRadius: 10,
     backgroundColor: stylesVars.dangerSoft,
     borderWidth: 1,
     borderColor: stylesVars.dangerBorder,
-    marginTop: 10,
     justifyContent: "center",
+    alignItems: "center",
   },
 
   logoutText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "700",
     color: stylesVars.danger,
   },

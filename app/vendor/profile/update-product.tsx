@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { useAppSelector } from "@/store/hooks";
 import * as ImagePicker from "expo-image-picker";
@@ -288,12 +288,19 @@ function SelectionPill({
 
 export default function UpdateProductScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    productId?: string;
+    product_id?: string;
+  }>();
 
   const vendorIdRaw =
     useAppSelector((s: any) => s?.vendorSlice?.vendor?.id ?? null) ??
     useAppSelector((s: any) => s?.vendor?.id ?? null);
 
   const vendorId = safeInt(vendorIdRaw);
+  const routeProductId = safeInt(
+    (params as any)?.productId ?? (params as any)?.product_id,
+  );
 
   const [loadingList, setLoadingList] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -301,14 +308,10 @@ export default function UpdateProductScreen() {
   const [vendorLoading, setVendorLoading] = useState(false);
 
   const [products, setProducts] = useState<ProductRow[]>([]);
-  const [query, setQuery] = useState("");
-
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const selected = useMemo(() => {
     return products.find((p) => p.id === selectedId) ?? null;
   }, [products, selectedId]);
-
-  const [pickerOpen, setPickerOpen] = useState(true);
 
   const [title, setTitle] = useState("");
   const [moreDescription, setMoreDescription] = useState("");
@@ -453,6 +456,12 @@ export default function UpdateProductScreen() {
   }, [vendorId]);
 
   useEffect(() => {
+    if (routeProductId != null) {
+      setSelectedId(routeProductId);
+    }
+  }, [routeProductId]);
+
+  useEffect(() => {
     if (!selected) return;
 
     setTitle(safeText(selected.title));
@@ -518,17 +527,6 @@ export default function UpdateProductScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tailoringEnabled]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return products;
-
-    return products.filter((p: ProductRow) => {
-      const code = String(p.product_code ?? "").toLowerCase();
-      const t = String(p.title ?? "").toLowerCase();
-      return code.includes(q) || t.includes(q);
-    });
-  }, [products, query]);
-
   const inventoryEditable = useMemo(() => {
     if (!selected) return false;
     return !Boolean(selected.made_on_order);
@@ -556,6 +554,8 @@ export default function UpdateProductScreen() {
         .filter(Boolean) as string[],
     [imagePaths, resolvePublicUrl],
   );
+
+  const previewImageUrl = imageUrls[0] ?? null;
 
   const videoUrls = useMemo(
     () =>
@@ -802,6 +802,7 @@ export default function UpdateProductScreen() {
       Alert.alert(
         "Updated",
         `Saved changes for ${safeText(updated.product_code)}`,
+        [{ text: "OK", onPress: () => router.back() }],
       );
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not update product.");
@@ -846,6 +847,36 @@ export default function UpdateProductScreen() {
     } finally {
       setSavingMedia(false);
     }
+  }
+
+  function confirmRemoveImage(idx: number) {
+    Alert.alert(
+      "Remove image?",
+      "This image will be removed from the product.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: () => void removeImageAt(idx),
+        },
+      ],
+    );
+  }
+
+  function confirmRemoveVideo(idx: number) {
+    Alert.alert(
+      "Remove video?",
+      "This video will be removed from the product.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: () => void removeVideoAt(idx),
+        },
+      ],
+    );
   }
 
   async function removeImageAt(idx: number) {
@@ -1039,568 +1070,474 @@ export default function UpdateProductScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>Update Product</Text>
+    <View style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.headerRow}>
+          <Text style={styles.title}>Update Product</Text>
 
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.linkBtn,
-            pressed ? styles.pressed : null,
-          ]}
-        >
-          <Text style={styles.linkText}>Close</Text>
-        </Pressable>
-      </View>
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [
+              styles.linkBtn,
+              pressed ? styles.pressed : null,
+            ]}
+          >
+            <Text style={styles.linkText}>Close</Text>
+          </Pressable>
+        </View>
 
-      {!vendorId ? (
-        <Text style={styles.warn}>
-          Vendor not loaded. Please ensure vendorSlice has vendor.id (bigint).
-        </Text>
-      ) : null}
+        {!vendorId ? (
+          <Text style={styles.warn}>
+            Vendor not loaded. Please ensure vendorSlice has vendor.id (bigint).
+          </Text>
+        ) : null}
+        {selected ? (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Product Preview</Text>
 
-      <View style={styles.card}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Pick a product</Text>
+            <View style={styles.previewBox}>
+              {previewImageUrl ? (
+                <Image
+                  source={{ uri: previewImageUrl }}
+                  style={styles.previewImage}
+                />
+              ) : (
+                <View style={styles.previewImageFallback}>
+                  <Text style={styles.previewImageFallbackText}>No Image</Text>
+                </View>
+              )}
 
-          {selected ? (
+              <View style={styles.previewInfo}>
+                <Text style={styles.selectedCode}>
+                  {safeText(selected.product_code)}
+                </Text>
+
+                <Text style={styles.selectedTitle} numberOfLines={2}>
+                  {safeText(selected.title)}
+                </Text>
+
+                <Text style={styles.metaLine}>
+                  {Boolean(selected.made_on_order)
+                    ? "Made on Order"
+                    : `Inventory Qty: ${Math.max(
+                        0,
+                        Number(selected.inventory_qty ?? 0),
+                      )}`}
+                </Text>
+              </View>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>No product selected</Text>
+            <Text style={styles.empty}>
+              Open this screen from Products → Edit so the product can load
+              directly.
+            </Text>
             <Pressable
-              onPress={() => setPickerOpen((v) => !v)}
+              onPress={() => router.back()}
               style={({ pressed }) => [
                 styles.smallBtn,
                 pressed ? styles.pressed : null,
               ]}
             >
-              <Text style={styles.smallBtnText}>
-                {pickerOpen ? "Hide" : "Change Product"}
-              </Text>
+              <Text style={styles.smallBtnText}>Back to Products</Text>
             </Pressable>
-          ) : null}
-        </View>
-
-        {selected ? (
-          <View style={styles.selectedBox}>
-            <Text style={styles.selectedCode}>
-              {safeText(selected.product_code)}
-            </Text>
-            <Text style={styles.selectedTitle} numberOfLines={1}>
-              {safeText(selected.title)}
-            </Text>
           </View>
-        ) : null}
+        )}
 
-        {pickerOpen ? (
-          <>
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search by product code or title..."
-              placeholderTextColor={stylesVars.placeholder}
-              style={styles.input}
-              maxLength={80}
-            />
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Basic Details</Text>
 
-            <View style={styles.topActionsRow}>
-              <Text
-                style={[styles.refresh, loadingList && styles.disabledText]}
-                onPress={loadingList ? undefined : fetchProducts}
-              >
-                {loadingList ? "Loading..." : "Refresh"}
-              </Text>
-            </View>
-
-            {loadingList ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator />
-                <Text style={styles.loadingText}>Loading products…</Text>
-              </View>
-            ) : filtered.length ? (
-              <View style={styles.list}>
-                {filtered.slice(0, 30).map((p: ProductRow) => {
-                  const isOn = p.id === selectedId;
-                  const code = safeText(p.product_code);
-                  const t = safeText(p.title);
-
-                  return (
-                    <Pressable
-                      key={String(p.id)}
-                      style={({ pressed }) => [
-                        styles.item,
-                        isOn ? styles.itemOn : null,
-                        pressed ? styles.pressed : null,
-                      ]}
-                      onPress={() => {
-                        setSelectedId(p.id);
-                        setPickerOpen(false);
-                      }}
-                    >
-                      <View style={styles.itemLeft}>
-                        <Text style={styles.itemCode}>{code}</Text>
-                        <Text style={styles.itemTitle} numberOfLines={1}>
-                          {t}
-                        </Text>
-                      </View>
-
-                      <Text style={styles.itemArrow}>{isOn ? "✓" : "›"}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ) : (
-              <Text style={styles.empty}>No products found.</Text>
-            )}
-
-            {filtered.length > 30 ? (
-              <Text style={styles.hint}>
-                Showing first 30 matches. Refine your search.
-              </Text>
-            ) : null}
-          </>
-        ) : null}
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Edit details</Text>
-
-        {!selected ? (
-          <Text style={styles.empty}>Select a product above to edit.</Text>
-        ) : (
-          <>
-            <Text style={styles.metaLine}>
-              Selected:{" "}
-              <Text style={styles.metaStrong}>
-                {safeText(selected.product_code)}
-              </Text>
-            </Text>
-
-            <Text style={styles.label}>Title *</Text>
-            <TextInput
-              value={title}
-              onChangeText={setTitle}
-              placeholder="e.g., Bridal heavy embroidered lehenga"
-              placeholderTextColor={stylesVars.placeholder}
-              style={styles.input}
-              maxLength={80}
-            />
-            <Text style={styles.label}>Inventory Quantity *</Text>
-
-            {Boolean(selected.made_on_order) ? (
-              <View style={styles.madeOnOrderPill}>
-                <Text style={styles.madeOnOrderText}>Made on Order</Text>
-              </View>
-            ) : (
+          {!selected ? (
+            <Text style={styles.empty}>Select a product above to edit.</Text>
+          ) : (
+            <>
+              <Text style={styles.label}>Title *</Text>
               <TextInput
-                value={String(inventoryQty ?? 0)}
-                onChangeText={(t) =>
-                  setInventoryQty(Number(sanitizeNumber(t) || "0"))
-                }
-                placeholder="e.g., 10"
+                value={title}
+                onChangeText={setTitle}
+                placeholder="e.g., Bridal heavy embroidered lehenga"
                 placeholderTextColor={stylesVars.placeholder}
                 style={styles.input}
-                keyboardType="number-pad"
-                maxLength={10}
+                maxLength={80}
               />
-            )}
 
-            {!Boolean(selected?.made_on_order) &&
-            Number(inventoryQty ?? 0) <= 0 ? (
-              <View
-                style={{
-                  marginTop: 10,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: "#FCA5A5",
-                  backgroundColor: "#FEE2E2",
-                  padding: 12,
-                }}
-              >
-                <Text
+              <Text style={styles.label}>Inventory Quantity *</Text>
+
+              {Boolean(selected.made_on_order) ? (
+                <View style={styles.madeOnOrderPill}>
+                  <Text style={styles.madeOnOrderText}>Made on Order</Text>
+                </View>
+              ) : (
+                <TextInput
+                  value={String(inventoryQty ?? 0)}
+                  onChangeText={(t) =>
+                    setInventoryQty(Number(sanitizeNumber(t) || "0"))
+                  }
+                  placeholder="e.g., 10"
+                  placeholderTextColor={stylesVars.placeholder}
+                  style={styles.input}
+                  keyboardType="number-pad"
+                  maxLength={10}
+                />
+              )}
+
+              {!Boolean(selected?.made_on_order) &&
+              Number(inventoryQty ?? 0) <= 0 ? (
+                <View
                   style={{
-                    color: "#B91C1C",
-                    fontWeight: "800",
-                    fontSize: 13,
-                    lineHeight: 18,
+                    marginTop: 10,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: "#FCA5A5",
+                    backgroundColor: "#FEE2E2",
+                    padding: 12,
                   }}
                 >
-                  Out of stock — update inventory to make this product visible
-                  again
+                  <Text
+                    style={{
+                      color: "#B91C1C",
+                      fontWeight: "800",
+                      fontSize: 13,
+                      lineHeight: 18,
+                    }}
+                  >
+                    Out of stock — update inventory to make this product visible
+                    again
+                  </Text>
+                </View>
+              ) : null}
+
+              <Text style={styles.label}>Dress Type</Text>
+
+              <View style={styles.readonlyField}>
+                <Text style={styles.readonlyValue}>
+                  {priceMode === "unstitched_per_meter"
+                    ? "Unstitched (PKR/meter)"
+                    : "Stitched / Ready-to-wear"}
                 </Text>
               </View>
-            ) : null}
 
-            <Text style={styles.label}>Cost Mode</Text>
+              {priceMode === "stitched_total" ? (
+                <>
+                  <Text style={styles.label}>Total Cost (PKR) *</Text>
+                  <TextInput
+                    value={String(priceTotal ?? "")}
+                    onChangeText={(t) =>
+                      setPriceTotal(Number(sanitizeNumber(t) || "0"))
+                    }
+                    placeholder="e.g., 25000"
+                    placeholderTextColor={stylesVars.placeholder}
+                    style={styles.input}
+                    keyboardType="decimal-pad"
+                    maxLength={12}
+                  />
 
-            <View style={styles.readonlyField}>
-              <Text style={styles.readonlyValue}>
-                {priceMode === "unstitched_per_meter"
-                  ? "Unstitched (PKR/meter)"
-                  : "Stitched / Ready-to-wear"}
-              </Text>
-            </View>
-
-            {priceMode === "stitched_total" ? (
-              <>
-                <Text style={styles.label}>Total Cost (PKR) *</Text>
-                <TextInput
-                  value={String(priceTotal ?? "")}
-                  onChangeText={(t) =>
-                    setPriceTotal(Number(sanitizeNumber(t) || "0"))
-                  }
-                  placeholder="e.g., 25000"
-                  placeholderTextColor={stylesVars.placeholder}
-                  style={styles.input}
-                  keyboardType="decimal-pad"
-                  maxLength={12}
-                />
-
-                <Text style={styles.label}>
-                  Available Sizes (comma separated)
-                </Text>
-                <TextInput
-                  value={(availableSizes ?? []).join(", ")}
-                  onChangeText={(t) =>
-                    setAvailableSizes(
-                      t
-                        .split(",")
-                        .map((x) => x.trim())
-                        .filter(Boolean),
-                    )
-                  }
-                  placeholder="e.g., XS, S, M, L, XL, XXL, All"
-                  placeholderTextColor={stylesVars.placeholder}
-                  style={styles.input}
-                  maxLength={80}
-                />
-
-                <Text style={styles.hint}>
-                  Dyeing and stitching services apply only to unstitched
-                  products.
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.label}>Cost per Meter (PKR) *</Text>
-                <TextInput
-                  value={String(pricePerMeter ?? "")}
-                  onChangeText={(t) =>
-                    setPricePerMeter(Number(sanitizeNumber(t) || "0"))
-                  }
-                  placeholder="e.g., 1800"
-                  placeholderTextColor={stylesVars.placeholder}
-                  style={styles.input}
-                  keyboardType="decimal-pad"
-                  maxLength={12}
-                />
-
-                <View style={styles.inlineToggleRow}>
-                  <Text style={[styles.label, { marginTop: 0 }]}>Dyeable</Text>
-
-                  <Pressable
-                    onPress={() => {
-                      if (!isUnstitched) return;
-                      setDyeingEnabled((v) => !v);
-                    }}
-                    style={({ pressed }) => [
-                      styles.inlineTogglePill,
-                      dyeingEnabled ? styles.inlineTogglePillOn : null,
-                      pressed ? styles.pressed : null,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.inlineTogglePillText,
-                        dyeingEnabled ? styles.inlineTogglePillTextOn : null,
-                      ]}
-                    >
-                      {dyeingEnabled ? "Yes" : "No"}
-                    </Text>
-                  </Pressable>
-                </View>
-
-                {dyeingEnabled ? (
-                  <>
-                    <Text style={styles.hint}>
-                      Buyer will pick a dye shade at checkout.
-                    </Text>
-
-                    <Text style={styles.label}>Dyeing Cost (PKR) *</Text>
-                    <TextInput
-                      value={String(dyeingCost ?? "")}
-                      onChangeText={(t) =>
-                        setDyeingCost(Number(sanitizeNumber(t) || "0"))
-                      }
-                      placeholder="e.g., 800"
-                      placeholderTextColor={stylesVars.placeholder}
-                      style={styles.input}
-                      keyboardType="decimal-pad"
-                      maxLength={12}
-                    />
-                  </>
-                ) : null}
-
-                <View style={styles.inlineToggleRow}>
-                  <Text style={[styles.label, { marginTop: 0 }]}>
-                    Stitching available
+                  <Text style={styles.label}>
+                    Available Sizes (comma separated)
                   </Text>
+                  <TextInput
+                    value={(availableSizes ?? []).join(", ")}
+                    onChangeText={(t) =>
+                      setAvailableSizes(
+                        t
+                          .split(",")
+                          .map((x) => x.trim())
+                          .filter(Boolean),
+                      )
+                    }
+                    placeholder="e.g., XS, S, M, L, XL, XXL, All"
+                    placeholderTextColor={stylesVars.placeholder}
+                    style={styles.input}
+                    maxLength={80}
+                  />
 
-                  <Pressable
-                    onPress={() => {
-                      if (!isUnstitched) return;
-                      if (!vendorOffersTailoring) {
-                        Alert.alert(
-                          "Tailoring not enabled",
-                          "This vendor profile does not offer tailoring.",
-                        );
-                        return;
-                      }
-                      setTailoringEnabled((v) => !v);
-                    }}
-                    style={({ pressed }) => [
-                      styles.inlineTogglePill,
-                      tailoringEnabled ? styles.inlineTogglePillOn : null,
-                      pressed ? styles.pressed : null,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.inlineTogglePillText,
-                        tailoringEnabled ? styles.inlineTogglePillTextOn : null,
-                      ]}
-                    >
-                      {tailoringEnabled ? "Yes" : "No"}
-                    </Text>
-                  </Pressable>
-                </View>
-
-                {vendorLoading ? (
-                  <View style={styles.loadingRow}>
-                    <ActivityIndicator />
-                    <Text style={styles.loadingText}>
-                      Loading tailoring options…
-                    </Text>
-                  </View>
-                ) : null}
-
-                {!vendorLoading && !vendorOffersTailoring ? (
                   <Text style={styles.hint}>
-                    Vendor profile currently does not offer tailoring.
+                    Dyeing and stitching services apply only to unstitched
+                    products.
                   </Text>
-                ) : null}
+                </>
+              ) : (
+                <>
+                  <Text style={styles.label}>Cost per Meter (PKR) *</Text>
+                  <TextInput
+                    value={String(pricePerMeter ?? "")}
+                    onChangeText={(t) =>
+                      setPricePerMeter(Number(sanitizeNumber(t) || "0"))
+                    }
+                    placeholder="e.g., 1800"
+                    placeholderTextColor={stylesVars.placeholder}
+                    style={styles.input}
+                    keyboardType="decimal-pad"
+                    maxLength={12}
+                  />
 
-                {tailoringEnabled ? (
-                  <>
-                    <Text style={styles.hint}>
-                      Pick only the styles this product should offer to buyers.
-                      Keep selections small and relevant.
+                  <View style={styles.inlineToggleRow}>
+                    <Text style={[styles.label, { marginTop: 0 }]}>
+                      Dyeable
                     </Text>
 
-                    <Text style={styles.label}>Tailoring Cost (PKR) *</Text>
-                    <TextInput
-                      value={String(tailoringCost ?? "")}
-                      onChangeText={(t) =>
-                        setTailoringCost(Number(sanitizeNumber(t) || "0"))
-                      }
-                      placeholder="e.g., 2500"
-                      placeholderTextColor={stylesVars.placeholder}
-                      style={styles.input}
-                      keyboardType="decimal-pad"
-                      maxLength={12}
-                    />
-
-                    <Text style={styles.label}>
-                      Tailoring Turnaround (days)
-                    </Text>
-                    <TextInput
-                      value={String(tailoringTurnaroundDays ?? "")}
-                      onChangeText={(t) =>
-                        setTailoringTurnaroundDays(
-                          Number(sanitizeNumber(t) || "0"),
-                        )
-                      }
-                      placeholder="e.g., 12"
-                      placeholderTextColor={stylesVars.placeholder}
-                      style={styles.input}
-                      keyboardType="number-pad"
-                      maxLength={3}
-                    />
-
-                    <Text style={styles.label}>Neck Styles</Text>
-                    {blouseNeckOptions.length ? (
-                      <View style={styles.optionWrap}>
-                        {blouseNeckOptions.map((item) => (
-                          <SelectionPill
-                            key={`neck-${item}`}
-                            label={item}
-                            selected={selectedTailoringStyles.blouse_neck.includes(
-                              item,
-                            )}
-                            onPress={() => toggleStyle("blouse_neck", item)}
-                          />
-                        ))}
-                      </View>
-                    ) : (
-                      <Text style={styles.emptyInline}>
-                        No neck styles found in vendor profile.
-                      </Text>
-                    )}
-
-                    <Text style={styles.label}>Sleeve Styles</Text>
-                    {sleeveOptions.length ? (
-                      <View style={styles.optionWrap}>
-                        {sleeveOptions.map((item) => (
-                          <SelectionPill
-                            key={`sleeve-${item}`}
-                            label={item}
-                            selected={selectedTailoringStyles.sleeves.includes(
-                              item,
-                            )}
-                            onPress={() => toggleStyle("sleeves", item)}
-                          />
-                        ))}
-                      </View>
-                    ) : (
-                      <Text style={styles.emptyInline}>
-                        No sleeve styles found in vendor profile.
-                      </Text>
-                    )}
-
-                    <Text style={styles.label}>Trouser Styles</Text>
-                    {trouserOptions.length ? (
-                      <View style={styles.optionWrap}>
-                        {trouserOptions.map((item) => (
-                          <SelectionPill
-                            key={`trouser-${item}`}
-                            label={item}
-                            selected={selectedTailoringStyles.trouser.includes(
-                              item,
-                            )}
-                            onPress={() => toggleStyle("trouser", item)}
-                          />
-                        ))}
-                      </View>
-                    ) : (
-                      <Text style={styles.emptyInline}>
-                        No trouser styles found in vendor profile.
-                      </Text>
-                    )}
-
-                    {!hasAnyVendorStyleOptions ? (
-                      <Text style={styles.hint}>
-                        Add tailoring style options in vendor profile first,
-                        then return here.
-                      </Text>
-                    ) : null}
-                  </>
-                ) : null}
-              </>
-            )}
-          </>
-        )}
-      </View>
-
-      <View style={styles.card}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Media</Text>
-
-          {selected ? (
-            <View style={styles.mediaActionRow}>
-              <Pressable
-                onPress={() => pickAndUpload("image")}
-                disabled={savingMedia}
-                style={({ pressed }) => [
-                  styles.smallBtn,
-                  savingMedia ? styles.smallBtnDisabled : null,
-                  pressed ? styles.pressed : null,
-                ]}
-              >
-                <Text style={styles.smallBtnText}>+ Add Image</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => pickAndUpload("video")}
-                disabled={savingMedia}
-                style={({ pressed }) => [
-                  styles.smallBtn,
-                  savingMedia ? styles.smallBtnDisabled : null,
-                  pressed ? styles.pressed : null,
-                ]}
-              >
-                <Text style={styles.smallBtnText}>+ Add Video</Text>
-              </Pressable>
-            </View>
-          ) : null}
-        </View>
-
-        {!selected ? (
-          <Text style={styles.empty}>
-            Select a product above to edit media.
-          </Text>
-        ) : (
-          <>
-            {savingMedia ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator />
-                <Text style={styles.loadingText}>Updating media…</Text>
-              </View>
-            ) : null}
-
-            <Text style={styles.metaSmall}>Images</Text>
-            {imageUrls.length ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={styles.thumbRow}>
-                  {imageUrls.map((u, idx) => (
-                    <View key={`${u}-${idx}`} style={styles.thumbWrap}>
-                      <Image source={{ uri: u }} style={styles.thumb} />
-                      <Pressable
-                        onPress={() => removeImageAt(idx)}
-                        disabled={savingMedia}
-                        style={({ pressed }) => [
-                          styles.thumbX,
-                          pressed ? styles.pressed : null,
+                    <Pressable
+                      onPress={() => {
+                        if (!isUnstitched) return;
+                        setDyeingEnabled((v) => !v);
+                      }}
+                      style={({ pressed }) => [
+                        styles.inlineTogglePill,
+                        dyeingEnabled ? styles.inlineTogglePillOn : null,
+                        pressed ? styles.pressed : null,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.inlineTogglePillText,
+                          dyeingEnabled ? styles.inlineTogglePillTextOn : null,
                         ]}
                       >
-                        <Text style={styles.thumbXText}>✕</Text>
-                      </Pressable>
+                        {dyeingEnabled ? "Yes" : "No"}
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  {dyeingEnabled ? (
+                    <>
+                      <Text style={styles.hint}>
+                        Buyer will pick a dye shade at checkout.
+                      </Text>
+
+                      <Text style={styles.label}>Dyeing Cost (PKR) *</Text>
+                      <TextInput
+                        value={String(dyeingCost ?? "")}
+                        onChangeText={(t) =>
+                          setDyeingCost(Number(sanitizeNumber(t) || "0"))
+                        }
+                        placeholder="e.g., 800"
+                        placeholderTextColor={stylesVars.placeholder}
+                        style={styles.input}
+                        keyboardType="decimal-pad"
+                        maxLength={12}
+                      />
+                    </>
+                  ) : null}
+
+                  <View style={styles.inlineToggleRow}>
+                    <Text style={[styles.label, { marginTop: 0 }]}>
+                      Stitching available
+                    </Text>
+
+                    <Pressable
+                      onPress={() => {
+                        if (!isUnstitched) return;
+                        if (!vendorOffersTailoring) {
+                          Alert.alert(
+                            "Tailoring not enabled",
+                            "This vendor profile does not offer tailoring.",
+                          );
+                          return;
+                        }
+                        setTailoringEnabled((v) => !v);
+                      }}
+                      style={({ pressed }) => [
+                        styles.inlineTogglePill,
+                        tailoringEnabled ? styles.inlineTogglePillOn : null,
+                        pressed ? styles.pressed : null,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.inlineTogglePillText,
+                          tailoringEnabled
+                            ? styles.inlineTogglePillTextOn
+                            : null,
+                        ]}
+                      >
+                        {tailoringEnabled ? "Yes" : "No"}
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  {vendorLoading ? (
+                    <View style={styles.loadingRow}>
+                      <ActivityIndicator />
+                      <Text style={styles.loadingText}>
+                        Loading tailoring options…
+                      </Text>
                     </View>
-                  ))}
-                </View>
-              </ScrollView>
-            ) : (
-              <Text style={styles.emptyInline}>—</Text>
-            )}
+                  ) : null}
 
-            <Text style={[styles.metaSmall, { marginTop: 12 }]}>Videos</Text>
-            {videoUrls.length ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={styles.thumbRow}>
-                  {videoUrls.map((u, idx) => {
-                    const t = thumbUrls[idx] ?? null;
-                    const fallback = videoThumbs[u] ?? null;
+                  {!vendorLoading && !vendorOffersTailoring ? (
+                    <Text style={styles.hint}>
+                      Vendor profile currently does not offer tailoring.
+                    </Text>
+                  ) : null}
 
-                    return (
-                      <View key={`${u}-${idx}`} style={styles.thumbWrap}>
-                        {t ? (
-                          <Image source={{ uri: t }} style={styles.thumb} />
-                        ) : fallback ? (
-                          <Image
-                            source={{ uri: fallback }}
-                            style={styles.thumb}
-                          />
-                        ) : (
-                          <View style={styles.videoPlaceholder}>
-                            <Text style={styles.videoPlaceholderText}>
-                              Video {idx + 1}
-                            </Text>
-                          </View>
-                        )}
+                  {tailoringEnabled ? (
+                    <>
+                      <Text style={styles.hint}>
+                        Pick only the styles this product should offer to
+                        buyers. Keep selections small and relevant.
+                      </Text>
 
-                        <View style={styles.playBadge}>
-                          <Text style={styles.playBadgeText}>▶</Text>
+                      <Text style={styles.label}>Tailoring Cost (PKR) *</Text>
+                      <TextInput
+                        value={String(tailoringCost ?? "")}
+                        onChangeText={(t) =>
+                          setTailoringCost(Number(sanitizeNumber(t) || "0"))
+                        }
+                        placeholder="e.g., 2500"
+                        placeholderTextColor={stylesVars.placeholder}
+                        style={styles.input}
+                        keyboardType="decimal-pad"
+                        maxLength={12}
+                      />
+
+                      <Text style={styles.label}>
+                        Tailoring Turnaround (days)
+                      </Text>
+                      <TextInput
+                        value={String(tailoringTurnaroundDays ?? "")}
+                        onChangeText={(t) =>
+                          setTailoringTurnaroundDays(
+                            Number(sanitizeNumber(t) || "0"),
+                          )
+                        }
+                        placeholder="e.g., 12"
+                        placeholderTextColor={stylesVars.placeholder}
+                        style={styles.input}
+                        keyboardType="number-pad"
+                        maxLength={3}
+                      />
+
+                      <Text style={styles.label}>Neck Styles</Text>
+                      {blouseNeckOptions.length ? (
+                        <View style={styles.optionWrap}>
+                          {blouseNeckOptions.map((item) => (
+                            <SelectionPill
+                              key={`neck-${item}`}
+                              label={item}
+                              selected={selectedTailoringStyles.blouse_neck.includes(
+                                item,
+                              )}
+                              onPress={() => toggleStyle("blouse_neck", item)}
+                            />
+                          ))}
                         </View>
+                      ) : (
+                        <Text style={styles.emptyInline}>
+                          No neck styles found in vendor profile.
+                        </Text>
+                      )}
 
+                      <Text style={styles.label}>Sleeve Styles</Text>
+                      {sleeveOptions.length ? (
+                        <View style={styles.optionWrap}>
+                          {sleeveOptions.map((item) => (
+                            <SelectionPill
+                              key={`sleeve-${item}`}
+                              label={item}
+                              selected={selectedTailoringStyles.sleeves.includes(
+                                item,
+                              )}
+                              onPress={() => toggleStyle("sleeves", item)}
+                            />
+                          ))}
+                        </View>
+                      ) : (
+                        <Text style={styles.emptyInline}>
+                          No sleeve styles found in vendor profile.
+                        </Text>
+                      )}
+
+                      <Text style={styles.label}>Trouser Styles</Text>
+                      {trouserOptions.length ? (
+                        <View style={styles.optionWrap}>
+                          {trouserOptions.map((item) => (
+                            <SelectionPill
+                              key={`trouser-${item}`}
+                              label={item}
+                              selected={selectedTailoringStyles.trouser.includes(
+                                item,
+                              )}
+                              onPress={() => toggleStyle("trouser", item)}
+                            />
+                          ))}
+                        </View>
+                      ) : (
+                        <Text style={styles.emptyInline}>
+                          No trouser styles found in vendor profile.
+                        </Text>
+                      )}
+
+                      {!hasAnyVendorStyleOptions ? (
+                        <Text style={styles.hint}>
+                          Add tailoring style options in vendor profile first,
+                          then return here.
+                        </Text>
+                      ) : null}
+                    </>
+                  ) : null}
+                </>
+              )}
+            </>
+          )}
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Media</Text>
+
+            {selected ? (
+              <View style={styles.mediaActionRow}>
+                <Pressable
+                  onPress={() => pickAndUpload("image")}
+                  disabled={savingMedia}
+                  style={({ pressed }) => [
+                    styles.smallBtn,
+                    savingMedia ? styles.smallBtnDisabled : null,
+                    pressed ? styles.pressed : null,
+                  ]}
+                >
+                  <Text style={styles.smallBtnText}>+ Add Image</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => pickAndUpload("video")}
+                  disabled={savingMedia}
+                  style={({ pressed }) => [
+                    styles.smallBtn,
+                    savingMedia ? styles.smallBtnDisabled : null,
+                    pressed ? styles.pressed : null,
+                  ]}
+                >
+                  <Text style={styles.smallBtnText}>+ Add Video</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+
+          {!selected ? (
+            <Text style={styles.empty}>
+              Select a product above to edit media.
+            </Text>
+          ) : (
+            <>
+              {savingMedia ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator />
+                  <Text style={styles.loadingText}>Updating media…</Text>
+                </View>
+              ) : null}
+
+              <Text style={styles.metaSmall}>Images</Text>
+              {imageUrls.length ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={styles.thumbRow}>
+                    {imageUrls.map((u, idx) => (
+                      <View key={`${u}-${idx}`} style={styles.thumbWrap}>
+                        <Image source={{ uri: u }} style={styles.thumb} />
                         <Pressable
-                          onPress={() => removeVideoAt(idx)}
+                          onPress={() => confirmRemoveImage(idx)}
                           disabled={savingMedia}
                           style={({ pressed }) => [
                             styles.thumbX,
@@ -1610,49 +1547,112 @@ export default function UpdateProductScreen() {
                           <Text style={styles.thumbXText}>✕</Text>
                         </Pressable>
                       </View>
-                    );
-                  })}
-                </View>
-              </ScrollView>
-            ) : (
-              <Text style={styles.emptyInline}>—</Text>
-            )}
+                    ))}
+                  </View>
+                </ScrollView>
+              ) : (
+                <Text style={styles.emptyInline}>—</Text>
+              )}
 
-            <Text style={styles.label}>More Description</Text>
-            <TextInput
-              value={moreDescription}
-              onChangeText={setMoreDescription}
-              placeholder="Add more details: work, fabric, lining, measurements, delivery notes, etc."
-              placeholderTextColor={stylesVars.placeholder}
-              style={[styles.input, styles.textArea]}
-              multiline
-              textAlignVertical="top"
-              maxLength={1200}
-            />
-          </>
-        )}
-      </View>
+              <Text style={[styles.metaSmall, { marginTop: 12 }]}>Videos</Text>
+              {videoUrls.length ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={styles.thumbRow}>
+                    {videoUrls.map((u, idx) => {
+                      const t = thumbUrls[idx] ?? null;
+                      const fallback = videoThumbs[u] ?? null;
 
-      <Pressable
-        style={({ pressed }) => [
-          styles.saveBtn,
-          !canSave || saving ? styles.saveBtnDisabled : null,
-          pressed ? styles.pressed : null,
-        ]}
-        onPress={saveUpdate}
-        disabled={!canSave || saving}
-      >
-        <Text style={styles.saveText}>
-          {saving ? "Saving…" : "Save Changes"}
-        </Text>
-      </Pressable>
+                      return (
+                        <View key={`${u}-${idx}`} style={styles.thumbWrap}>
+                          {t ? (
+                            <Image source={{ uri: t }} style={styles.thumb} />
+                          ) : fallback ? (
+                            <Image
+                              source={{ uri: fallback }}
+                              style={styles.thumb}
+                            />
+                          ) : (
+                            <View style={styles.videoPlaceholder}>
+                              <Text style={styles.videoPlaceholderText}>
+                                Video {idx + 1}
+                              </Text>
+                            </View>
+                          )}
 
-      {!vendorId ? (
-        <Text style={styles.warn}>
-          Vendor not loaded. Please ensure vendorSlice has vendor.id (bigint).
-        </Text>
+                          <View style={styles.playBadge}>
+                            <Text style={styles.playBadgeText}>▶</Text>
+                          </View>
+
+                          <Pressable
+                            onPress={() => confirmRemoveVideo(idx)}
+                            disabled={savingMedia}
+                            style={({ pressed }) => [
+                              styles.thumbX,
+                              pressed ? styles.pressed : null,
+                            ]}
+                          >
+                            <Text style={styles.thumbXText}>✕</Text>
+                          </Pressable>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              ) : (
+                <Text style={styles.emptyInline}>—</Text>
+              )}
+
+              <Text style={styles.label}>More Description</Text>
+              <TextInput
+                value={moreDescription}
+                onChangeText={setMoreDescription}
+                placeholder="Add more details: work, fabric, lining, measurements, delivery notes, etc."
+                placeholderTextColor={stylesVars.placeholder}
+                style={[styles.input, styles.textArea]}
+                multiline
+                textAlignVertical="top"
+                maxLength={1200}
+              />
+            </>
+          )}
+        </View>
+
+        {!vendorId ? (
+          <Text style={styles.warn}>
+            Vendor not loaded. Please ensure vendorSlice has vendor.id (bigint).
+          </Text>
+        ) : null}
+      </ScrollView>
+
+      {selected ? (
+        <View style={styles.bottomBar}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.cancelBtn,
+              pressed ? styles.pressed : null,
+            ]}
+            onPress={() => router.back()}
+            disabled={saving}
+          >
+            <Text style={styles.cancelText}>Cancel</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.saveBtn,
+              !canSave || saving ? styles.saveBtnDisabled : null,
+              pressed ? styles.pressed : null,
+            ]}
+            onPress={saveUpdate}
+            disabled={!canSave || saving}
+          >
+            <Text style={styles.saveText}>
+              {saving ? "Saving…" : "Save Changes"}
+            </Text>
+          </Pressable>
+        </View>
       ) : null}
-    </ScrollView>
+    </View>
   );
 }
 
@@ -1676,9 +1676,14 @@ const stylesVars = {
 };
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: stylesVars.bg,
+  },
+
   content: {
     padding: 16,
-    paddingBottom: 24,
+    paddingBottom: 110,
     backgroundColor: stylesVars.bg,
   },
 
@@ -1806,6 +1811,7 @@ const styles = StyleSheet.create({
     minHeight: 120,
     paddingTop: 12,
   },
+
   readonlyField: {
     marginTop: 8,
     borderWidth: 1,
@@ -1858,70 +1864,6 @@ const styles = StyleSheet.create({
     color: stylesVars.text,
     fontWeight: "700",
     fontSize: 13,
-  },
-
-  topActionsRow: {
-    marginTop: 10,
-    flexDirection: "row",
-    justifyContent: "flex-end",
-  },
-
-  refresh: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: stylesVars.blue,
-  },
-
-  disabledText: {
-    opacity: 0.6,
-  },
-
-  list: {
-    gap: 10,
-    marginTop: 12,
-  },
-
-  item: {
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    backgroundColor: stylesVars.cardBg,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  itemOn: {
-    borderColor: stylesVars.blue,
-    borderWidth: 2,
-    backgroundColor: stylesVars.blueSoft,
-  },
-
-  itemLeft: {
-    flex: 1,
-    paddingRight: 10,
-  },
-
-  itemCode: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: stylesVars.blue,
-  },
-
-  itemTitle: {
-    marginTop: 2,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: "500",
-    color: stylesVars.text,
-  },
-
-  itemArrow: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: stylesVars.subText,
   },
 
   loadingRow: {
@@ -2020,8 +1962,35 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
+  bottomBar: {
+    flexDirection: "row",
+    gap: 10,
+    padding: 14,
+    borderTopWidth: 1,
+    borderTopColor: stylesVars.border,
+    backgroundColor: stylesVars.white,
+  },
+
+  cancelBtn: {
+    flex: 0.8,
+    minHeight: 50,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.white,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  cancelText: {
+    color: stylesVars.text,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+
   saveBtn: {
-    marginTop: 14,
+    flex: 1,
+    marginTop: 0,
     minHeight: 48,
     borderRadius: 14,
     paddingVertical: 12,
@@ -2141,6 +2110,46 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     flexWrap: "wrap",
+  },
+
+  previewBox: {
+    marginTop: 10,
+    flexDirection: "row",
+    gap: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: stylesVars.blueSoft,
+    padding: 12,
+  },
+
+  previewImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 14,
+    backgroundColor: "#F1F5F9",
+  },
+
+  previewImageFallback: {
+    width: 72,
+    height: 72,
+    borderRadius: 14,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  previewImageFallbackText: {
+    color: stylesVars.mutedText,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+
+  previewInfo: {
+    flex: 1,
+    justifyContent: "center",
   },
 
   pressed: {
