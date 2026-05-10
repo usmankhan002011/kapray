@@ -19,6 +19,12 @@ const BUCKET_VENDOR = "vendor_images";
 
 const PAGE_SIZE = 30;
 
+type ProductCategory =
+  | "unstitched_plain"
+  | "unstitched_dyeing"
+  | "unstitched_dyeing_tailoring"
+  | "stitched_ready";
+
 type ProductRow = {
   id: string;
   product_code: string | null;
@@ -26,8 +32,17 @@ type ProductRow = {
   created_at?: string | null;
   inventory_qty?: number | null;
   made_on_order?: boolean | null;
+  product_category?: ProductCategory | null;
+  spec?: any;
+  price?: any;
   media?: any;
   banner_url?: string | null;
+};
+
+type VariantInventorySummary = {
+  totalQty: number;
+  availableSizes: number;
+  hasStock: boolean;
 };
 
 function safeInt(v: any) {
@@ -56,6 +71,93 @@ function publicUrlForStoragePath(path: string | null): string | null {
   if (!path) return null;
   const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(path);
   return data?.publicUrl ?? null;
+}
+
+function getVariantInventorySummary(
+  product: ProductRow,
+): VariantInventorySummary {
+  const price = product?.price ?? {};
+  const spec = product?.spec ?? {};
+
+  const variants =
+    price?.variants ??
+    price?.ready_variants ??
+    price?.readyVariants ??
+    price?.stitched_variants ??
+    price?.stitchedVariants ??
+    spec?.variants ??
+    spec?.ready_variants ??
+    spec?.readyVariants ??
+    spec?.stitched_variants ??
+    spec?.stitchedVariants ??
+    [];
+
+  let totalQty = 0;
+  let availableSizes = 0;
+
+  for (const variant of Array.isArray(variants) ? variants : []) {
+    const sizes = Array.isArray(variant?.sizes) ? variant.sizes : [];
+
+    for (const row of sizes) {
+      const qty = Number(
+        row?.qty ??
+          row?.stock_qty ??
+          row?.stockQty ??
+          row?.stock ??
+          row?.quantity ??
+          0,
+      );
+
+      if (Number.isFinite(qty) && qty > 0) {
+        totalQty += Math.trunc(qty);
+        availableSizes += 1;
+      }
+    }
+  }
+
+  return {
+    totalQty,
+    availableSizes,
+    hasStock: totalQty > 0,
+  };
+}
+
+function isStitchedReadyProduct(item: ProductRow) {
+  const category = String(item?.product_category ?? "").trim();
+  const price = item?.price ?? {};
+  const spec = item?.spec ?? {};
+
+  return (
+    category === "stitched_ready" ||
+    String(price?.mode ?? "") === "stitched_total" ||
+    String(price?.mode ?? "") === "stitched_ready" ||
+    String(spec?.product_category ?? "") === "stitched_ready"
+  );
+}
+
+function getStockSummaryText(item: ProductRow) {
+  if (item?.made_on_order) return "Made on order";
+
+  if (isStitchedReadyProduct(item)) {
+    const info = getVariantInventorySummary(item);
+
+    if (!info.hasStock) return "Variant stock: 0";
+
+    const sizeWord = info.availableSizes === 1 ? "size" : "sizes";
+    return `Variant stock: ${info.totalQty} total • ${info.availableSizes} ${sizeWord}`;
+  }
+
+  return `Qty: ${Math.max(0, Number(item?.inventory_qty ?? 0))}`;
+}
+
+function isOutOfStock(item: ProductRow) {
+  if (item?.made_on_order) return false;
+
+  if (isStitchedReadyProduct(item)) {
+    return !getVariantInventorySummary(item).hasStock;
+  }
+
+  return Number(item?.inventory_qty ?? 0) <= 0;
 }
 
 export default function VendorProductsScreen() {
@@ -90,7 +192,7 @@ export default function VendorProductsScreen() {
       const { data, error } = await supabase
         .from(PRODUCTS_TABLE)
         .select(
-          "id, product_code, title, created_at, inventory_qty, made_on_order, media",
+          "id, product_code, title, created_at, inventory_qty, made_on_order, product_category, spec, price, media",
         )
         .eq("vendor_id", vendorId)
         .order("created_at", { ascending: false })
@@ -133,7 +235,7 @@ export default function VendorProductsScreen() {
       const { data, error } = await supabase
         .from(PRODUCTS_TABLE)
         .select(
-          "id, product_code, title, created_at, inventory_qty, made_on_order, media",
+          "id, product_code, title, created_at, inventory_qty, made_on_order, product_category, spec, price, media",
         )
         .eq("vendor_id", vendorId)
         .order("created_at", { ascending: false })
@@ -187,7 +289,7 @@ export default function VendorProductsScreen() {
         const { data, error } = await supabase
           .from(PRODUCTS_TABLE)
           .select(
-            "id, product_code, title, created_at, inventory_qty, made_on_order, media",
+            "id, product_code, title, created_at, inventory_qty, made_on_order, product_category, spec, price, media",
           )
           .eq("id", newId)
           .eq("vendor_id", vendorId)
@@ -236,6 +338,8 @@ export default function VendorProductsScreen() {
   function renderItem({ item }: { item: ProductRow }) {
     const code = safeText(item.product_code);
     const title = safeText(item.title);
+    const stockText = getStockSummaryText(item);
+    const outOfStock = isOutOfStock(item);
 
     return (
       <View style={styles.item}>
@@ -262,13 +366,9 @@ export default function VendorProductsScreen() {
               {title}
             </Text>
 
-            <Text style={styles.stockText}>
-              {item?.made_on_order
-                ? "Made on order"
-                : `Qty: ${Math.max(0, Number(item?.inventory_qty ?? 0))}`}
-            </Text>
+            <Text style={styles.stockText}>{stockText}</Text>
 
-            {!item?.made_on_order && Number(item?.inventory_qty ?? 0) <= 0 ? (
+            {outOfStock ? (
               <Text style={styles.outOfStockText}>Out of stock</Text>
             ) : null}
           </View>

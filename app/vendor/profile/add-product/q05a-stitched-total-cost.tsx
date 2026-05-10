@@ -1,5 +1,12 @@
 import React, { useMemo, useRef, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
@@ -48,7 +55,10 @@ export default function Q05AStitchedTotalCost() {
       return;
     }
     if (typeof ctx.setDraft === "function") {
-      ctx.setDraft((prev: any) => ({ ...prev, price: { ...(prev?.price ?? {}), ...patch } }));
+      ctx.setDraft((prev: any) => ({
+        ...prev,
+        price: { ...(prev?.price ?? {}), ...patch },
+      }));
       return;
     }
     // last resort (shouldn't be needed, but keeps behavior consistent)
@@ -62,12 +72,15 @@ export default function Q05AStitchedTotalCost() {
         inputRef.current?.focus();
       }, 100);
       return () => clearTimeout(timer);
-    }, [])
+    }, []),
   );
 
   function onContinue() {
     if (!vendorId) {
-      Alert.alert("Vendor not loaded", "Please ensure vendorSlice has vendor.id.");
+      Alert.alert(
+        "Vendor not loaded",
+        "Please ensure vendorSlice has vendor.id.",
+      );
       return;
     }
 
@@ -82,6 +95,10 @@ export default function Q05AStitchedTotalCost() {
     setPriceTotal?.(n);
     patchPrice({ mode: "stitched_total", cost_pkr_total: n });
 
+    if (returnTo) {
+      router.replace(returnTo as any);
+      return;
+    }
     if (returnTo) {
       router.replace(returnTo as any);
       return;
@@ -102,7 +119,10 @@ export default function Q05AStitchedTotalCost() {
 
           <Pressable
             onPress={() => router.back()}
-            style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
+            style={({ pressed }) => [
+              apStyles.linkBtn,
+              pressed ? apStyles.pressed : null,
+            ]}
           >
             <Text style={apStyles.linkText}>Close</Text>
           </Pressable>
@@ -127,7 +147,7 @@ export default function Q05AStitchedTotalCost() {
             style={({ pressed }) => [
               apStyles.primaryBtn,
               !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null
+              pressed ? apStyles.pressed : null,
             ]}
             onPress={onContinue}
             disabled={!canContinue}

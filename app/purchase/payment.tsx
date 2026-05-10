@@ -103,6 +103,14 @@ type Params = {
   selected_tailoring_style_title?: string;
   selected_tailoring_style_image?: string;
   selected_tailoring_style_snapshot?: string;
+
+  selected_variant_id?: string;
+  selected_variant_title?: string;
+  selected_variant_size?: string;
+  selected_variant_color?: string;
+  selected_variant_price_pkr?: string;
+  selected_variant_image_path?: string;
+
   selected_neck_variation?: string;
   selected_sleeve_variation?: string;
   selected_trouser_variation?: string;
@@ -172,6 +180,23 @@ function parseBoolParam(v: unknown): boolean | null {
 
 function prettyCategory(v: string) {
   return v.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function cleanReadyToWearTitle(title: string, sizeLike: string) {
+  const cleanTitle = norm(title);
+  const cleanSize = norm(sizeLike);
+  if (!cleanTitle || !cleanSize) return cleanTitle;
+
+  return cleanTitle
+    .replace(
+      new RegExp(
+        `\\s*[-–—|•:,]*\\s*\\(?${cleanSize.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\)?\\s*$`,
+        "i",
+      ),
+      "",
+    )
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 function cleanVariationLabel(value: string, kind: "neck" | "sleeve") {
@@ -408,20 +433,37 @@ export default function PaymentScreen() {
       },
     ].filter((row) => row.label && row.value);
 
+    const selectedVariantSizeForLabel = safeDecode(
+      params.selected_variant_size,
+    );
+
     const sizeLabel =
       mode === "exact"
         ? exactPairs.length
           ? "Exact measurements"
           : "Exact measurements not set"
-        : selectedUnstitchedSize
-          ? selectedUnstitchedSize
-          : selectedSize
-            ? selectedSize
-            : "Not set";
+        : selectedVariantSizeForLabel
+          ? selectedVariantSizeForLabel
+          : selectedUnstitchedSize
+            ? selectedUnstitchedSize
+            : selectedSize
+              ? selectedSize
+              : "Not set";
 
     const dyeShadeId = safeDecode(params.dye_shade_id);
     const dyeHex = safeDecode(params.dye_hex);
     const dyeLabel = safeDecode(params.dye_label);
+    const selectedVariantId = safeDecode(params.selected_variant_id);
+    const selectedVariantTitle = safeDecode(params.selected_variant_title);
+    const selectedVariantSize = safeDecode(params.selected_variant_size);
+    const selectedVariantColor = safeDecode(params.selected_variant_color);
+    const selectedVariantPricePkr = safePositiveNumber(
+      safeDecode(params.selected_variant_price_pkr),
+    );
+    const selectedVariantImagePath = safeDecode(
+      params.selected_variant_image_path,
+    );
+
     const dyeingSelected = parseBoolParam(params.dyeing_selected) === true;
     const dyeCostPkr = dyeingSelected
       ? safePositiveNumber(safeDecode(params.dyeing_cost_pkr))
@@ -538,6 +580,12 @@ export default function PaymentScreen() {
       mode,
       selectedSize,
       selectedUnstitchedSize,
+      selectedVariantId,
+      selectedVariantTitle,
+      selectedVariantSize,
+      selectedVariantColor,
+      selectedVariantPricePkr,
+      selectedVariantImagePath,
       measurements,
       exactPairs,
       customDimensions,
@@ -651,6 +699,10 @@ export default function PaymentScreen() {
       const exactMap: Record<string, string> = {};
       for (const [k, v] of data.exactPairs) exactMap[k] = v;
 
+      const selectedVariantIdForRpc = data.selectedVariantId
+        ? String(data.selectedVariantId).split("::")[0].trim()
+        : "";
+
       const specSnapshot =
         pRow.spec && typeof pRow.spec === "object"
           ? { ...(pRow.spec as any) }
@@ -676,6 +728,27 @@ export default function PaymentScreen() {
 
       if (data.customDimensions.length) {
         (specSnapshot as any).custom_dimensions = data.customDimensions;
+      }
+
+      if (
+        data.selectedVariantId ||
+        data.selectedVariantTitle ||
+        data.selectedVariantSize ||
+        data.selectedVariantColor ||
+        data.selectedVariantImagePath
+      ) {
+        (specSnapshot as any).selected_variant_id =
+          selectedVariantIdForRpc || "";
+        (specSnapshot as any).selected_variant_title =
+          data.selectedVariantTitle || "";
+        (specSnapshot as any).selected_variant_size =
+          data.selectedVariantSize || "";
+        (specSnapshot as any).selected_variant_color =
+          data.selectedVariantColor || "";
+        (specSnapshot as any).selected_variant_price_pkr =
+          data.selectedVariantPricePkr || 0;
+        (specSnapshot as any).selected_variant_image_path =
+          data.selectedVariantImagePath || "";
       }
 
       if (data.dyeingSelected) {
@@ -740,12 +813,16 @@ export default function PaymentScreen() {
 
       (specSnapshot as any).destination_type = data.destinationType || "inland";
       (specSnapshot as any).export_region = data.exportRegion || "";
+      (specSnapshot as any).postal_code = data.postalCode || "";
+      (specSnapshot as any).country = data.country || "";
       (specSnapshot as any).delivery_weight_kg = data.weightKg || 0;
 
       const { data: rpcData, error: rpcError } = await (supabase as any).rpc(
         "create_order_atomic_single_unit",
         {
           p_product_id: productId,
+          p_selected_variant_id: selectedVariantIdForRpc || null,
+          p_selected_variant_size: data.selectedVariantSize || null,
           p_buyer_auth_user_id: buyerAuthUserId,
           p_buyer_name: data.buyerName || "Buyer",
           p_buyer_mobile: data.buyerMobile || "",
@@ -768,7 +845,10 @@ export default function PaymentScreen() {
           p_selected_size:
             data.mode === "exact"
               ? null
-              : data.selectedUnstitchedSize || data.selectedSize || null,
+              : data.selectedVariantSize ||
+                data.selectedUnstitchedSize ||
+                data.selectedSize ||
+                null,
           p_exact_measurements: data.mode === "exact" ? exactMap : {},
         },
       );
@@ -798,6 +878,38 @@ export default function PaymentScreen() {
     ? prettyCategory(data.productCategory)
     : "—";
 
+  const categoryKey = data.productCategory.toLowerCase();
+  const isUnstitched =
+    categoryKey === "unstitched_plain" ||
+    categoryKey === "unstitched_dyeing" ||
+    categoryKey === "unstitched_dyeing_tailoring";
+  const isReadyToWearStitched =
+    !isUnstitched &&
+    Boolean(data.selectedVariantId || data.selectedVariantTitle) &&
+    (categoryKey.includes("ready") ||
+      categoryKey.includes("ready_to_wear") ||
+      categoryKey.includes("ready-to-wear") ||
+      categoryKey.includes("stitched_ready") ||
+      categoryKey.includes("ready_stitched") ||
+      categoryKey === "stitched" ||
+      categoryKey === "stitched_ready_to_wear" ||
+      categoryKey === "ready_to_wear_stitched");
+
+  const selectedReadyVariantTitle = isReadyToWearStitched
+    ? cleanReadyToWearTitle(
+        data.selectedVariantTitle || "Selected variant",
+        data.selectedVariantSize || data.sizeLabel,
+      )
+    : data.selectedVariantTitle;
+  // Keep original image handling untouched: imageUrl already carries the correct selected variant image.
+  const productSummaryImageUrl = data.imageUrl;
+  const productSummaryTitle = isReadyToWearStitched
+    ? cleanReadyToWearTitle(
+        data.productName,
+        data.selectedVariantSize || data.sizeLabel,
+      )
+    : data.productName;
+
   return (
     <SafeAreaView
       style={styles.safe}
@@ -819,8 +931,11 @@ export default function PaymentScreen() {
           <Card title="Product Summary">
             <View style={styles.productRow}>
               <View style={styles.imageBox}>
-                {data.imageUrl ? (
-                  <Image source={{ uri: data.imageUrl }} style={styles.image} />
+                {productSummaryImageUrl ? (
+                  <Image
+                    source={{ uri: productSummaryImageUrl }}
+                    style={styles.image}
+                  />
                 ) : (
                   <View style={styles.imagePlaceholder}>
                     <Text style={styles.imagePlaceholderText}>No image</Text>
@@ -830,7 +945,7 @@ export default function PaymentScreen() {
 
               <View style={styles.productMetaWrap}>
                 <Text style={styles.productName} numberOfLines={2}>
-                  {data.productName}
+                  {productSummaryTitle}
                 </Text>
 
                 <View style={styles.productMetaInfo}>
@@ -847,6 +962,28 @@ export default function PaymentScreen() {
                   </View>
                 )}
 
+                {isReadyToWearStitched ? (
+                  <>
+                    <View style={styles.productMetaInfo}>
+                      <Text style={styles.productMetaLabel}>
+                        Selected variant
+                      </Text>
+                      <Text style={styles.productMetaValue}>
+                        {selectedReadyVariantTitle || "Not selected"}
+                      </Text>
+                    </View>
+
+                    <View style={styles.productMetaInfo}>
+                      <Text style={styles.productMetaLabel}>Size</Text>
+                      <Text style={styles.productMetaValue}>
+                        {data.selectedVariantSize ||
+                          data.sizeLabel ||
+                          "Not selected"}
+                      </Text>
+                    </View>
+                  </>
+                ) : null}
+
                 <Text style={styles.heroPrice}>
                   {formatMoney(
                     data.currency,
@@ -859,158 +996,197 @@ export default function PaymentScreen() {
             </View>
           </Card>
 
-          <PlainSection title="Customization">
-            <KVRow
-              label="Size"
-              value={
-                data.mode === "exact" ? "Exact measurements" : data.sizeLabel
-              }
-            />
+          {!isReadyToWearStitched ? (
+            <PlainSection title="Customization">
+              <KVRow
+                label="Size"
+                value={
+                  data.mode === "exact" ? "Exact measurements" : data.sizeLabel
+                }
+              />
 
-            {data.mode === "exact" && measurementRows.length ? (
-              <View style={styles.inlineActionRow}>
-                <Text style={styles.helper}>
-                  {measurementRows.length} dimensions saved
-                  {data.customDimensions.length
-                    ? ` • ${data.customDimensions.length} custom`
-                    : ""}
-                </Text>
+              {data.selectedVariantId ||
+              data.selectedVariantTitle ||
+              data.selectedVariantSize ||
+              data.selectedVariantColor ? (
+                <View style={styles.customBlock}>
+                  <KVRow
+                    label="Ready variant"
+                    value={
+                      data.selectedVariantTitle ||
+                      data.selectedVariantSize ||
+                      "Selected variant"
+                    }
+                  />
+                  {!!data.selectedVariantSize && (
+                    <KVRow
+                      label="Variant size"
+                      value={data.selectedVariantSize}
+                    />
+                  )}
+                  {!!data.selectedVariantColor && (
+                    <KVRow
+                      label="Variant color"
+                      value={data.selectedVariantColor}
+                    />
+                  )}
+                  {data.selectedVariantPricePkr > 0 ? (
+                    <KVRow
+                      label="Variant price"
+                      value={formatMoney(
+                        data.currency,
+                        data.selectedVariantPricePkr,
+                      )}
+                    />
+                  ) : null}
+                </View>
+              ) : null}
 
-                <Pressable
-                  onPress={() => setMeasurementsOpen(true)}
-                  style={styles.secondaryInlineBtn}
-                >
-                  <Text style={styles.secondaryInlineText}>
-                    View Exact Measurements
+              {data.mode === "exact" && measurementRows.length ? (
+                <View style={styles.inlineActionRow}>
+                  <Text style={styles.helper}>
+                    {measurementRows.length} dimensions saved
+                    {data.customDimensions.length
+                      ? ` • ${data.customDimensions.length} custom`
+                      : ""}
                   </Text>
-                </Pressable>
-              </View>
-            ) : null}
 
-            {data.fabricCostPkr > 0 ? (
-              <>
-                <KVRow
-                  label="Fabric length"
-                  value={`${data.selectedFabricLengthM || 0} m`}
-                />
-                <KVRow
-                  label="Rate"
-                  value={
-                    data.pricePerMeterPkr
-                      ? `${formatMoney(data.currency, data.pricePerMeterPkr)} / meter`
-                      : ""
-                  }
-                />
-              </>
-            ) : null}
-
-            {data.dyeingSelected ? (
-              <View style={styles.customBlock}>
-                <View style={styles.kvRow}>
-                  <Text style={styles.kvLabel}>Dyeing color</Text>
-                  <View style={styles.colorPreviewRow}>
-                    {!!data.dyeHex && (
-                      <View
-                        style={[
-                          styles.dyeSwatch,
-                          { backgroundColor: data.dyeHex },
-                        ]}
-                      />
-                    )}
-                    <Text style={styles.helper}>
-                      {formatMoney(data.currency, data.dyeCostPkr)}
+                  <Pressable
+                    onPress={() => setMeasurementsOpen(true)}
+                    style={styles.secondaryInlineBtn}
+                  >
+                    <Text style={styles.secondaryInlineText}>
+                      View Exact Measurements
                     </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+
+              {data.fabricCostPkr > 0 ? (
+                <>
+                  <KVRow
+                    label="Fabric length"
+                    value={`${data.selectedFabricLengthM || 0} m`}
+                  />
+                  <KVRow
+                    label="Rate"
+                    value={
+                      data.pricePerMeterPkr
+                        ? `${formatMoney(data.currency, data.pricePerMeterPkr)} / meter`
+                        : ""
+                    }
+                  />
+                </>
+              ) : null}
+
+              {data.dyeingSelected ? (
+                <View style={styles.customBlock}>
+                  <View style={styles.kvRow}>
+                    <Text style={styles.kvLabel}>Dyeing color</Text>
+                    <View style={styles.colorPreviewRow}>
+                      {!!data.dyeHex && (
+                        <View
+                          style={[
+                            styles.dyeSwatch,
+                            { backgroundColor: data.dyeHex },
+                          ]}
+                        />
+                      )}
+                      <Text style={styles.helper}>
+                        {formatMoney(data.currency, data.dyeCostPkr)}
+                      </Text>
+                    </View>
                   </View>
                 </View>
-              </View>
-            ) : null}
+              ) : null}
 
-            {data.tailoringSelected ? (
-              <View style={styles.customBlock}>
-                <KVRow
-                  label="Tailoring"
-                  value={`${formatMoney(data.currency, data.tailoringCostPkr)}${
-                    data.tailoringTurnaroundDays
-                      ? ` • ${data.tailoringTurnaroundDays} days`
-                      : ""
-                  }`}
-                />
+              {data.tailoringSelected ? (
+                <View style={styles.customBlock}>
+                  <KVRow
+                    label="Tailoring"
+                    value={`${formatMoney(data.currency, data.tailoringCostPkr)}${
+                      data.tailoringTurnaroundDays
+                        ? ` • ${data.tailoringTurnaroundDays} days`
+                        : ""
+                    }`}
+                  />
 
-                {data.hasStyleSelected ? (
-                  <>
-                    {!!data.selectedTailoringStyleImage && (
-                      <View style={styles.tailoringImageWrap}>
-                        <Image
-                          source={{ uri: data.selectedTailoringStyleImage }}
-                          style={styles.tailoringImage}
-                          resizeMode="cover"
+                  {data.hasStyleSelected ? (
+                    <>
+                      {!!data.selectedTailoringStyleImage && (
+                        <View style={styles.tailoringImageWrap}>
+                          <Image
+                            source={{ uri: data.selectedTailoringStyleImage }}
+                            style={styles.tailoringImage}
+                            resizeMode="cover"
+                          />
+                        </View>
+                      )}
+
+                      <KVRow
+                        label="Style"
+                        value={
+                          data.selectedTailoringStyleTitle || "Selected style"
+                        }
+                      />
+
+                      {!!data.selectedNeckVariation &&
+                      data.selectedNeckVariation !==
+                        "no change in selected style" ? (
+                        <KVRow
+                          label="Neck"
+                          value={cleanVariationLabel(
+                            data.selectedNeckVariation,
+                            "neck",
+                          )}
                         />
-                      </View>
-                    )}
+                      ) : null}
 
-                    <KVRow
-                      label="Style"
-                      value={
-                        data.selectedTailoringStyleTitle || "Selected style"
-                      }
-                    />
+                      {!!data.selectedSleeveVariation &&
+                      data.selectedSleeveVariation !==
+                        "no change in selected style" ? (
+                        <KVRow
+                          label="Sleeve"
+                          value={cleanVariationLabel(
+                            data.selectedSleeveVariation,
+                            "sleeve",
+                          )}
+                        />
+                      ) : null}
 
-                    {!!data.selectedNeckVariation &&
-                    data.selectedNeckVariation !==
-                      "no change in selected style" ? (
-                      <KVRow
-                        label="Neck"
-                        value={cleanVariationLabel(
-                          data.selectedNeckVariation,
-                          "neck",
-                        )}
-                      />
-                    ) : null}
+                      {!!data.selectedTrouserVariation &&
+                      data.selectedTrouserVariation !==
+                        "no change in selected style" ? (
+                        <KVRow
+                          label="Trouser"
+                          value={data.selectedTrouserVariation}
+                        />
+                      ) : null}
 
-                    {!!data.selectedSleeveVariation &&
-                    data.selectedSleeveVariation !==
-                      "no change in selected style" ? (
-                      <KVRow
-                        label="Sleeve"
-                        value={cleanVariationLabel(
-                          data.selectedSleeveVariation,
-                          "sleeve",
-                        )}
-                      />
-                    ) : null}
+                      {data.tailoringStyleExtraCostPkr > 0 ? (
+                        <KVRow
+                          label="Additional style cost"
+                          value={formatMoney(
+                            data.currency,
+                            data.tailoringStyleExtraCostPkr,
+                          )}
+                        />
+                      ) : null}
 
-                    {!!data.selectedTrouserVariation &&
-                    data.selectedTrouserVariation !==
-                      "no change in selected style" ? (
-                      <KVRow
-                        label="Trouser"
-                        value={data.selectedTrouserVariation}
-                      />
-                    ) : null}
-
-                    {data.tailoringStyleExtraCostPkr > 0 ? (
-                      <KVRow
-                        label="Additional style cost"
-                        value={formatMoney(
-                          data.currency,
-                          data.tailoringStyleExtraCostPkr,
-                        )}
-                      />
-                    ) : null}
-
-                    {!!data.customTailoringNote ? (
-                      <View style={styles.noteBox}>
-                        <Text style={styles.noteLabel}>Tailoring note</Text>
-                        <Text style={styles.noteText}>
-                          {data.customTailoringNote}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </>
-                ) : null}
-              </View>
-            ) : null}
-          </PlainSection>
+                      {!!data.customTailoringNote ? (
+                        <View style={styles.noteBox}>
+                          <Text style={styles.noteLabel}>Tailoring note</Text>
+                          <Text style={styles.noteText}>
+                            {data.customTailoringNote}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </>
+                  ) : null}
+                </View>
+              ) : null}
+            </PlainSection>
+          ) : null}
 
           <PlainSection title="Delivery">
             <KVRow label="Buyer" value={data.buyerName || "—"} />

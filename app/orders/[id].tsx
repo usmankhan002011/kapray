@@ -56,6 +56,12 @@ type OrderRow = {
 
   courier_name: string | null;
   tracking_number: string | null;
+
+  vendor?: {
+    id?: number | null;
+    name?: string | null;
+    shop_name?: string | null;
+  } | null;
 };
 
 function money(currency: string, v: any) {
@@ -194,6 +200,35 @@ function cleanVariationLabel(value: string, kind: "neck" | "sleeve") {
     .trim();
 }
 
+function cleanVariantTitle(value: string, sizeValue: string) {
+  let title = String(value ?? "").trim();
+  const size = String(sizeValue ?? "").trim();
+
+  if (!title || title === "—") return "";
+  if (!size || size === "—") return title;
+
+  const commonSizeSuffixes = [
+    ` (${size})`,
+    ` - ${size}`,
+    ` – ${size}`,
+    ` — ${size}`,
+    ` / ${size}`,
+    ` | ${size}`,
+  ];
+
+  for (const suffix of commonSizeSuffixes) {
+    if (title.toLowerCase().endsWith(suffix.toLowerCase())) {
+      title = title.slice(0, -suffix.length).trim();
+      break;
+    }
+  }
+
+  return title
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s*[-–—|/]\s*$/, "")
+    .trim();
+}
+
 function buildAddressPreview(args: {
   address: string;
   city: string;
@@ -327,6 +362,11 @@ export default function OrderDetailScreen() {
           `
           id,
           vendor_id,
+          vendor:vendor_id (
+            id,
+            name,
+            shop_name
+          ),
           created_at,
           order_no,
           status,
@@ -363,6 +403,7 @@ export default function OrderDetailScreen() {
       setOrder({
         id: Number(o.id),
         vendor_id: Number(o.vendor_id ?? 0),
+        vendor: o.vendor ?? null,
 
         created_at: String(o.created_at),
         order_no: o.order_no ?? null,
@@ -685,6 +726,89 @@ export default function OrderDetailScreen() {
     return raw === "—" ? "" : raw;
   }, [order, spec]);
 
+  const selectedStitchedVariant = useMemo(() => {
+    if (!order) return null;
+
+    const snapshot =
+      spec?.selected_stitched_variant &&
+      typeof spec.selected_stitched_variant === "object"
+        ? spec.selected_stitched_variant
+        : spec?.selected_variant && typeof spec.selected_variant === "object"
+          ? spec.selected_variant
+          : {};
+
+    const idRaw = safeText(
+      spec?.selected_variant_id ?? snapshot?.id ?? snapshot?.variant_id ?? "",
+    );
+    const titleRaw = safeText(
+      spec?.selected_variant_title ??
+        snapshot?.title ??
+        snapshot?.label ??
+        snapshot?.name ??
+        "",
+    );
+    const sizeRaw = safeText(
+      spec?.selected_variant_size ??
+        snapshot?.size ??
+        snapshot?.size_label ??
+        "",
+    );
+    const colorRaw = safeText(
+      spec?.selected_variant_color ?? snapshot?.color ?? snapshot?.colour ?? "",
+    );
+    const imageRaw = safeText(
+      spec?.selected_variant_image_path ??
+        snapshot?.image_path ??
+        snapshot?.image_paths?.[0] ??
+        snapshot?.images?.[0] ??
+        snapshot?.image ??
+        "",
+    );
+    const skuRaw = safeText(spec?.selected_variant_sku ?? snapshot?.sku ?? "");
+    const noteRaw = safeText(
+      spec?.selected_variant_note ?? snapshot?.note ?? "",
+    );
+    const stockQty = numOrNull(
+      spec?.selected_variant_stock_qty ??
+        snapshot?.stock_qty ??
+        snapshot?.stockQty ??
+        null,
+    );
+    const pricePkr = numOrNull(
+      spec?.selected_variant_price_pkr ??
+        snapshot?.price_pkr ??
+        snapshot?.pricePkr ??
+        snapshot?.price ??
+        null,
+    );
+
+    const hasVariant = [
+      idRaw,
+      titleRaw,
+      sizeRaw,
+      colorRaw,
+      imageRaw,
+      skuRaw,
+      noteRaw,
+    ].some((v) => v && v !== "—");
+
+    if (!hasVariant && pricePkr == null && stockQty == null) return null;
+
+    return {
+      id: idRaw === "—" ? "" : idRaw,
+      title: titleRaw === "—" ? "" : cleanVariantTitle(titleRaw, sizeRaw),
+      size: sizeRaw === "—" ? "" : sizeRaw,
+      color: colorRaw === "—" ? "" : colorRaw,
+      imageUrl: imageRaw === "—" ? "" : resolvePublicUrlFromPath(imageRaw),
+      sku: skuRaw === "—" ? "" : skuRaw,
+      note: noteRaw === "—" ? "" : noteRaw,
+      stockQty,
+      pricePkr,
+    };
+  }, [order, spec]);
+
+  const isReadyStitchedOrder = !!selectedStitchedVariant && !isUnstitched;
+
   const selectedFabricLengthM = useMemo(() => {
     if (!order) return null;
     return numOrNull(spec?.selected_fabric_length_m ?? "");
@@ -896,9 +1020,14 @@ export default function OrderDetailScreen() {
 
   const vendorNameForMeasurements = useMemo(() => {
     const fromSpec = safeText(
-      spec?.vendor_name ?? spec?.vendor_shop_name ?? "",
+      spec?.vendor_shop_name ?? spec?.vendor_name ?? "",
     );
     if (fromSpec !== "—") return fromSpec;
+
+    const fromOrderVendor = safeText(
+      order?.vendor?.shop_name ?? order?.vendor?.name ?? "",
+    );
+    if (fromOrderVendor !== "—") return fromOrderVendor;
 
     const fromStore = safeText(
       vendorFromStore?.shop_name ??
@@ -911,7 +1040,7 @@ export default function OrderDetailScreen() {
     if (isVendorView) return "Your Store";
 
     return "";
-  }, [spec, vendorFromStore, isVendorView]);
+  }, [spec, order?.vendor, vendorFromStore, isVendorView]);
 
   const bannerUrl = useMemo(() => {
     if (!order) return "";
@@ -1067,6 +1196,12 @@ export default function OrderDetailScreen() {
                     {order.title_snapshot}
                   </Text>
 
+                  {!!vendorNameForMeasurements ? (
+                    <Text style={styles.productVendorName} numberOfLines={1}>
+                      by {vendorNameForMeasurements}
+                    </Text>
+                  ) : null}
+
                   <View style={styles.productMetaInfo}>
                     <Text style={styles.productMetaLabel}>Category</Text>
                     <Text style={styles.productMetaValue}>{categoryLabel}</Text>
@@ -1081,151 +1216,223 @@ export default function OrderDetailScreen() {
                     </View>
                   )}
 
-                  <Text style={styles.heroPrice}>
-                    {money(order.currency, baseProductCostPkr)}
-                  </Text>
+                  {!isReadyStitchedOrder ? (
+                    <Text style={styles.heroPrice}>
+                      {money(order.currency, baseProductCostPkr)}
+                    </Text>
+                  ) : null}
                 </View>
               </View>
             </SectionCard>
 
-            <SectionCard title="Customization">
-              {order.size_mode !== "exact" ? (
-                <KVRow
-                  label="Size"
-                  value={isUnstitched ? selectedUnstitchedSize : sizeLabel}
-                />
-              ) : null}
-
-              {order.size_mode === "exact" && measurementRows.length ? (
-                <View style={styles.inlineActionRow}>
-                  <Text style={styles.helper}>
-                    {measurementRows.length} dimensions saved
-                    {customDimensions.length
-                      ? ` • ${customDimensions.length} custom`
-                      : ""}
-                  </Text>
-
-                  <Pressable
-                    onPress={() => setMeasurementsOpen(true)}
-                    style={styles.secondaryInlineBtn}
-                  >
-                    <Text style={styles.secondaryInlineText}>
-                      View Exact Measurements
-                    </Text>
-                  </Pressable>
-                </View>
-              ) : null}
-
-              {isUnstitched ? (
-                <>
-                  <KVRow
-                    label="Fabric length"
-                    value={
-                      selectedFabricLengthM != null
-                        ? `${selectedFabricLengthM} m`
-                        : ""
-                    }
-                  />
-                  <KVRow
-                    label="Rate"
-                    value={
-                      pricePerMeterPkr != null
-                        ? `${money(order.currency, pricePerMeterPkr)} / meter`
-                        : ""
-                    }
-                  />
-                </>
-              ) : null}
-
-              {dyeSelected ? (
-                <View style={styles.customBlock}>
-                  <View style={styles.kvRow}>
-                    <Text style={styles.kvLabel}>Dyeing color</Text>
-                    <View style={styles.colorPreviewRow}>
-                      {!!dyeHex && (
-                        <View
-                          style={[
-                            styles.dyeSwatch,
-                            { backgroundColor: dyeHex },
-                          ]}
-                        />
-                      )}
-                      <Text style={styles.helper}>
-                        {dyeCostPkr != null
-                          ? money(order.currency, dyeCostPkr)
-                          : `${order.currency} —`}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              ) : null}
-
-              {tailoringSelected ? (
-                <View style={styles.customBlock}>
-                  <KVRow
-                    label="Tailoring"
-                    value={`${tailoringCostPkr != null ? money(order.currency, tailoringCostPkr) : "Included"}${
-                      tailoringTurnaroundDays != null
-                        ? ` • ${tailoringTurnaroundDays} days`
-                        : ""
-                    }`}
-                  />
-
-                  {!!selectedTailoringStyleImage && (
-                    <View style={styles.tailoringImageWrap}>
+            {selectedStitchedVariant ? (
+              <SectionCard title="Selected Stitched Variant">
+                <View style={styles.variantRow}>
+                  {selectedStitchedVariant.imageUrl ? (
+                    <View style={styles.variantImageWrap}>
                       <Image
-                        source={{ uri: selectedTailoringStyleImage }}
-                        style={styles.tailoringImage}
+                        source={{ uri: selectedStitchedVariant.imageUrl }}
+                        style={styles.variantImage}
                         resizeMode="cover"
                       />
                     </View>
-                  )}
-
-                  <KVRow label="Style" value={selectedTailoringStyleTitle} />
-                  <KVRow
-                    label="Neck"
-                    value={
-                      selectedNeckVariation &&
-                      selectedNeckVariation !== "no change in selected style"
-                        ? cleanVariationLabel(selectedNeckVariation, "neck")
-                        : ""
-                    }
-                  />
-                  <KVRow
-                    label="Sleeve"
-                    value={
-                      selectedSleeveVariation &&
-                      selectedSleeveVariation !== "no change in selected style"
-                        ? cleanVariationLabel(selectedSleeveVariation, "sleeve")
-                        : ""
-                    }
-                  />
-                  <KVRow
-                    label="Trouser"
-                    value={
-                      selectedTrouserVariation &&
-                      selectedTrouserVariation !== "no change in selected style"
-                        ? selectedTrouserVariation
-                        : ""
-                    }
-                  />
-
-                  {tailoringStyleExtraCostPkr != null ? (
-                    <KVRow
-                      label="Additional style cost"
-                      value={money(order.currency, tailoringStyleExtraCostPkr)}
-                    />
                   ) : null}
 
-                  {!!customTailoringNote && (
-                    <View style={styles.noteBox}>
-                      <Text style={styles.noteLabel}>Tailoring note</Text>
-                      <Text style={styles.noteText}>{customTailoringNote}</Text>
-                    </View>
-                  )}
+                  <View style={styles.variantInfoWrap}>
+                    <Text style={styles.variantTitle} numberOfLines={2}>
+                      {selectedStitchedVariant.title || "Ready-to-wear variant"}
+                    </Text>
+                    <KVRow label="Size" value={selectedStitchedVariant.size} />
+                    <KVRow
+                      label="Product cost"
+                      value={
+                        selectedStitchedVariant.pricePkr != null
+                          ? money(
+                              order.currency,
+                              selectedStitchedVariant.pricePkr,
+                            )
+                          : baseProductCostPkr != null
+                            ? money(order.currency, baseProductCostPkr)
+                            : ""
+                      }
+                    />
+                    <KVRow
+                      label="Stock"
+                      value={
+                        selectedStitchedVariant.stockQty != null
+                          ? String(selectedStitchedVariant.stockQty)
+                          : ""
+                      }
+                    />
+                    <KVRow
+                      label="SKU"
+                      value={selectedStitchedVariant.sku}
+                      muted
+                    />
+                  </View>
                 </View>
-              ) : null}
-            </SectionCard>
+
+                {!!selectedStitchedVariant.note && (
+                  <View style={styles.noteBox}>
+                    <Text style={styles.noteLabel}>Variant note</Text>
+                    <Text style={styles.noteText}>
+                      {selectedStitchedVariant.note}
+                    </Text>
+                  </View>
+                )}
+              </SectionCard>
+            ) : null}
+
+            {!isReadyStitchedOrder ? (
+              <SectionCard title="Customization">
+                {order.size_mode !== "exact" ? (
+                  <KVRow
+                    label="Size"
+                    value={isUnstitched ? selectedUnstitchedSize : sizeLabel}
+                  />
+                ) : null}
+
+                {order.size_mode === "exact" && measurementRows.length ? (
+                  <View style={styles.inlineActionRow}>
+                    <Text style={styles.helper}>
+                      {measurementRows.length} dimensions saved
+                      {customDimensions.length
+                        ? ` • ${customDimensions.length} custom`
+                        : ""}
+                    </Text>
+
+                    <Pressable
+                      onPress={() => setMeasurementsOpen(true)}
+                      style={styles.secondaryInlineBtn}
+                    >
+                      <Text style={styles.secondaryInlineText}>
+                        View Exact Measurements
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+
+                {isUnstitched ? (
+                  <>
+                    <KVRow
+                      label="Fabric length"
+                      value={
+                        selectedFabricLengthM != null
+                          ? `${selectedFabricLengthM} m`
+                          : ""
+                      }
+                    />
+                    <KVRow
+                      label="Rate"
+                      value={
+                        pricePerMeterPkr != null
+                          ? `${money(order.currency, pricePerMeterPkr)} / meter`
+                          : ""
+                      }
+                    />
+                  </>
+                ) : null}
+
+                {dyeSelected ? (
+                  <View style={styles.customBlock}>
+                    <View style={styles.kvRow}>
+                      <Text style={styles.kvLabel}>Dyeing color</Text>
+                      <View style={styles.colorPreviewRow}>
+                        {!!dyeHex && (
+                          <View
+                            style={[
+                              styles.dyeSwatch,
+                              { backgroundColor: dyeHex },
+                            ]}
+                          />
+                        )}
+                        <Text style={styles.helper}>
+                          {dyeCostPkr != null
+                            ? money(order.currency, dyeCostPkr)
+                            : `${order.currency} —`}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                ) : null}
+
+                {tailoringSelected ? (
+                  <View style={styles.customBlock}>
+                    <KVRow
+                      label="Tailoring"
+                      value={`${tailoringCostPkr != null ? money(order.currency, tailoringCostPkr) : "Included"}${
+                        tailoringTurnaroundDays != null
+                          ? ` • ${tailoringTurnaroundDays} days`
+                          : ""
+                      }`}
+                    />
+
+                    {!!selectedTailoringStyleImage && (
+                      <View style={styles.tailoringImageWrap}>
+                        <Image
+                          source={{ uri: selectedTailoringStyleImage }}
+                          style={styles.tailoringImage}
+                          resizeMode="cover"
+                        />
+                      </View>
+                    )}
+
+                    <KVRow label="Style" value={selectedTailoringStyleTitle} />
+                    <KVRow
+                      label="Neck"
+                      value={
+                        selectedNeckVariation &&
+                        selectedNeckVariation !== "no change in selected style"
+                          ? cleanVariationLabel(selectedNeckVariation, "neck")
+                          : ""
+                      }
+                    />
+                    <KVRow
+                      label="Sleeve"
+                      value={
+                        selectedSleeveVariation &&
+                        selectedSleeveVariation !==
+                          "no change in selected style"
+                          ? cleanVariationLabel(
+                              selectedSleeveVariation,
+                              "sleeve",
+                            )
+                          : ""
+                      }
+                    />
+                    <KVRow
+                      label="Trouser"
+                      value={
+                        selectedTrouserVariation &&
+                        selectedTrouserVariation !==
+                          "no change in selected style"
+                          ? selectedTrouserVariation
+                          : ""
+                      }
+                    />
+
+                    {tailoringStyleExtraCostPkr != null ? (
+                      <KVRow
+                        label="Additional style cost"
+                        value={money(
+                          order.currency,
+                          tailoringStyleExtraCostPkr,
+                        )}
+                      />
+                    ) : null}
+
+                    {!!customTailoringNote && (
+                      <View style={styles.noteBox}>
+                        <Text style={styles.noteLabel}>Tailoring note</Text>
+                        <Text style={styles.noteText}>
+                          {customTailoringNote}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                ) : null}
+              </SectionCard>
+            ) : null}
 
             <SectionCard title="Buyer">
               <KVRow label="Name" value={order.buyer_name} />
@@ -1268,7 +1475,7 @@ export default function OrderDetailScreen() {
             </SectionCard>
 
             <SectionCard title="Price Summary">
-              {baseProductCostPkr != null ? (
+              {baseProductCostPkr != null && !isReadyStitchedOrder ? (
                 <PriceRow
                   label={isUnstitched ? "Total fabric cost" : "Product"}
                   value={money(order.currency, baseProductCostPkr)}
@@ -1704,6 +1911,14 @@ const styles = StyleSheet.create({
     color: stylesVars.text,
   },
 
+  productVendorName: {
+    marginTop: -2,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "700",
+  },
+
   productMetaInfo: {
     gap: 2,
   },
@@ -1799,6 +2014,39 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#CBD5E1",
+  },
+
+  variantRow: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "flex-start",
+  },
+
+  variantImageWrap: {
+    width: 112,
+    height: 132,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: "#F1F5F9",
+  },
+
+  variantImage: {
+    width: "100%",
+    height: "100%",
+  },
+
+  variantInfoWrap: {
+    flex: 1,
+    gap: 8,
+  },
+
+  variantTitle: {
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: "800",
+    color: stylesVars.text,
   },
 
   tailoringImageWrap: {

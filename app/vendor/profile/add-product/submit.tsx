@@ -17,6 +17,14 @@ import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { supabase } from "@/utils/supabase/client";
 
+import {
+  normalizeReadyVariants,
+  sumReadyVariantQty,
+  validateReadyVariants,
+  type ReadyVariant,
+  type ReadyVariantImage,
+} from "@/utils/kapray/productVariants";
+
 const BUCKET_VENDOR = "vendor_images";
 const PRODUCTS_TABLE = "products";
 
@@ -68,23 +76,6 @@ function safeNumOrZero(v: any) {
   return n;
 }
 
-function normalizeStringArray(v: unknown): string[] {
-  const arr = Array.isArray(v) ? v : [];
-  const seen = new Set<string>();
-  const out: string[] = [];
-
-  for (const item of arr) {
-    const s = safeStr(item);
-    if (!s) continue;
-    const key = s.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(s);
-  }
-
-  return out;
-}
-
 function normalizePresetArray(v: unknown): TailoringStylePreset[] {
   return Array.isArray(v) ? (v as TailoringStylePreset[]) : [];
 }
@@ -112,6 +103,7 @@ function inferCategoryFromDraft(draft: any): ProductCategory {
   const spec = draft?.spec ?? {};
   const price = draft?.price ?? {};
   const fromSpec = safeStr((spec as any)?.product_category ?? "");
+
   if (
     fromSpec === "unstitched_plain" ||
     fromSpec === "unstitched_dyeing" ||
@@ -140,6 +132,7 @@ function hasValidSizeLengthMap(v: any) {
     const n = Number(v[key]);
     if (Number.isFinite(n) && n > 0) return true;
   }
+
   return false;
 }
 
@@ -157,6 +150,7 @@ function hasValidPackageCm(v: any) {
     height > 0
   );
 }
+
 function hasValidTailoringPreset(
   preset: TailoringStylePreset,
   includesTrouser: boolean,
@@ -199,7 +193,9 @@ async function uploadTailoringPresetImages(args: {
       }
 
       if (rawPath && !rawUrl) {
-        const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(rawPath);
+        const { data } = supabase.storage
+          .from(BUCKET_VENDOR)
+          .getPublicUrl(rawPath);
         uploadedImages.push({
           ...img,
           uri: data?.publicUrl ?? rawUri ?? "",
@@ -213,7 +209,10 @@ async function uploadTailoringPresetImages(args: {
 
       const mimeType = safeStr((img as any)?.mimeType) || "image/jpeg";
       const ext =
-        safeStr((img as any)?.fileName).split(".").pop()?.toLowerCase() ||
+        safeStr((img as any)?.fileName)
+          .split(".")
+          .pop()
+          ?.toLowerCase() ||
         mimeType.split("/")[1] ||
         "jpg";
 
@@ -229,7 +228,9 @@ async function uploadTailoringPresetImages(args: {
 
       if (!uploadedPath) continue;
 
-      const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(uploadedPath);
+      const { data } = supabase.storage
+        .from(BUCKET_VENDOR)
+        .getPublicUrl(uploadedPath);
 
       uploadedImages.push({
         ...img,
@@ -248,6 +249,196 @@ async function uploadTailoringPresetImages(args: {
   return nextPresets;
 }
 
+type ReadyVariantForSubmit = ReadyVariant & {
+  image_paths?: string[];
+  images?: ReadyVariantImage[];
+};
+
+type ReadyVariantImageInput = {
+  uri?: string | null;
+  path?: string | null;
+  url?: string | null;
+  fileName?: string | null;
+  mimeType?: string | null;
+};
+
+function dedupeStrings(items: string[]) {
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const item of items) {
+    const clean = safeStr(item);
+    if (!clean) continue;
+    if (seen.has(clean)) continue;
+    seen.add(clean);
+    out.push(clean);
+  }
+
+  return out;
+}
+
+function isLocalFileUri(v: string) {
+  return (
+    v.startsWith("file://") ||
+    v.startsWith("content://") ||
+    v.startsWith("ph://") ||
+    v.startsWith("assets-library://")
+  );
+}
+
+function storagePathFromPublicUrl(url: string) {
+  const clean = safeStr(url);
+  if (!clean) return "";
+
+  const marker = `/storage/v1/object/public/${BUCKET_VENDOR}/`;
+  const idx = clean.indexOf(marker);
+  if (idx >= 0) {
+    return decodeURIComponent(clean.slice(idx + marker.length));
+  }
+
+  return "";
+}
+
+function normalizeReadyVariantImageInputs(
+  variant: ReadyVariantForSubmit,
+): ReadyVariantImageInput[] {
+  const out: ReadyVariantImageInput[] = [];
+
+  const rawPaths = Array.isArray((variant as any)?.image_paths)
+    ? ((variant as any).image_paths as any[])
+    : [];
+
+  for (const item of rawPaths) {
+    if (typeof item === "string") {
+      const clean = safeStr(item);
+      if (!clean) continue;
+
+      const storagePath = storagePathFromPublicUrl(clean);
+      if (storagePath) {
+        out.push({ path: storagePath, url: clean });
+      } else if (isLocalFileUri(clean)) {
+        out.push({ uri: clean });
+      } else {
+        out.push({ path: clean });
+      }
+      continue;
+    }
+
+    if (item && typeof item === "object") {
+      const obj = item as ReadyVariantImageInput;
+      out.push({
+        uri: safeStr(obj?.uri ?? "") || null,
+        path: safeStr(obj?.path ?? "") || null,
+        url: safeStr(obj?.url ?? "") || null,
+        fileName: obj?.fileName ?? null,
+        mimeType: obj?.mimeType ?? null,
+      });
+    }
+  }
+
+  const legacyImages = Array.isArray((variant as any)?.images)
+    ? ((variant as any).images as ReadyVariantImageInput[])
+    : [];
+
+  for (const img of legacyImages) {
+    out.push({
+      uri: safeStr((img as any)?.uri ?? "") || null,
+      path: safeStr((img as any)?.path ?? "") || null,
+      url: safeStr((img as any)?.url ?? "") || null,
+      fileName: (img as any)?.fileName ?? null,
+      mimeType: (img as any)?.mimeType ?? null,
+    });
+  }
+
+  return out;
+}
+
+function stripReadyVariantForDb(
+  variant: ReadyVariantForSubmit,
+  imagePaths: string[],
+) {
+  const {
+    images: _images,
+    image_paths: _oldImagePaths,
+    ...rest
+  } = variant as any;
+
+  return {
+    ...rest,
+    image_paths: dedupeStrings(imagePaths),
+  };
+}
+
+async function uploadReadyVariantImages(args: {
+  vendorId: number;
+  productCode: string;
+  variants: ReadyVariant[];
+}) {
+  const nextVariants: any[] = [];
+
+  for (
+    let variantIndex = 0;
+    variantIndex < args.variants.length;
+    variantIndex++
+  ) {
+    const variant = args.variants[variantIndex] as ReadyVariantForSubmit;
+    const inputs = normalizeReadyVariantImageInputs(variant);
+    const uploadedPaths: string[] = [];
+
+    for (let imageIndex = 0; imageIndex < inputs.length; imageIndex++) {
+      const img = inputs[imageIndex] ?? {};
+      const rawUri = safeStr(img?.uri ?? "");
+      const rawUrl = safeStr(img?.url ?? "");
+      const rawPath = safeStr(img?.path ?? "");
+
+      if (rawPath) {
+        uploadedPaths.push(rawPath);
+        continue;
+      }
+
+      const pathFromUrl = storagePathFromPublicUrl(rawUrl);
+      if (pathFromUrl) {
+        uploadedPaths.push(pathFromUrl);
+        continue;
+      }
+
+      if (!rawUri) continue;
+
+      const uriPathFromPublicUrl = storagePathFromPublicUrl(rawUri);
+      if (uriPathFromPublicUrl) {
+        uploadedPaths.push(uriPathFromPublicUrl);
+        continue;
+      }
+
+      if (!isLocalFileUri(rawUri)) continue;
+
+      const mimeType = safeStr(img?.mimeType) || "image/jpeg";
+      const ext =
+        safeStr(img?.fileName).split(".").pop()?.toLowerCase() ||
+        mimeType.split("/")[1] ||
+        "jpg";
+
+      const variantId =
+        safeStr((variant as any)?.id) || `variant_${variantIndex + 1}`;
+
+      const path = `vendors/${args.vendorId}/products/${args.productCode}/variants/${variantId}/${Date.now()}-${imageIndex}.${ext}`;
+
+      const uploadedPath = await uploadAssetToStorage({
+        bucket: BUCKET_VENDOR,
+        path,
+        uri: rawUri,
+        contentType: mimeType.startsWith("image/") ? mimeType : "image/jpeg",
+      });
+
+      if (uploadedPath) uploadedPaths.push(uploadedPath);
+    }
+
+    nextVariants.push(stripReadyVariantForDb(variant, uploadedPaths));
+  }
+
+  return nextVariants;
+}
+
 export default function AddProductSubmitScreen() {
   const router = useRouter();
 
@@ -261,7 +452,8 @@ export default function AddProductSubmitScreen() {
 
   const [saving, setSaving] = useState(false);
 
-  const [vendorOffersTailoring, setVendorOffersTailoring] = useState<boolean>(false);
+  const [vendorOffersTailoring, setVendorOffersTailoring] =
+    useState<boolean>(false);
   const [vendorLoading, setVendorLoading] = useState<boolean>(false);
 
   useEffect(() => {
@@ -305,19 +497,44 @@ export default function AddProductSubmitScreen() {
     };
   }, [vendorId]);
 
-  const productCategory = useMemo<ProductCategory>(() => inferCategoryFromDraft(draft), [draft]);
+  const productCategory = useMemo<ProductCategory>(
+    () => inferCategoryFromDraft(draft),
+    [draft],
+  );
 
   const madeOnOrder = Boolean((draft.spec as any)?.made_on_order ?? false);
   const moreDescription = safeStr((draft.spec as any)?.more_description ?? "");
 
   const needsDyeing =
-    productCategory === "unstitched_dyeing" || productCategory === "unstitched_dyeing_tailoring";
+    productCategory === "unstitched_dyeing" ||
+    productCategory === "unstitched_dyeing_tailoring";
   const needsTailoring = productCategory === "unstitched_dyeing_tailoring";
   const isUnstitched = productCategory !== "stitched_ready";
 
-  const dyeingCostPkr = safeNumOrZero((draft.price as any)?.dyeing_cost_pkr ?? 0);
-  const tailoringCostPkr = safeNumOrZero((draft.price as any)?.tailoring_cost_pkr ?? 0);
-  const tailoringTurnaroundDays = safeNumOrZero((draft.spec as any)?.tailoring_turnaround_days ?? 0);
+  const hasReadyVariants =
+    productCategory === "stitched_ready" &&
+    !madeOnOrder &&
+    safeStr((draft.spec as any)?.variant_mode) === "ready_variants";
+
+  const readyVariants = useMemo(
+    () => normalizeReadyVariants((draft.price as any)?.variants),
+    [draft.price],
+  );
+
+  const readyVariantQty = useMemo(
+    () => sumReadyVariantQty(readyVariants),
+    [readyVariants],
+  );
+
+  const dyeingCostPkr = safeNumOrZero(
+    (draft.price as any)?.dyeing_cost_pkr ?? 0,
+  );
+  const tailoringCostPkr = safeNumOrZero(
+    (draft.price as any)?.tailoring_cost_pkr ?? 0,
+  );
+  const tailoringTurnaroundDays = safeNumOrZero(
+    (draft.spec as any)?.tailoring_turnaround_days ?? 0,
+  );
 
   const sizeLengthMap = (draft.spec as any)?.size_length_m ?? {};
   const weightKg = safeNumOrZero((draft.spec as any)?.weight_kg ?? 0);
@@ -325,9 +542,9 @@ export default function AddProductSubmitScreen() {
 
   const includesTrouser = Boolean(
     (draft.spec as any)?.includes_trouser ??
-      (draft.spec as any)?.has_trouser ??
-      (draft.spec as any)?.product_has_trouser ??
-      false,
+    (draft.spec as any)?.has_trouser ??
+    (draft.spec as any)?.product_has_trouser ??
+    false,
   );
 
   const tailoringStylePresets = useMemo(
@@ -342,6 +559,11 @@ export default function AddProductSubmitScreen() {
     if (productCategory === "stitched_ready") {
       const n = Number((draft.price as any)?.cost_pkr_total ?? 0);
       if (!Number.isFinite(n) || n <= 0) return false;
+
+      if (hasReadyVariants) {
+        const variantError = validateReadyVariants(readyVariants);
+        if (variantError) return false;
+      }
     } else {
       const n = Number((draft.price as any)?.cost_pkr_per_meter ?? 0);
       if (!Number.isFinite(n) || n <= 0) return false;
@@ -363,7 +585,11 @@ export default function AddProductSubmitScreen() {
         if (!Number.isFinite(days) || days < 0) return false;
 
         if (!tailoringStylePresets.length) return false;
-        if (!tailoringStylePresets.every((preset) => hasValidTailoringPreset(preset, includesTrouser))) {
+        if (
+          !tailoringStylePresets.every((preset) =>
+            hasValidTailoringPreset(preset, includesTrouser),
+          )
+        ) {
           return false;
         }
       }
@@ -375,9 +601,14 @@ export default function AddProductSubmitScreen() {
     if ((draft.media.images ?? []).length < 1) return false;
     if ((draft.spec.dressTypeIds ?? []).length < 1) return false;
 
-    if (!madeOnOrder) {
+    if (!madeOnOrder && !hasReadyVariants) {
       const q = Number(draft.inventory_qty ?? 0);
       if (!Number.isFinite(q) || q < 0) return false;
+    }
+
+    if (!madeOnOrder && hasReadyVariants) {
+      if (!Number.isFinite(readyVariantQty) || readyVariantQty <= 0)
+        return false;
     }
 
     return true;
@@ -386,6 +617,9 @@ export default function AddProductSubmitScreen() {
     draft,
     madeOnOrder,
     productCategory,
+    hasReadyVariants,
+    readyVariants,
+    readyVariantQty,
     needsDyeing,
     dyeingCostPkr,
     needsTailoring,
@@ -415,8 +649,19 @@ export default function AddProductSubmitScreen() {
     if (productCategory === "stitched_ready") {
       const total = Number((draft.price as any)?.cost_pkr_total ?? 0);
       if (!Number.isFinite(total) || total <= 0) {
-        Alert.alert("Missing price", "Please enter valid total cost for stitched product.");
+        Alert.alert(
+          "Missing price",
+          "Please enter valid total cost for stitched product.",
+        );
         return;
+      }
+
+      if (hasReadyVariants) {
+        const variantError = validateReadyVariants(readyVariants);
+        if (variantError) {
+          Alert.alert("Incomplete ready variants", variantError);
+          return;
+        }
       }
     } else {
       const perMeter = Number((draft.price as any)?.cost_pkr_per_meter ?? 0);
@@ -452,18 +697,27 @@ export default function AddProductSubmitScreen() {
 
         const t = Number(tailoringCostPkr ?? 0);
         if (!Number.isFinite(t) || t <= 0) {
-          Alert.alert("Missing tailoring cost", "Please enter valid tailoring cost.");
+          Alert.alert(
+            "Missing tailoring cost",
+            "Please enter valid tailoring cost.",
+          );
           return;
         }
 
         const days = Number(tailoringTurnaroundDays ?? 0);
         if (!Number.isFinite(days) || days < 0) {
-          Alert.alert("Invalid turnaround", "Tailoring turnaround days must be 0 or more.");
+          Alert.alert(
+            "Invalid turnaround",
+            "Tailoring turnaround days must be 0 or more.",
+          );
           return;
         }
 
         if (!tailoringStylePresets.length) {
-          Alert.alert("Missing style cards", "Please add at least one tailoring style card.");
+          Alert.alert(
+            "Missing style cards",
+            "Please add at least one tailoring style card.",
+          );
           return;
         }
 
@@ -493,16 +747,22 @@ export default function AddProductSubmitScreen() {
     }
 
     if ((draft.media.images ?? []).length < 1) {
-      Alert.alert("Missing images", "Please upload at least one product image.");
+      Alert.alert(
+        "Missing images",
+        "Please upload at least one product image.",
+      );
       return;
     }
 
     if ((draft.spec.dressTypeIds ?? []).length < 1) {
-      Alert.alert("Missing dress type", "Please select at least one dress type.");
+      Alert.alert(
+        "Missing dress type",
+        "Please select at least one dress type.",
+      );
       return;
     }
 
-    if (!madeOnOrder) {
+    if (!madeOnOrder && !hasReadyVariants) {
       const q = Number(draft.inventory_qty ?? 0);
       if (!Number.isFinite(q) || q < 0) {
         Alert.alert("Invalid inventory", "Inventory must be 0 or more.");
@@ -510,19 +770,37 @@ export default function AddProductSubmitScreen() {
       }
     }
 
+    if (!madeOnOrder && hasReadyVariants) {
+      if (!Number.isFinite(readyVariantQty) || readyVariantQty <= 0) {
+        Alert.alert(
+          "Invalid variant stock",
+          "Total stock across ready variants must be more than 0.",
+        );
+        return;
+      }
+    }
+
     try {
       setSaving(true);
 
-      const inventoryQty = madeOnOrder ? 0 : Number(draft.inventory_qty ?? 0);
+      const inventoryQty = madeOnOrder
+        ? 0
+        : hasReadyVariants
+          ? readyVariantQty
+          : Number(draft.inventory_qty ?? 0);
 
       const finalCategory: ProductCategory = productCategory;
 
       const finalPriceMode =
-        finalCategory === "stitched_ready" ? "stitched_total" : "unstitched_per_meter";
+        finalCategory === "stitched_ready"
+          ? "stitched_total"
+          : "unstitched_per_meter";
 
       const unstitchedDyeingEnabled =
-        finalCategory === "unstitched_dyeing" || finalCategory === "unstitched_dyeing_tailoring";
-      const unstitchedTailoringEnabled = finalCategory === "unstitched_dyeing_tailoring";
+        finalCategory === "unstitched_dyeing" ||
+        finalCategory === "unstitched_dyeing_tailoring";
+      const unstitchedTailoringEnabled =
+        finalCategory === "unstitched_dyeing_tailoring";
 
       const unstitchedDyeingCost = unstitchedDyeingEnabled
         ? Math.max(0, Number(dyeingCostPkr ?? 0))
@@ -543,7 +821,9 @@ export default function AddProductSubmitScreen() {
         product_category: finalCategory,
         made_on_order: Boolean(madeOnOrder),
 
-        inventory_qty: Number.isFinite(inventoryQty) ? Math.trunc(inventoryQty) : 0,
+        inventory_qty: Number.isFinite(inventoryQty)
+          ? Math.trunc(inventoryQty)
+          : 0,
 
         spec: {
           ...(draft.spec ?? {}),
@@ -556,8 +836,12 @@ export default function AddProductSubmitScreen() {
           tailoring_enabled: unstitchedTailoringEnabled,
           tailoring_turnaround_days: unstitchedTailoringTurnaround,
 
-          includes_trouser: unstitchedTailoringEnabled ? includesTrouser : false,
-          tailoring_style_presets: unstitchedTailoringEnabled ? tailoringStylePresets : [],
+          includes_trouser: unstitchedTailoringEnabled
+            ? includesTrouser
+            : false,
+          tailoring_style_presets: unstitchedTailoringEnabled
+            ? tailoringStylePresets
+            : [],
 
           weight_kg: Number(weightKg),
           package_cm: {
@@ -575,6 +859,10 @@ export default function AddProductSubmitScreen() {
         price: {
           ...(draft.price ?? {}),
           mode: finalPriceMode,
+
+          // Keep local picked variant images out of the DB insert.
+          // Final uploaded storage paths are written in the update below.
+          variants: [],
 
           dyeing_cost_pkr: unstitchedDyeingCost,
           tailoring_cost_pkr: unstitchedTailoringCost,
@@ -654,7 +942,9 @@ export default function AddProductSubmitScreen() {
         if (vp) uploadedVideoPaths.push(vp);
 
         try {
-          const t = await VideoThumbnails.getThumbnailAsync(uri, { time: 1500 });
+          const t = await VideoThumbnails.getThumbnailAsync(uri, {
+            time: 1500,
+          });
           if (t?.uri) {
             const tPath = `vendors/${vendorId}/products/${finalCode}/thumbs/${Date.now()}-${i}.jpg`;
             const tp = await uploadAssetToStorage({
@@ -678,20 +968,41 @@ export default function AddProductSubmitScreen() {
           })
         : [];
 
+      const uploadedReadyVariants = hasReadyVariants
+        ? await uploadReadyVariantImages({
+            vendorId,
+            productCode: finalCode,
+            variants: readyVariants,
+          })
+        : [];
+
       const media = {
         images: uploadedImagePaths,
         videos: uploadedVideoPaths,
         thumbs: uploadedThumbPaths,
       };
 
+      const finalSpec = {
+        ...insertPayload.spec,
+        tailoring_style_presets: unstitchedTailoringEnabled
+          ? uploadedTailoringPresets
+          : [],
+      };
+
+      const finalPrice = {
+        ...insertPayload.price,
+        variants: hasReadyVariants ? uploadedReadyVariants : [],
+      };
+
       const { error: updErr } = await supabase
         .from(PRODUCTS_TABLE)
         .update({
           media,
-          spec: {
-            ...insertPayload.spec,
-            tailoring_style_presets: unstitchedTailoringEnabled ? uploadedTailoringPresets : [],
-          },
+          spec: finalSpec,
+          price: finalPrice,
+          inventory_qty: Number.isFinite(inventoryQty)
+            ? Math.trunc(inventoryQty)
+            : 0,
           updated_at: new Date().toISOString(),
         })
         .eq("id", productId);
@@ -705,7 +1016,9 @@ export default function AddProductSubmitScreen() {
       resetDraft();
 
       router.replace(
-        `/vendor/profile/products?new_product_id=${encodeURIComponent(String(productId))}` as any,
+        `/vendor/profile/products?new_product_id=${encodeURIComponent(
+          String(productId),
+        )}` as any,
       );
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not save product.");
@@ -721,7 +1034,10 @@ export default function AddProductSubmitScreen() {
 
         <Pressable
           onPress={() => router.back()}
-          style={({ pressed }) => [styles.linkBtn, pressed ? styles.pressed : null]}
+          style={({ pressed }) => [
+            styles.linkBtn,
+            pressed ? styles.pressed : null,
+          ]}
         >
           <Text style={styles.linkText}>Back</Text>
         </Pressable>
@@ -745,7 +1061,8 @@ export default function AddProductSubmitScreen() {
 
         {!canSave ? (
           <Text style={styles.meta}>
-            Some required fields are missing. Go back to Review and complete the missing steps.
+            Some required fields are missing. Go back to Review and complete the
+            missing steps.
           </Text>
         ) : (
           <Text style={styles.meta}>

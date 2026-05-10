@@ -29,7 +29,9 @@ export default function Q10Videos() {
 
   const { draft, setVideos } = useProductDraft() as any;
 
-  const pickedVideos: any[] = Array.isArray(draft?.media?.videos) ? draft.media.videos : [];
+  const pickedVideos: any[] = Array.isArray(draft?.media?.videos)
+    ? draft.media.videos
+    : [];
   const videoCount = pickedVideos.length;
 
   const [videoThumbs, setVideoThumbs] = useState<Record<string, string>>({});
@@ -45,7 +47,9 @@ export default function Q10Videos() {
         if (videoThumbs[uri]) continue;
 
         try {
-          const t = await VideoThumbnails.getThumbnailAsync(uri, { time: 1500 });
+          const t = await VideoThumbnails.getThumbnailAsync(uri, {
+            time: 1500,
+          });
           if (!alive) return;
           if (t?.uri) {
             setVideoThumbs((prev) => {
@@ -77,7 +81,7 @@ export default function Q10Videos() {
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Videos,
       allowsMultipleSelection: true,
-      quality: 1
+      quality: 1,
     });
 
     if (res.canceled) return;
@@ -99,10 +103,12 @@ export default function Q10Videos() {
       return p.filter((a: any) => safeStr(a?.uri) !== uri);
     });
   }
-
   function goNext() {
     if (!vendorId) {
-      Alert.alert("Vendor not loaded", "Please ensure vendorSlice has vendor.id.");
+      Alert.alert(
+        "Vendor not loaded",
+        "Please ensure vendorSlice has vendor.id.",
+      );
       return;
     }
 
@@ -111,9 +117,21 @@ export default function Q10Videos() {
       return;
     }
 
+    const category = String(draft?.spec?.product_category ?? "").trim();
+    const madeOnOrder = Boolean(draft?.spec?.made_on_order ?? false);
+
+    const shouldAskReadyVariants =
+      category === "stitched_ready" && madeOnOrder === false;
+
+    if (shouldAskReadyVariants) {
+      router.push(
+        "/vendor/profile/add-product/q06b1-ready-variant-choice" as any,
+      );
+      return;
+    }
+
     router.push("/vendor/profile/add-product/q11-description" as any);
   }
-
   return (
     <View style={apStyles.screen}>
       <ScrollView
@@ -126,7 +144,10 @@ export default function Q10Videos() {
 
           <Pressable
             onPress={() => router.back()}
-            style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
+            style={({ pressed }) => [
+              apStyles.linkBtn,
+              pressed ? apStyles.pressed : null,
+            ]}
           >
             <Text style={apStyles.linkText}>Close</Text>
           </Pressable>
@@ -136,10 +157,15 @@ export default function Q10Videos() {
           <Text style={apStyles.label}>Pick videos (optional)</Text>
 
           <Pressable
-            style={({ pressed }) => [apStyles.secondaryBtn, pressed ? apStyles.pressed : null]}
+            style={({ pressed }) => [
+              apStyles.secondaryBtn,
+              pressed ? apStyles.pressed : null,
+            ]}
             onPress={pickVideos}
           >
-            <Text style={apStyles.secondaryText}>Pick Videos {videoCount ? `(${videoCount})` : ""}</Text>
+            <Text style={apStyles.secondaryText}>
+              Pick Videos {videoCount ? `(${videoCount})` : ""}
+            </Text>
           </Pressable>
 
           {pickedVideos.length ? (
@@ -164,14 +190,32 @@ export default function Q10Videos() {
                       overflow: "hidden",
                       borderWidth: 1,
                       borderColor: apColors.borderSoft,
-                      backgroundColor: "#f3f4f6"
+                      backgroundColor: "#f3f4f6",
                     }}
                   >
                     {tUri ? (
-                      <Image source={{ uri: tUri }} style={{ width: 76, height: 76 }} />
+                      <Image
+                        source={{ uri: tUri }}
+                        style={{ width: 76, height: 76 }}
+                      />
                     ) : (
-                      <View style={{ width: 76, height: 76, alignItems: "center", justifyContent: "center" }}>
-                        <Text style={{ fontWeight: "900", color: "#111", opacity: 0.7 }}>Video</Text>
+                      <View
+                        style={{
+                          width: 76,
+                          height: 76,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontWeight: "900",
+                            color: "#111",
+                            opacity: 0.7,
+                          }}
+                        >
+                          Video
+                        </Text>
                       </View>
                     )}
 
@@ -187,13 +231,21 @@ export default function Q10Videos() {
                           borderRadius: 999,
                           alignItems: "center",
                           justifyContent: "center",
-                          backgroundColor: "rgba(0,0,0,0.55)"
+                          backgroundColor: "rgba(0,0,0,0.55)",
                         },
-                        pressed ? apStyles.pressed : null
+                        pressed ? apStyles.pressed : null,
                       ]}
                       hitSlop={10}
                     >
-                      <Text style={{ color: "#fff", fontWeight: "900", fontSize: 12 }}>✕</Text>
+                      <Text
+                        style={{
+                          color: "#fff",
+                          fontWeight: "900",
+                          fontSize: 12,
+                        }}
+                      >
+                        ✕
+                      </Text>
                     </Pressable>
                   </View>
                 );
@@ -205,7 +257,10 @@ export default function Q10Videos() {
 
           <View style={apStyles.btnStack}>
             <Pressable
-              style={({ pressed }) => [apStyles.dangerBtn, pressed ? apStyles.pressed : null]}
+              style={({ pressed }) => [
+                apStyles.dangerBtn,
+                pressed ? apStyles.pressed : null,
+              ]}
               onPress={goNext}
               disabled={!canContinue}
             >
@@ -216,7 +271,7 @@ export default function Q10Videos() {
               style={({ pressed }) => [
                 apStyles.primaryBtn,
                 !canContinue ? apStyles.primaryBtnDisabled : null,
-                pressed ? apStyles.pressed : null
+                pressed ? apStyles.pressed : null,
               ]}
               onPress={goNext}
               disabled={!canContinue}

@@ -45,6 +45,11 @@ function safeText(v: any) {
   return t.length ? t : "—";
 }
 
+function cleanText(v: any) {
+  const t = String(v ?? "").trim();
+  return t.length ? t : "";
+}
+
 function humanizeCat(v: any) {
   const s = String(v ?? "").trim();
   if (!s) return "—";
@@ -53,16 +58,6 @@ function humanizeCat(v: any) {
     .replace(/\s+/g, " ")
     .trim()
     .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function boolish(v: any): boolean {
-  if (typeof v === "boolean") return v;
-  if (typeof v === "number") return v !== 0;
-  if (typeof v === "string") {
-    const s = v.trim().toLowerCase();
-    return s === "true" || s === "1" || s === "yes" || s === "y";
-  }
-  return !!v;
 }
 
 function money(currency: string, v: any) {
@@ -79,9 +74,26 @@ function numOrNull(v: any): number | null {
   return n;
 }
 
+function getSelectedVariant(spec: any) {
+  const title = cleanText(spec?.selected_variant_title);
+  const size = cleanText(spec?.selected_variant_size);
+  const color = cleanText(spec?.selected_variant_color);
+  const price = numOrNull(spec?.selected_variant_price_pkr);
+
+  return {
+    hasVariant: !!(title || size || color || price != null),
+    title,
+    size,
+    color,
+    price,
+  };
+}
+
 export default function OrdersIndexScreen() {
   const router = useRouter();
-  const vendorIdFromStore = useAppSelector((s) => (s.vendor as any)?.id ?? null);
+  const vendorIdFromStore = useAppSelector(
+    (s) => (s.vendor as any)?.id ?? null,
+  );
 
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<OrderRow[]>([]);
@@ -100,11 +112,18 @@ export default function OrdersIndexScreen() {
         return;
       }
 
-      const activeStatuses = ["placed", "seen", "in_progress", "packed", "dispatched"];
+      const activeStatuses = [
+        "placed",
+        "seen",
+        "in_progress",
+        "packed",
+        "dispatched",
+      ];
 
       let q = supabase
         .from("orders")
-        .select(`
+        .select(
+          `
           id,
           created_at,
           order_no,
@@ -119,7 +138,8 @@ export default function OrdersIndexScreen() {
           delivery_pkr,
           total_pkr,
           currency
-        `)
+        `,
+        )
         .eq("vendor_id", vId)
         .order("created_at", { ascending: false })
         .limit(500);
@@ -168,16 +188,24 @@ export default function OrdersIndexScreen() {
     if (!q) return rows;
 
     return rows.filter((r) => {
-      const spec = r.spec_snapshot && typeof r.spec_snapshot === "object" ? r.spec_snapshot : {};
+      const spec =
+        r.spec_snapshot && typeof r.spec_snapshot === "object"
+          ? r.spec_snapshot
+          : {};
+      const selectedVariant = getSelectedVariant(spec);
 
       const dyeHex = safeText(spec?.dye_hex ?? spec?.dyeing_hex ?? "");
-      const tailoringEnabled = safeText(spec?.tailoring_enabled ?? spec?.tailoring_selected ?? "");
+      const tailoringEnabled = safeText(
+        spec?.tailoring_enabled ?? spec?.tailoring_selected ?? "",
+      );
       const tailoringDays = safeText(spec?.tailoring_turnaround_days ?? "");
       const tailoringCost = safeText(spec?.tailoring_cost_pkr ?? "");
       const productCategory = safeText(
         spec?.product_category ?? spec?.dress_category ?? spec?.dress_cat ?? "",
       );
-      const selectedUnstitchedSize = safeText(spec?.selected_unstitched_size ?? "");
+      const selectedUnstitchedSize = safeText(
+        spec?.selected_unstitched_size ?? "",
+      );
       const fabricLength = safeText(spec?.selected_fabric_length_m ?? "");
       const exportRegion = safeText(spec?.export_region ?? "");
       const destinationType = safeText(spec?.destination_type ?? "");
@@ -199,6 +227,10 @@ export default function OrdersIndexScreen() {
         fabricLength,
         exportRegion,
         destinationType,
+        selectedVariant.title,
+        selectedVariant.size,
+        selectedVariant.color,
+        selectedVariant.price != null ? String(selectedVariant.price) : "",
       ]
         .join(" ")
         .toLowerCase();
@@ -211,7 +243,11 @@ export default function OrdersIndexScreen() {
     const orderNo = item.order_no || `Order #${item.id}`;
     const status = norm(item.status);
 
-    const spec = item.spec_snapshot && typeof item.spec_snapshot === "object" ? item.spec_snapshot : {};
+    const spec =
+      item.spec_snapshot && typeof item.spec_snapshot === "object"
+        ? item.spec_snapshot
+        : {};
+    const selectedVariant = getSelectedVariant(spec);
 
     const dyeHex = safeText(spec?.dye_hex ?? spec?.dyeing_hex ?? "");
     const hasDye = dyeHex && dyeHex !== "—";
@@ -220,8 +256,12 @@ export default function OrdersIndexScreen() {
       spec?.product_category ?? spec?.dress_category ?? spec?.dress_cat ?? "",
     );
 
-    const selectedUnstitchedSize = safeText(spec?.selected_unstitched_size ?? "");
-    const selectedFabricLengthM = numOrNull(spec?.selected_fabric_length_m ?? null);
+    const selectedUnstitchedSize = safeText(
+      spec?.selected_unstitched_size ?? "",
+    );
+    const selectedFabricLengthM = numOrNull(
+      spec?.selected_fabric_length_m ?? null,
+    );
     const fabricCostPkr = numOrNull(spec?.fabric_cost_pkr ?? null);
     const destinationType = safeText(spec?.destination_type ?? "");
     const exportRegion = safeText(spec?.export_region ?? "");
@@ -236,13 +276,20 @@ export default function OrdersIndexScreen() {
             params: { id: String(item.id) },
           })
         }
-        style={({ pressed }) => [styles.card, isNew && styles.cardNewRed, pressed && styles.pressed]}
+        style={({ pressed }) => [
+          styles.card,
+          isNew && styles.cardNewRed,
+          pressed && styles.pressed,
+        ]}
       >
         <View style={styles.rowBetween}>
           <Text style={styles.orderNo} numberOfLines={1}>
             {orderNo}
           </Text>
-          <Text style={[styles.badge, isNew ? styles.badgeRed : styles.badgeBlue]} numberOfLines={1}>
+          <Text
+            style={[styles.badge, isNew ? styles.badgeRed : styles.badgeBlue]}
+            numberOfLines={1}
+          >
             {item.status}
           </Text>
         </View>
@@ -255,10 +302,34 @@ export default function OrdersIndexScreen() {
           Dress Cat: {dressCat}
         </Text>
 
+        {selectedVariant.hasVariant ? (
+          <View style={styles.variantBox}>
+            <Text style={styles.variantTitle} numberOfLines={1}>
+              Selected Variant:{" "}
+              {selectedVariant.title || "Ready-to-wear variant"}
+            </Text>
+
+            <Text style={styles.variantMeta} numberOfLines={1}>
+              {selectedVariant.size ? `Size: ${selectedVariant.size}` : ""}
+              {selectedVariant.size && selectedVariant.color ? " • " : ""}
+              {selectedVariant.color ? `Color: ${selectedVariant.color}` : ""}
+              {(selectedVariant.size || selectedVariant.color) &&
+              selectedVariant.price != null
+                ? " • "
+                : ""}
+              {selectedVariant.price != null
+                ? money(item.currency, selectedVariant.price)
+                : ""}
+            </Text>
+          </View>
+        ) : null}
+
         {!!selectedUnstitchedSize && (
           <Text style={styles.small} numberOfLines={1}>
             Size: {selectedUnstitchedSize}
-            {selectedFabricLengthM != null ? ` • ${selectedFabricLengthM}m` : ""}
+            {selectedFabricLengthM != null
+              ? ` • ${selectedFabricLengthM}m`
+              : ""}
           </Text>
         )}
 
@@ -319,7 +390,11 @@ export default function OrdersIndexScreen() {
               pressed && styles.pressed,
             ]}
           >
-            <Text style={[styles.tabText, tab === "active" && styles.tabTextActive]}>Active</Text>
+            <Text
+              style={[styles.tabText, tab === "active" && styles.tabTextActive]}
+            >
+              Active
+            </Text>
           </Pressable>
 
           <Pressable
@@ -330,7 +405,12 @@ export default function OrdersIndexScreen() {
               pressed && styles.pressed,
             ]}
           >
-            <Text style={[styles.tabText, tab === "completed" && styles.tabTextActive]}>
+            <Text
+              style={[
+                styles.tabText,
+                tab === "completed" && styles.tabTextActive,
+              ]}
+            >
               Completed
             </Text>
           </Pressable>
@@ -346,7 +426,13 @@ export default function OrdersIndexScreen() {
           autoCorrect={false}
         />
 
-        <Pressable onPress={load} style={({ pressed }) => [styles.refreshBtn, pressed && styles.pressed]}>
+        <Pressable
+          onPress={load}
+          style={({ pressed }) => [
+            styles.refreshBtn,
+            pressed && styles.pressed,
+          ]}
+        >
           <Text style={styles.refreshText}>Refresh</Text>
         </Pressable>
       </View>
@@ -561,6 +647,29 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+  },
+
+  variantBox: {
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: stylesVars.blueSoft,
+    borderRadius: 12,
+    padding: 10,
+    gap: 3,
+  },
+
+  variantTitle: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: stylesVars.blue,
+    fontWeight: "800",
+  },
+
+  variantMeta: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: stylesVars.subText,
+    fontWeight: "600",
   },
 
   badge: {

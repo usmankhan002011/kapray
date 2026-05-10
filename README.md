@@ -523,3 +523,20 @@ d. dont add anything else.
 e. inform if any changes done other than the prediscussed and agreed upon changhes
 
 ---
+
+---
+
+ready-to-wear stitched cat files
+C:\DEV\kapray\kapray\data\kapray\productPieces.ts
+C:\DEV\kapray\kapray\utils\kapray\productVariants.ts
+C:\DEV\kapray\kapray\components\product\add-product\ReadyVariantEditor.tsx
+C:\DEV\kapray\kapray\components\product\add-product\VariantSummaryCard.tsx
+C:\DEV\kapray\kapray\components\product\view-product\ViewProduct.screen.tsx
+C:\DEV\kapray\kapray\components\product\view-product\ViewProduct.variants.stitched.tsx
+C:\DEV\kapray\kapray\app\vendor\profile\add-product\q06b1-ready-variant-choice.tsx
+C:\DEV\kapray\kapray\app\vendor\profile\add-product\q06b2-piece-count.tsx
+C:\DEV\kapray\kapray\app\vendor\profile\add-product\q06b3-ready-variants.tsx
+C:\DEV\kapray\kapray\app\vendor\profile\add-product\q05a-stitched-total-cost.tsx
+C:\DEV\kapray\kapray\app\vendor\profile\add-product\review.tsx
+C:\DEV\kapray\kapray\app\vendor\profile\add-product\submit.tsx
+C:\DEV\kapray\kapray\components\product\view-product\ViewProduct.screen.tsx

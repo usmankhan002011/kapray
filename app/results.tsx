@@ -27,6 +27,12 @@ const TABLE_WEAR_STATES = "wear_states";
 
 const PAGE_SIZE = 30;
 
+type ProductCategory =
+  | "unstitched_plain"
+  | "unstitched_dyeing"
+  | "unstitched_dyeing_tailoring"
+  | "stitched_ready";
+
 type ProductRow = {
   id: number;
   vendor_id?: number | null;
@@ -35,12 +41,7 @@ type ProductRow = {
   created_at?: string | null;
   inventory_qty?: number | null;
   made_on_order?: boolean;
-  product_category?:
-    | "unstitched_plain"
-    | "unstitched_dyeing"
-    | "unstitched_dyeing_tailoring"
-    | "stitched_ready"
-    | null;
+  product_category?: ProductCategory | null;
   spec?: any;
   price?: any;
   media?: any;
@@ -57,6 +58,13 @@ type ResultsCacheShape = {
   originCities: NameRow[];
   wearStates: NameRow[];
   hasMore: boolean;
+};
+
+type VariantInventorySummary = {
+  totalQty: number;
+  availableSizes: number;
+  lowestPositiveQty: number;
+  hasStock: boolean;
 };
 
 let RESULTS_CACHE: ResultsCacheShape | null = null;
@@ -97,6 +105,131 @@ function publicUrlForStoragePath(path: string | null): string | null {
   return data?.publicUrl ?? null;
 }
 
+function safeStockQty(v: unknown) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.trunc(n);
+}
+
+function getRawReadyVariants(product: any): any[] {
+  const price = product?.price ?? {};
+  const spec = product?.spec ?? {};
+  const inventory = product?.inventory ?? {};
+
+  const raw =
+    product?.variants ??
+    price?.variants ??
+    price?.ready_variants ??
+    price?.readyVariants ??
+    price?.stitched_variants ??
+    price?.stitchedVariants ??
+    spec?.variants ??
+    spec?.ready_variants ??
+    spec?.readyVariants ??
+    spec?.stitched_variants ??
+    spec?.stitchedVariants ??
+    inventory?.variants ??
+    inventory?.ready_variants ??
+    inventory?.stitched_variants ??
+    [];
+
+  return Array.isArray(raw) ? raw : [];
+}
+
+function getVariantInventorySummary(product: any): VariantInventorySummary {
+  const variants = getRawReadyVariants(product);
+  let totalQty = 0;
+  let lowestPositiveQty = Infinity;
+  const availableSizeSet = new Set<string>();
+
+  for (const variant of variants) {
+    const sizes = Array.isArray(variant?.sizes) ? variant.sizes : [];
+
+    for (const row of sizes) {
+      const size = String(
+        row?.size ?? row?.label ?? row?.name ?? row?.value ?? "",
+      )
+        .trim()
+        .toUpperCase();
+
+      const qty = Number(
+        row?.qty ??
+          row?.stock_qty ??
+          row?.stockQty ??
+          row?.stock ??
+          row?.quantity ??
+          0,
+      );
+
+      if (qty > 0) {
+        totalQty += qty;
+        if (size) availableSizeSet.add(size);
+        lowestPositiveQty = Math.min(lowestPositiveQty, qty);
+      }
+    }
+  }
+
+  const availableSizes = availableSizeSet.size;
+
+  return {
+    totalQty,
+    availableSizes,
+    lowestPositiveQty: lowestPositiveQty === Infinity ? 0 : lowestPositiveQty,
+    hasStock: totalQty > 0,
+  };
+}
+
+function getProductCategory(product: ProductRow): ProductCategory | null {
+  const fromDb = product?.product_category;
+  if (fromDb) return fromDb;
+
+  const fromSpec = product?.spec?.product_category;
+  if (
+    fromSpec === "unstitched_plain" ||
+    fromSpec === "unstitched_dyeing" ||
+    fromSpec === "unstitched_dyeing_tailoring" ||
+    fromSpec === "stitched_ready"
+  ) {
+    return fromSpec;
+  }
+
+  const priceMode = String(product?.price?.mode ?? "");
+  if (priceMode === "stitched_total") return "stitched_ready";
+  if (priceMode === "unstitched_per_meter") return "unstitched_plain";
+
+  return null;
+}
+
+function isStitchedReadyProduct(product: ProductRow) {
+  return getProductCategory(product) === "stitched_ready";
+}
+function productHasBuyerVisibleStock(product: ProductRow) {
+  if (Boolean(product?.made_on_order)) return true;
+
+  if (isStitchedReadyProduct(product)) {
+    return getVariantInventorySummary(product).hasStock;
+  }
+
+  return safeStockQty(product?.inventory_qty) > 0;
+}
+function stockBadgeText(product: ProductRow) {
+  if (Boolean(product?.made_on_order)) return "Made on order";
+
+  if (isStitchedReadyProduct(product)) {
+    const info = getVariantInventorySummary(product);
+
+    if (!info.hasStock) return "Out of stock";
+
+    const sizeText =
+      info.availableSizes === 1 ? "1 size" : `${info.availableSizes} sizes`;
+
+    return `Qty: ${info.totalQty} • ${sizeText} available`;
+  }
+
+  const qty = safeStockQty(product?.inventory_qty);
+  if (qty <= 0) return "Out of stock";
+  return `Qty: ${qty}`;
+}
 /**
  * Numeric PKR value for filtering:
  * - stitched_total => cost_pkr_total
@@ -131,8 +264,9 @@ function formatPrice(price: any): string {
   }
 
   if (typeof total === "number") return `PKR ${total.toLocaleString()}`;
-  if (typeof perMeter === "number")
+  if (typeof perMeter === "number") {
     return `PKR ${perMeter.toLocaleString()} / meter`;
+  }
 
   return "Price not set";
 }
@@ -176,10 +310,12 @@ function priceRangeSummary(
   maxCostPkr: number | null,
 ) {
   if (minCostPkr === null && maxCostPkr === null) return "Price: Any";
-  if (minCostPkr !== null && maxCostPkr === null)
+  if (minCostPkr !== null && maxCostPkr === null) {
     return `Price: ${formatPKR(minCostPkr)}+`;
-  if (minCostPkr === null && maxCostPkr !== null)
+  }
+  if (minCostPkr === null && maxCostPkr !== null) {
     return `Price: Up to ${formatPKR(maxCostPkr)}`;
+  }
   return `Price: ${formatPKR(minCostPkr as number)} – ${formatPKR(maxCostPkr as number)}`;
 }
 
@@ -386,7 +522,7 @@ export default function ResultsScreen() {
     }
 
     if (!RESULTS_CACHE) {
-      loadAll();
+      void loadAll();
     } else {
       setLoading(false);
       setProducts(RESULTS_CACHE.products);
@@ -468,10 +604,7 @@ export default function ResultsScreen() {
       const spec = p?.spec ?? {};
       const price = p?.price ?? {};
 
-      const madeOnOrder = Boolean(p?.made_on_order);
-      const inventoryQty = Number(p?.inventory_qty ?? 0);
-
-      if (!madeOnOrder && inventoryQty <= 0) return false;
+      if (!productHasBuyerVisibleStock(p)) return false;
 
       // ✅ vendor filter (multi-select). Empty => ANY
       if (vendorIds.length) {
@@ -812,12 +945,14 @@ export default function ResultsScreen() {
           contentContainerStyle={{ padding: 16 }}
           onEndReachedThreshold={0.6}
           onEndReached={() => {
-            if (!loadingMore && hasMore) fetchMore();
+            if (!loadingMore && hasMore) void fetchMore();
           }}
           renderItem={({ item }) => {
             const imgPath = firstImagePath(item.media);
             const url = publicUrlForStoragePath(imgPath);
             const isFav = favoriteIds.has(item.id);
+            const category = getProductCategory(item);
+            const badge = stockBadgeText(item);
 
             return (
               <Pressable style={styles.card} onPress={() => openProduct(item)}>
@@ -845,27 +980,25 @@ export default function ResultsScreen() {
                   ) : (
                     <>
                       <Text style={styles.cardSub} numberOfLines={1}>
-                        {item?.product_category === "stitched_ready"
+                        {category === "stitched_ready"
                           ? "Ready-to-wear"
                           : "Unstitched"}
                       </Text>
 
-                      {item?.product_category ===
-                      "unstitched_dyeing_tailoring" ? (
+                      {category === "unstitched_dyeing_tailoring" ? (
                         <Text style={styles.cardSub} numberOfLines={1}>
                           Tailoring available
                         </Text>
                       ) : null}
 
-                      {item?.product_category === "unstitched_dyeing" ? (
+                      {category === "unstitched_dyeing" ? (
                         <Text style={styles.cardSub} numberOfLines={1}>
                           Dyeing available
                         </Text>
                       ) : null}
 
                       <Text style={styles.cardSub} numberOfLines={1}>
-                        In Stock:{" "}
-                        {Math.max(0, Number(item?.inventory_qty ?? 0))}
+                        {badge}
                       </Text>
                     </>
                   )}

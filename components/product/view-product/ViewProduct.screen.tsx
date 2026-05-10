@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Alert,
   BackHandler,
+  Image,
   Dimensions,
   Pressable,
   ScrollView,
@@ -32,6 +33,9 @@ import { makeViewProductStyles, stylesVars } from "./ViewProduct.styles";
 import ViewProductTailoringSelection, {
   TailoringSelection,
 } from "./ViewProduct.tailoring.selection";
+import ViewProductStitchedVariants, {
+  StitchedVariant,
+} from "./ViewProduct.variants.stitched";
 import {
   normalizeTailoringPresetArray,
   safeInt0,
@@ -259,6 +263,43 @@ function encodeJsonParam(v: unknown) {
   }
 }
 
+function firstStitchedVariantImagePath(v: StitchedVariant | null): string {
+  if (!v) return "";
+
+  const raw = (v as any)?.raw ?? {};
+  const rawVariant = (v as any)?.rawVariant ?? {};
+
+  const candidates = [
+    // New canonical selected-variant shape from ViewProduct.variants.stitched.tsx.
+    (v as any)?.image_paths,
+    rawVariant?.image_paths,
+
+    // Backward-compatible variant/raw shapes.
+    raw?.image_paths,
+    raw?.variant_image_paths,
+    raw?.images,
+    raw?.imagePaths,
+    raw?.media?.image_paths,
+    raw?.media?.images,
+    raw?.image_path,
+    raw?.variant_image_path,
+    raw?.image,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      const first = candidate.find((item) => String(item ?? "").trim());
+      if (first) return String(first).trim();
+      continue;
+    }
+
+    const s = String(candidate ?? "").trim();
+    if (s) return s;
+  }
+
+  return "";
+}
+
 export default function ViewProductScreen() {
   const { styles } = useMemo(() => makeViewProductStyles(width, FOOTER_H), []);
   const router = useRouter();
@@ -353,6 +394,9 @@ export default function ViewProductScreen() {
   const [tailoringSelection, setTailoringSelection] =
     useState<TailoringSelection | null>(null);
 
+  const [selectedStitchedVariant, setSelectedStitchedVariant] =
+    useState<StitchedVariant | null>(null);
+
   const setBuyerWantsTailoring = useCallback(
     (next: boolean) => {
       _setBuyerWantsTailoring(next);
@@ -397,6 +441,7 @@ export default function ViewProductScreen() {
   }, []);
 
   const resetBuyerSelections = useCallback(() => {
+    setSelectedStitchedVariant(null);
     _setBuyerWantsTailoring(false);
     _setBuyerWantsDyeing(false);
     setTailoringSelection(null);
@@ -426,6 +471,10 @@ export default function ViewProductScreen() {
     resetBuyerSelections();
     router.replace("/(tabs)");
   }, [resetBuyerSelections, router]);
+
+  useEffect(() => {
+    setSelectedStitchedVariant(null);
+  }, [productId, productCode]);
 
   useEffect(() => {
     if (!choiceKey) return;
@@ -854,6 +903,29 @@ export default function ViewProductScreen() {
     );
   };
 
+  const productCategory = useMemo<ProductCategory | null>(() => {
+    const fromDb = (product as any)?.product_category;
+    if (isProductCategory(fromDb)) return fromDb;
+
+    const fromSpec = (product as any)?.spec?.product_category;
+    if (isProductCategory(fromSpec)) return fromSpec;
+
+    return null;
+  }, [product]);
+
+  const isStitchedReady = useMemo(() => {
+    if (productCategory) return productCategory === "stitched_ready";
+
+    const price = (product as any)?.price ?? {};
+    const spec = (product as any)?.spec ?? {};
+
+    return (
+      String(price?.mode ?? "") === "stitched_total" ||
+      String(price?.mode ?? "") === "stitched_ready" ||
+      String(spec?.product_category ?? "") === "stitched_ready"
+    );
+  }, [product, productCategory]);
+
   const priceText = useMemo(() => {
     const price = (product as any)?.price ?? {};
     const mode = String(price?.mode ?? "");
@@ -863,30 +935,68 @@ export default function ViewProductScreen() {
       return v ? `PKR ${v} / meter` : "—";
     }
 
+    if (isStitchedReady && selectedStitchedVariant?.pricePkr) {
+      return `PKR ${selectedStitchedVariant.pricePkr}`;
+    }
+
     const t = price?.cost_pkr_total;
     return t ? `PKR ${t} (total)` : "—";
-  }, [product]);
+  }, [isStitchedReady, product, selectedStitchedVariant]);
 
   const pricePerMeterPkr = useMemo(() => {
     const price = (product as any)?.price ?? {};
     return safePositiveNumber(price?.cost_pkr_per_meter);
   }, [product]);
 
-  const stitchedTotalPkr = useMemo(() => {
+  const baseStitchedProductPricePkr = useMemo(() => {
     const price = (product as any)?.price ?? {};
-    return safePositiveNumber(price?.cost_pkr_total);
+    const spec = (product as any)?.spec ?? {};
+
+    return (
+      safePositiveNumber(price?.cost_pkr_total) ||
+      safePositiveNumber(price?.costPkrTotal) ||
+      safePositiveNumber(price?.total_cost_pkr) ||
+      safePositiveNumber(price?.stitched_total_cost_pkr) ||
+      safePositiveNumber((product as any)?.cost_pkr_total) ||
+      safePositiveNumber((product as any)?.total_cost_pkr) ||
+      safePositiveNumber((product as any)?.stitched_total_cost_pkr) ||
+      safePositiveNumber(spec?.cost_pkr_total) ||
+      safePositiveNumber(spec?.total_cost_pkr) ||
+      safePositiveNumber(spec?.stitched_total_cost_pkr) ||
+      0
+    );
   }, [product]);
 
+  const stitchedTotalPkr = useMemo(() => {
+    if (isStitchedReady && selectedStitchedVariant?.pricePkr) {
+      return safePositiveNumber(selectedStitchedVariant.pricePkr);
+    }
+
+    return baseStitchedProductPricePkr;
+  }, [baseStitchedProductPricePkr, isStitchedReady, selectedStitchedVariant]);
+
   const sizeText = useMemo(() => {
+    if (isStitchedReady && selectedStitchedVariant?.size) {
+      return selectedStitchedVariant.size;
+    }
+
     const price = (product as any)?.price ?? {};
     const sizes = Array.isArray(price?.available_sizes)
       ? price.available_sizes
       : [];
     return sizes.length ? sizes.join(", ") : "—";
-  }, [product]);
+  }, [isStitchedReady, product, selectedStitchedVariant]);
 
   const inventoryText = useMemo(() => {
     if (!product) return "—";
+
+    if (isStitchedReady && selectedStitchedVariant?.stockQty != null) {
+      return String(selectedStitchedVariant.stockQty);
+    }
+
+    if (isStitchedReady && !selectedStitchedVariant) {
+      return "Select size";
+    }
 
     const made =
       Boolean((product as any)?.made_on_order) ||
@@ -901,10 +1011,14 @@ export default function ViewProductScreen() {
     if (!Number.isFinite(n)) return "—";
 
     return String(n);
-  }, [product]);
+  }, [isStitchedReady, product, selectedStitchedVariant]);
 
   const isOutOfStock = useMemo(() => {
     if (!product) return false;
+
+    if (isStitchedReady && selectedStitchedVariant?.stockQty != null) {
+      return selectedStitchedVariant.stockQty <= 0;
+    }
 
     const made =
       Boolean((product as any)?.made_on_order) ||
@@ -919,7 +1033,7 @@ export default function ViewProductScreen() {
     if (!Number.isFinite(n)) return false;
 
     return n <= 0;
-  }, [product]);
+  }, [isStitchedReady, product, selectedStitchedVariant]);
 
   const moreDescriptionText = useMemo(() => {
     const spec = (product as any)?.spec ?? {};
@@ -939,22 +1053,10 @@ export default function ViewProductScreen() {
   }, [product, loading, isVendorSelf, isOutOfStock]);
 
   const showBuyerActions = isBuyerRoute ? true : !isVendorSelf;
-  const productCategory = useMemo<ProductCategory | null>(() => {
-    const fromDb = (product as any)?.product_category;
-    if (isProductCategory(fromDb)) return fromDb;
-
-    const fromSpec = (product as any)?.spec?.product_category;
-    if (isProductCategory(fromSpec)) return fromSpec;
-
-    return null;
-  }, [product]);
-
   const isUnstitched = useMemo(() => {
     if (productCategory) return productCategory !== "stitched_ready";
-
-    const price = (product as any)?.price ?? {};
-    return String(price?.mode ?? "") === "unstitched_per_meter";
-  }, [product, productCategory]);
+    return !isStitchedReady;
+  }, [isStitchedReady, productCategory]);
 
   const showDyeing = useMemo(() => {
     if (!product || !isUnstitched) return false;
@@ -1177,8 +1279,28 @@ export default function ViewProductScreen() {
     selectedDyeShadeId,
   ]);
 
+  const selectedRawVariantId = useMemo(() => {
+    if (!selectedStitchedVariant) return "";
+
+    return String(
+      (selectedStitchedVariant as any)?.rawVariant?.id ||
+        selectedStitchedVariant.id ||
+        "",
+    )
+      .split("::")[0]
+      .trim();
+  }, [selectedStitchedVariant]);
+
   const onPurchase = useCallback(() => {
     if (!product) return;
+
+    if (isStitchedReady && !selectedStitchedVariant) {
+      Alert.alert(
+        "Select variant and size",
+        "Please select a stitched ready-to-wear variant and size before continuing.",
+      );
+      return;
+    }
 
     if (tailoringEligible && buyerWantsTailoring) {
       if (!tailoringSelection?.presetId) {
@@ -1212,14 +1334,27 @@ export default function ViewProductScreen() {
     }
 
     const imageUrl = imageUrls.length ? imageUrls[0] : "";
+    const selectedVariantImagePath = firstStitchedVariantImagePath(
+      selectedStitchedVariant,
+    );
+
+    const stitchedVariantReadyToProceed =
+      isStitchedReady &&
+      !!selectedStitchedVariant?.id &&
+      !!selectedStitchedVariant?.size;
 
     router.push({
-      pathname: "/flow/purchase/size" as any,
+      pathname: stitchedVariantReadyToProceed
+        ? ("/flow/purchase/place-order" as any)
+        : ("/flow/purchase/size" as any),
       params: {
         returnTo: "/flow/purchase/place-order",
+        bypass_size_step: stitchedVariantReadyToProceed ? "1" : "0",
         productId: String(product.id),
         productCode: String(product.product_code || ""),
+
         productName: String(product.title || ""),
+
         product_category: productCategory ? String(productCategory) : "",
         currency: "PKR",
         imageUrl,
@@ -1228,6 +1363,86 @@ export default function ViewProductScreen() {
           isUnstitched && pricePerMeterPkr > 0 ? String(pricePerMeterPkr) : "",
         stitched_total_pkr:
           !isUnstitched && stitchedTotalPkr > 0 ? String(stitchedTotalPkr) : "",
+
+        selected_variant_id:
+          isStitchedReady && selectedRawVariantId
+            ? encodeURIComponent(selectedRawVariantId)
+            : "",
+        selected_variant_title:
+          isStitchedReady && selectedStitchedVariant?.title
+            ? encodeURIComponent(String(selectedStitchedVariant.title))
+            : "",
+        selected_variant_size:
+          isStitchedReady && selectedStitchedVariant?.size
+            ? encodeURIComponent(String(selectedStitchedVariant.size))
+            : "",
+
+        selectedSize:
+          isStitchedReady && selectedStitchedVariant?.size
+            ? encodeURIComponent(String(selectedStitchedVariant.size))
+            : "",
+
+        selected_size:
+          isStitchedReady && selectedStitchedVariant?.size
+            ? encodeURIComponent(String(selectedStitchedVariant.size))
+            : "",
+        selected_variant_color:
+          isStitchedReady && selectedStitchedVariant?.color
+            ? encodeURIComponent(String(selectedStitchedVariant.color))
+            : "",
+        selected_variant_price_pkr:
+          isStitchedReady && selectedStitchedVariant?.pricePkr
+            ? encodeURIComponent(String(selectedStitchedVariant.pricePkr))
+            : "",
+        selected_variant_stock_qty:
+          isStitchedReady && selectedStitchedVariant?.stockQty != null
+            ? encodeURIComponent(String(selectedStitchedVariant.stockQty))
+            : "",
+
+        selected_variant_base_cost_pkr:
+          isStitchedReady && baseStitchedProductPricePkr > 0
+            ? encodeURIComponent(String(baseStitchedProductPricePkr))
+            : "",
+
+        selected_variant_additional_cost_pkr: isStitchedReady
+          ? encodeURIComponent(
+              String(
+                safePositiveNumber(
+                  (selectedStitchedVariant as any)?.additional_price_pkr,
+                ),
+              ),
+            )
+          : "",
+
+        selected_variant_total_cost_pkr:
+          isStitchedReady && selectedStitchedVariant?.pricePkr
+            ? encodeURIComponent(String(selectedStitchedVariant.pricePkr))
+            : "",
+        selected_variant_image_path:
+          isStitchedReady && selectedVariantImagePath
+            ? encodeURIComponent(selectedVariantImagePath)
+            : "",
+
+        selected_stitched_variant_id:
+          isStitchedReady && selectedRawVariantId
+            ? encodeURIComponent(selectedRawVariantId)
+            : "",
+        selected_stitched_size:
+          isStitchedReady && selectedStitchedVariant?.size
+            ? encodeURIComponent(String(selectedStitchedVariant.size))
+            : "",
+        selected_stitched_label:
+          isStitchedReady && selectedStitchedVariant?.label
+            ? encodeURIComponent(String(selectedStitchedVariant.label))
+            : "",
+        selected_stitched_sku:
+          isStitchedReady && selectedStitchedVariant?.sku
+            ? encodeURIComponent(String(selectedStitchedVariant.sku))
+            : "",
+        selected_stitched_variant_snapshot:
+          isStitchedReady && selectedStitchedVariant
+            ? encodeJsonParam(selectedStitchedVariant)
+            : "",
 
         size_length_m: hasAnySizeLengthMap
           ? encodeJsonParam(sizeLengthMap)
@@ -1341,6 +1556,7 @@ export default function ViewProductScreen() {
     dyeingCostPkr,
     hasAnySizeLengthMap,
     imageUrls,
+    isStitchedReady,
     isUnstitched,
     packageCm,
     pricePerMeterPkr,
@@ -1350,6 +1566,8 @@ export default function ViewProductScreen() {
     selectedDyeHex,
     selectedDyeLabel,
     selectedDyeShadeId,
+    selectedStitchedVariant,
+    selectedRawVariantId,
     shippingWeightKg,
     showDyeing,
     sizeLengthMap,
@@ -1376,7 +1594,12 @@ export default function ViewProductScreen() {
     });
   }, [router, vendorRow]);
 
-  const purchaseDisabled = !product || loading || missingParam || isOutOfStock;
+  const purchaseDisabled =
+    !product ||
+    loading ||
+    missingParam ||
+    isOutOfStock ||
+    (isStitchedReady && !selectedStitchedVariant);
 
   const CompactLine = ({ text }: { text: string | null }) => {
     if (!text) return null;
@@ -1504,17 +1727,26 @@ export default function ViewProductScreen() {
         <View style={styles.compactBlock}>
           <CompactLine text={titleLine} />
           <CompactLine text={categoryLine} />
-          <CompactLine text={priceLine} />
-          <CompactLine text={sizesLine} />
-          <CompactLine text={inventoryLine} />
 
-          {product && !loading && isOutOfStock && !isVendorSelf ? (
+          {!isStitchedReady ? (
+            <>
+              <CompactLine text={priceLine} />
+              <CompactLine text={sizesLine} />
+              <CompactLine text={inventoryLine} />
+            </>
+          ) : null}
+
+          {!isStitchedReady &&
+          product &&
+          !loading &&
+          isOutOfStock &&
+          !isVendorSelf ? (
             <Text style={{ color: "#B91C1C", fontWeight: "700", marginTop: 8 }}>
               Out of stock
             </Text>
           ) : null}
 
-          {showVendorOutOfStockWarning ? (
+          {!isStitchedReady && showVendorOutOfStockWarning ? (
             <View
               style={{
                 marginTop: 10,
@@ -1641,6 +1873,54 @@ export default function ViewProductScreen() {
           ) : null}
         </View>
 
+        {product && isStitchedReady ? (
+          <>
+            <ViewProductStitchedVariants
+              product={product}
+              selectedVariant={selectedStitchedVariant}
+              onSelect={setSelectedStitchedVariant}
+              styles={styles}
+              stylesVars={stylesVars}
+              basePricePkr={baseStitchedProductPricePkr}
+              resolvePublicUrl={resolvePublicUrl}
+              resolveManyPublic={resolveManyPublic}
+            />
+
+            {product && !loading && isOutOfStock && !isVendorSelf ? (
+              <Text
+                style={{ color: "#B91C1C", fontWeight: "700", marginTop: 8 }}
+              >
+                Out of stock
+              </Text>
+            ) : null}
+
+            {showVendorOutOfStockWarning ? (
+              <View
+                style={{
+                  marginTop: 10,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#FCA5A5",
+                  backgroundColor: "#FEE2E2",
+                  padding: 12,
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#B91C1C",
+                    fontWeight: "800",
+                    fontSize: 13,
+                    lineHeight: 18,
+                  }}
+                >
+                  Out of stock — update inventory to make this product visible
+                  again
+                </Text>
+              </View>
+            ) : null}
+          </>
+        ) : null}
+
         {showBuyerActions && showDyeing ? (
           <View style={styles.card}>
             <Text style={[styles.label, { color: stylesVars.blue }]}>
@@ -1766,6 +2046,123 @@ export default function ViewProductScreen() {
             />
           </View>
         ) : null}
+
+        {isStitchedReady && selectedStitchedVariant
+          ? (() => {
+              const selectedImageUrl =
+                (Array.isArray((selectedStitchedVariant as any)?.imageUrls)
+                  ? (selectedStitchedVariant as any).imageUrls[0]
+                  : null) ||
+                resolvePublicUrl(
+                  firstStitchedVariantImagePath(selectedStitchedVariant),
+                );
+
+              const baseCost = safePositiveNumber(baseStitchedProductPricePkr);
+              const additionalCost = safePositiveNumber(
+                (selectedStitchedVariant as any)?.additional_price_pkr,
+              );
+              const totalCost =
+                safePositiveNumber(
+                  (selectedStitchedVariant as any)?.total_price_pkr ??
+                    (selectedStitchedVariant as any)?.pricePkr ??
+                    (selectedStitchedVariant as any)?.price_pkr,
+                ) || baseCost + additionalCost;
+
+              return (
+                <View style={styles.card}>
+                  <Text
+                    style={[styles.sectionTitle, { color: stylesVars.blue }]}
+                  >
+                    Selected Variant
+                  </Text>
+
+                  <View
+                    style={{
+                      marginTop: 12,
+                      flexDirection: "row",
+                      gap: 12,
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    {selectedImageUrl ? (
+                      <Image
+                        source={{ uri: selectedImageUrl }}
+                        style={{
+                          width: 82,
+                          height: 82,
+                          borderRadius: 14,
+                          backgroundColor: "#EEF2F7",
+                        }}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View
+                        style={{
+                          width: 82,
+                          height: 82,
+                          borderRadius: 14,
+                          backgroundColor: "#EEF2F7",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Text style={[styles.meta, { fontSize: 11 }]}>
+                          No image
+                        </Text>
+                      </View>
+                    )}
+
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          fontWeight: "900",
+                          color: stylesVars.text,
+                        }}
+                        numberOfLines={2}
+                      >
+                        {selectedStitchedVariant.rawVariant?.display_name ||
+                          selectedStitchedVariant.title ||
+                          selectedStitchedVariant.label}
+                      </Text>
+
+                      {selectedStitchedVariant.color ? (
+                        <Text style={styles.metaLine}>
+                          Variant / Color: {selectedStitchedVariant.color}
+                        </Text>
+                      ) : null}
+
+                      <Text style={styles.metaLine}>
+                        Selected Size: {selectedStitchedVariant.size}
+                      </Text>
+                      <Text style={styles.metaLine}>
+                        Available Stock:{" "}
+                        {selectedStitchedVariant.stockQty ?? "—"}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={{ marginTop: 12, gap: 5 }}>
+                    <Text style={styles.metaLine}>
+                      Base Cost: PKR {baseCost.toLocaleString()}
+                    </Text>
+                    <Text style={styles.metaLine}>
+                      Variant Additional Cost: PKR{" "}
+                      {additionalCost.toLocaleString()}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.metaLine,
+                        { fontWeight: "900", color: stylesVars.text },
+                      ]}
+                    >
+                      Total Cost: PKR {totalCost.toLocaleString()}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })()
+          : null}
 
         <View style={styles.card}>
           <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>

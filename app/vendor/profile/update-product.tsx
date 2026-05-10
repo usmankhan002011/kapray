@@ -48,6 +48,20 @@ type ProductTailoringSelections = {
   trouser: string[];
 };
 
+type EditableVariantSizeRow = {
+  size: string;
+  qty: number;
+  raw: any;
+};
+
+type EditableReadyVariant = {
+  id: string;
+  label: string;
+  sourceKey: string;
+  raw: any;
+  sizes: EditableVariantSizeRow[];
+};
+
 function safeInt(v: any) {
   const n = Number(v);
   if (!Number.isFinite(n)) return null;
@@ -252,6 +266,224 @@ function clearProductTailoringSelections(specInput: unknown) {
   return writeProductTailoringSelections(specInput, emptyTailoringSelections());
 }
 
+function safeNonNegInt(v: any) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.max(0, Math.trunc(n));
+}
+
+function readVariantArrayWithSource(priceInput: unknown, specInput: unknown) {
+  const price = safeJson(priceInput);
+  const spec = safeJson(specInput);
+
+  const candidates: Array<{
+    source: "price" | "spec";
+    key: string;
+    value: any;
+  }> = [
+    { source: "price", key: "variants", value: price?.variants },
+    { source: "price", key: "ready_variants", value: price?.ready_variants },
+    { source: "price", key: "readyVariants", value: price?.readyVariants },
+    {
+      source: "price",
+      key: "stitched_variants",
+      value: price?.stitched_variants,
+    },
+    {
+      source: "price",
+      key: "stitchedVariants",
+      value: price?.stitchedVariants,
+    },
+    { source: "spec", key: "variants", value: spec?.variants },
+    { source: "spec", key: "ready_variants", value: spec?.ready_variants },
+    { source: "spec", key: "readyVariants", value: spec?.readyVariants },
+    {
+      source: "spec",
+      key: "stitched_variants",
+      value: spec?.stitched_variants,
+    },
+    { source: "spec", key: "stitchedVariants", value: spec?.stitchedVariants },
+  ];
+
+  const found = candidates.find((item) => Array.isArray(item.value));
+
+  return {
+    source: found?.source ?? "price",
+    key: found?.key ?? "variants",
+    variants: Array.isArray(found?.value) ? found?.value : [],
+  };
+}
+
+function normalizeEditableVariantSizes(v: any): EditableVariantSizeRow[] {
+  const rawSizes = Array.isArray(v?.sizes) ? v.sizes : [];
+
+  const fromSizes = rawSizes
+    .map((row: any): EditableVariantSizeRow | null => {
+      const size = String(
+        row?.size ?? row?.label ?? row?.name ?? row?.value ?? "",
+      ).trim();
+      if (!size) return null;
+
+      return {
+        size,
+        qty: safeNonNegInt(
+          row?.qty ??
+            row?.stock_qty ??
+            row?.stockQty ??
+            row?.stock ??
+            row?.quantity ??
+            0,
+        ),
+        raw: row && typeof row === "object" && !Array.isArray(row) ? row : {},
+      };
+    })
+    .filter(Boolean) as EditableVariantSizeRow[];
+
+  if (fromSizes.length) return fromSizes;
+
+  const singleSize = String(
+    v?.size ?? v?.selected_size ?? v?.selectedSize ?? v?.label ?? "",
+  ).trim();
+
+  if (!singleSize) return [];
+
+  return [
+    {
+      size: singleSize,
+      qty: safeNonNegInt(
+        v?.qty ?? v?.stock_qty ?? v?.stockQty ?? v?.stock ?? v?.quantity ?? 0,
+      ),
+      raw: {},
+    },
+  ];
+}
+
+function readEditableStitchedVariants(
+  product: ProductRow | null,
+): EditableReadyVariant[] {
+  if (!product) return [];
+
+  const { key, variants } = readVariantArrayWithSource(
+    product.price,
+    product.spec,
+  );
+
+  return variants
+    .map((variant: any, index: number): EditableReadyVariant | null => {
+      if (!variant || typeof variant !== "object" || Array.isArray(variant)) {
+        return null;
+      }
+
+      const variantNo =
+        safeNonNegInt(variant?.variant_no ?? variant?.variantNo) || index + 1;
+      const name = String(
+        variant?.display_name ??
+          variant?.displayName ??
+          variant?.name ??
+          variant?.color ??
+          variant?.design ??
+          variant?.title ??
+          variant?.label ??
+          `Variant ${variantNo}`,
+      ).trim();
+
+      const id = String(
+        variant?.id ??
+          variant?.variant_id ??
+          variant?.variantId ??
+          `variant-${variantNo}`,
+      ).trim();
+
+      const sizes = normalizeEditableVariantSizes(variant);
+      if (!sizes.length) return null;
+
+      return {
+        id,
+        label: name || `Variant ${variantNo}`,
+        sourceKey: key,
+        raw: variant,
+        sizes,
+      };
+    })
+    .filter(Boolean) as EditableReadyVariant[];
+}
+
+function getStitchedVariantInventoryInfo(variants: EditableReadyVariant[]) {
+  let totalQty = 0;
+  let availableSizes = 0;
+
+  for (const variant of variants) {
+    for (const row of variant.sizes) {
+      const qty = safeNonNegInt(row.qty);
+      totalQty += qty;
+      if (qty > 0) availableSizes += 1;
+    }
+  }
+
+  return {
+    totalQty,
+    availableSizes,
+    allOutOfStock: variants.length > 0 && totalQty <= 0,
+  };
+}
+
+function writeEditableStitchedVariantsToJson(args: {
+  prevPrice: any;
+  prevSpec: any;
+  nextPrice: any;
+  nextSpec: any;
+  variants: EditableReadyVariant[];
+}) {
+  const sourceInfo = readVariantArrayWithSource(args.prevPrice, args.prevSpec);
+  const key = sourceInfo.key || "variants";
+  const source = sourceInfo.source || "price";
+
+  const nextVariants = args.variants.map((variant, variantIndex) => {
+    const rawVariant =
+      variant.raw &&
+      typeof variant.raw === "object" &&
+      !Array.isArray(variant.raw)
+        ? variant.raw
+        : {};
+
+    return {
+      ...rawVariant,
+      id: rawVariant?.id ?? variant.id ?? `variant-${variantIndex + 1}`,
+      sizes: variant.sizes.map((row) => {
+        const rawRow =
+          row.raw && typeof row.raw === "object" && !Array.isArray(row.raw)
+            ? row.raw
+            : {};
+        const qty = safeNonNegInt(row.qty);
+
+        return {
+          ...rawRow,
+          size: row.size,
+          qty,
+          stock_qty: qty,
+          stockQty: qty,
+        };
+      }),
+    };
+  });
+
+  if (source === "spec") {
+    args.nextSpec[key] = nextVariants;
+  } else {
+    args.nextPrice[key] = nextVariants;
+  }
+
+  if (key !== "variants" && Array.isArray(args.prevPrice?.variants)) {
+    args.nextPrice.variants = nextVariants;
+  }
+
+  return {
+    nextPrice: args.nextPrice,
+    nextSpec: args.nextSpec,
+    totalQty: getStitchedVariantInventoryInfo(args.variants).totalQty,
+  };
+}
+
 function SelectionPill({
   label,
   selected,
@@ -344,6 +576,10 @@ export default function UpdateProductScreen() {
   const [selectedTailoringStyles, setSelectedTailoringStyles] =
     useState<ProductTailoringSelections>(emptyTailoringSelections());
 
+  const [stitchedVariants, setStitchedVariants] = useState<
+    EditableReadyVariant[]
+  >([]);
+
   const [videoThumbs, setVideoThumbs] = useState<Record<string, string>>({});
 
   const resolvePublicUrl = useCallback((path: string | null | undefined) => {
@@ -369,6 +605,26 @@ export default function UpdateProductScreen() {
             : [...current, clean],
         };
       });
+    },
+    [],
+  );
+
+  const updateStitchedVariantSizeQty = useCallback(
+    (variantId: string, size: string, rawValue: string) => {
+      const qty = safeNonNegInt(sanitizeNumber(rawValue));
+
+      setStitchedVariants((prev) =>
+        prev.map((variant) =>
+          variant.id === variantId
+            ? {
+                ...variant,
+                sizes: variant.sizes.map((row) =>
+                  row.size === size ? { ...row, qty } : row,
+                ),
+              }
+            : variant,
+        ),
+      );
     },
     [],
   );
@@ -511,6 +767,7 @@ export default function UpdateProductScreen() {
     setTailoringTurnaroundDays(daysFromSpec);
 
     setSelectedTailoringStyles(readProductTailoringSelections(spec));
+    setStitchedVariants(readEditableStitchedVariants(selected));
   }, [selected]);
 
   useEffect(() => {
@@ -531,6 +788,14 @@ export default function UpdateProductScreen() {
     if (!selected) return false;
     return !Boolean(selected.made_on_order);
   }, [selected]);
+
+  const stitchedVariantInventoryInfo = useMemo(() => {
+    return getStitchedVariantInventoryInfo(stitchedVariants);
+  }, [stitchedVariants]);
+
+  const usesVariantInventory = useMemo(() => {
+    return priceMode === "stitched_total" && stitchedVariants.length > 0;
+  }, [priceMode, stitchedVariants.length]);
 
   const media = useMemo(() => safeJson(selected?.media), [selected]);
 
@@ -766,6 +1031,19 @@ export default function UpdateProductScreen() {
         nextSpec = clearProductTailoringSelections(nextSpec);
       }
 
+      if (priceMode === "stitched_total" && stitchedVariants.length > 0) {
+        const written = writeEditableStitchedVariantsToJson({
+          prevPrice,
+          prevSpec,
+          nextPrice,
+          nextSpec,
+          variants: stitchedVariants,
+        });
+
+        nextPrice = written.nextPrice;
+        nextSpec = written.nextSpec;
+      }
+
       const updatePayload: any = {
         title: title.trim(),
         price: nextPrice,
@@ -775,6 +1053,11 @@ export default function UpdateProductScreen() {
 
       if (Boolean(selected?.made_on_order)) {
         updatePayload.inventory_qty = 0;
+      } else if (
+        priceMode === "stitched_total" &&
+        stitchedVariants.length > 0
+      ) {
+        updatePayload.inventory_qty = stitchedVariantInventoryInfo.totalQty;
       } else if (inventoryEditable) {
         updatePayload.inventory_qty = Number(inventoryQty ?? 0);
       }
@@ -1119,10 +1402,12 @@ export default function UpdateProductScreen() {
                 <Text style={styles.metaLine}>
                   {Boolean(selected.made_on_order)
                     ? "Made on Order"
-                    : `Inventory Qty: ${Math.max(
-                        0,
-                        Number(selected.inventory_qty ?? 0),
-                      )}`}
+                    : usesVariantInventory
+                      ? `Variant Inventory: ${stitchedVariantInventoryInfo.totalQty}`
+                      : `Inventory Qty: ${Math.max(
+                          0,
+                          Number(selected.inventory_qty ?? 0),
+                        )}`}
                 </Text>
               </View>
             </View>
@@ -1169,6 +1454,15 @@ export default function UpdateProductScreen() {
                 <View style={styles.madeOnOrderPill}>
                   <Text style={styles.madeOnOrderText}>Made on Order</Text>
                 </View>
+              ) : usesVariantInventory ? (
+                <View style={styles.readonlyField}>
+                  <Text style={styles.readonlyValue}>
+                    Variant-size inventory:{" "}
+                    {stitchedVariantInventoryInfo.totalQty} total units •{" "}
+                    {stitchedVariantInventoryInfo.availableSizes} available
+                    sizes
+                  </Text>
+                </View>
               ) : (
                 <TextInput
                   value={String(inventoryQty ?? 0)}
@@ -1184,7 +1478,9 @@ export default function UpdateProductScreen() {
               )}
 
               {!Boolean(selected?.made_on_order) &&
-              Number(inventoryQty ?? 0) <= 0 ? (
+              (usesVariantInventory
+                ? stitchedVariantInventoryInfo.allOutOfStock
+                : Number(inventoryQty ?? 0) <= 0) ? (
                 <View
                   style={{
                     marginTop: 10,
@@ -1252,6 +1548,55 @@ export default function UpdateProductScreen() {
                     style={styles.input}
                     maxLength={80}
                   />
+
+                  {stitchedVariants.length ? (
+                    <View style={styles.variantInventoryBox}>
+                      <Text style={styles.variantInventoryTitle}>
+                        Variant Size Inventory
+                      </Text>
+                      <Text style={styles.hint}>
+                        Edit stock for each ready-to-wear variant size. Buyer
+                        listings remain visible until all variant sizes reach
+                        zero.
+                      </Text>
+
+                      {stitchedVariants.map((variant) => (
+                        <View key={variant.id} style={styles.variantCard}>
+                          <Text style={styles.variantCardTitle}>
+                            {variant.label}
+                          </Text>
+
+                          <View style={styles.variantSizeGrid}>
+                            {variant.sizes.map((row) => (
+                              <View
+                                key={`${variant.id}-${row.size}`}
+                                style={styles.variantSizeCell}
+                              >
+                                <Text style={styles.variantSizeLabel}>
+                                  {row.size}
+                                </Text>
+                                <TextInput
+                                  value={String(row.qty ?? 0)}
+                                  onChangeText={(t) =>
+                                    updateStitchedVariantSizeQty(
+                                      variant.id,
+                                      row.size,
+                                      t,
+                                    )
+                                  }
+                                  placeholder="0"
+                                  placeholderTextColor={stylesVars.placeholder}
+                                  style={styles.variantQtyInput}
+                                  keyboardType="number-pad"
+                                  maxLength={6}
+                                />
+                              </View>
+                            ))}
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
 
                   <Text style={styles.hint}>
                     Dyeing and stitching services apply only to unstitched
@@ -2104,6 +2449,65 @@ const styles = StyleSheet.create({
 
   optionPillTextOn: {
     color: stylesVars.white,
+  },
+
+  variantInventoryBox: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 14,
+    padding: 12,
+  },
+
+  variantInventoryTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: stylesVars.blue,
+  },
+
+  variantCard: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: stylesVars.borderSoft,
+    backgroundColor: stylesVars.white,
+    borderRadius: 12,
+    padding: 10,
+  },
+
+  variantCardTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: stylesVars.text,
+  },
+
+  variantSizeGrid: {
+    marginTop: 10,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+
+  variantSizeCell: {
+    width: 84,
+  },
+
+  variantSizeLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: stylesVars.mutedText,
+  },
+
+  variantQtyInput: {
+    marginTop: 5,
+    borderWidth: 1,
+    borderColor: stylesVars.borderSoft,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: stylesVars.text,
+    backgroundColor: stylesVars.white,
   },
 
   mediaActionRow: {

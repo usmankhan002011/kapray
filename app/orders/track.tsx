@@ -53,6 +53,11 @@ function safeText(v: any) {
   return t.length ? t : "—";
 }
 
+function cleanText(v: any) {
+  const t = String(v ?? "").trim();
+  return t.length ? t : "";
+}
+
 function humanizeCat(v: any) {
   const s = String(v ?? "").trim();
   if (!s) return "—";
@@ -68,6 +73,27 @@ function money(currency: string, v: any) {
   const n = typeof v === "number" ? v : Number(v);
   if (Number.isNaN(n)) return `${currency} —`;
   return `${currency} ${n.toLocaleString()}`;
+}
+
+function numOrNull(v: any): number | null {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function getSelectedVariant(spec: any) {
+  const title = cleanText(spec?.selected_variant_title);
+  const size = cleanText(spec?.selected_variant_size);
+  const color = cleanText(spec?.selected_variant_color);
+  const price = numOrNull(spec?.selected_variant_price_pkr);
+
+  return {
+    hasVariant: !!(title || size || color || price != null),
+    title,
+    size,
+    color,
+    price,
+  };
 }
 
 export default function TrackOrdersScreen() {
@@ -269,10 +295,12 @@ export default function TrackOrdersScreen() {
       item.spec_snapshot && typeof item.spec_snapshot === "object"
         ? item.spec_snapshot
         : {};
+
     const dressCat = humanizeCat(
       spec?.product_category ?? spec?.dress_category ?? spec?.dress_cat ?? "",
     );
 
+    const selectedVariant = getSelectedVariant(spec);
     const showReviewSubmitted = status === "delivered" && !!item.has_review;
 
     return (
@@ -311,6 +339,28 @@ export default function TrackOrdersScreen() {
         <Text style={styles.small} numberOfLines={1}>
           Dress Cat: {dressCat}
         </Text>
+
+        {selectedVariant.hasVariant ? (
+          <View style={styles.variantBox}>
+            <Text style={styles.variantTitle} numberOfLines={1}>
+              Selected Variant:{" "}
+              {selectedVariant.title || "Ready-to-wear variant"}
+            </Text>
+
+            <Text style={styles.variantMeta} numberOfLines={1}>
+              {selectedVariant.size ? `Size: ${selectedVariant.size}` : ""}
+              {selectedVariant.size && selectedVariant.color ? " • " : ""}
+              {selectedVariant.color ? `Color: ${selectedVariant.color}` : ""}
+              {(selectedVariant.size || selectedVariant.color) &&
+              selectedVariant.price != null
+                ? " • "
+                : ""}
+              {selectedVariant.price != null
+                ? money(item.currency, selectedVariant.price)
+                : ""}
+            </Text>
+          </View>
+        ) : null}
 
         <View style={styles.rowBetween}>
           <Text style={styles.small} numberOfLines={1}>
@@ -711,6 +761,29 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+  },
+
+  variantBox: {
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: stylesVars.blueSoft,
+    borderRadius: 12,
+    padding: 10,
+    gap: 3,
+  },
+
+  variantTitle: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: stylesVars.blue,
+    fontWeight: "800",
+  },
+
+  variantMeta: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: stylesVars.subText,
+    fontWeight: "600",
   },
 
   badge: {
