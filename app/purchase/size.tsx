@@ -68,7 +68,15 @@ function isUnstitchedCategory(v: unknown) {
   );
 }
 
-function getFabricLengthFromSize(size: string, sizeMap: Record<string, unknown>) {
+function isTruthyParam(v: unknown) {
+  const s = norm(v).toLowerCase();
+  return s === "1" || s === "true" || s === "yes" || s === "y" || s === "on";
+}
+
+function getFabricLengthFromSize(
+  size: string,
+  sizeMap: Record<string, unknown>,
+) {
   if (!size) return 0;
   return safePositiveNumber(sizeMap?.[size]);
 }
@@ -83,6 +91,9 @@ export default function SizeScreen() {
     product_code?: string;
     productName?: string;
     product_category?: string;
+    made_on_order?: string;
+    selected_variant_made_on_order?: string;
+    variant_mode?: string;
 
     price_per_meter_pkr?: string;
     stitched_total_pkr?: string;
@@ -118,7 +129,25 @@ export default function SizeScreen() {
     weight_kg?: string;
     package_cm?: string;
 
+    selected_variant_id?: string;
+    selected_variant_title?: string;
+    selected_variant_size?: string;
+    selected_variant_color?: string;
+    selected_variant_price_pkr?: string;
+    selected_variant_stock_qty?: string;
+    selected_variant_base_cost_pkr?: string;
+    selected_variant_additional_cost_pkr?: string;
+    selected_variant_total_cost_pkr?: string;
+    selected_variant_image_path?: string;
+    selected_stitched_variant_id?: string;
+    selected_stitched_size?: string;
+    selected_stitched_label?: string;
+    selected_stitched_sku?: string;
+    selected_stitched_variant_snapshot?: string;
+    bypass_size_step?: string;
+
     selectedSize?: string;
+    selected_size?: string;
     selected_unstitched_size?: string;
     selected_fabric_length_m?: string;
     fabric_cost_pkr?: string;
@@ -171,8 +200,47 @@ export default function SizeScreen() {
     [params.productCode, params.product_code],
   );
 
-  const productCategory = useMemo(() => norm(params.product_category), [params.product_category]);
-  const isUnstitched = useMemo(() => isUnstitchedCategory(productCategory), [productCategory]);
+  const productCategory = useMemo(
+    () => norm(params.product_category),
+    [params.product_category],
+  );
+  const isUnstitched = useMemo(
+    () => isUnstitchedCategory(productCategory),
+    [productCategory],
+  );
+
+  const selectedVariantSnapshot = useMemo(
+    () => safeJsonDecode<any>(params.selected_stitched_variant_snapshot, null),
+    [params.selected_stitched_variant_snapshot],
+  );
+
+  const isMadeOnOrder = useMemo(() => {
+    if (productCategory !== "stitched_ready") return false;
+
+    const snapshot = selectedVariantSnapshot ?? {};
+    const rawVariant = snapshot?.rawVariant ?? {};
+
+    return (
+      isTruthyParam(params.made_on_order) ||
+      isTruthyParam(params.selected_variant_made_on_order) ||
+      norm(params.variant_mode) === "made_order_variants" ||
+      Boolean(snapshot?.made_on_order) ||
+      snapshot?.variant_mode === "made_order_variants" ||
+      Boolean(rawVariant?.made_on_order) ||
+      rawVariant?.variant_mode === "made_order_variants"
+    );
+  }, [
+    params.made_on_order,
+    params.selected_variant_made_on_order,
+    params.variant_mode,
+    productCategory,
+    selectedVariantSnapshot,
+  ]);
+
+  const categoryDisplay = useMemo(
+    () => (isMadeOnOrder ? "Made on order" : prettyCategory(productCategory)),
+    [isMadeOnOrder, productCategory],
+  );
 
   const pricePerMeterPkr = useMemo(
     () => safePositiveNumber(params.price_per_meter_pkr),
@@ -191,7 +259,9 @@ export default function SizeScreen() {
 
   const availableUnstitchedSizes = useMemo(() => {
     const order = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
-    return order.filter((size) => getFabricLengthFromSize(size, sizeLengthMap) > 0);
+    return order.filter(
+      (size) => getFabricLengthFromSize(size, sizeLengthMap) > 0,
+    );
   }, [sizeLengthMap]);
 
   const unit = useMemo<Unit>(() => {
@@ -200,14 +270,28 @@ export default function SizeScreen() {
   }, [params.unit]);
 
   const selectedStandardSize = useMemo(
-    () => safeDecode(params.selected_unstitched_size || params.selectedSize),
-    [params.selected_unstitched_size, params.selectedSize],
+    () =>
+      safeDecode(
+        params.selected_unstitched_size ||
+          params.selected_variant_size ||
+          params.selected_stitched_size ||
+          params.selected_size ||
+          params.selectedSize,
+      ),
+    [
+      params.selected_unstitched_size,
+      params.selected_variant_size,
+      params.selected_stitched_size,
+      params.selected_size,
+      params.selectedSize,
+    ],
   );
 
   const selectedStandardFabricLength = useMemo(
     () =>
       safePositiveNumber(
-        safeDecode(params.selected_fabric_length_m) || params.selected_fabric_length_m,
+        safeDecode(params.selected_fabric_length_m) ||
+          params.selected_fabric_length_m,
       ),
     [params.selected_fabric_length_m],
   );
@@ -258,7 +342,10 @@ export default function SizeScreen() {
     ],
   );
 
-  const exactHasAny = useMemo(() => exactValues.some((x) => x.length > 0), [exactValues]);
+  const exactHasAny = useMemo(
+    () => exactValues.some((x) => x.length > 0),
+    [exactValues],
+  );
 
   const customRows = useMemo(
     () =>
@@ -312,7 +399,11 @@ export default function SizeScreen() {
         { order: 10, label: "10. Wrist", value: norm(params.m10) },
         { order: 11, label: "11. Shoulder to waist", value: norm(params.m11) },
         { order: 12, label: "12. Shoulder to floor", value: norm(params.m12) },
-        { order: 13, label: "13. Shoulder to shoulder", value: norm(params.m13) },
+        {
+          order: 13,
+          label: "13. Shoulder to shoulder",
+          value: norm(params.m13),
+        },
         { order: 14, label: "14. Back neck to waist", value: norm(params.m14) },
         { order: 15, label: "15. Across back", value: norm(params.m15) },
         { order: 16, label: "16. Inner arm length", value: norm(params.m16) },
@@ -359,16 +450,25 @@ export default function SizeScreen() {
   };
 
   const onSelectStandard = (size: string) => {
-    const fabricLengthM = isUnstitched ? getFabricLengthFromSize(size, sizeLengthMap) : 0;
+    const fabricLengthM = isUnstitched
+      ? getFabricLengthFromSize(size, sizeLengthMap)
+      : 0;
     const fabricCostPkr = isUnstitched ? pricePerMeterPkr * fabricLengthM : 0;
+    const encodedSize = encodeURIComponent(size);
 
     goPlaceOrder({
       mode: "standard",
-      selectedSize: size,
-      selected_unstitched_size: isUnstitched ? encodeURIComponent(size) : "",
+      selectedSize: encodedSize,
+      selected_size: encodedSize,
+      selected_variant_size: isUnstitched ? "" : encodedSize,
+      selected_stitched_size: isUnstitched ? "" : encodedSize,
+      selected_unstitched_size: isUnstitched ? encodedSize : "",
       selected_fabric_length_m:
-        isUnstitched && fabricLengthM > 0 ? encodeURIComponent(String(fabricLengthM)) : "",
-      fabric_cost_pkr: isUnstitched && fabricCostPkr > 0 ? String(fabricCostPkr) : "",
+        isUnstitched && fabricLengthM > 0
+          ? encodeURIComponent(String(fabricLengthM))
+          : "",
+      fabric_cost_pkr:
+        isUnstitched && fabricCostPkr > 0 ? String(fabricCostPkr) : "",
 
       m1: "",
       m2: "",
@@ -423,38 +523,52 @@ export default function SizeScreen() {
         {!!productCategory ? (
           <View style={styles.summaryCard}>
             <Text style={styles.summaryText}>
-              Category: <Text style={styles.summaryStrong}>{prettyCategory(productCategory)}</Text>
+              Category:{" "}
+              <Text style={styles.summaryStrong}>{categoryDisplay}</Text>
             </Text>
 
             {isUnstitched ? (
               <>
                 <Text style={styles.summaryText}>
                   Cost per meter:{" "}
-                  <Text style={styles.summaryStrong}>PKR {pricePerMeterPkr || 0} / meter</Text>
+                  <Text style={styles.summaryStrong}>
+                    PKR {pricePerMeterPkr || 0} / meter
+                  </Text>
                 </Text>
 
                 {availableUnstitchedSizes.length ? (
                   <Text style={styles.summaryText}>
                     Available mapped sizes:{" "}
-                    <Text style={styles.summaryStrong}>{availableUnstitchedSizes.join(", ")}</Text>
+                    <Text style={styles.summaryStrong}>
+                      {availableUnstitchedSizes.join(", ")}
+                    </Text>
                   </Text>
                 ) : (
                   <Text style={styles.summaryText}>
-                    Available mapped sizes: <Text style={styles.summaryStrong}>Not available</Text>
+                    Available mapped sizes:{" "}
+                    <Text style={styles.summaryStrong}>Not available</Text>
                   </Text>
                 )}
               </>
             ) : (
               <Text style={styles.summaryText}>
-                Product total: <Text style={styles.summaryStrong}>PKR {stitchedTotalPkr || 0}</Text>
+                Product total:{" "}
+                <Text style={styles.summaryStrong}>
+                  PKR {stitchedTotalPkr || 0}
+                </Text>
               </Text>
             )}
           </View>
         ) : null}
 
         <View style={styles.toggleRow}>
-          <Pressable onPress={() => {}} style={[styles.toggleBtn, styles.toggleActive]}>
-            <Text style={[styles.toggleText, styles.toggleTextActive]}>Standard</Text>
+          <Pressable
+            onPress={() => {}}
+            style={[styles.toggleBtn, styles.toggleActive]}
+          >
+            <Text style={[styles.toggleText, styles.toggleTextActive]}>
+              Standard
+            </Text>
           </Pressable>
 
           <Pressable onPress={openExactMeasurements} style={styles.toggleBtn}>
@@ -466,19 +580,25 @@ export default function SizeScreen() {
           <Text style={styles.sectionTitle}>Choose standard size</Text>
 
           <View style={styles.sizeGrid}>
-            {(isUnstitched ? availableUnstitchedSizes : STANDARD_SIZES).map((s) => {
-              const isOn = selectedStandardSize === s;
+            {(isUnstitched ? availableUnstitchedSizes : STANDARD_SIZES).map(
+              (s) => {
+                const isOn = selectedStandardSize === s;
 
-              return (
-                <Pressable
-                  key={s}
-                  onPress={() => onSelectStandard(s)}
-                  style={[styles.sizePill, isOn ? styles.sizePillOn : null]}
-                >
-                  <Text style={[styles.sizeText, isOn ? styles.sizeTextOn : null]}>{s}</Text>
-                </Pressable>
-              );
-            })}
+                return (
+                  <Pressable
+                    key={s}
+                    onPress={() => onSelectStandard(s)}
+                    style={[styles.sizePill, isOn ? styles.sizePillOn : null]}
+                  >
+                    <Text
+                      style={[styles.sizeText, isOn ? styles.sizeTextOn : null]}
+                    >
+                      {s}
+                    </Text>
+                  </Pressable>
+                );
+              },
+            )}
           </View>
 
           {isUnstitched && !availableUnstitchedSizes.length ? (
@@ -487,22 +607,31 @@ export default function SizeScreen() {
             </Text>
           ) : null}
 
-          {isUnstitched && !!selectedStandardSize && selectedStandardFabricLength > 0 ? (
+          {isUnstitched &&
+          !!selectedStandardSize &&
+          selectedStandardFabricLength > 0 ? (
             <View style={styles.costCard}>
               <Text style={styles.costLine}>
                 Cost per meter:{" "}
-                <Text style={styles.costStrong}>PKR {pricePerMeterPkr} / meter</Text>
+                <Text style={styles.costStrong}>
+                  PKR {pricePerMeterPkr} / meter
+                </Text>
               </Text>
               <Text style={styles.costLine}>
-                Selected size: <Text style={styles.costStrong}>{selectedStandardSize}</Text>
+                Selected size:{" "}
+                <Text style={styles.costStrong}>{selectedStandardSize}</Text>
               </Text>
               <Text style={styles.costLine}>
                 Fabric length:{" "}
-                <Text style={styles.costStrong}>{selectedStandardFabricLength} meter(s)</Text>
+                <Text style={styles.costStrong}>
+                  {selectedStandardFabricLength} meter(s)
+                </Text>
               </Text>
               <Text style={styles.costLine}>
                 Total fabric cost:{" "}
-                <Text style={styles.costStrong}>PKR {selectedStandardFabricCost}</Text>
+                <Text style={styles.costStrong}>
+                  PKR {selectedStandardFabricCost}
+                </Text>
               </Text>
             </View>
           ) : null}
@@ -510,7 +639,9 @@ export default function SizeScreen() {
 
         {exactHasAny ? (
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Last saved exact measurements</Text>
+            <Text style={styles.sectionTitle}>
+              Last saved exact measurements
+            </Text>
 
             <View style={styles.exactSummaryCard}>
               <Text style={styles.resultLine}>
@@ -519,17 +650,26 @@ export default function SizeScreen() {
 
               <Text style={styles.resultLine}>
                 Entered main measurements:{" "}
-                <Text style={styles.resultStrong}>{exactEnteredCount} / 17</Text>
+                <Text style={styles.resultStrong}>
+                  {exactEnteredCount} / 17
+                </Text>
               </Text>
 
               <Text style={styles.resultLine}>
-                Custom dimensions: <Text style={styles.resultStrong}>{customRows.length} / 4</Text>
+                Custom dimensions:{" "}
+                <Text style={styles.resultStrong}>{customRows.length} / 4</Text>
               </Text>
 
               <Text style={styles.resultLine}>
                 Estimated standard size:{" "}
                 <Text style={styles.resultStrong}>
-                  {safeDecode(params.selected_unstitched_size || params.selectedSize) || "—"}
+                  {safeDecode(
+                    params.selected_unstitched_size ||
+                      params.selected_variant_size ||
+                      params.selected_stitched_size ||
+                      params.selected_size ||
+                      params.selectedSize,
+                  ) || "—"}
                 </Text>
               </Text>
 
@@ -537,12 +677,16 @@ export default function SizeScreen() {
                 <>
                   <Text style={styles.resultLine}>
                     Fabric length:{" "}
-                    <Text style={styles.resultStrong}>{selectedStandardFabricLength || 0} m</Text>
+                    <Text style={styles.resultStrong}>
+                      {selectedStandardFabricLength || 0} m
+                    </Text>
                   </Text>
 
                   <Text style={styles.resultLine}>
                     Fabric cost:{" "}
-                    <Text style={styles.resultStrong}>PKR {selectedStandardFabricCost || 0}</Text>
+                    <Text style={styles.resultStrong}>
+                      PKR {selectedStandardFabricCost || 0}
+                    </Text>
                   </Text>
                 </>
               ) : null}
@@ -552,10 +696,15 @@ export default function SizeScreen() {
                   onPress={() => setSummaryOpen(true)}
                   style={styles.secondaryInlineBtn}
                 >
-                  <Text style={styles.secondaryInlineText}>View exact measurements</Text>
+                  <Text style={styles.secondaryInlineText}>
+                    View exact measurements
+                  </Text>
                 </Pressable>
 
-                <Pressable onPress={openExactMeasurements} style={styles.primaryInlineBtn}>
+                <Pressable
+                  onPress={openExactMeasurements}
+                  style={styles.primaryInlineBtn}
+                >
                   <Text style={styles.primaryInlineText}>Edit</Text>
                 </Pressable>
               </View>
@@ -573,7 +722,15 @@ export default function SizeScreen() {
         onClose={() => setSummaryOpen(false)}
         title="Exact Measurements"
         rows={dimensionRows}
-        inferredSize={safeDecode(params.selected_unstitched_size || params.selectedSize) || ""}
+        inferredSize={
+          safeDecode(
+            params.selected_unstitched_size ||
+              params.selected_variant_size ||
+              params.selected_stitched_size ||
+              params.selected_size ||
+              params.selectedSize,
+          ) || ""
+        }
         unit={unit}
         fabricLengthM={selectedStandardFabricLength}
         fabricCostPkr={selectedStandardFabricCost}

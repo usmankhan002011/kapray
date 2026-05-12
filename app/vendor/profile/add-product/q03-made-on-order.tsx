@@ -37,7 +37,10 @@ export default function Q03MadeOnOrder() {
       return;
     }
     if (typeof ctx.setDraft === "function") {
-      ctx.setDraft((prev: any) => ({ ...prev, spec: { ...(prev?.spec ?? {}), ...patch } }));
+      ctx.setDraft((prev: any) => ({
+        ...prev,
+        spec: { ...(prev?.spec ?? {}), ...patch },
+      }));
       return;
     }
     draft.spec = { ...(draft?.spec ?? {}), ...patch };
@@ -58,14 +61,38 @@ export default function Q03MadeOnOrder() {
 
   function goNext() {
     if (!vendorId) {
-      Alert.alert("Vendor not loaded", "Please ensure vendorSlice has vendor.id.");
+      Alert.alert(
+        "Vendor not loaded",
+        "Please ensure vendorSlice has vendor.id.",
+      );
+      return;
+    }
+
+    const category = safeStr((draft?.spec as any)?.product_category ?? "");
+    const isStitchedReady = category === "stitched_ready";
+
+    if (isStitchedReady && madeOnOrder) {
+      router.push(
+        returnTo
+          ? (`/vendor/profile/add-product/q05a-stitched-total-cost?returnTo=${encodeURIComponent(returnTo)}` as any)
+          : ("/vendor/profile/add-product/q05a-stitched-total-cost" as any),
+      );
+      return;
+    }
+
+    if (isStitchedReady && !madeOnOrder) {
+      router.push(
+        returnTo
+          ? (`/vendor/profile/add-product/q04-inventory?returnTo=${encodeURIComponent(returnTo)}` as any)
+          : ("/vendor/profile/add-product/q04-inventory" as any),
+      );
       return;
     }
 
     router.push(
       returnTo
         ? (`/vendor/profile/add-product/q04-inventory?returnTo=${encodeURIComponent(returnTo)}` as any)
-        : ("/vendor/profile/add-product/q04-inventory" as any)
+        : ("/vendor/profile/add-product/q04-inventory" as any),
     );
   }
 
@@ -83,7 +110,10 @@ export default function Q03MadeOnOrder() {
 
           <Pressable
             onPress={() => router.back()}
-            style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
+            style={({ pressed }) => [
+              apStyles.linkBtn,
+              pressed ? apStyles.pressed : null,
+            ]}
           >
             <Text style={apStyles.linkText}>Close</Text>
           </Pressable>
@@ -98,13 +128,13 @@ export default function Q03MadeOnOrder() {
             style={({ pressed }) => [
               apStyles.segment,
               madeOnOrder ? apStyles.segmentOn : null,
-              pressed ? apStyles.pressed : null
+              pressed ? apStyles.pressed : null,
             ]}
           >
             <Text
               style={[
                 apStyles.segmentText,
-                madeOnOrder ? apStyles.segmentTextOn : null
+                madeOnOrder ? apStyles.segmentTextOn : null,
               ]}
             >
               {madeOnOrder ? "✓  Yes" : "Yes"}
@@ -118,13 +148,13 @@ export default function Q03MadeOnOrder() {
               apStyles.segment,
               !madeOnOrder ? apStyles.segmentOn : null,
               pressed ? apStyles.pressed : null,
-              { marginTop: 10 }
+              { marginTop: 10 },
             ]}
           >
             <Text
               style={[
                 apStyles.segmentText,
-                !madeOnOrder ? apStyles.segmentTextOn : null
+                !madeOnOrder ? apStyles.segmentTextOn : null,
               ]}
             >
               {!madeOnOrder ? "✓  No" : "No"}
@@ -150,7 +180,7 @@ export default function Q03MadeOnOrder() {
             style={({ pressed }) => [
               apStyles.primaryBtn,
               !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null
+              pressed ? apStyles.pressed : null,
             ]}
             onPress={goNext}
             disabled={!canContinue}

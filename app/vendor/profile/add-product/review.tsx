@@ -13,8 +13,11 @@ import { useRouter } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import {
+  getMadeOrderVariantFinalPrice,
   getReadyVariantFinalPrice,
+  normalizeMadeOrderVariants,
   sumReadyVariantQty,
+  MadeOrderVariant as SharedMadeOrderVariant,
   ReadyVariant as SharedReadyVariant,
 } from "@/utils/kapray/productVariants";
 
@@ -36,6 +39,17 @@ type ReadyVariant = SharedReadyVariant & {
   price_pkr?: number;
   stock_qty?: number;
   sku?: string;
+  note?: string;
+  image_paths?: any;
+  variant_image_paths?: any;
+  variant_images?: any;
+  image_path?: any;
+  image?: any;
+};
+
+type MadeOrderVariant = SharedMadeOrderVariant & {
+  title?: string;
+  color?: string;
   note?: string;
   image_paths?: any;
   variant_image_paths?: any;
@@ -323,6 +337,77 @@ function summarizeReadyVariant(variant: ReadyVariant, basePrice: number) {
     .join(" • ");
 }
 
+function normalizeMadeOrderVariantImagePaths(
+  variant: MadeOrderVariant,
+): string[] {
+  const rawSources = [
+    variant?.image_paths,
+    variant?.variant_image_paths,
+    variant?.images,
+    variant?.variant_images,
+    variant?.image_path,
+    variant?.image,
+  ];
+
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const raw of rawSources) {
+    const arr = Array.isArray(raw) ? raw : raw ? [raw] : [];
+
+    for (const item of arr) {
+      const s =
+        typeof item === "string"
+          ? safeStr(item)
+          : safeStr(item?.uri ?? item?.url ?? item?.path ?? "");
+
+      if (!s) continue;
+      if (seen.has(s)) continue;
+      seen.add(s);
+      out.push(s);
+    }
+  }
+
+  return out;
+}
+
+function countMadeOrderVariantImages(variant: MadeOrderVariant) {
+  return normalizeMadeOrderVariantImagePaths(variant).length;
+}
+
+function firstMadeOrderVariantImageUri(variant: MadeOrderVariant) {
+  return normalizeMadeOrderVariantImagePaths(variant)[0] || "";
+}
+
+function getMadeOrderVariantTitle(variant: MadeOrderVariant) {
+  return (
+    safeStr(variant?.display_name) ||
+    safeStr(variant?.title) ||
+    safeStr(variant?.label) ||
+    safeStr(variant?.name) ||
+    "Variant"
+  );
+}
+
+function summarizeMadeOrderVariant(
+  variant: MadeOrderVariant,
+  basePrice: number,
+) {
+  const imgCount = countMadeOrderVariantImages(variant);
+  const finalPrice = getMadeOrderVariantFinalPrice(basePrice, variant as any);
+  const days = Math.max(0, Math.trunc(safeNum(variant?.estimated_days)));
+  const note = safeStr((variant as any)?.note);
+
+  return [
+    `Rs ${finalPrice.toLocaleString()}`,
+    `${days} day${days === 1 ? "" : "s"}`,
+    `${imgCount} image${imgCount === 1 ? "" : "s"}`,
+    note,
+  ]
+    .filter(Boolean)
+    .join(" • ");
+}
+
 export default function AddProductReviewScreen() {
   const router = useRouter();
 
@@ -352,8 +437,21 @@ export default function AddProductReviewScreen() {
     !madeOnOrder &&
     safeStr((draft.spec as any)?.variant_mode) === "ready_variants";
 
+  const hasMadeOrderVariants =
+    isStitched &&
+    madeOnOrder &&
+    safeStr((draft.spec as any)?.variant_mode) === "made_order_variants";
+
   const readyVariants = useMemo(
     () => normalizeReadyVariants((draft.price as any)?.variants),
+    [draft.price],
+  );
+
+  const madeOrderVariants = useMemo(
+    () =>
+      normalizeMadeOrderVariants(
+        (draft.price as any)?.made_order_variants,
+      ) as MadeOrderVariant[],
     [draft.price],
   );
 
@@ -603,7 +701,9 @@ export default function AddProductReviewScreen() {
             goEdit(
               hasReadyVariants
                 ? "/vendor/profile/add-product/q06b3-ready-variants"
-                : "/vendor/profile/add-product/q04-inventory",
+                : hasMadeOrderVariants
+                  ? "/vendor/profile/add-product/q06b4-made-order-variants"
+                  : "/vendor/profile/add-product/q04-inventory",
             )
           }
           style={({ pressed }) => [
@@ -612,7 +712,12 @@ export default function AddProductReviewScreen() {
           ]}
         >
           <Text style={styles.rowTitle}>
-            Inventory Quantity *{hasReadyVariants ? " (from variants)" : ""}
+            Inventory Quantity *
+            {hasReadyVariants
+              ? " (from variants)"
+              : madeOnOrder
+                ? " (made on order)"
+                : ""}
           </Text>
           <Text style={styles.rowValue}>
             {Number.isFinite(inventoryQty) ? String(inventoryQty) : "0"}
@@ -642,22 +747,68 @@ export default function AddProductReviewScreen() {
               </Text>
             </Pressable>
 
-            {!hasReadyVariants ? (
-              <Pressable
-                onPress={() => goEdit("/vendor/profile/add-product/q06a-sizes")}
-                style={({ pressed }) => [
-                  styles.rowBtn,
-                  pressed ? styles.pressed : null,
-                ]}
-              >
-                <Text style={styles.rowTitle}>Available Sizes</Text>
-                <Text style={styles.rowValue}>
-                  {Array.isArray(sizes) && sizes.length
-                    ? sizes.join(", ")
-                    : "Not set"}
-                </Text>
-              </Pressable>
-            ) : (
+            {hasMadeOrderVariants ? (
+              <>
+                <Pressable
+                  onPress={() =>
+                    goEdit(
+                      "/vendor/profile/add-product/q06b4-made-order-variants",
+                    )
+                  }
+                  style={({ pressed }) => [
+                    styles.rowBtn,
+                    pressed ? styles.pressed : null,
+                  ]}
+                >
+                  <Text style={styles.rowTitle}>Made-on-order designs</Text>
+                  <Text style={styles.rowValue}>
+                    {madeOrderVariants.length
+                      ? `${madeOrderVariants.length} design(s) • Inventory 0`
+                      : "Not set"}
+                  </Text>
+                </Pressable>
+
+                {madeOrderVariants.map((variant, index) => {
+                  const imageUri = firstMadeOrderVariantImageUri(variant);
+                  const title = getMadeOrderVariantTitle(variant);
+                  const summary = summarizeMadeOrderVariant(variant, costTotal);
+
+                  return (
+                    <Pressable
+                      key={`${safeStr((variant as any).id) || "made-order-variant"}-${index}`}
+                      onPress={() =>
+                        goEdit(
+                          "/vendor/profile/add-product/q06b4-made-order-variants",
+                        )
+                      }
+                      style={({ pressed }) => [
+                        styles.variantCard,
+                        pressed ? styles.pressed : null,
+                      ]}
+                    >
+                      {imageUri ? (
+                        <Image
+                          source={{ uri: imageUri }}
+                          style={styles.variantImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={styles.variantImagePlaceholder}>
+                          <Text style={styles.variantImagePlaceholderText}>
+                            No image
+                          </Text>
+                        </View>
+                      )}
+
+                      <View style={styles.variantBody}>
+                        <Text style={styles.rowTitle}>{title}</Text>
+                        <Text style={styles.rowValue}>{summary}</Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </>
+            ) : hasReadyVariants ? (
               <>
                 <Pressable
                   onPress={() =>
@@ -728,14 +879,28 @@ export default function AddProductReviewScreen() {
                       )}
 
                       <View style={styles.variantBody}>
-                        <Text style={styles.rowTitle}>Variant {index + 1}</Text>
-                        <Text style={styles.variantTitle}>{title}</Text>
+                        <Text style={styles.rowTitle}>{title}</Text>
                         <Text style={styles.rowValue}>{summary}</Text>
                       </View>
                     </Pressable>
                   );
                 })}
               </>
+            ) : (
+              <Pressable
+                onPress={() => goEdit("/vendor/profile/add-product/q06a-sizes")}
+                style={({ pressed }) => [
+                  styles.rowBtn,
+                  pressed ? styles.pressed : null,
+                ]}
+              >
+                <Text style={styles.rowTitle}>Available Sizes</Text>
+                <Text style={styles.rowValue}>
+                  {Array.isArray(sizes) && sizes.length
+                    ? sizes.join(", ")
+                    : "Not set"}
+                </Text>
+              </Pressable>
             )}
           </>
         ) : (

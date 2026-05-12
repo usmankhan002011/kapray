@@ -120,10 +120,14 @@ export default function Q10Videos() {
     const category = String(draft?.spec?.product_category ?? "").trim();
     const madeOnOrder = Boolean(draft?.spec?.made_on_order ?? false);
 
-    const shouldAskReadyVariants =
-      category === "stitched_ready" && madeOnOrder === false;
+    if (category === "stitched_ready" && madeOnOrder) {
+      router.push(
+        "/vendor/profile/add-product/q06b4-made-order-variants" as any,
+      );
+      return;
+    }
 
-    if (shouldAskReadyVariants) {
+    if (category === "stitched_ready" && !madeOnOrder) {
       router.push(
         "/vendor/profile/add-product/q06b1-ready-variant-choice" as any,
       );

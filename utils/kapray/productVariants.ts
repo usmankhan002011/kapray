@@ -31,6 +31,24 @@ export type ReadyVariant = {
   sizes: ReadyVariantSize[];
 };
 
+export type MadeOrderVariantImage = ReadyVariantImage;
+
+export type MadeOrderVariant = {
+  id: string;
+  variant_no: number;
+  label: string;
+  name: string;
+  display_name: string;
+  additional_price_pkr: number;
+  estimated_days: number;
+
+  // New standardized schema for storage/display.
+  image_paths: string[];
+
+  // Legacy/local picker support.
+  images: MadeOrderVariantImage[];
+};
+
 function safeStr(v: unknown) {
   return String(v ?? "").trim();
 }
@@ -233,4 +251,133 @@ export function validateReadyVariants(variants: ReadyVariant[]) {
   if (totalQty <= 0) return "Total stock across variants must be more than 0.";
 
   return "";
+}
+
+export function buildMadeOrderVariantDisplayName(
+  variantNo: number,
+  name: string,
+) {
+  const clean = safeStr(name);
+  return clean ? `Variant ${variantNo}: ${clean}` : `Variant ${variantNo}`;
+}
+
+export function makeMadeOrderVariant(variantNo: number): MadeOrderVariant {
+  return {
+    id: `made-order-variant-${variantNo}`,
+    variant_no: variantNo,
+    label: `Variant ${variantNo}`,
+    name: "",
+    display_name: `Variant ${variantNo}`,
+    additional_price_pkr: 0,
+    estimated_days: 7,
+    image_paths: [],
+    images: [],
+  };
+}
+
+export function normalizeMadeOrderVariant(
+  v: unknown,
+  index: number,
+): MadeOrderVariant {
+  const obj = (v ?? {}) as any;
+
+  const variantNo = safeInt(obj?.variant_no) || index + 1;
+  const name = safeStr(obj?.name ?? obj?.color ?? obj?.title ?? "");
+  const estimatedDays = safeInt(
+    obj?.estimated_days ??
+      obj?.estimatedDays ??
+      obj?.turnaround_days ??
+      obj?.estimated_turnaround_days ??
+      7,
+  );
+
+  return {
+    id: safeStr(obj?.id) || `made-order-variant-${variantNo}`,
+    variant_no: variantNo,
+    label: safeStr(obj?.label) || `Variant ${variantNo}`,
+    name,
+    display_name:
+      safeStr(obj?.display_name) ||
+      buildMadeOrderVariantDisplayName(variantNo, name),
+    additional_price_pkr: safeInt(
+      obj?.additional_price_pkr ?? obj?.extra_price_pkr ?? 0,
+    ),
+    estimated_days: estimatedDays,
+    image_paths: normalizeReadyVariantImagePaths(obj),
+    images: normalizeReadyVariantImages(obj?.images),
+  };
+}
+
+export function normalizeMadeOrderVariants(v: unknown): MadeOrderVariant[] {
+  const arr = Array.isArray(v) ? v : [];
+  return arr.map((item: unknown, index: number) =>
+    normalizeMadeOrderVariant(item, index),
+  );
+}
+
+export function getMadeOrderVariantFinalPrice(
+  basePrice: number,
+  variant: MadeOrderVariant,
+) {
+  return Number(basePrice || 0) + Number(variant?.additional_price_pkr || 0);
+}
+
+export function validateMadeOrderVariants(variants: MadeOrderVariant[]) {
+  if (!variants?.length)
+    return "Please add at least one made-on-order variant.";
+
+  for (const variant of variants) {
+    const title = variant.display_name || variant.label;
+
+    if (!safeStr(variant.name)) {
+      return `${variant.label} needs a color or design name.`;
+    }
+
+    if (
+      !Number.isFinite(Number(variant.additional_price_pkr)) ||
+      Number(variant.additional_price_pkr) < 0
+    ) {
+      return `${title} has an invalid additional price.`;
+    }
+
+    if (
+      !Number.isFinite(Number(variant.estimated_days)) ||
+      Number(variant.estimated_days) <= 0
+    ) {
+      return `${title} needs valid estimated days.`;
+    }
+
+    const imagePaths = normalizeReadyVariantImagePaths(variant);
+    const legacyImages = normalizeReadyVariantImages(variant.images);
+
+    if (!imagePaths.length && !legacyImages.length) {
+      return `${title} needs at least one image.`;
+    }
+  }
+
+  return "";
+}
+
+export function stripMadeOrderVariantForDb(
+  variant: MadeOrderVariant,
+  uploadedImagePaths?: string[],
+): MadeOrderVariant {
+  const normalized = normalizeMadeOrderVariant(variant, 0);
+  const imagePaths = uploadedImagePaths?.length
+    ? uploadedImagePaths
+    : normalizeReadyVariantImagePaths(normalized);
+
+  return {
+    id: normalized.id,
+    variant_no: normalized.variant_no,
+    label: normalized.label,
+    name: normalized.name,
+    display_name:
+      safeStr(normalized.display_name) ||
+      buildMadeOrderVariantDisplayName(normalized.variant_no, normalized.name),
+    additional_price_pkr: safeInt(normalized.additional_price_pkr),
+    estimated_days: safeInt(normalized.estimated_days),
+    image_paths: imagePaths,
+    images: [],
+  };
 }

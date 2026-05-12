@@ -25,6 +25,10 @@ type Params = {
   product_name?: string;
 
   product_category?: string;
+  made_on_order?: string;
+  selected_variant_made_on_order?: string;
+  variant_mode?: string;
+  selected_variant_mode?: string;
 
   price?: string;
   currency?: string;
@@ -110,6 +114,7 @@ type Params = {
   selected_variant_color?: string;
   selected_variant_price_pkr?: string;
   selected_variant_image_path?: string;
+  selected_stitched_variant_snapshot?: string;
 
   selected_neck_variation?: string;
   selected_sleeve_variation?: string;
@@ -463,6 +468,26 @@ export default function PaymentScreen() {
     const selectedVariantImagePath = safeDecode(
       params.selected_variant_image_path,
     );
+    const selectedVariantMode = safeDecode(
+      firstNonEmpty(params.selected_variant_mode, params.variant_mode),
+    );
+    const selectedStitchedVariantSnapshot = safeJsonDecode<any>(
+      params.selected_stitched_variant_snapshot,
+      null,
+    );
+    const rawVariantSnapshot =
+      selectedStitchedVariantSnapshot?.rawVariant ?? {};
+    const productCategoryRaw = norm(params.product_category);
+    const isMadeOnOrder =
+      productCategoryRaw === "stitched_ready" &&
+      (parseBoolParam(params.made_on_order) === true ||
+        parseBoolParam(params.selected_variant_made_on_order) === true ||
+        selectedVariantMode === "made_order_variants" ||
+        Boolean(selectedStitchedVariantSnapshot?.made_on_order) ||
+        selectedStitchedVariantSnapshot?.variant_mode ===
+          "made_order_variants" ||
+        Boolean(rawVariantSnapshot?.made_on_order) ||
+        rawVariantSnapshot?.variant_mode === "made_order_variants");
 
     const dyeingSelected = parseBoolParam(params.dyeing_selected) === true;
     const dyeCostPkr = dyeingSelected
@@ -546,7 +571,10 @@ export default function PaymentScreen() {
       productCode: firstNonEmpty(params.productCode, params.product_code),
       productName:
         firstNonEmpty(params.productName, params.product_name) || "Product",
-      productCategory: norm(params.product_category),
+      productCategory: productCategoryRaw,
+      madeOnOrder: isMadeOnOrder,
+      selectedVariantMode,
+      selectedStitchedVariantSnapshot,
       imageUrl: firstNonEmpty(params.imageUrl, params.image_url),
 
       currency,
@@ -712,6 +740,12 @@ export default function PaymentScreen() {
         (specSnapshot as any).product_category = data.productCategory;
       }
 
+      if (data.madeOnOrder) {
+        (specSnapshot as any).made_on_order = true;
+        (specSnapshot as any).variant_mode = "made_order_variants";
+        (specSnapshot as any).selected_variant_made_on_order = true;
+      }
+
       if (data.selectedUnstitchedSize) {
         (specSnapshot as any).selected_unstitched_size =
           data.selectedUnstitchedSize;
@@ -749,6 +783,10 @@ export default function PaymentScreen() {
           data.selectedVariantPricePkr || 0;
         (specSnapshot as any).selected_variant_image_path =
           data.selectedVariantImagePath || "";
+        if (data.madeOnOrder) {
+          (specSnapshot as any).selected_variant_made_on_order = true;
+          (specSnapshot as any).selected_variant_mode = "made_order_variants";
+        }
       }
 
       if (data.dyeingSelected) {
@@ -874,16 +912,31 @@ export default function PaymentScreen() {
     }
   };
 
-  const categoryLabel = data.productCategory
-    ? prettyCategory(data.productCategory)
-    : "—";
-
   const categoryKey = data.productCategory.toLowerCase();
   const isUnstitched =
     categoryKey === "unstitched_plain" ||
     categoryKey === "unstitched_dyeing" ||
     categoryKey === "unstitched_dyeing_tailoring";
+  const isMadeOrderStitched =
+    data.madeOnOrder ||
+    (categoryKey === "stitched_ready" &&
+      (data.selectedVariantMode === "made_order_variants" ||
+        Boolean((data.selectedStitchedVariantSnapshot as any)?.made_on_order) ||
+        (data.selectedStitchedVariantSnapshot as any)?.variant_mode ===
+          "made_order_variants" ||
+        Boolean(
+          (data.selectedStitchedVariantSnapshot as any)?.rawVariant
+            ?.made_on_order,
+        ) ||
+        (data.selectedStitchedVariantSnapshot as any)?.rawVariant
+          ?.variant_mode === "made_order_variants"));
+  const categoryLabel = isMadeOrderStitched
+    ? "Made on order"
+    : data.productCategory
+      ? prettyCategory(data.productCategory)
+      : "—";
   const isReadyToWearStitched =
+    !isMadeOrderStitched &&
     !isUnstitched &&
     Boolean(data.selectedVariantId || data.selectedVariantTitle) &&
     (categoryKey.includes("ready") ||
@@ -894,8 +947,10 @@ export default function PaymentScreen() {
       categoryKey === "stitched" ||
       categoryKey === "stitched_ready_to_wear" ||
       categoryKey === "ready_to_wear_stitched");
+  const isStitchedVariantSelection =
+    isReadyToWearStitched || isMadeOrderStitched;
 
-  const selectedReadyVariantTitle = isReadyToWearStitched
+  const selectedStitchedVariantTitle = isReadyToWearStitched
     ? cleanReadyToWearTitle(
         data.selectedVariantTitle || "Selected variant",
         data.selectedVariantSize || data.sizeLabel,
@@ -962,14 +1017,14 @@ export default function PaymentScreen() {
                   </View>
                 )}
 
-                {isReadyToWearStitched ? (
+                {isStitchedVariantSelection ? (
                   <>
                     <View style={styles.productMetaInfo}>
                       <Text style={styles.productMetaLabel}>
                         Selected variant
                       </Text>
                       <Text style={styles.productMetaValue}>
-                        {selectedReadyVariantTitle || "Not selected"}
+                        {selectedStitchedVariantTitle || "Not selected"}
                       </Text>
                     </View>
 
@@ -1005,13 +1060,14 @@ export default function PaymentScreen() {
                 }
               />
 
-              {data.selectedVariantId ||
-              data.selectedVariantTitle ||
-              data.selectedVariantSize ||
-              data.selectedVariantColor ? (
+              {!isMadeOrderStitched &&
+              (data.selectedVariantId ||
+                data.selectedVariantTitle ||
+                data.selectedVariantSize ||
+                data.selectedVariantColor) ? (
                 <View style={styles.customBlock}>
                   <KVRow
-                    label="Ready variant"
+                    label="Selected variant"
                     value={
                       data.selectedVariantTitle ||
                       data.selectedVariantSize ||

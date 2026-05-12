@@ -926,6 +926,13 @@ export default function ViewProductScreen() {
     );
   }, [product, productCategory]);
 
+  const isMadeOnOrder = useMemo(() => {
+    return (
+      Boolean((product as any)?.made_on_order) ||
+      Boolean((product as any)?.spec?.made_on_order)
+    );
+  }, [product]);
+
   const priceText = useMemo(() => {
     const price = (product as any)?.price ?? {};
     const mode = String(price?.mode ?? "");
@@ -941,7 +948,7 @@ export default function ViewProductScreen() {
 
     const t = price?.cost_pkr_total;
     return t ? `PKR ${t} (total)` : "—";
-  }, [isStitchedReady, product, selectedStitchedVariant]);
+  }, [isMadeOnOrder, isStitchedReady, product, selectedStitchedVariant]);
 
   const pricePerMeterPkr = useMemo(() => {
     const price = (product as any)?.price ?? {};
@@ -985,7 +992,7 @@ export default function ViewProductScreen() {
       ? price.available_sizes
       : [];
     return sizes.length ? sizes.join(", ") : "—";
-  }, [isStitchedReady, product, selectedStitchedVariant]);
+  }, [isMadeOnOrder, isStitchedReady, product, selectedStitchedVariant]);
 
   const inventoryText = useMemo(() => {
     if (!product) return "—";
@@ -998,11 +1005,7 @@ export default function ViewProductScreen() {
       return "Select size";
     }
 
-    const made =
-      Boolean((product as any)?.made_on_order) ||
-      Boolean((product as any)?.spec?.made_on_order);
-
-    if (made) return "Made on order";
+    if (isMadeOnOrder) return "Made on order";
 
     const raw = (product as any)?.inventory_qty;
     if (raw == null) return "—";
@@ -1011,7 +1014,7 @@ export default function ViewProductScreen() {
     if (!Number.isFinite(n)) return "—";
 
     return String(n);
-  }, [isStitchedReady, product, selectedStitchedVariant]);
+  }, [isMadeOnOrder, isStitchedReady, product, selectedStitchedVariant]);
 
   const isOutOfStock = useMemo(() => {
     if (!product) return false;
@@ -1020,11 +1023,7 @@ export default function ViewProductScreen() {
       return selectedStitchedVariant.stockQty <= 0;
     }
 
-    const made =
-      Boolean((product as any)?.made_on_order) ||
-      Boolean((product as any)?.spec?.made_on_order);
-
-    if (made) return false;
+    if (isMadeOnOrder) return false;
 
     const raw = (product as any)?.inventory_qty;
     if (raw == null) return false;
@@ -1033,7 +1032,7 @@ export default function ViewProductScreen() {
     if (!Number.isFinite(n)) return false;
 
     return n <= 0;
-  }, [isStitchedReady, product, selectedStitchedVariant]);
+  }, [isMadeOnOrder, isStitchedReady, product, selectedStitchedVariant]);
 
   const moreDescriptionText = useMemo(() => {
     const spec = (product as any)?.spec ?? {};
@@ -1235,19 +1234,32 @@ export default function ViewProductScreen() {
   }, [isUnstitched, product, showBuyerActions]);
 
   const categoryText = useMemo(() => {
-    if (productCategory === "stitched_ready") return "Stitched / Ready-to-wear";
+    if (productCategory === "stitched_ready" && isMadeOnOrder) {
+      return "Made on order";
+    }
+
+    if (productCategory === "stitched_ready") {
+      return "Stitched / Ready-to-wear";
+    }
+
     if (productCategory === "unstitched_dyeing_tailoring") {
       return "Unstitched + Dyeing + Tailoring";
     }
-    if (productCategory === "unstitched_dyeing") return "Unstitched + Dyeing";
-    if (productCategory === "unstitched_plain") return "Unstitched (Plain)";
+
+    if (productCategory === "unstitched_dyeing") {
+      return "Unstitched + Dyeing";
+    }
+
+    if (productCategory === "unstitched_plain") {
+      return "Unstitched (Plain)";
+    }
 
     if (isUnstitched) {
       return showDyeing ? "Unstitched + Dyeable" : "Unstitched";
     }
 
-    return "Stitched / Ready-to-wear";
-  }, [isUnstitched, productCategory, showDyeing]);
+    return isMadeOnOrder ? "Made on order" : "Stitched / Ready-to-wear";
+  }, [isMadeOnOrder, isUnstitched, productCategory, showDyeing]);
 
   const onOpenDyeing = useCallback(() => {
     if (!product) return;
@@ -1294,10 +1306,27 @@ export default function ViewProductScreen() {
   const onPurchase = useCallback(() => {
     if (!product) return;
 
+    const selectedVariantMadeOnOrder =
+      isMadeOnOrder ||
+      Boolean((selectedStitchedVariant as any)?.made_on_order) ||
+      String((selectedStitchedVariant as any)?.variant_mode ?? "") ===
+        "made_order_variants" ||
+      String(
+        (selectedStitchedVariant as any)?.rawVariant?.variant_mode ?? "",
+      ) === "made_order_variants";
+
+    const selectedVariantMode = selectedVariantMadeOnOrder
+      ? "made_order_variants"
+      : String((selectedStitchedVariant as any)?.variant_mode ?? "");
+
     if (isStitchedReady && !selectedStitchedVariant) {
       Alert.alert(
-        "Select variant and size",
-        "Please select a stitched ready-to-wear variant and size before continuing.",
+        selectedVariantMadeOnOrder
+          ? "Select variant"
+          : "Select variant and size",
+        selectedVariantMadeOnOrder
+          ? "Please select a made-on-order variant before continuing."
+          : "Please select a stitched ready-to-wear variant and size before continuing.",
       );
       return;
     }
@@ -1356,6 +1385,10 @@ export default function ViewProductScreen() {
         productName: String(product.title || ""),
 
         product_category: productCategory ? String(productCategory) : "",
+        made_on_order: isMadeOnOrder ? "1" : "0",
+        selected_variant_made_on_order: selectedVariantMadeOnOrder ? "1" : "0",
+        variant_mode: selectedVariantMode,
+        selected_variant_mode: selectedVariantMode,
         currency: "PKR",
         imageUrl,
 
@@ -1387,7 +1420,9 @@ export default function ViewProductScreen() {
             ? encodeURIComponent(String(selectedStitchedVariant.size))
             : "",
         selected_variant_color:
-          isStitchedReady && selectedStitchedVariant?.color
+          isStitchedReady &&
+          !selectedVariantMadeOnOrder &&
+          selectedStitchedVariant?.color
             ? encodeURIComponent(String(selectedStitchedVariant.color))
             : "",
         selected_variant_price_pkr:
@@ -1395,7 +1430,9 @@ export default function ViewProductScreen() {
             ? encodeURIComponent(String(selectedStitchedVariant.pricePkr))
             : "",
         selected_variant_stock_qty:
-          isStitchedReady && selectedStitchedVariant?.stockQty != null
+          isStitchedReady &&
+          !selectedVariantMadeOnOrder &&
+          selectedStitchedVariant?.stockQty != null
             ? encodeURIComponent(String(selectedStitchedVariant.stockQty))
             : "",
 
@@ -1556,6 +1593,7 @@ export default function ViewProductScreen() {
     dyeingCostPkr,
     hasAnySizeLengthMap,
     imageUrls,
+    isMadeOnOrder,
     isStitchedReady,
     isUnstitched,
     packageCm,
@@ -2126,19 +2164,17 @@ export default function ViewProductScreen() {
                           selectedStitchedVariant.label}
                       </Text>
 
-                      {selectedStitchedVariant.color ? (
-                        <Text style={styles.metaLine}>
-                          Variant / Color: {selectedStitchedVariant.color}
-                        </Text>
+                      {!isMadeOnOrder ? (
+                        <>
+                          <Text style={styles.metaLine}>
+                            Selected Size: {selectedStitchedVariant.size}
+                          </Text>
+                          <Text style={styles.metaLine}>
+                            Available Stock:{" "}
+                            {selectedStitchedVariant.stockQty ?? "—"}
+                          </Text>
+                        </>
                       ) : null}
-
-                      <Text style={styles.metaLine}>
-                        Selected Size: {selectedStitchedVariant.size}
-                      </Text>
-                      <Text style={styles.metaLine}>
-                        Available Stock:{" "}
-                        {selectedStitchedVariant.stockQty ?? "—"}
-                      </Text>
                     </View>
                   </View>
 

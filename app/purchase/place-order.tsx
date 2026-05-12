@@ -72,6 +72,12 @@ type Params = {
   custom_value_4?: string;
 
   product_category?: string;
+  made_on_order?: string;
+  selected_variant_made_on_order?: string;
+  variant_mode?: string;
+  selected_variant_mode?: string;
+  selected_variant_snapshot?: string;
+  selected_stitched_variant_snapshot?: string;
 
   productName?: string;
   product_name?: string;
@@ -590,6 +596,32 @@ export default function PlaceOrderScreen() {
         null,
       );
 
+    const selectedVariantSnapshot = safeJsonDecode<any>(
+      firstNonEmpty(
+        params.selected_stitched_variant_snapshot,
+        params.selected_variant_snapshot,
+      ),
+      null,
+    );
+
+    const variantMode = safeDecode(
+      firstNonEmpty(
+        params.selected_variant_mode,
+        params.variant_mode,
+        selectedVariantSnapshot?.variant_mode,
+        selectedVariantSnapshot?.rawVariant?.variant_mode,
+      ),
+    );
+
+    const madeOnOrder = Boolean(
+      parseBoolParam(params.made_on_order) ??
+      parseBoolParam(params.selected_variant_made_on_order) ??
+      selectedVariantSnapshot?.made_on_order ??
+      selectedVariantSnapshot?.rawVariant?.made_on_order ??
+      selectedVariantSnapshot?.rawVariant?.madeOnOrder ??
+      variantMode === "made_order_variants",
+    );
+
     const selectedVariantId = safeDecode(
       firstNonEmpty(params.selected_variant_id),
     );
@@ -663,6 +695,9 @@ export default function PlaceOrderScreen() {
 
       productName: firstNonEmpty(params.productName, params.product_name),
       productCategory: norm(params.product_category),
+      madeOnOrder,
+      variantMode,
+      selectedVariantSnapshot,
       priceParam: norm(params.price),
       pricePerMeterPkr: safePositiveNumber(params.price_per_meter_pkr),
       stitchedTotalPkr: safePositiveNumber(params.stitched_total_pkr),
@@ -881,9 +916,17 @@ export default function PlaceOrderScreen() {
       base.productCategory === "unstitched_dyeing_tailoring";
 
     const categoryKey = base.productCategory.toLowerCase();
-    const isReadyToWearStitched =
+    const hasSelectedStitchedVariant = Boolean(
+      base.selectedVariantId || base.selectedVariantTitle,
+    );
+    const isMadeOrderStitched =
       !isUnstitched &&
-      Boolean(base.selectedVariantId || base.selectedVariantTitle) &&
+      hasSelectedStitchedVariant &&
+      Boolean(base.madeOnOrder || base.variantMode === "made_order_variants");
+    const isReadyToWearStitched =
+      !isMadeOrderStitched &&
+      !isUnstitched &&
+      hasSelectedStitchedVariant &&
       (categoryKey.includes("ready") ||
         categoryKey.includes("ready_to_wear") ||
         categoryKey.includes("ready-to-wear") ||
@@ -892,13 +935,15 @@ export default function PlaceOrderScreen() {
         categoryKey === "stitched" ||
         categoryKey === "stitched_ready_to_wear" ||
         categoryKey === "ready_to_wear_stitched");
+    const shouldShowSelectedStitchedVariant =
+      isReadyToWearStitched || isMadeOrderStitched;
 
     const selectedVariantImageUrl =
-      isReadyToWearStitched && base.selectedVariantImagePath
+      shouldShowSelectedStitchedVariant && base.selectedVariantImagePath
         ? resolvePublicUrl(base.selectedVariantImagePath)
         : "";
     const displayImageUrl = selectedVariantImageUrl || imageUrl;
-    const displayTitle = isReadyToWearStitched
+    const displayTitle = shouldShowSelectedStitchedVariant
       ? cleanReadyToWearTitle(title, base.selectedVariantSize || base.sizeLabel)
       : title;
 
@@ -934,6 +979,8 @@ export default function PlaceOrderScreen() {
       exportRegions,
       isUnstitched,
       isReadyToWearStitched,
+      isMadeOrderStitched,
+      shouldShowSelectedStitchedVariant,
       totalProductCostPkr,
       hasDyeing,
       hasTailoring,
@@ -1125,6 +1172,19 @@ export default function PlaceOrderScreen() {
         productCode: resolved.code || base.productCode,
         productName: resolved.title,
         product_category: base.productCategory,
+        made_on_order: resolved.isMadeOrderStitched ? "1" : "0",
+        selected_variant_made_on_order: resolved.isMadeOrderStitched
+          ? "1"
+          : "0",
+        variant_mode: resolved.isMadeOrderStitched
+          ? "made_order_variants"
+          : base.variantMode || "",
+        selected_variant_mode: resolved.isMadeOrderStitched
+          ? "made_order_variants"
+          : base.variantMode || "",
+        selected_variant_snapshot: base.selectedVariantSnapshot
+          ? encodeURIComponent(JSON.stringify(base.selectedVariantSnapshot))
+          : "",
 
         currency: base.currency,
         imageUrl: resolved.imageUrl,
@@ -1276,15 +1336,19 @@ export default function PlaceOrderScreen() {
     });
   };
 
-  const categoryLabel = base.productCategory
-    ? prettyCategory(base.productCategory)
-    : "—";
+  const categoryLabel = resolved.isMadeOrderStitched
+    ? "Made on order"
+    : base.productCategory
+      ? prettyCategory(base.productCategory)
+      : "—";
   const exportRegionsText = joinRegions(exportRegionList);
   const displayCountry = destinationType === "inland" ? "Pakistan" : country;
-  const selectedReadyVariantTitle = resolved.isReadyToWearStitched
+  const selectedReadyVariantTitle = resolved.shouldShowSelectedStitchedVariant
     ? cleanReadyToWearTitle(
         base.selectedVariantTitle || "Selected variant",
-        base.selectedVariantSize || base.sizeLabel,
+        resolved.isMadeOrderStitched
+          ? ""
+          : base.selectedVariantSize || base.sizeLabel,
       )
     : base.selectedVariantTitle;
 
@@ -1346,7 +1410,7 @@ export default function PlaceOrderScreen() {
                   </View>
                 )}
 
-                {resolved.isReadyToWearStitched ? (
+                {resolved.shouldShowSelectedStitchedVariant ? (
                   <>
                     <View style={styles.productMetaInfo}>
                       <Text style={styles.productMetaLabel}>
@@ -1360,11 +1424,35 @@ export default function PlaceOrderScreen() {
                     <View style={styles.productMetaInfo}>
                       <Text style={styles.productMetaLabel}>Size</Text>
                       <Text style={styles.productMetaValue}>
-                        {base.selectedVariantSize ||
-                          base.sizeLabel ||
-                          "Not selected"}
+                        {base.mode === "exact"
+                          ? "Exact measurements"
+                          : base.selectedVariantSize ||
+                            base.sizeLabel ||
+                            "Not selected"}
                       </Text>
                     </View>
+
+                    {resolved.isMadeOrderStitched &&
+                    base.mode === "exact" &&
+                    measurementRows.length ? (
+                      <View style={styles.inlineActionRow}>
+                        <Text style={styles.helper}>
+                          {measurementRows.length} dimensions saved
+                          {base.customDimensions.length
+                            ? ` • ${base.customDimensions.length} custom`
+                            : ""}
+                        </Text>
+
+                        <Pressable
+                          onPress={() => setMeasurementsOpen(true)}
+                          style={styles.secondaryInlineBtn}
+                        >
+                          <Text style={styles.secondaryInlineText}>
+                            View Exact Measurements
+                          </Text>
+                        </Pressable>
+                      </View>
+                    ) : null}
                   </>
                 ) : null}
 
@@ -1377,7 +1465,7 @@ export default function PlaceOrderScreen() {
             </View>
           </SectionCard>
 
-          {!resolved.isReadyToWearStitched ? (
+          {!resolved.shouldShowSelectedStitchedVariant ? (
             <SectionCard title="Customization">
               {!resolved.isUnstitched ? (
                 <KVRow

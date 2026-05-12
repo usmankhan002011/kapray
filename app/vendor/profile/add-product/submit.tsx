@@ -21,8 +21,12 @@ import {
   normalizeReadyVariants,
   sumReadyVariantQty,
   validateReadyVariants,
+  normalizeMadeOrderVariants,
+  validateMadeOrderVariants,
+  stripMadeOrderVariantForDb,
   type ReadyVariant,
   type ReadyVariantImage,
+  type MadeOrderVariant,
 } from "@/utils/kapray/productVariants";
 
 const BUCKET_VENDOR = "vendor_images";
@@ -254,6 +258,11 @@ type ReadyVariantForSubmit = ReadyVariant & {
   images?: ReadyVariantImage[];
 };
 
+type MadeOrderVariantForSubmit = MadeOrderVariant & {
+  image_paths?: string[];
+  images?: ReadyVariantImage[];
+};
+
 type ReadyVariantImageInput = {
   uri?: string | null;
   path?: string | null;
@@ -439,6 +448,77 @@ async function uploadReadyVariantImages(args: {
   return nextVariants;
 }
 
+async function uploadMadeOrderVariantImages(args: {
+  vendorId: number;
+  productCode: string;
+  variants: MadeOrderVariant[];
+}) {
+  const nextVariants: any[] = [];
+
+  for (
+    let variantIndex = 0;
+    variantIndex < args.variants.length;
+    variantIndex++
+  ) {
+    const variant = args.variants[variantIndex] as MadeOrderVariantForSubmit;
+    const inputs = normalizeReadyVariantImageInputs(variant as any);
+    const uploadedPaths: string[] = [];
+
+    for (let imageIndex = 0; imageIndex < inputs.length; imageIndex++) {
+      const img = inputs[imageIndex] ?? {};
+      const rawUri = safeStr(img?.uri ?? "");
+      const rawUrl = safeStr(img?.url ?? "");
+      const rawPath = safeStr(img?.path ?? "");
+
+      if (rawPath) {
+        uploadedPaths.push(rawPath);
+        continue;
+      }
+
+      const pathFromUrl = storagePathFromPublicUrl(rawUrl);
+      if (pathFromUrl) {
+        uploadedPaths.push(pathFromUrl);
+        continue;
+      }
+
+      if (!rawUri) continue;
+
+      const uriPathFromPublicUrl = storagePathFromPublicUrl(rawUri);
+      if (uriPathFromPublicUrl) {
+        uploadedPaths.push(uriPathFromPublicUrl);
+        continue;
+      }
+
+      if (!isLocalFileUri(rawUri)) continue;
+
+      const mimeType = safeStr(img?.mimeType) || "image/jpeg";
+      const ext =
+        safeStr(img?.fileName).split(".").pop()?.toLowerCase() ||
+        mimeType.split("/")[1] ||
+        "jpg";
+
+      const variantId =
+        safeStr((variant as any)?.id) ||
+        `made_order_variant_${variantIndex + 1}`;
+
+      const path = `vendors/${args.vendorId}/products/${args.productCode}/made-order-variants/${variantId}/${Date.now()}-${imageIndex}.${ext}`;
+
+      const uploadedPath = await uploadAssetToStorage({
+        bucket: BUCKET_VENDOR,
+        path,
+        uri: rawUri,
+        contentType: mimeType.startsWith("image/") ? mimeType : "image/jpeg",
+      });
+
+      if (uploadedPath) uploadedPaths.push(uploadedPath);
+    }
+
+    nextVariants.push(stripMadeOrderVariantForDb(variant, uploadedPaths));
+  }
+
+  return nextVariants;
+}
+
 export default function AddProductSubmitScreen() {
   const router = useRouter();
 
@@ -526,6 +606,11 @@ export default function AddProductSubmitScreen() {
     [readyVariants],
   );
 
+  const madeOrderVariants = useMemo(
+    () => normalizeMadeOrderVariants((draft.price as any)?.made_order_variants),
+    [draft.price],
+  );
+
   const dyeingCostPkr = safeNumOrZero(
     (draft.price as any)?.dyeing_cost_pkr ?? 0,
   );
@@ -559,6 +644,11 @@ export default function AddProductSubmitScreen() {
     if (productCategory === "stitched_ready") {
       const n = Number((draft.price as any)?.cost_pkr_total ?? 0);
       if (!Number.isFinite(n) || n <= 0) return false;
+
+      if (madeOnOrder) {
+        const variantError = validateMadeOrderVariants(madeOrderVariants);
+        if (variantError) return false;
+      }
 
       if (hasReadyVariants) {
         const variantError = validateReadyVariants(readyVariants);
@@ -620,6 +710,7 @@ export default function AddProductSubmitScreen() {
     hasReadyVariants,
     readyVariants,
     readyVariantQty,
+    madeOrderVariants,
     needsDyeing,
     dyeingCostPkr,
     needsTailoring,
@@ -654,6 +745,14 @@ export default function AddProductSubmitScreen() {
           "Please enter valid total cost for stitched product.",
         );
         return;
+      }
+
+      if (madeOnOrder) {
+        const variantError = validateMadeOrderVariants(madeOrderVariants);
+        if (variantError) {
+          Alert.alert("Invalid variants", variantError);
+          return;
+        }
       }
 
       if (hasReadyVariants) {
@@ -831,6 +930,9 @@ export default function AddProductSubmitScreen() {
           more_description: safeStr(moreDescription),
 
           product_category: finalCategory,
+          variant_mode: madeOnOrder
+            ? "made_order_variants"
+            : safeStr((draft.spec as any)?.variant_mode ?? ""),
 
           dyeing_enabled: unstitchedDyeingEnabled,
           tailoring_enabled: unstitchedTailoringEnabled,
@@ -863,6 +965,7 @@ export default function AddProductSubmitScreen() {
           // Keep local picked variant images out of the DB insert.
           // Final uploaded storage paths are written in the update below.
           variants: [],
+          made_order_variants: [],
 
           dyeing_cost_pkr: unstitchedDyeingCost,
           tailoring_cost_pkr: unstitchedTailoringCost,
@@ -976,6 +1079,14 @@ export default function AddProductSubmitScreen() {
           })
         : [];
 
+      const uploadedMadeOrderVariants = madeOnOrder
+        ? await uploadMadeOrderVariantImages({
+            vendorId,
+            productCode: finalCode,
+            variants: madeOrderVariants,
+          })
+        : [];
+
       const media = {
         images: uploadedImagePaths,
         videos: uploadedVideoPaths,
@@ -984,6 +1095,9 @@ export default function AddProductSubmitScreen() {
 
       const finalSpec = {
         ...insertPayload.spec,
+        variant_mode: madeOnOrder
+          ? "made_order_variants"
+          : safeStr((draft.spec as any)?.variant_mode ?? ""),
         tailoring_style_presets: unstitchedTailoringEnabled
           ? uploadedTailoringPresets
           : [],
@@ -992,6 +1106,7 @@ export default function AddProductSubmitScreen() {
       const finalPrice = {
         ...insertPayload.price,
         variants: hasReadyVariants ? uploadedReadyVariants : [],
+        made_order_variants: madeOnOrder ? uploadedMadeOrderVariants : [],
       };
 
       const { error: updErr } = await supabase

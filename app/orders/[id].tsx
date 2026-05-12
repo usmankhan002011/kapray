@@ -128,6 +128,34 @@ function isUnstitchedFromSpec(spec: any): boolean {
   );
 }
 
+function isMadeOrderFromSpec(spec: any): boolean {
+  const s = spec && typeof spec === "object" ? spec : {};
+  const selectedVariant =
+    s?.selected_stitched_variant &&
+    typeof s.selected_stitched_variant === "object"
+      ? s.selected_stitched_variant
+      : s?.selected_variant && typeof s.selected_variant === "object"
+        ? s.selected_variant
+        : {};
+
+  const variantMode = String(
+    s?.variant_mode ??
+      s?.selected_variant_mode ??
+      selectedVariant?.variant_mode ??
+      selectedVariant?.variantMode ??
+      "",
+  )
+    .trim()
+    .toLowerCase();
+
+  return (
+    boolish(s?.made_on_order) ||
+    boolish(s?.selected_variant_made_on_order) ||
+    boolish(selectedVariant?.made_on_order) ||
+    variantMode === "made_order_variants"
+  );
+}
+
 function humanizeCat(v: any) {
   const s = String(v ?? "").trim();
   if (!s) return "—";
@@ -807,7 +835,15 @@ export default function OrderDetailScreen() {
     };
   }, [order, spec]);
 
-  const isReadyStitchedOrder = !!selectedStitchedVariant && !isUnstitched;
+  const isMadeOrderStitchedOrder = useMemo(() => {
+    if (!order) return false;
+    return !isUnstitched && isMadeOrderFromSpec(spec);
+  }, [order, spec, isUnstitched]);
+
+  const isReadyStitchedOrder =
+    !!selectedStitchedVariant && !isUnstitched && !isMadeOrderStitchedOrder;
+
+  const isStitchedVariantOrder = !!selectedStitchedVariant && !isUnstitched;
 
   const selectedFabricLengthM = useMemo(() => {
     if (!order) return null;
@@ -1015,8 +1051,9 @@ export default function OrderDetailScreen() {
 
   const categoryLabel = useMemo(() => {
     if (!order) return "—";
+    if (isMadeOrderStitchedOrder) return "Made on order";
     return getDressCatFromSpec(spec);
-  }, [order, spec]);
+  }, [order, spec, isMadeOrderStitchedOrder]);
 
   const vendorNameForMeasurements = useMemo(() => {
     const fromSpec = safeText(
@@ -1216,7 +1253,7 @@ export default function OrderDetailScreen() {
                     </View>
                   )}
 
-                  {!isReadyStitchedOrder ? (
+                  {!isStitchedVariantOrder ? (
                     <Text style={styles.heroPrice}>
                       {money(order.currency, baseProductCostPkr)}
                     </Text>
@@ -1226,7 +1263,7 @@ export default function OrderDetailScreen() {
             </SectionCard>
 
             {selectedStitchedVariant ? (
-              <SectionCard title="Selected Stitched Variant">
+              <SectionCard title="Selected Variant">
                 <View style={styles.variantRow}>
                   {selectedStitchedVariant.imageUrl ? (
                     <View style={styles.variantImageWrap}>
@@ -1240,9 +1277,14 @@ export default function OrderDetailScreen() {
 
                   <View style={styles.variantInfoWrap}>
                     <Text style={styles.variantTitle} numberOfLines={2}>
-                      {selectedStitchedVariant.title || "Ready-to-wear variant"}
+                      {selectedStitchedVariant.title || "Selected variant"}
                     </Text>
-                    <KVRow label="Size" value={selectedStitchedVariant.size} />
+                    {!isMadeOrderStitchedOrder ? (
+                      <KVRow
+                        label="Size"
+                        value={selectedStitchedVariant.size}
+                      />
+                    ) : null}
                     <KVRow
                       label="Product cost"
                       value={
@@ -1256,14 +1298,16 @@ export default function OrderDetailScreen() {
                             : ""
                       }
                     />
-                    <KVRow
-                      label="Stock"
-                      value={
-                        selectedStitchedVariant.stockQty != null
-                          ? String(selectedStitchedVariant.stockQty)
-                          : ""
-                      }
-                    />
+                    {!isMadeOrderStitchedOrder ? (
+                      <KVRow
+                        label="Stock"
+                        value={
+                          selectedStitchedVariant.stockQty != null
+                            ? String(selectedStitchedVariant.stockQty)
+                            : ""
+                        }
+                      />
+                    ) : null}
                     <KVRow
                       label="SKU"
                       value={selectedStitchedVariant.sku}

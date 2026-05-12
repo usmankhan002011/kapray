@@ -104,349 +104,362 @@ Show-CustomTree -Path "." -MaxDepth 8 | Tee-Object -FilePath ".\tree.txt"
 }
 
 > > }
-
-kapray
-├── .idea
-│ ├── caches
-│ │ └── deviceStreaming.xml
-│ ├── kapray.iml
-│ ├── misc.xml
-│ ├── modules.xml
-│ ├── vcs.xml
-│ └── workspace.xml
-├── .vscode
-│ ├── .react
-│ ├── extensions.json
-│ └── settings.json
-├── app
-│ ├── (auth)
-│ │ ├── buyer
-│ │ │ ├── signin.tsx
-│ │ │ └── signup.tsx
-│ │ └── vendor
-│ │ ├── signin.tsx
-│ │ └── signup.tsx
-│ ├── (buyer)
-│ │ ├── dye_palette_modal.tsx
-│ │ ├── review-vendor-modal.tsx
-│ │ ├── view-product.tsx
-│ │ └── view-profile.tsx
-│ ├── (tabs)
-│ │ ├── flow
-│ │ │ ├── orders
-│ │ │ │ ├── [id].tsx
-│ │ │ │ ├── index.tsx
-│ │ │ │ └── track.tsx
-│ │ │ ├── purchase
-│ │ │ │ ├── \_layout.tsx
-│ │ │ │ ├── cart.tsx
-│ │ │ │ ├── exact-measurements.tsx
-│ │ │ │ ├── exact-measurements-export.ts
-│ │ │ │ ├── exact-measurements-modal.tsx
-│ │ │ │ ├── exact-measurements-sheet.tsx
-│ │ │ │ ├── payment.tsx
-│ │ │ │ ├── place-order.tsx
-│ │ │ │ └── size.tsx
-│ │ │ ├── \_layout.tsx
-│ │ │ ├── confirmation.tsx
-│ │ │ ├── results-filters.tsx
-│ │ │ ├── vendor-search.tsx
-│ │ │ └── view-product.tsx
-│ │ ├── \_layout.tsx
-│ │ ├── index.tsx
-│ │ └── shops.tsx
-│ ├── couriers
-│ │ └── components
-│ ├── orders
-│ │ ├── [id].tsx
-│ │ ├── index.tsx
-│ │ └── track.tsx
-│ ├── purchase
-│ │ ├── \_layout.tsx
-│ │ ├── cart.tsx
-│ │ ├── payment.tsx
-│ │ ├── place-order.tsx
-│ │ └── size.tsx
-│ ├── services
-│ ├── tailors
-│ │ └── components
-│ │ ├── TailoringCheckoutBlock.tsx
-│ │ └── TailoringOfferCard.tsx
-│ ├── vendor
-│ │ ├── profile
-│ │ │ ├── (product-modals)
-│ │ │ │ ├── dyeing
-│ │ │ │ │ ├── dye_palette_modal.tsx
-│ │ │ │ │ └── palette.ts
-│ │ │ │ ├── more-description
-│ │ │ │ │ ├── care.tsx
-│ │ │ │ │ ├── disclaimer.tsx
-│ │ │ │ │ ├── dupatta.tsx
-│ │ │ │ │ ├── fabric-work.tsx
-│ │ │ │ │ ├── hook.tsx
-│ │ │ │ │ ├── index.tsx
-│ │ │ │ │ ├── occasion.tsx
-│ │ │ │ │ ├── replica.tsx
-│ │ │ │ │ └── trouser.tsx
-│ │ │ │ ├── \_layout.tsx
-│ │ │ │ ├── color_modal.tsx
-│ │ │ │ ├── dress-type_modal.tsx
-│ │ │ │ ├── fabric_modal.tsx
-│ │ │ │ ├── origin-city_modal.tsx
-│ │ │ │ ├── wear-state_modal.tsx
-│ │ │ │ ├── work_modal.tsx
-│ │ │ │ ├── work-density_modal.tsx
-│ │ │ │ └── work-subtypes_modal.tsx
-│ │ │ ├── add-product
-│ │ │ │ ├── \_layout.tsx
-│ │ │ │ ├── index.tsx
-│ │ │ │ ├── q02-category.tsx
-│ │ │ │ ├── q03-made-on-order.tsx
-│ │ │ │ ├── q04-inventory.tsx
-│ │ │ │ ├── q05a-stitched-total-cost.tsx
-│ │ │ │ ├── q05b-unstitched-cost-per-meter.tsx
-│ │ │ │ ├── q05c-unstitched-fabric-length.tsx
-│ │ │ │ ├── q06a-sizes.tsx
-│ │ │ │ ├── q06b2-tailoring-styles.tsx
-│ │ │ │ ├── q06b-services-costs.tsx
-│ │ │ │ ├── q06c-shipping.tsx
-│ │ │ │ ├── q09-images.tsx
-│ │ │ │ ├── q10-videos.tsx
-│ │ │ │ ├── q11-description.tsx
-│ │ │ │ ├── q12-more-description.tsx
-│ │ │ │ ├── review.tsx
-│ │ │ │ └── submit.tsx
-│ │ │ ├── view-product
-│ │ │ │ └── index.tsx
-│ │ │ ├── \_layout.tsx
-│ │ │ ├── add-product_legacy.tsx
-│ │ │ ├── edit-vendor.tsx
-│ │ │ ├── index.tsx
-│ │ │ ├── orders.tsx
-│ │ │ ├── products.tsx
-│ │ │ ├── reviews.tsx
-│ │ │ ├── settings.tsx
-│ │ │ ├── update-product.tsx
-│ │ │ ├── view-product_legacy.tsx
-│ │ │ ├── view-product_legacy_2.tsx
-│ │ │ └── view-profile.tsx
-│ │ ├── confirmation.tsx
-│ │ ├── create-shop.tsx
-│ │ └── index.tsx
-│ ├── \_layout.tsx
-│ ├── color.tsx
-│ ├── fabric.tsx
-│ ├── index.tsx
-│ ├── modal.tsx
-│ ├── origin-city.tsx
-│ ├── price-band.tsx
-│ ├── price-band_legacy.tsx
-│ ├── results.tsx
-│ ├── results-filters.tsx
-│ ├── vendor-search.tsx
-│ ├── wear-state.tsx
-│ ├── wizard.tsx
-│ ├── wizard_legacy.tsx
-│ ├── work.tsx
-│ └── work-density.tsx
-├── assets
-│ ├── dress-types-images
-│ │ ├── BLOUSE.png
-│ │ ├── DUPATTA.png
-│ │ ├── FARCHI_LEHNGA.png
-│ │ ├── GHARARA.png
-│ │ ├── LEHNGA_SET.png
-│ │ ├── MAXI_GOWN.png
-│ │ ├── PESHWAS_FROCK.png
-│ │ ├── SAREE.png
-│ │ ├── SHARARA.png
-│ │ └── SHIRT_AND_BOTTOM_SET.png
-│ ├── fabric-types-images
-│ │ ├── CHIFFON.jpg
-│ │ ├── COTTON_SILK.jpg
-│ │ ├── CREPE_CHIFFON.jpg
-│ │ ├── GEORGETTE.jpg
-│ │ ├── JAMAWAR.jpg
-│ │ ├── KATAN_BROCADE.jpg
-│ │ ├── KOREAN_SILK.jpg
-│ │ ├── NET.jpg
-│ │ ├── ORGANZA.jpg
-│ │ ├── SATIN_SILK.jpg
-│ │ ├── SILK.jpg
-│ │ ├── SILK_CHIFFON.jpg
-│ │ ├── SILK_VELVET.jpg
-│ │ ├── TISSUE.jpg
-│ │ ├── TISSUE_SILK.jpg
-│ │ └── VELVET.jpg
-│ ├── images
-│ │ └── completeLogo.png
-│ ├── origin-images
-│ │ ├── Bahawalpur.jpg
-│ │ ├── Faisalabad_labeled.jpg
-│ │ ├── Hyderabad.jpg
-│ │ ├── Karachi.jpg
-│ │ ├── Lahore.jpg
-│ │ ├── Multan.jpg
-│ │ ├── Peshawar.jpg
-│ │ └── Rawalpindi.jpg
-│ ├── work-density-images
-│ │ ├── extra-heavy.jpg
-│ │ ├── heavy.jpg
-│ │ ├── light.png
-│ │ └── medium.jpg
-│ ├── work-images
-│ │ ├── designer.jpg
-│ │ ├── gotta.jpg
-│ │ ├── machine.jpg
-│ │ ├── metallic.jpg
-│ │ ├── mirror.jpg
-│ │ ├── sequin.jpg
-│ │ ├── stone.jpg
-│ │ └── thread.jpg
-│ ├── work-subtype-images
-│ │ ├── designer
-│ │ │ ├── 3d_floral_embroidery.jpg
-│ │ │ ├── digital_print_embellishment.jpg
-│ │ │ └── hand_printed_embroidery.jpg
-│ │ ├── gotta
-│ │ │ ├── gotta_patti.jpg
-│ │ │ └── patch_applique.jpg
-│ │ ├── machine
-│ │ │ ├── computer_embroidery.jpg
-│ │ │ ├── machine_embroidery.jpg
-│ │ │ └── machine_embroidery_2.webp
-│ │ ├── metallic
-│ │ │ ├── dabka.png
-│ │ │ ├── kora.png
-│ │ │ ├── mukesh.jpg
-│ │ │ ├── nakshi.jpg
-│ │ │ ├── salma.png
-│ │ │ ├── tilla.png
-│ │ │ ├── zardozi.jpg
-│ │ │ └── zari.png
-│ │ ├── mirror
-│ │ │ ├── kutch_mirror_work.jpg
-│ │ │ └── mirror_work.jpg
-│ │ ├── sequin
-│ │ │ ├── sequins.jpg
-│ │ │ └── sitara.jpg
-│ │ ├── stone
-│ │ │ ├── bead_work.jpg
-│ │ │ ├── cut_dana.jpg
-│ │ │ ├── pearl_work.jpg
-│ │ │ ├── rhinestones.jpg
-│ │ │ └── swarovski_crystal.jpg
-│ │ └── thread
-│ │ ├── chickenkari.png
-│ │ ├── chikankari.jpg
-│ │ ├── resham 2.jpg
-│ │ ├── resham.jpg
-│ │ ├── resham.png
-│ │ └── sozni.jpg
-│ ├── body measurement chart.jpg
-│ └── filter funnel emoji.jpg
-├── components
-│ ├── auth
-│ │ ├── authStyles.ts
-│ │ ├── ForgotPasswordModal.tsx
-│ │ └── index.ts
-│ ├── product
-│ │ ├── view-product
-│ │ │ ├── TailoringStylePickerModal.tsx
-│ │ │ ├── ViewProduct.media.tsx
-│ │ │ ├── ViewProduct.screen.tsx
-│ │ │ ├── ViewProduct.styles.ts
-│ │ │ ├── ViewProduct.tailoring.helpers.ts
-│ │ │ ├── ViewProduct.tailoring.selection.tsx
-│ │ │ ├── ViewProduct.tailoring.tsx
-│ │ │ └── ViewProductScreen_legacy
-│ │ ├── addProductStyles.ts
-│ │ ├── ProductDraftContext.tsx
-│ │ └── useAutoFocus.ts
-│ ├── ui
-│ │ ├── collapsible.tsx
-│ │ ├── icon-symbol.ios.tsx
-│ │ ├── icon-symbol.tsx
-│ │ ├── select-panel.tsx
-│ │ └── StandardFilterDisplay.tsx
-│ ├── vendor-reviews
-│ │ ├── ReviewList.tsx
-│ │ ├── ReviewSummaryCard.tsx
-│ │ └── StarRating.tsx
-│ ├── Wizard
-│ │ ├── GradientInputCard.tsx
-│ │ ├── VendorReviewSummary.tsx
-│ │ ├── WizardScraffold.tsx
-│ │ └── wizardTypes.ts
-│ ├── AppStarter.tsx
-│ ├── external-link.tsx
-│ ├── haptic-tab.tsx
-│ ├── hello-wave.tsx
-│ ├── parallax-scroll-view.tsx
-│ ├── themed-text.tsx
-│ └── themed-view.tsx
-├── constants
-│ └── theme.ts
-├── data
-│ ├── kapray
-│ │ ├── courierSlabs.ts
-│ │ ├── exportRegions.ts
-│ │ ├── pakistanCities.ts
-│ │ ├── productTypes.ts
-│ │ └── tailoringOptions.ts
-│ ├── products.data.ts
-│ └── workSubTypes.ts
-├── hooks
-│ ├── use-color-scheme.ts
-│ ├── use-color-scheme.web.ts
-│ └── use-theme-color.ts
-├── scripts
-│ └── reset-project.js
-├── store
-│ ├── buyerSlice.ts
-│ ├── filtersSlice.ts
-│ ├── hooks.ts
-│ ├── index.ts
-│ └── vendorSlice.ts
-├── utils
-│ ├── auth
-│ │ ├── googleAuth.ts
-│ │ └── logout.ts
-│ ├── helpers
-│ │ └── wizardHelpers.ts
-│ ├── kapray
-│ │ ├── delivery.ts
-│ │ ├── pricing.ts
-│ │ └── purchaseUi.ts
-│ └── supabase
-│ ├── client.ts
-│ ├── consumer.ts
-│ ├── dressType.ts
-│ ├── dressType_legacy.ts
-│ ├── fabricType.ts
-│ ├── originCity.ts
-│ ├── priceBand.ts
-│ ├── product.ts
-│ ├── supabase.ts
-│ ├── supabaseSecrets.ts
-│ ├── vendor.ts
-│ ├── wearState.ts
-│ ├── workDensity.ts
-│ └── workType.ts
-├── .easignore
-├── .gitignore
-├── app.json
-├── eas.json
-├── eslint.config.js
-├── expo-env.d.ts
-├── package.json
-├── package-lock.json
-├── README.md
-├── tree.txt
-├── tree-app.txt
-└── tsconfig.json
-PS C:\DEV\kapray\kapray>
-as on 4May26
+> > }
+> > kapray
+> > ├── .idea
+> > │ ├── caches
+> > │ │ └── deviceStreaming.xml
+> > │ ├── kapray.iml
+> > │ ├── misc.xml
+> > │ ├── modules.xml
+> > │ ├── vcs.xml
+> > │ └── workspace.xml
+> > ├── .vscode
+> > │ ├── .react
+> > │ ├── extensions.json
+> > │ └── settings.json
+> > ├── app
+> > │ ├── (auth)
+> > │ │ ├── buyer
+> > │ │ │ ├── signin.tsx
+> > │ │ │ └── signup.tsx
+> > │ │ └── vendor
+> > │ │ ├── signin.tsx
+> > │ │ └── signup.tsx
+> > │ ├── (buyer)
+> > │ │ ├── dye_palette_modal.tsx
+> > │ │ ├── review-vendor-modal.tsx
+> > │ │ ├── view-product.tsx
+> > │ │ └── view-profile.tsx
+> > │ ├── (tabs)
+> > │ │ ├── flow
+> > │ │ │ ├── orders
+> > │ │ │ │ ├── [id].tsx
+> > │ │ │ │ ├── index.tsx
+> > │ │ │ │ └── track.tsx
+> > │ │ │ ├── purchase
+> > │ │ │ │ ├── \_layout.tsx
+> > │ │ │ │ ├── cart.tsx
+> > │ │ │ │ ├── exact-measurements.tsx
+> > │ │ │ │ ├── exact-measurements-export.ts
+> > │ │ │ │ ├── exact-measurements-modal.tsx
+> > │ │ │ │ ├── exact-measurements-sheet.tsx
+> > │ │ │ │ ├── payment.tsx
+> > │ │ │ │ ├── place-order.tsx
+> > │ │ │ │ └── size.tsx
+> > │ │ │ ├── \_layout.tsx
+> > │ │ │ ├── confirmation.tsx
+> > │ │ │ ├── results-filters.tsx
+> > │ │ │ ├── vendor-search.tsx
+> > │ │ │ └── view-product.tsx
+> > │ │ ├── \_layout.tsx
+> > │ │ ├── index.tsx
+> > │ │ └── shops.tsx
+> > │ ├── couriers
+> > │ │ └── components
+> > │ ├── orders
+> > │ │ ├── [id].tsx
+> > │ │ ├── index.tsx
+> > │ │ └── track.tsx
+> > │ ├── purchase
+> > │ │ ├── \_layout.tsx
+> > │ │ ├── cart.tsx
+> > │ │ ├── payment.tsx
+> > │ │ ├── place-order.tsx
+> > │ │ └── size.tsx
+> > │ ├── services
+> > │ ├── tailors
+> > │ │ └── components
+> > │ │ ├── TailoringCheckoutBlock.tsx
+> > │ │ └── TailoringOfferCard.tsx
+> > │ ├── vendor
+> > │ │ ├── profile
+> > │ │ │ ├── (product-modals)
+> > │ │ │ │ ├── dyeing
+> > │ │ │ │ │ ├── dye_palette_modal.tsx
+> > │ │ │ │ │ └── palette.ts
+> > │ │ │ │ ├── more-description
+> > │ │ │ │ │ ├── care.tsx
+> > │ │ │ │ │ ├── disclaimer.tsx
+> > │ │ │ │ │ ├── dupatta.tsx
+> > │ │ │ │ │ ├── fabric-work.tsx
+> > │ │ │ │ │ ├── hook.tsx
+> > │ │ │ │ │ ├── index.tsx
+> > │ │ │ │ │ ├── occasion.tsx
+> > │ │ │ │ │ ├── replica.tsx
+> > │ │ │ │ │ └── trouser.tsx
+> > │ │ │ │ ├── \_layout.tsx
+> > │ │ │ │ ├── color_modal.tsx
+> > │ │ │ │ ├── dress-type_modal.tsx
+> > │ │ │ │ ├── fabric_modal.tsx
+> > │ │ │ │ ├── origin-city_modal.tsx
+> > │ │ │ │ ├── wear-state_modal.tsx
+> > │ │ │ │ ├── work_modal.tsx
+> > │ │ │ │ ├── work-density_modal.tsx
+> > │ │ │ │ └── work-subtypes_modal.tsx
+> > │ │ │ ├── add-product
+> > │ │ │ │ ├── \_layout.tsx
+> > │ │ │ │ ├── index.tsx
+> > │ │ │ │ ├── q02-category.tsx
+> > │ │ │ │ ├── q03-made-on-order.tsx
+> > │ │ │ │ ├── q04-inventory.tsx
+> > │ │ │ │ ├── q05a-stitched-total-cost.tsx
+> > │ │ │ │ ├── q05b-unstitched-cost-per-meter.tsx
+> > │ │ │ │ ├── q05c-unstitched-fabric-length.tsx
+> > │ │ │ │ ├── q06a-sizes.tsx
+> > │ │ │ │ ├── q06b1-ready-variant-choice.tsx
+> > │ │ │ │ ├── q06b2-piece-count.tsx
+> > │ │ │ │ ├── q06b2-tailoring-styles.tsx
+> > │ │ │ │ ├── q06b3-ready-variants.tsx
+> > │ │ │ │ ├── q06b4-made-order-variants.tsx
+> > │ │ │ │ ├── q06b-services-costs.tsx
+> > │ │ │ │ ├── q06c-shipping.tsx
+> > │ │ │ │ ├── q09-images.tsx
+> > │ │ │ │ ├── q10-videos.tsx
+> > │ │ │ │ ├── q11-description.tsx
+> > │ │ │ │ ├── q12-more-description.tsx
+> > │ │ │ │ ├── review.tsx
+> > │ │ │ │ └── submit.tsx
+> > │ │ │ ├── view-product
+> > │ │ │ │ └── index.tsx
+> > │ │ │ ├── \_layout.tsx
+> > │ │ │ ├── add-product_legacy.tsx
+> > │ │ │ ├── edit-vendor.tsx
+> > │ │ │ ├── index.tsx
+> > │ │ │ ├── orders.tsx
+> > │ │ │ ├── products.tsx
+> > │ │ │ ├── reviews.tsx
+> > │ │ │ ├── settings.tsx
+> > │ │ │ ├── update-product.tsx
+> > │ │ │ ├── view-product_legacy.tsx
+> > │ │ │ ├── view-product_legacy_2.tsx
+> > │ │ │ └── view-profile.tsx
+> > │ │ ├── confirmation.tsx
+> > │ │ ├── create-shop.tsx
+> > │ │ └── index.tsx
+> > │ ├── \_layout.tsx
+> > │ ├── color.tsx
+> > │ ├── fabric.tsx
+> > │ ├── index.tsx
+> > │ ├── modal.tsx
+> > │ ├── origin-city.tsx
+> > │ ├── price-band.tsx
+> > │ ├── price-band_legacy.tsx
+> > │ ├── results.tsx
+> > │ ├── results-filters.tsx
+> > │ ├── vendor-search.tsx
+> > │ ├── wear-state.tsx
+> > │ ├── wizard.tsx
+> > │ ├── wizard_legacy.tsx
+> > │ ├── work.tsx
+> > │ └── work-density.tsx
+> > ├── assets
+> > │ ├── dress-types-images
+> > │ │ ├── BLOUSE.png
+> > │ │ ├── DUPATTA.png
+> > │ │ ├── FARCHI_LEHNGA.png
+> > │ │ ├── GHARARA.png
+> > │ │ ├── LEHNGA_SET.png
+> > │ │ ├── MAXI_GOWN.png
+> > │ │ ├── PESHWAS_FROCK.png
+> > │ │ ├── SAREE.png
+> > │ │ ├── SHARARA.png
+> > │ │ └── SHIRT_AND_BOTTOM_SET.png
+> > │ ├── fabric-types-images
+> > │ │ ├── CHIFFON.jpg
+> > │ │ ├── COTTON_SILK.jpg
+> > │ │ ├── CREPE_CHIFFON.jpg
+> > │ │ ├── GEORGETTE.jpg
+> > │ │ ├── JAMAWAR.jpg
+> > │ │ ├── KATAN_BROCADE.jpg
+> > │ │ ├── KOREAN_SILK.jpg
+> > │ │ ├── NET.jpg
+> > │ │ ├── ORGANZA.jpg
+> > │ │ ├── SATIN_SILK.jpg
+> > │ │ ├── SILK.jpg
+> > │ │ ├── SILK_CHIFFON.jpg
+> > │ │ ├── SILK_VELVET.jpg
+> > │ │ ├── TISSUE.jpg
+> > │ │ ├── TISSUE_SILK.jpg
+> > │ │ └── VELVET.jpg
+> > │ ├── images
+> > │ │ └── completeLogo.png
+> > │ ├── origin-images
+> > │ │ ├── Bahawalpur.jpg
+> > │ │ ├── Faisalabad_labeled.jpg
+> > │ │ ├── Hyderabad.jpg
+> > │ │ ├── Karachi.jpg
+> > │ │ ├── Lahore.jpg
+> > │ │ ├── Multan.jpg
+> > │ │ ├── Peshawar.jpg
+> > │ │ └── Rawalpindi.jpg
+> > │ ├── work-density-images
+> > │ │ ├── extra-heavy.jpg
+> > │ │ ├── heavy.jpg
+> > │ │ ├── light.png
+> > │ │ └── medium.jpg
+> > │ ├── work-images
+> > │ │ ├── designer.jpg
+> > │ │ ├── gotta.jpg
+> > │ │ ├── machine.jpg
+> > │ │ ├── metallic.jpg
+> > │ │ ├── mirror.jpg
+> > │ │ ├── sequin.jpg
+> > │ │ ├── stone.jpg
+> > │ │ └── thread.jpg
+> > │ ├── work-subtype-images
+> > │ │ ├── designer
+> > │ │ │ ├── 3d_floral_embroidery.jpg
+> > │ │ │ ├── digital_print_embellishment.jpg
+> > │ │ │ └── hand_printed_embroidery.jpg
+> > │ │ ├── gotta
+> > │ │ │ ├── gotta_patti.jpg
+> > │ │ │ └── patch_applique.jpg
+> > │ │ ├── machine
+> > │ │ │ ├── computer_embroidery.jpg
+> > │ │ │ ├── machine_embroidery.jpg
+> > │ │ │ └── machine_embroidery_2.webp
+> > │ │ ├── metallic
+> > │ │ │ ├── dabka.png
+> > │ │ │ ├── kora.png
+> > │ │ │ ├── mukesh.jpg
+> > │ │ │ ├── nakshi.jpg
+> > │ │ │ ├── salma.png
+> > │ │ │ ├── tilla.png
+> > │ │ │ ├── zardozi.jpg
+> > │ │ │ └── zari.png
+> > │ │ ├── mirror
+> > │ │ │ ├── kutch_mirror_work.jpg
+> > │ │ │ └── mirror_work.jpg
+> > │ │ ├── sequin
+> > │ │ │ ├── sequins.jpg
+> > │ │ │ └── sitara.jpg
+> > │ │ ├── stone
+> > │ │ │ ├── bead_work.jpg
+> > │ │ │ ├── cut_dana.jpg
+> > │ │ │ ├── pearl_work.jpg
+> > │ │ │ ├── rhinestones.jpg
+> > │ │ │ └── swarovski_crystal.jpg
+> > │ │ └── thread
+> > │ │ ├── chickenkari.png
+> > │ │ ├── chikankari.jpg
+> > │ │ ├── resham 2.jpg
+> > │ │ ├── resham.jpg
+> > │ │ ├── resham.png
+> > │ │ └── sozni.jpg
+> > │ ├── atomic_variant_inventory_rpc .sql
+> > │ ├── body measurement chart.jpg
+> > │ └── filter funnel emoji.jpg
+> > ├── components
+> > │ ├── auth
+> > │ │ ├── authStyles.ts
+> > │ │ ├── ForgotPasswordModal.tsx
+> > │ │ └── index.ts
+> > │ ├── product
+> > │ │ ├── add-product
+> > │ │ │ ├── MadeOrderVariantEditor.tsx
+> > │ │ │ ├── ReadyVariantEditor.tsx
+> > │ │ │ └── VariantSummaryCard.tsx
+> > │ │ ├── view-product
+> > │ │ │ ├── TailoringStylePickerModal.tsx
+> > │ │ │ ├── ViewProduct.media.tsx
+> > │ │ │ ├── ViewProduct.screen.tsx
+> > │ │ │ ├── ViewProduct.styles.ts
+> > │ │ │ ├── ViewProduct.tailoring.helpers.ts
+> > │ │ │ ├── ViewProduct.tailoring.selection.tsx
+> > │ │ │ ├── ViewProduct.tailoring.tsx
+> > │ │ │ ├── ViewProduct.variants.stitched.tsx
+> > │ │ │ └── ViewProductScreen_legacy
+> > │ │ ├── addProductStyles.ts
+> > │ │ ├── ProductDraftContext.tsx
+> > │ │ └── useAutoFocus.ts
+> > │ ├── ui
+> > │ │ ├── collapsible.tsx
+> > │ │ ├── icon-symbol.ios.tsx
+> > │ │ ├── icon-symbol.tsx
+> > │ │ ├── select-panel.tsx
+> > │ │ └── StandardFilterDisplay.tsx
+> > │ ├── vendor-reviews
+> > │ │ ├── ReviewList.tsx
+> > │ │ ├── ReviewSummaryCard.tsx
+> > │ │ └── StarRating.tsx
+> > │ ├── Wizard
+> > │ │ ├── GradientInputCard.tsx
+> > │ │ ├── VendorReviewSummary.tsx
+> > │ │ ├── WizardScraffold.tsx
+> > │ │ └── wizardTypes.ts
+> > │ ├── AppStarter.tsx
+> > │ ├── external-link.tsx
+> > │ ├── haptic-tab.tsx
+> > │ ├── hello-wave.tsx
+> > │ ├── parallax-scroll-view.tsx
+> > │ ├── themed-text.tsx
+> > │ └── themed-view.tsx
+> > ├── constants
+> > │ └── theme.ts
+> > ├── data
+> > │ ├── kapray
+> > │ │ ├── courierSlabs.ts
+> > │ │ ├── exportRegions.ts
+> > │ │ ├── pakistanCities.ts
+> > │ │ ├── productPieces.ts
+> > │ │ ├── productTypes.ts
+> > │ │ └── tailoringOptions.ts
+> > │ ├── products.data.ts
+> > │ └── workSubTypes.ts
+> > ├── hooks
+> > │ ├── use-color-scheme.ts
+> > │ ├── use-color-scheme.web.ts
+> > │ └── use-theme-color.ts
+> > ├── scripts
+> > │ └── reset-project.js
+> > ├── store
+> > │ ├── buyerSlice.ts
+> > │ ├── filtersSlice.ts
+> > │ ├── hooks.ts
+> > │ ├── index.ts
+> > │ └── vendorSlice.ts
+> > ├── utils
+> > │ ├── auth
+> > │ │ ├── googleAuth.ts
+> > │ │ └── logout.ts
+> > │ ├── helpers
+> > │ │ └── wizardHelpers.ts
+> > │ ├── kapray
+> > │ │ ├── delivery.ts
+> > │ │ ├── pricing.ts
+> > │ │ ├── productVariants.ts
+> > │ │ └── purchaseUi.ts
+> > │ └── supabase
+> > │ ├── client.ts
+> > │ ├── consumer.ts
+> > │ ├── dressType.ts
+> > │ ├── dressType_legacy.ts
+> > │ ├── fabricType.ts
+> > │ ├── originCity.ts
+> > │ ├── priceBand.ts
+> > │ ├── product.ts
+> > │ ├── supabase.ts
+> > │ ├── supabaseSecrets.ts
+> > │ ├── vendor.ts
+> > │ ├── wearState.ts
+> > │ ├── workDensity.ts
+> > │ └── workType.ts
+> > ├── .easignore
+> > ├── .gitignore
+> > ├── app.json
+> > ├── eas.json
+> > ├── eslint.config.js
+> > ├── expo-env.d.ts
+> > ├── package.json
+> > ├── package-lock.json
+> > ├── README.md
+> > ├── tree.txt
+> > ├── tree-app.txt
+> > └── tsconfig.json
+> > PS C:\DEV\kapray\kapray>
+> > PS C:\DEV\kapray\kapray>
+> > as on 10May26
 
 ---
 
