@@ -1,5 +1,12 @@
 import React, { useMemo, useRef, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
@@ -66,6 +73,11 @@ export default function Q12MoreDescription() {
   const ctx = useProductDraft() as any;
   const { draft } = ctx;
 
+  const category = safeStr((draft?.spec as any)?.product_category ?? "");
+  const needsTailoring = category === "unstitched_dyeing_tailoring";
+  const madeOnOrder = Boolean((draft?.spec as any)?.made_on_order ?? false);
+  const isMadeOrderStitched = category === "stitched_ready" && madeOnOrder;
+
   function patchSpec(patch: any) {
     if (typeof ctx.setSpec === "function") {
       ctx.setSpec((prev: any) => ({ ...(prev ?? {}), ...patch }));
@@ -74,18 +86,20 @@ export default function Q12MoreDescription() {
     if (typeof ctx.setDraft === "function") {
       ctx.setDraft((prev: any) => ({
         ...prev,
-        spec: { ...(prev?.spec ?? {}), ...patch }
+        spec: { ...(prev?.spec ?? {}), ...patch },
       }));
       return;
     }
     draft.spec = { ...(draft?.spec ?? {}), ...patch };
   }
 
-  const [text, setText] = useState<string>(safeStr((draft?.spec as any)?.more_description ?? ""));
+  const [text, setText] = useState<string>(
+    safeStr((draft?.spec as any)?.more_description ?? ""),
+  );
   const [selectedSentences, setSelectedSentences] = useState<string[]>(
     Array.isArray((draft?.spec as any)?.more_description_parts)
       ? (draft?.spec as any)?.more_description_parts
-      : []
+      : [],
   );
 
   const canContinue = useMemo(() => Boolean(vendorId), [vendorId]);
@@ -97,23 +111,31 @@ export default function Q12MoreDescription() {
         .filter(Boolean);
 
       if (toAdd.length) {
-        const parts = Array.isArray((draft?.spec as any)?.more_description_parts)
+        const parts = Array.isArray(
+          (draft?.spec as any)?.more_description_parts,
+        )
           ? (draft?.spec as any)?.more_description_parts
           : [];
-        const currentText = safeStr((draft?.spec as any)?.more_description ?? "");
+        const currentText = safeStr(
+          (draft?.spec as any)?.more_description ?? "",
+        );
 
         const uniqueToAdd = toAdd.filter((s) => !parts.includes(s));
-        const nextParts = uniqueToAdd.length ? [...parts, ...uniqueToAdd] : parts;
+        const nextParts = uniqueToAdd.length
+          ? [...parts, ...uniqueToAdd]
+          : parts;
 
         const nextText = uniqueToAdd.length
           ? normalizeSpaces(
-              currentText ? `${currentText} ${uniqueToAdd.join(" ")}` : uniqueToAdd.join(" ")
+              currentText
+                ? `${currentText} ${uniqueToAdd.join(" ")}`
+                : uniqueToAdd.join(" "),
             )
           : currentText;
 
         patchSpec({
           more_description_parts: nextParts,
-          more_description: safeStr(nextText)
+          more_description: safeStr(nextText),
         });
 
         setSelectedSentences(nextParts);
@@ -121,11 +143,15 @@ export default function Q12MoreDescription() {
 
         router.replace({
           pathname: "/vendor/profile/add-product/q12-more-description",
-          params: returnTo ? { returnTo } : undefined
+          params: returnTo ? { returnTo } : undefined,
         } as any);
       } else {
-        const latestText = safeStr((draft?.spec as any)?.more_description ?? "");
-        const latestParts = Array.isArray((draft?.spec as any)?.more_description_parts)
+        const latestText = safeStr(
+          (draft?.spec as any)?.more_description ?? "",
+        );
+        const latestParts = Array.isArray(
+          (draft?.spec as any)?.more_description_parts,
+        )
           ? (draft?.spec as any)?.more_description_parts
           : [];
 
@@ -138,7 +164,7 @@ export default function Q12MoreDescription() {
       }, 100);
 
       return () => clearTimeout(timer);
-    }, [appendManyRaw, appendOne, returnTo])
+    }, [appendManyRaw, appendOne, returnTo]),
   );
 
   function onChangeText(next: string) {
@@ -185,14 +211,17 @@ export default function Q12MoreDescription() {
       pathname: "/vendor/profile/(product-modals)/more-description",
       params: {
         q12Path: "/vendor/profile/add-product/q12-more-description",
-        parentReturnTo: returnTo
-      }
+        parentReturnTo: returnTo,
+      },
     } as any);
   }
 
   function onContinue() {
     if (!vendorId) {
-      Alert.alert("Vendor not loaded", "Please ensure vendorSlice has vendor.id.");
+      Alert.alert(
+        "Vendor not loaded",
+        "Please ensure vendorSlice has vendor.id.",
+      );
       return;
     }
 
@@ -202,6 +231,21 @@ export default function Q12MoreDescription() {
       router.replace(returnTo as any);
       return;
     }
+
+    if (needsTailoring) {
+      router.push(
+        "/vendor/profile/add-product/q06b2-tailoring-style-choice" as any,
+      );
+      return;
+    }
+
+    if (isMadeOrderStitched) {
+      router.push(
+        "/vendor/profile/add-product/q06b4-made-order-variant-choice" as any,
+      );
+      return;
+    }
+
     router.push("/vendor/profile/add-product/review" as any);
   }
 
@@ -217,7 +261,10 @@ export default function Q12MoreDescription() {
 
           <Pressable
             onPress={closeScreen}
-            style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
+            style={({ pressed }) => [
+              apStyles.linkBtn,
+              pressed ? apStyles.pressed : null,
+            ]}
           >
             <Text style={apStyles.linkText}>Close</Text>
           </Pressable>
@@ -228,19 +275,33 @@ export default function Q12MoreDescription() {
 
           <Pressable
             onPress={openBuilder}
-            style={({ pressed }) => [apStyles.secondaryBtn, pressed ? apStyles.pressed : null]}
+            style={({ pressed }) => [
+              apStyles.secondaryBtn,
+              pressed ? apStyles.pressed : null,
+            ]}
           >
             <Text style={apStyles.secondaryText}>Open Builder</Text>
           </Pressable>
 
           {selectedSentences.length ? (
             <View style={{ marginTop: 6 }}>
-              <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 10 }}>
-                <Text style={apStyles.metaHint}>Tap ✕ to remove a builder sentence.</Text>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  marginTop: 10,
+                }}
+              >
+                <Text style={apStyles.metaHint}>
+                  Tap ✕ to remove a builder sentence.
+                </Text>
 
                 <Pressable
                   onPress={clearAllBuilder}
-                  style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
+                  style={({ pressed }) => [
+                    apStyles.linkBtn,
+                    pressed ? apStyles.pressed : null,
+                  ]}
                 >
                   <Text style={apStyles.linkText}>Clear builder list</Text>
                 </Pressable>
@@ -255,10 +316,13 @@ export default function Q12MoreDescription() {
                     marginTop: 12,
                     padding: 10,
                     backgroundColor: "#FFF5F5",
-                    borderRadius: 8
+                    borderRadius: 8,
                   }}
                 >
-                  <Pressable onPress={() => removeSentence(sentence)} style={{ marginRight: 8 }}>
+                  <Pressable
+                    onPress={() => removeSentence(sentence)}
+                    style={{ marginRight: 8 }}
+                  >
                     <Text style={{ color: "red", fontWeight: "bold" }}>✕</Text>
                   </Pressable>
 
@@ -268,7 +332,9 @@ export default function Q12MoreDescription() {
             </View>
           ) : null}
 
-          <Text style={[apStyles.label, { marginTop: 20 }]}>More description (optional)</Text>
+          <Text style={[apStyles.label, { marginTop: 20 }]}>
+            More description (optional)
+          </Text>
 
           <TextInput
             ref={inputRef}
@@ -285,7 +351,7 @@ export default function Q12MoreDescription() {
             style={({ pressed }) => [
               apStyles.primaryBtn,
               !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null
+              pressed ? apStyles.pressed : null,
             ]}
             onPress={onContinue}
             disabled={!canContinue}

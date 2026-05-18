@@ -12,8 +12,14 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import {
+  loadFavouriteProductIds,
+  saveFavouriteProductIds,
+} from "@/utils/favourites";
 import { useAppSelector } from "@/store/hooks";
 import { supabase } from "@/utils/supabase/client";
+import Wizard from "./wizard";
 
 const PRODUCTS_TABLE = "products";
 const BUCKET_VENDOR = "vendor_images";
@@ -319,12 +325,37 @@ function priceRangeSummary(
   return `Price: ${formatPKR(minCostPkr as number)} – ${formatPKR(maxCostPkr as number)}`;
 }
 
+function productCategoryLabel(productCategoryIds: string[]) {
+  if (!Array.isArray(productCategoryIds) || !productCategoryIds.length) {
+    return "Product Category: Any";
+  }
+
+  const labels = productCategoryIds
+    .map((id) => {
+      const key = String(id || "").trim();
+      if (key === "stitched_ready") return "Ready-to-Wear";
+      if (key === "stitched_made_order") return "Made-on-Order";
+      if (key === "unstitched") return "Unstitched";
+      return "";
+    })
+    .filter((x) => x.length > 0);
+
+  return labels.length
+    ? `Product Category: ${labels.join(", ")}`
+    : "Product Category: Any";
+}
+
 export default function ResultsScreen() {
   const router = useRouter();
   const filters = useAppSelector((s: any) => s.filters);
+  const [wizardVisible, setWizardVisible] = useState(false);
 
   // ✅ Dress Type is now MULTI-select (empty => Any)
   const dressTypeIds: string[] = filters?.dressTypeIds ?? [];
+
+  const hasDressTypeSelection = useMemo(() => {
+    return Array.isArray(dressTypeIds) && dressTypeIds.length > 0;
+  }, [dressTypeIds]);
 
   const fabricTypeIds: string[] = filters?.fabricTypeIds ?? [];
   const colorShadeIds: string[] = filters?.colorShadeIds ?? [];
@@ -332,6 +363,7 @@ export default function ResultsScreen() {
   const workDensityIds: string[] = filters?.workDensityIds ?? [];
   const originCityIds: string[] = filters?.originCityIds ?? [];
   const wearStateIds: string[] = filters?.wearStateIds ?? [];
+  const productCategoryIds: string[] = filters?.productCategoryIds ?? [];
 
   // ✅ cost range (nulls => Any)
   const minCostPkr: number | null = filters?.minCostPkr ?? null;
@@ -370,8 +402,9 @@ export default function ResultsScreen() {
     RESULTS_CACHE?.wearStates ?? [],
   );
 
-  // ✅ local favourites (heart turns red). No DB yet.
+  // ✅ local favourites persisted on the buyer mobile. No DB yet.
   const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
   // ✅ sort (default: cost ascending)
   const [sortOpen, setSortOpen] = useState(false);
@@ -379,14 +412,43 @@ export default function ResultsScreen() {
     "cost_asc",
   );
 
-  function toggleFavorite(productId: number) {
+  async function toggleFavorite(productId: number) {
     setFavoriteIds((prev) => {
       const next = new Set(prev);
       if (next.has(productId)) next.delete(productId);
       else next.add(productId);
+
+      void saveFavouriteProductIds(next).catch(() => {
+        Alert.alert(
+          "Favourite not saved",
+          "Please try again. The heart changed on screen but could not be stored on this device.",
+        );
+      });
+
       return next;
     });
   }
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadFavoriteIds() {
+      try {
+        const ids = await loadFavouriteProductIds();
+        if (!alive) return;
+        setFavoriteIds(ids);
+      } catch {
+        if (!alive) return;
+        setFavoriteIds(new Set<number>());
+      }
+    }
+
+    void loadFavoriteIds();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   async function fetchPage(from: number, to: number) {
     return supabase
@@ -615,6 +677,40 @@ export default function ResultsScreen() {
         if (!vid || !vendorIds.includes(vid)) return false;
       }
 
+      // ✅ product category MULTI-select (empty => ANY)
+      if (productCategoryIds.length) {
+        const category = getProductCategory(p);
+
+        let matchesProductCategory = false;
+
+        for (const selectedCategory of productCategoryIds) {
+          if (selectedCategory === "stitched_ready") {
+            if (!Boolean(p?.made_on_order) && category === "stitched_ready") {
+              matchesProductCategory = true;
+            }
+          }
+
+          if (selectedCategory === "stitched_made_order") {
+            if (Boolean(p?.made_on_order)) {
+              matchesProductCategory = true;
+            }
+          }
+
+          if (selectedCategory === "unstitched") {
+            const isUnstitched =
+              category === "unstitched_plain" ||
+              category === "unstitched_dyeing" ||
+              category === "unstitched_dyeing_tailoring";
+
+            if (isUnstitched) {
+              matchesProductCategory = true;
+            }
+          }
+        }
+
+        if (!matchesProductCategory) return false;
+      }
+
       // ✅ dress type MULTI-select (empty => ANY)
       if (!anyOverlap(dressTypeIds, spec?.dressTypeIds)) return false;
 
@@ -639,6 +735,7 @@ export default function ResultsScreen() {
   }, [
     products,
     vendorIds,
+    productCategoryIds,
     dressTypeIds,
     fabricTypeIds,
     colorShadeIds,
@@ -652,7 +749,11 @@ export default function ResultsScreen() {
 
   // ✅ apply sort (cost asc/desc or date)
   const sorted = useMemo(() => {
-    const arr = [...(filtered ?? [])];
+    const base = showFavoritesOnly
+      ? (filtered ?? []).filter((p) => favoriteIds.has(Number(p.id)))
+      : (filtered ?? []);
+
+    const arr = [...base];
 
     if (sortMode === "cost_asc" || sortMode === "cost_desc") {
       const dir = sortMode === "cost_asc" ? 1 : -1;
@@ -693,7 +794,7 @@ export default function ResultsScreen() {
     });
 
     return arr;
-  }, [filtered, sortMode]);
+  }, [filtered, sortMode, showFavoritesOnly, favoriteIds]);
 
   // ✅ summary = NAMES ONLY (and "Loading…" if selection exists but names not loaded yet)
   const filtersSummary = useMemo(() => {
@@ -710,6 +811,7 @@ export default function ResultsScreen() {
       .filter((x) => x.length > 0);
 
     return [
+      productCategoryLabel(productCategoryIds),
       namesOrLoading("Dress", dressTypeIds, dressNames),
       namesOrLoading("Fabric", fabricTypeIds, fabricNames),
       namesOrLoading("Color", colorShadeIds, colorNames),
@@ -720,6 +822,7 @@ export default function ResultsScreen() {
       priceRangeSummary(minCostPkr, maxCostPkr),
     ].join("  |  ");
   }, [
+    productCategoryIds,
     dressTypeIds,
     dressMap,
     fabricTypeIds,
@@ -739,29 +842,109 @@ export default function ResultsScreen() {
 
   function openProduct(p: ProductRow) {
     router.push({
-      pathname: "/flow/view-product" as any,
-      params: { id: String(p.id) },
+      pathname: "/(tabs)/flow/view-product" as any,
+      params: { id: String(p.id), from: "results" },
     });
+  }
+
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <Image
+        source={require("../assets/images/completeLogo.png")}
+        style={styles.logo}
+        resizeMode="contain"
+      />
+
+      {hasDressTypeSelection ? (
+        <Pressable
+          onPress={() => setWizardVisible(true)}
+          style={({ pressed }) => [
+            styles.searchButton,
+            pressed ? styles.pressed : null,
+          ]}
+        >
+          <Ionicons name="search" size={18} color="#2563EB" />
+        </Pressable>
+      ) : (
+        <View style={styles.searchButtonPlaceholder} />
+      )}
+    </View>
+  );
+
+  const renderWizardModal = () => (
+    <Modal
+      visible={wizardVisible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setWizardVisible(false)}
+    >
+      <View style={styles.wizardModalOverlay}>
+        <View style={styles.wizardModalContent}>
+          <Wizard onClose={() => setWizardVisible(false)} />
+        </View>
+      </View>
+    </Modal>
+  );
+
+  if (!hasDressTypeSelection) {
+    return (
+      <View style={styles.container}>
+        {renderHeader()}
+
+        <View style={styles.wizardWrap}>
+          <Wizard />
+        </View>
+
+        {renderWizardModal()}
+      </View>
+    );
   }
 
   if (loading) {
     return (
-      <View style={[styles.center, styles.loadingScreen]}>
-        <ActivityIndicator />
-        <Text style={styles.muted}>Loading products…</Text>
+      <View style={styles.container}>
+        {renderHeader()}
+
+        <View style={[styles.center, styles.loadingScreen]}>
+          <ActivityIndicator />
+          <Text style={styles.muted}>Loading products…</Text>
+        </View>
+
+        {renderWizardModal()}
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      {renderHeader()}
+
       <View style={styles.topRow}>
         <Text style={styles.title} numberOfLines={1}>
-          Products ({sorted.length})
+          {showFavoritesOnly ? "Favourites" : "Products"} ({sorted.length})
         </Text>
 
         <View style={styles.topActions}>
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              showFavoritesOnly ? "Show all products" : "Show favourites"
+            }
+            onPress={() => setShowFavoritesOnly((v) => !v)}
+            style={({ pressed }) => [
+              styles.iconBtn,
+              showFavoritesOnly ? styles.iconBtnActive : null,
+              pressed ? { opacity: 0.7 } : null,
+            ]}
+          >
+            <Text style={styles.iconText}>
+              {showFavoritesOnly ? "❤️" : "🤍"}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open sorting"
             onPress={() => setSortOpen(true)}
             style={({ pressed }) => [
               styles.iconBtn,
@@ -772,9 +955,11 @@ export default function ResultsScreen() {
           </Pressable>
 
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open filters"
             onPress={() =>
               router.push({
-                pathname: "/flow/results-filters" as any,
+                pathname: "/(tabs)/flow/results-filters" as any,
               })
             }
             style={({ pressed }) => [
@@ -782,13 +967,15 @@ export default function ResultsScreen() {
               pressed ? { opacity: 0.7 } : null,
             ]}
           >
-            <Text style={styles.iconText}>🔍</Text>
+            <MaterialIcons name="filter-list" size={20} color="#111827" />
           </Pressable>
 
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Track order"
             onPress={() =>
               router.push({
-                pathname: "/flow/orders/track" as any,
+                pathname: "/(tabs)/flow/orders/track" as any,
               })
             }
             style={({ pressed }) => [
@@ -930,10 +1117,14 @@ export default function ResultsScreen() {
       {sorted.length === 0 ? (
         <View style={styles.center}>
           <Text style={styles.emptyTitle}>
-            No matching products (loaded so far)
+            {showFavoritesOnly
+              ? "No favourite products yet"
+              : "No matching products (loaded so far)"}
           </Text>
           <Text style={styles.muted}>
-            Tip: press “Load more” to search more products, or broaden filters.
+            {showFavoritesOnly
+              ? "Tap 🤍 on any product to save it here."
+              : "Tip: press “Load more” to search more products, or broaden filters."}
           </Text>
         </View>
       ) : (
@@ -1006,7 +1197,7 @@ export default function ResultsScreen() {
 
                 <View style={styles.actionRow}>
                   <Pressable
-                    onPress={() => toggleFavorite(item.id)}
+                    onPress={() => void toggleFavorite(item.id)}
                     style={styles.actionBtn}
                   >
                     <Text
@@ -1026,6 +1217,10 @@ export default function ResultsScreen() {
                   <ActivityIndicator />
                   <Text style={styles.muted}>Loading more…</Text>
                 </View>
+              ) : showFavoritesOnly ? (
+                <Text style={styles.endText}>
+                  favourites shown from loaded products
+                </Text>
               ) : hasMore ? (
                 <Pressable style={styles.loadMoreBtn} onPress={fetchMore}>
                   <Text style={styles.loadMoreText}>Load more</Text>
@@ -1037,6 +1232,8 @@ export default function ResultsScreen() {
           }
         />
       )}
+
+      {renderWizardModal()}
     </View>
   );
 }
@@ -1065,16 +1262,70 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: stylesVars.bg,
+    paddingTop: 24,
   },
 
-  topRow: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 10,
+  header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12,
+    paddingLeft: 0,
+    paddingRight: 14,
+    paddingBottom: 2,
+    minHeight: 40,
+  },
+
+  logo: {
+    width: 165,
+    height: 58,
+    marginLeft: -25,
+  },
+
+  searchButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  searchButtonPlaceholder: {
+    width: 34,
+    height: 34,
+  },
+
+  wizardWrap: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingTop: 4,
+  },
+
+  wizardModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  wizardModalContent: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: stylesVars.cardBg,
+    borderRadius: 18,
+    padding: 24,
+  },
+
+  topRow: {
+    paddingHorizontal: 12,
+    paddingTop: 2,
+    paddingBottom: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
   },
 
   link: {
@@ -1085,23 +1336,23 @@ const styles = StyleSheet.create({
 
   title: {
     flex: 1,
-    textAlign: "center",
-    fontSize: 18,
-    fontWeight: "700",
+    textAlign: "left",
+    fontSize: 13,
+    fontWeight: "800",
     color: stylesVars.text,
-    paddingHorizontal: 10,
   },
 
   topActions: {
     flexDirection: "row",
-    gap: 8,
     alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 8,
   },
 
   iconBtn: {
     width: 34,
     height: 34,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: stylesVars.blueSoft,
@@ -1109,8 +1360,13 @@ const styles = StyleSheet.create({
     borderColor: "#D7E3FF",
   },
 
+  iconBtnActive: {
+    backgroundColor: stylesVars.dangerSoft,
+    borderColor: stylesVars.dangerBorder,
+  },
+
   iconText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
     color: stylesVars.blue,
   },
@@ -1220,6 +1476,10 @@ const styles = StyleSheet.create({
     color: stylesVars.blue,
     fontWeight: "700",
     fontSize: 14,
+  },
+
+  pressed: {
+    opacity: 0.82,
   },
 
   center: {

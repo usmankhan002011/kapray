@@ -99,10 +99,6 @@ export default function Q05AStitchedTotalCost() {
       router.replace(returnTo as any);
       return;
     }
-    if (returnTo) {
-      router.replace(returnTo as any);
-      return;
-    }
 
     router.push("/vendor/profile/add-product/q06a-sizes" as any);
   }

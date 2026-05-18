@@ -23,6 +23,16 @@ function safeStr(v: any) {
   return String(v ?? "").trim();
 }
 
+function makeEditableMadeOrderVariant(variantNo: number): MadeOrderVariant {
+  return {
+    ...makeMadeOrderVariant(variantNo),
+    variant_no: variantNo,
+    label: `Variant ${variantNo}`,
+    display_name: "",
+    name: "",
+  } as MadeOrderVariant;
+}
+
 function resequenceMadeOrderVariants(variants: MadeOrderVariant[]) {
   return variants.map((variant, index) => {
     const variantNo = index + 1;
@@ -32,8 +42,9 @@ function resequenceMadeOrderVariants(variants: MadeOrderVariant[]) {
       ...variant,
       id: safeStr(variant.id) || `made-order-variant-${variantNo}`,
       variant_no: variantNo,
-      label: name ? `${name}` : `Variant ${variantNo}`,
-      display_name: name ? `${name}` : `Variant ${variantNo}`,
+      label: `Variant ${variantNo}`,
+      display_name: name,
+      name,
       additional_price_pkr: Math.max(
         0,
         Math.trunc(Number(variant.additional_price_pkr || 0)),
@@ -74,12 +85,11 @@ export default function Q06B4MadeOrderVariants() {
     [draft?.price],
   );
 
-  // Important: when the draft has no saved made-order variants yet, we still
-  // render one editable seed variant. All update/add/remove handlers must use
-  // this same source array, otherwise typing into the first empty field maps
-  // over [] and immediately resets the TextInput value.
+  // Important: when the draft has no saved made-order variants yet, render one
+  // editable seed variant. Do not let makeMadeOrderVariant's default display_name
+  // duplicate the visible label in MadeOrderVariantEditor.
   const editableVariants = useMemo(
-    () => (variants.length ? variants : [makeMadeOrderVariant(1)]),
+    () => (variants.length ? variants : [makeEditableMadeOrderVariant(1)]),
     [variants],
   );
 
@@ -136,9 +146,10 @@ export default function Q06B4MadeOrderVariants() {
   }
 
   function addVariant() {
+    const nextVariantNo = editableVariants.length + 1;
     const next = [
       ...editableVariants,
-      makeMadeOrderVariant(editableVariants.length + 1),
+      makeEditableMadeOrderVariant(nextVariantNo),
     ];
     persistVariants(next);
   }
@@ -195,7 +206,7 @@ export default function Q06B4MadeOrderVariants() {
       return;
     }
 
-    router.push("/vendor/profile/add-product/q11-description" as any);
+    router.push("/vendor/profile/add-product/review" as any);
   }
 
   return (
@@ -220,31 +231,18 @@ export default function Q06B4MadeOrderVariants() {
         </View>
 
         <View style={apStyles.card}>
-          <Text style={apStyles.label}>VARIANT DETAILS</Text>
+          <Text style={apStyles.label}>Add product variants</Text>
+
           <Text style={apStyles.metaHint}>
-            Add colors or designs that buyers can order. No sizes, quantities,
-            or inventory are used here. Buyer sizing is collected during
-            purchase.
+            Add variants when this made-on-order stitched product can be made in
+            different colours, styles, or designs within the same product.
           </Text>
 
-          <View
-            style={{
-              marginTop: 10,
-              borderWidth: 1,
-              borderColor: apColors.borderSoft,
-              borderRadius: 14,
-              padding: 12,
-              backgroundColor: "#F8FAFC",
-            }}
-          >
-            <Text style={{ color: apColors.text, fontWeight: "900" }}>
-              Inventory will be saved as 0
-            </Text>
-            <Text style={[apStyles.metaHint, { marginTop: 4 }]}>
-              These are made after order confirmation, so stock is not deducted
-              by variant.
-            </Text>
-          </View>
+          <Text style={[apStyles.metaHint, { marginTop: 8 }]}>
+            Each variant may have its own name, reference images, additional
+            price, and estimated making time. Buyers will choose one of these
+            variants before providing their sizing details.
+          </Text>
         </View>
 
         {editableVariants.map((variant, index) => (

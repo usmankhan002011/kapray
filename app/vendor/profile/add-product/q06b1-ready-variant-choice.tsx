@@ -60,15 +60,8 @@ export default function Q06B1ReadyVariantChoice() {
           <Text style={apStyles.label}>Do you want to add variants?</Text>
 
           <Text style={{ color: apColors.muted, lineHeight: 20 }}>
-            Use variants when the same stitched/ready-to-wear product has
-            different colors, designs, images, sizes, stock, or additional
-            price.
-          </Text>
-
-          <Text style={{ color: apColors.muted, lineHeight: 20 }}>
-            Naming guideline: the system will create Variant 1, Variant 2, etc.
-            You only enter the color or design name, for example Black, Ivory
-            Gold, Design A.
+            Add variants for this product with different colors, design
+            alterations, sizes, stock, or additional price if applicable.
           </Text>
 
           <Pressable style={apStyles.primaryBtn} onPress={yes}>

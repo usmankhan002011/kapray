@@ -39,7 +39,7 @@ function esc(v: unknown) {
     .replace(/"/g, "&quot;");
 }
 
-function hasPositive(n?: number) {
+function hasPositive(n?: number): n is number {
   return typeof n === "number" && Number.isFinite(n) && n > 0;
 }
 
@@ -143,10 +143,12 @@ function buildMetaRows(args: ExportArgs) {
     );
   }
 
-  if (hasPositive(args.fabricCostPkr)) {
+  const fabricCostPkr = args.fabricCostPkr;
+
+  if (hasPositive(fabricCostPkr)) {
     rows.push(
       `<div><span class="meta-label">Fabric cost:</span> <strong>PKR ${Math.round(
-        args.fabricCostPkr,
+        fabricCostPkr,
       )}</strong></div>`,
     );
   }
@@ -478,4 +480,8 @@ export async function shareExactMeasurements(args: ExportArgs) {
       UTI: "com.adobe.pdf",
     });
   }
+}
+
+export default function ExactMeasurementsExportRoute() {
+  return null;
 }

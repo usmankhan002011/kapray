@@ -263,6 +263,89 @@ function encodeJsonParam(v: unknown) {
   }
 }
 
+function uniqueNonEmptyStrings(values: Array<string | null | undefined>) {
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const raw of values) {
+    const s = String(raw ?? "").trim();
+    if (!s) continue;
+
+    const key = s.toLowerCase();
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    out.push(s);
+  }
+
+  return out;
+}
+
+function resolveTailoringPresetImageUrls(
+  preset: any,
+  resolvePublicUrl: (path: string | null | undefined) => string | null,
+) {
+  if (!preset) return [];
+
+  const candidates: unknown[] = [
+    ...(Array.isArray(preset?.images) ? preset.images : []),
+    ...(Array.isArray(preset?.image_urls) ? preset.image_urls : []),
+    ...(Array.isArray(preset?.imageUrls) ? preset.imageUrls : []),
+    ...(Array.isArray(preset?.image_paths) ? preset.image_paths : []),
+    ...(Array.isArray(preset?.imagePaths) ? preset.imagePaths : []),
+    ...(Array.isArray(preset?.style_images) ? preset.style_images : []),
+    ...(Array.isArray(preset?.style_image_paths)
+      ? preset.style_image_paths
+      : []),
+    ...(Array.isArray(preset?.media?.images) ? preset.media.images : []),
+    ...(Array.isArray(preset?.media?.image_paths)
+      ? preset.media.image_paths
+      : []),
+    preset?.image_url,
+    preset?.imageUrl,
+    preset?.image_path,
+    preset?.imagePath,
+    preset?.image,
+    preset?.url,
+    preset?.uri,
+    preset?.path,
+  ];
+
+  const urls = candidates
+    .map((item) => {
+      if (item == null) return null;
+
+      if (typeof item === "string" || typeof item === "number") {
+        const raw = String(item).trim();
+        if (!raw) return null;
+        return resolvePublicUrl(raw) || raw;
+      }
+
+      if (typeof item === "object") {
+        const obj = item as Record<string, unknown>;
+        const raw = String(
+          obj.url ??
+            obj.uri ??
+            obj.path ??
+            obj.image_url ??
+            obj.imageUrl ??
+            obj.image_path ??
+            obj.imagePath ??
+            obj.image ??
+            "",
+        ).trim();
+
+        if (!raw) return null;
+        return resolvePublicUrl(raw) || raw;
+      }
+
+      return null;
+    })
+    .filter(Boolean) as string[];
+
+  return uniqueNonEmptyStrings(urls);
+}
+
 function firstStitchedVariantImagePath(v: StitchedVariant | null): string {
   if (!v) return "";
 
@@ -943,10 +1026,16 @@ export default function ViewProductScreen() {
     }
 
     if (isStitchedReady && selectedStitchedVariant?.pricePkr) {
-      return `PKR ${selectedStitchedVariant.pricePkr}`;
+      return `Total Cost: PKR ${selectedStitchedVariant.pricePkr}`;
     }
 
     const t = price?.cost_pkr_total;
+
+    // Stitched buyer flows → premium starting-price wording
+    if ((isMadeOnOrder || isStitchedReady) && t) {
+      return `From PKR ${t}`;
+    }
+
     return t ? `PKR ${t} (total)` : "—";
   }, [isMadeOnOrder, isStitchedReady, product, selectedStitchedVariant]);
 
@@ -1051,7 +1140,14 @@ export default function ViewProductScreen() {
     return Boolean(product) && !loading && isVendorSelf && isOutOfStock;
   }, [product, loading, isVendorSelf, isOutOfStock]);
 
+  // Buyer actions control purchase/footer/vendor-profile buttons.
+  // Vendor self-view is a read-only preview: it can see offerings,
+  // but cannot select dyeing, tailoring, variants, or purchase.
   const showBuyerActions = isBuyerRoute ? true : !isVendorSelf;
+  const showVendorReadOnlyPreview = Boolean(product) && isVendorSelf;
+  const showReadOnlyProductOfferings =
+    Boolean(product) && (showBuyerActions || showVendorReadOnlyPreview);
+
   const isUnstitched = useMemo(() => {
     if (productCategory) return productCategory !== "stitched_ready";
     return !isStitchedReady;
@@ -1232,6 +1328,14 @@ export default function ViewProductScreen() {
   const showTailoringSection = useMemo(() => {
     return Boolean(product) && showBuyerActions && isUnstitched;
   }, [isUnstitched, product, showBuyerActions]);
+
+  const showVendorDyeingPreview = useMemo(() => {
+    return showVendorReadOnlyPreview && showDyeing;
+  }, [showDyeing, showVendorReadOnlyPreview]);
+
+  const showVendorTailoringPreview = useMemo(() => {
+    return showVendorReadOnlyPreview && isUnstitched;
+  }, [isUnstitched, showVendorReadOnlyPreview]);
 
   const categoryText = useMemo(() => {
     if (productCategory === "stitched_ready" && isMadeOnOrder) {
@@ -1815,7 +1919,9 @@ export default function ViewProductScreen() {
             </>
           ) : null}
 
-          {showBuyerActions && isUnstitched && !hasAnySizeLengthMap ? (
+          {showReadOnlyProductOfferings &&
+          isUnstitched &&
+          !hasAnySizeLengthMap ? (
             <Text style={[styles.meta, { marginTop: 8 }]}>
               Size-length mapping not available.
             </Text>
@@ -1922,6 +2028,7 @@ export default function ViewProductScreen() {
               basePricePkr={baseStitchedProductPricePkr}
               resolvePublicUrl={resolvePublicUrl}
               resolveManyPublic={resolveManyPublic}
+              readOnly={showVendorReadOnlyPreview}
             />
 
             {product && !loading && isOutOfStock && !isVendorSelf ? (
@@ -2067,6 +2174,24 @@ export default function ViewProductScreen() {
           </View>
         ) : null}
 
+        {showVendorDyeingPreview ? (
+          <View style={styles.card}>
+            <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>
+              Dyeing Offered
+            </Text>
+            <Text style={[styles.metaLine, { marginTop: 8 }]}>
+              Status: Available
+            </Text>
+            <Text style={styles.metaLine}>
+              Dyeing Cost: PKR {dyeingCostPkr.toLocaleString()}
+            </Text>
+            {/* <Text style={[styles.meta, { marginTop: 8 }]}>
+              This is a vendor preview only. Buyer shade selection is disabled
+              here.
+            </Text> */}
+          </View>
+        ) : null}
+
         {showTailoringSection ? (
           <View style={styles.card}>
             <ViewProductTailoringSelection
@@ -2082,10 +2207,232 @@ export default function ViewProductScreen() {
               onChange={setTailoringSelection}
               resolvePublicUrl={resolvePublicUrl}
             />
+
+            {buyerWantsTailoring && tailoringSelection?.presetId ? (
+              <View
+                style={{
+                  marginTop: 14,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: "#D7E3FF",
+                  backgroundColor: "#F8FAFC",
+                  padding: 12,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: "900",
+                    color: stylesVars.blue,
+                  }}
+                >
+                  Selected Tailoring Style
+                </Text>
+
+                <View
+                  style={{
+                    marginTop: 10,
+                    flexDirection: "row",
+                    gap: 12,
+                    alignItems: "flex-start",
+                  }}
+                >
+                  {tailoringSelection?.imageUrl ? (
+                    <Image
+                      source={{ uri: tailoringSelection.imageUrl }}
+                      style={{
+                        width: 82,
+                        height: 82,
+                        borderRadius: 14,
+                        backgroundColor: "#EEF2F7",
+                        borderWidth: 1,
+                        borderColor: "#E2E8F0",
+                      }}
+                      resizeMode="cover"
+                    />
+                  ) : null}
+
+                  <View style={{ flex: 1 }}>
+                    {tailoringSelection?.title ? (
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontWeight: "900",
+                          color: stylesVars.text,
+                          lineHeight: 18,
+                        }}
+                        numberOfLines={2}
+                      >
+                        {tailoringSelection.title}
+                      </Text>
+                    ) : null}
+
+                    {tailoringSelection?.extraCostPkr ? (
+                      <Text style={styles.metaLine}>
+                        Style Extra Cost: PKR{" "}
+                        {tailoringSelection.extraCostPkr.toLocaleString()}
+                      </Text>
+                    ) : null}
+
+                    {tailoringSelection?.neck ? (
+                      <Text style={styles.metaLine}>
+                        Neck: {tailoringSelection.neck}
+                      </Text>
+                    ) : null}
+                    {tailoringSelection?.sleeve ? (
+                      <Text style={styles.metaLine}>
+                        Sleeve: {tailoringSelection.sleeve}
+                      </Text>
+                    ) : null}
+                    {tailoringIncludesTrouser && tailoringSelection?.trouser ? (
+                      <Text style={styles.metaLine}>
+                        Trouser: {tailoringSelection.trouser}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+
+                {tailoringCostPkr > 0 ? (
+                  <Text
+                    style={[
+                      styles.metaLine,
+                      { fontWeight: "900", color: stylesVars.text },
+                    ]}
+                  >
+                    Tailoring Cost: PKR {tailoringCostPkr.toLocaleString()}
+                  </Text>
+                ) : null}
+
+                {tailoringTurnaroundDays > 0 ? (
+                  <Text style={styles.metaLine}>
+                    Turnaround: {tailoringTurnaroundDays} days
+                  </Text>
+                ) : null}
+
+                {tailoringSelection?.note ? (
+                  <Text style={[styles.meta, { marginTop: 8 }]}>
+                    {tailoringSelection.note}
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
           </View>
         ) : null}
 
-        {isStitchedReady && selectedStitchedVariant
+        {showVendorTailoringPreview ? (
+          <View style={styles.card}>
+            <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>
+              Tailoring Offered
+            </Text>
+
+            <Text style={[styles.metaLine, { marginTop: 8 }]}>
+              {tailoringAvailabilityLine}
+            </Text>
+            {tailoringTurnaroundDays > 0 ? (
+              <Text style={styles.metaLine}>
+                Turnaround: {tailoringTurnaroundDays} days
+              </Text>
+            ) : null}
+            {sizeLengthLine ? (
+              <Text style={styles.metaLine}>
+                Size Lengths: {sizeLengthLine}
+              </Text>
+            ) : null}
+
+            {hasTailoringStylePresets ? (
+              <View style={{ marginTop: 14, gap: 12 }}>
+                <Text style={[styles.specTitle, { color: stylesVars.blue }]}>
+                  Styles Offered
+                </Text>
+                {tailoringStylePresets.map((preset, index) => {
+                  const presetImageUrls = resolveTailoringPresetImageUrls(
+                    preset,
+                    resolvePublicUrl,
+                  );
+                  const extraCost = safeInt0(preset.extra_cost_pkr);
+                  const title =
+                    String(preset.title || "").trim() || `Style ${index + 1}`;
+
+                  return (
+                    <View
+                      key={preset.id || `${title}-${index}`}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: "#D7E3FF",
+                        borderRadius: 16,
+                        padding: 12,
+                        backgroundColor: "#FFFFFF",
+                        gap: 10,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          fontWeight: "900",
+                          color: stylesVars.text,
+                        }}
+                      >
+                        Style Card {index + 1}
+                      </Text>
+
+                      {presetImageUrls.length ? (
+                        <ScrollView
+                          horizontal
+                          nestedScrollEnabled
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={{ gap: 10 }}
+                        >
+                          {presetImageUrls.map((uri, imgIndex) => (
+                            <Image
+                              key={`${uri}-${imgIndex}`}
+                              source={{ uri }}
+                              style={{
+                                width: 210,
+                                height: 170,
+                                borderRadius: 14,
+                                backgroundColor: "#EEF2F7",
+                                borderWidth: 1,
+                                borderColor: "#E2E8F0",
+                              }}
+                              resizeMode="contain"
+                            />
+                          ))}
+                        </ScrollView>
+                      ) : null}
+
+                      <View style={{ gap: 3 }}>
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            fontWeight: "800",
+                            color: stylesVars.text,
+                          }}
+                        >
+                          {title}
+                        </Text>
+
+                        {extraCost > 0 ? (
+                          <Text style={styles.metaLine}>
+                            Extra Cost: PKR {extraCost.toLocaleString()}
+                          </Text>
+                        ) : null}
+                        {preset.note ? (
+                          <Text style={styles.meta}>{preset.note}</Text>
+                        ) : null}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : (
+              <Text style={[styles.meta, { marginTop: 10 }]}>
+                No tailoring style cards added for this product.
+              </Text>
+            )}
+          </View>
+        ) : null}
+
+        {showBuyerActions && isStitchedReady && selectedStitchedVariant
           ? (() => {
               const selectedImageUrl =
                 (Array.isArray((selectedStitchedVariant as any)?.imageUrls)

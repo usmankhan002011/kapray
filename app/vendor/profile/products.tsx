@@ -8,6 +8,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
@@ -42,6 +43,7 @@ type ProductRow = {
 type VariantInventorySummary = {
   totalQty: number;
   availableSizes: number;
+  variantCount: number;
   hasStock: boolean;
 };
 
@@ -93,10 +95,12 @@ function getVariantInventorySummary(
     [];
 
   let totalQty = 0;
-  let availableSizes = 0;
+  let variantCount = 0;
+  const availableSizeKeys = new Set<string>();
 
   for (const variant of Array.isArray(variants) ? variants : []) {
     const sizes = Array.isArray(variant?.sizes) ? variant.sizes : [];
+    let variantHasStock = false;
 
     for (const row of sizes) {
       const qty = Number(
@@ -110,14 +114,34 @@ function getVariantInventorySummary(
 
       if (Number.isFinite(qty) && qty > 0) {
         totalQty += Math.trunc(qty);
-        availableSizes += 1;
+        variantHasStock = true;
+
+        const sizeKey = String(
+          row?.size ??
+            row?.size_label ??
+            row?.sizeLabel ??
+            row?.label ??
+            row?.name ??
+            "",
+        )
+          .trim()
+          .toLowerCase();
+
+        if (sizeKey) {
+          availableSizeKeys.add(sizeKey);
+        }
       }
+    }
+
+    if (variantHasStock) {
+      variantCount += 1;
     }
   }
 
   return {
     totalQty,
-    availableSizes,
+    availableSizes: Math.min(6, availableSizeKeys.size),
+    variantCount,
     hasStock: totalQty > 0,
   };
 }
@@ -141,10 +165,11 @@ function getStockSummaryText(item: ProductRow) {
   if (isStitchedReadyProduct(item)) {
     const info = getVariantInventorySummary(item);
 
-    if (!info.hasStock) return "Variant stock: 0";
+    if (!info.hasStock) return "Variant stock: 0 total";
 
     const sizeWord = info.availableSizes === 1 ? "size" : "sizes";
-    return `Variant stock: ${info.totalQty} total • ${info.availableSizes} ${sizeWord}`;
+    const variantWord = info.variantCount === 1 ? "variant" : "variants";
+    return `Variant stock: ${info.totalQty} total • ${info.availableSizes} ${sizeWord} • ${info.variantCount} ${variantWord}`;
   }
 
   return `Qty: ${Math.max(0, Number(item?.inventory_qty ?? 0))}`;
@@ -158,6 +183,77 @@ function isOutOfStock(item: ProductRow) {
   }
 
   return Number(item?.inventory_qty ?? 0) <= 0;
+}
+
+function getSearchCategories(searchText: string): ProductCategory[] {
+  const q = searchText.toLowerCase().replace(/[_-]+/g, " ").trim();
+  if (!q) return [];
+
+  const words = q.split(/\s+/).filter(Boolean);
+  const hasWord = (word: string) => words.includes(word);
+  const hasPhrase = (phrase: string) => q.includes(phrase);
+
+  if (
+    hasPhrase("ready to wear") ||
+    hasPhrase("ready wear") ||
+    hasPhrase("stitched ready")
+  ) {
+    return ["stitched_ready"];
+  }
+
+  if (hasWord("stitched") && !hasWord("unstitched")) {
+    return ["stitched_ready"];
+  }
+
+  if (hasWord("unstitched")) {
+    if (hasWord("tailoring") || hasWord("tailor")) {
+      return ["unstitched_dyeing_tailoring"];
+    }
+
+    if (hasWord("dyeing") || hasWord("dyed") || hasWord("dye")) {
+      return ["unstitched_dyeing", "unstitched_dyeing_tailoring"];
+    }
+
+    if (hasWord("plain")) {
+      return ["unstitched_plain"];
+    }
+
+    return [
+      "unstitched_plain",
+      "unstitched_dyeing",
+      "unstitched_dyeing_tailoring",
+    ];
+  }
+
+  if (hasWord("plain")) return ["unstitched_plain"];
+  if (hasWord("tailoring") || hasWord("tailor"))
+    return ["unstitched_dyeing_tailoring"];
+  if (hasWord("dyeing") || hasWord("dyed") || hasWord("dye")) {
+    return ["unstitched_dyeing", "unstitched_dyeing_tailoring"];
+  }
+
+  return [];
+}
+
+function applyVendorProductSearch(query: any, searchText: string) {
+  const safeQuery = searchText.replace(/[%_,]/g, " ").trim();
+  if (!safeQuery) return query;
+
+  const categoryMatches = getSearchCategories(safeQuery);
+
+  if (categoryMatches.length === 1) {
+    return query.eq("product_category", categoryMatches[0]);
+  }
+
+  if (categoryMatches.length > 1) {
+    return query.in("product_category", categoryMatches);
+  }
+
+  return query.or(
+    [`product_code.ilike.%${safeQuery}%`, `title.ilike.%${safeQuery}%`].join(
+      ",",
+    ),
+  );
 }
 
 export default function VendorProductsScreen() {
@@ -174,10 +270,14 @@ export default function VendorProductsScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [hasMore, setHasMore] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const heading = useMemo(() => {
     return vendorId ? `Products (Vendor #${vendorId})` : "Products";
   }, [vendorId]);
+
+  const trimmedSearch = searchQuery.trim();
+  const searching = trimmedSearch.length > 0;
 
   async function fetchProductsReset() {
     if (!vendorId) {
@@ -189,12 +289,18 @@ export default function VendorProductsScreen() {
       setLoading(true);
       setHasMore(true);
 
-      const { data, error } = await supabase
+      let query = supabase
         .from(PRODUCTS_TABLE)
         .select(
           "id, product_code, title, created_at, inventory_qty, made_on_order, product_category, spec, price, media",
         )
-        .eq("vendor_id", vendorId)
+        .eq("vendor_id", vendorId);
+
+      if (trimmedSearch) {
+        query = applyVendorProductSearch(query, trimmedSearch);
+      }
+
+      const { data, error } = await query
         .order("created_at", { ascending: false })
         .range(0, PAGE_SIZE - 1);
 
@@ -232,12 +338,18 @@ export default function VendorProductsScreen() {
       const from = products.length;
       const to = from + PAGE_SIZE - 1;
 
-      const { data, error } = await supabase
+      let query = supabase
         .from(PRODUCTS_TABLE)
         .select(
           "id, product_code, title, created_at, inventory_qty, made_on_order, product_category, spec, price, media",
         )
-        .eq("vendor_id", vendorId)
+        .eq("vendor_id", vendorId);
+
+      if (trimmedSearch) {
+        query = applyVendorProductSearch(query, trimmedSearch);
+      }
+
+      const { data, error } = await query
         .order("created_at", { ascending: false })
         .range(from, to);
 
@@ -274,7 +386,7 @@ export default function VendorProductsScreen() {
       if (vendorId) {
         void fetchProductsReset();
       }
-    }, [vendorId]),
+    }, [vendorId, trimmedSearch]),
   );
 
   useEffect(() => {
@@ -348,7 +460,7 @@ export default function VendorProductsScreen() {
             styles.itemMain,
             pressed ? styles.pressed : null,
           ]}
-          // onPress={() => openProduct(item)}
+          onPress={() => openProduct(item)}
         >
           <View style={styles.thumbWrap}>
             {item.banner_url ? (
@@ -374,16 +486,6 @@ export default function VendorProductsScreen() {
           </View>
         </Pressable>
         <View style={styles.itemActions}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.actionBtn,
-              pressed ? styles.pressed : null,
-            ]}
-            onPress={() => openProduct(item)}
-          >
-            <Text style={styles.actionText}>View</Text>
-          </Pressable>
-
           <Pressable
             style={({ pressed }) => [
               styles.actionBtn,
@@ -422,11 +524,6 @@ export default function VendorProductsScreen() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.meta}>
-              Add new products here. To update a product, tap Edit on any
-              product below.
-            </Text>
-
             <Pressable
               style={({ pressed }) => [
                 styles.primaryBtn,
@@ -438,7 +535,29 @@ export default function VendorProductsScreen() {
             </Pressable>
           </View>
 
-          <Text style={styles.section}>Recent Products</Text>
+          {vendorId ? (
+            <View style={styles.searchCard}>
+              <Text style={styles.searchLabel}>Search your products</Text>
+              <TextInput
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search by code, name, or category (stitched, unstitched)"
+                placeholderTextColor={stylesVars.mutedText}
+                autoCapitalize="none"
+                autoCorrect={false}
+                clearButtonMode="while-editing"
+                style={styles.searchInput}
+              />
+            </View>
+          ) : null}
+
+          <Text style={styles.listInstruction}>
+            Tap any product to view. Edit to update
+          </Text>
+
+          <Text style={styles.section}>
+            {searching ? "Search Results" : "Recent Products"}
+          </Text>
 
           {!vendorId ? (
             <View style={styles.listCard}>
@@ -452,6 +571,12 @@ export default function VendorProductsScreen() {
                 <ActivityIndicator />
                 <Text style={styles.loadingText}>Loading products…</Text>
               </View>
+            </View>
+          ) : searching && !products.length ? (
+            <View style={styles.listCard}>
+              <Text style={styles.empty}>
+                No matching products found for this vendor.
+              </Text>
             </View>
           ) : !products.length ? (
             <View style={styles.listCard}>
@@ -565,8 +690,52 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 
+  searchCard: {
+    marginTop: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.cardBg,
+    padding: 14,
+  },
+
+  searchLabel: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: stylesVars.text,
+    marginBottom: 8,
+  },
+
+  searchInput: {
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: "#F8FAFC",
+    paddingHorizontal: 12,
+    color: stylesVars.text,
+    fontSize: 10,
+    fontWeight: "600",
+  },
+
+  searchHint: {
+    marginTop: 8,
+    fontSize: 12,
+    lineHeight: 17,
+    color: stylesVars.mutedText,
+    fontWeight: "500",
+  },
+
+  listInstruction: {
+    marginTop: 16,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "600",
+  },
+
   section: {
-    marginTop: 18,
+    marginTop: 6,
     fontSize: 15,
     fontWeight: "700",
     color: stylesVars.text,
@@ -664,7 +833,6 @@ const styles = StyleSheet.create({
     paddingRight: 10,
     paddingLeft: 4,
     justifyContent: "center",
-    gap: 6,
   },
 
   actionBtn: {

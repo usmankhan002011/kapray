@@ -623,10 +623,40 @@ export default function BuyerViewProfileScreen() {
           )}
         </View>
 
-        <View style={styles.card}>
+        <View style={[styles.card, { paddingVertical: 12 }]}>
           <Text style={styles.sectionTitle}>Meta</Text>
-          <Field label="Vendor ID" value={vendor?.id} />
-          <Field label="Created at" value={vendor?.created_at} />
+
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginTop: 6,
+            }}
+          >
+            <Text style={styles.label}>Vendor ID</Text>
+            <Text style={styles.value}>{safeText(vendor?.id)}</Text>
+          </View>
+
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginTop: 8,
+            }}
+          >
+            <Text style={styles.label}>Created</Text>
+            <Text style={styles.value}>
+              {vendor?.created_at
+                ? new Date(vendor.created_at).toLocaleDateString(undefined, {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  })
+                : "—"}
+            </Text>
+          </View>
         </View>
       </ScrollView>
 

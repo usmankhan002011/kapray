@@ -12,6 +12,23 @@ const TABLE_WEAR_STATES = "wear_states";
 
 type NameRow = { id: any; name: string };
 
+const PRODUCT_CATEGORY_LABELS: Record<string, string> = {
+  stitched_ready: "Ready-to-Wear",
+  stitched_made_order: "Made-on-Order",
+  unstitched: "Unstitched",
+};
+
+function productCategorySummary(productCategoryIds: string[]) {
+  if (!Array.isArray(productCategoryIds) || !productCategoryIds.length)
+    return "All";
+
+  const names = productCategoryIds
+    .map((id) => PRODUCT_CATEGORY_LABELS[String(id).trim()] ?? "")
+    .filter(Boolean);
+
+  return names.length ? names.join(", ") : "All";
+}
+
 function safeStr(v: any) {
   return String(v ?? "").trim();
 }
@@ -45,8 +62,10 @@ function summary(names: string[]) {
 
 function priceSummary(minCostPkr: number | null, maxCostPkr: number | null) {
   if (minCostPkr === null && maxCostPkr === null) return "Any";
-  if (minCostPkr !== null && maxCostPkr === null) return `${formatPKR(minCostPkr)}+`;
-  if (minCostPkr === null && maxCostPkr !== null) return `Up to ${formatPKR(maxCostPkr)}`;
+  if (minCostPkr !== null && maxCostPkr === null)
+    return `${formatPKR(minCostPkr)}+`;
+  if (minCostPkr === null && maxCostPkr !== null)
+    return `Up to ${formatPKR(maxCostPkr)}`;
   return `${formatPKR(minCostPkr as number)} – ${formatPKR(maxCostPkr as number)}`;
 }
 
@@ -54,6 +73,17 @@ export default function ResultsFiltersModal() {
   const router = useRouter();
 
   const filters = useAppSelector((s: any) => s.filters);
+
+  const legacyProductCategory = String(
+    filters?.productCategory ?? "all",
+  ).trim();
+  const productCategoryIds: string[] = Array.isArray(
+    filters?.productCategoryIds,
+  )
+    ? filters.productCategoryIds
+    : legacyProductCategory && legacyProductCategory !== "all"
+      ? [legacyProductCategory]
+      : [];
 
   const fabricTypeIds: string[] = filters?.fabricTypeIds ?? [];
   const colorShadeIds: string[] = filters?.colorShadeIds ?? [];
@@ -97,7 +127,7 @@ export default function ResultsFiltersModal() {
             supabase
               .from(TABLE_WEAR_STATES)
               .select("id, name")
-              .order("name", { ascending: true })
+              .order("name", { ascending: true }),
           ]);
 
         if (!alive) return;
@@ -124,7 +154,10 @@ export default function ResultsFiltersModal() {
 
   const fabricMap = useMemo(() => buildNameMap(fabricTypes), [fabricTypes]);
   const workMap = useMemo(() => buildNameMap(workTypes), [workTypes]);
-  const densityMap = useMemo(() => buildNameMap(workDensities), [workDensities]);
+  const densityMap = useMemo(
+    () => buildNameMap(workDensities),
+    [workDensities],
+  );
   const originMap = useMemo(() => buildNameMap(originCities), [originCities]);
   const wearMap = useMemo(() => buildNameMap(wearStates), [wearStates]);
 
@@ -138,27 +171,46 @@ export default function ResultsFiltersModal() {
   const priceValue = priceSummary(minCostPkr, maxCostPkr);
 
   function go(path: string) {
-    router.push({ pathname: path as any, params: { from: "results-filters" } } as any);
+    router.push({
+      pathname: path as any,
+      params: { from: "results-filters" },
+    } as any);
   }
 
   const closeToResults = useCallback(() => {
-    router.replace("/" as any);
+    router.replace("/(tabs)/flow/results" as any);
     return true;
   }, [router]);
 
   useEffect(() => {
-    const sub = BackHandler.addEventListener("hardwareBackPress", closeToResults);
+    const sub = BackHandler.addEventListener(
+      "hardwareBackPress",
+      closeToResults,
+    );
     return () => sub.remove();
   }, [closeToResults]);
 
   return (
     <View style={styles.container}>
       <View style={styles.topRow}>
-        <Text style={styles.title}>Filters 🔍</Text>
+        <Text style={styles.title}>Filters</Text>
         <Text style={styles.close} onPress={closeToResults}>
           Close
         </Text>
       </View>
+
+      <Pressable
+        style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]}
+        onPress={() => go("/product-category")}
+      >
+        <View style={styles.left}>
+          <Text style={styles.label}>Product Category</Text>
+          <Text style={styles.value} numberOfLines={2}>
+            {productCategorySummary(productCategoryIds)}
+          </Text>
+        </View>
+        <Text style={styles.arrow}>›</Text>
+      </Pressable>
 
       <Pressable
         style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]}
@@ -269,14 +321,14 @@ const stylesVars = {
   dangerSoft: "#FEE2E2",
   dangerBorder: "#FCA5A5",
   white: "#FFFFFF",
-  black: "#000000"
+  black: "#000000",
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: stylesVars.bg,
-    padding: 16
+    padding: 16,
   },
 
   topRow: {
@@ -284,19 +336,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
-    paddingBottom: 10
+    paddingBottom: 10,
   },
 
   title: {
     fontSize: 18,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   close: {
     fontSize: 14,
     fontWeight: "700",
-    color: stylesVars.blue
+    color: stylesVars.blue,
   },
 
   note: {
@@ -304,7 +356,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   row: {
@@ -316,18 +368,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: stylesVars.cardBg
+    backgroundColor: stylesVars.cardBg,
   },
 
   left: {
     flex: 1,
-    paddingRight: 10
+    paddingRight: 10,
   },
 
   label: {
     fontSize: 13,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   value: {
@@ -335,16 +387,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   arrow: {
     fontSize: 22,
     fontWeight: "700",
-    color: stylesVars.subText
+    color: stylesVars.subText,
   },
 
   pressed: {
-    opacity: 0.82
-  }
+    opacity: 0.82,
+  },
 });

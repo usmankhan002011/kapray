@@ -705,9 +705,39 @@ export default function VendorProfileScreen() {
         </View>
 
         <Text style={styles.section}>Meta</Text>
-        <View style={styles.card}>
-          <Field label="Vendor ID" value={vendor?.id} />
-          <Field label="Created at" value={vendor?.created_at} />
+
+        <View style={[styles.card, { paddingVertical: 12 }]}>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <Text style={styles.label}>Vendor ID</Text>
+            <Text style={styles.value}>{safeText(vendor?.id)}</Text>
+          </View>
+
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginTop: 8,
+            }}
+          >
+            <Text style={styles.label}>Created</Text>
+
+            <Text style={styles.value}>
+              {vendor?.created_at
+                ? new Date(vendor.created_at).toLocaleDateString(undefined, {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  })
+                : "—"}
+            </Text>
+          </View>
         </View>
       </ScrollView>
 

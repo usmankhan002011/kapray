@@ -121,9 +121,7 @@ export default function Q10Videos() {
     const madeOnOrder = Boolean(draft?.spec?.made_on_order ?? false);
 
     if (category === "stitched_ready" && madeOnOrder) {
-      router.push(
-        "/vendor/profile/add-product/q06b4-made-order-variants" as any,
-      );
+      router.push("/vendor/profile/add-product/q11-description" as any);
       return;
     }
 

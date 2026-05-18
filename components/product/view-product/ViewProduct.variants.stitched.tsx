@@ -93,6 +93,9 @@ type Props = {
 
   /** Kept for compatibility; this component does not auto-select a purchasable size. */
   autoSelectFirstAvailable?: boolean;
+
+  /** Read-only preview mode for vendor self-view. No variant/size selection actions. */
+  readOnly?: boolean;
 };
 
 function safeText(v: unknown) {
@@ -600,6 +603,7 @@ export default function ViewProductStitchedVariants({
   basePricePkr,
   resolvePublicUrl,
   resolveManyPublic,
+  readOnly = false,
 }: Props) {
   const { width } = useWindowDimensions();
   const [activeVariantId, setActiveVariantId] = useState<string>("");
@@ -648,22 +652,23 @@ export default function ViewProductStitchedVariants({
     return (
       <View style={styles.card}>
         <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>
-          Choose Variant
+          {readOnly ? "Variants Offered" : "Choose a Variant"}
         </Text>
-        <Text style={[styles.meta, { marginTop: 4 }]}>
-          Select a color or design. Size and exact measurements are collected
-          during purchase.
-        </Text>
+        {!readOnly ? (
+          <Text style={[styles.meta, { marginTop: 4 }]}></Text>
+        ) : null}
 
         <View style={{ marginTop: 12, gap: 14 }}>
-          {madeOrderVariants.map((variant) => {
+          {madeOrderVariants.map((variant, index) => {
             const isActive = activeVariantId === variant.id;
             const finalPrice = basePrice + variant.additional_price_pkr;
 
             return (
               <Pressable
                 key={variant.id}
+                disabled={readOnly}
                 onPress={() => {
+                  if (readOnly) return;
                   setActiveVariantId(variant.id);
                   onSelect(makeMadeOrderSelection(variant, basePrice));
                 }}
@@ -676,9 +681,21 @@ export default function ViewProductStitchedVariants({
                     padding: 12,
                     gap: 10,
                   },
-                  pressed ? styles.pressed : null,
+                  pressed && !readOnly ? styles.pressed : null,
                 ]}
               >
+                {readOnly ? (
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: "900",
+                      color: stylesVars.text,
+                    }}
+                  >
+                    Variant {index + 1}
+                  </Text>
+                ) : null}
+
                 {variant.imageUrls.length ? (
                   <ScrollView
                     horizontal
@@ -688,12 +705,14 @@ export default function ViewProductStitchedVariants({
                     {variant.imageUrls.map((uri, imgIndex) => (
                       <Pressable
                         key={`${uri}-${imgIndex}`}
+                        disabled={readOnly}
                         onPress={() => {
+                          if (readOnly) return;
                           setPreviewVariant(variant);
                           setPreviewIndex(imgIndex);
                         }}
                         style={({ pressed }) => [
-                          pressed ? styles.pressed : null,
+                          pressed && !readOnly ? styles.pressed : null,
                         ]}
                       >
                         <Image
@@ -760,64 +779,66 @@ export default function ViewProductStitchedVariants({
                   ) : null}
                 </View>
 
-                <View
-                  style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}
-                >
+                {!readOnly ? (
                   <View
-                    style={{
-                      minHeight: 42,
-                      borderRadius: 999,
-                      paddingHorizontal: 16,
-                      paddingVertical: 10,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: isActive
-                        ? stylesVars.blue
-                        : stylesVars.blueSoft,
-                    }}
+                    style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}
                   >
-                    <Text
+                    <View
                       style={{
-                        fontSize: 12,
-                        fontWeight: "900",
-                        color: isActive ? "#FFFFFF" : stylesVars.blue,
-                      }}
-                    >
-                      {isActive ? "Variant Selected" : "Tap to Select"}
-                    </Text>
-                  </View>
-
-                  <Pressable
-                    onPress={() => {
-                      setPreviewVariant(variant);
-                      setPreviewIndex(0);
-                    }}
-                    style={({ pressed }) => [
-                      {
                         minHeight: 42,
                         borderRadius: 999,
                         paddingHorizontal: 16,
                         paddingVertical: 10,
                         alignItems: "center",
                         justifyContent: "center",
-                        backgroundColor: "#EEF4FF",
-                        borderWidth: 1,
-                        borderColor: "#D7E3FF",
-                      },
-                      pressed ? styles.pressed : null,
-                    ]}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: "900",
-                        color: stylesVars.blue,
+                        backgroundColor: isActive
+                          ? stylesVars.blue
+                          : stylesVars.blueSoft,
                       }}
                     >
-                      View Card
-                    </Text>
-                  </Pressable>
-                </View>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: "900",
+                          color: isActive ? "#FFFFFF" : stylesVars.blue,
+                        }}
+                      >
+                        {isActive ? "Variant Selected" : "Tap to Select"}
+                      </Text>
+                    </View>
+
+                    <Pressable
+                      onPress={() => {
+                        setPreviewVariant(variant);
+                        setPreviewIndex(0);
+                      }}
+                      style={({ pressed }) => [
+                        {
+                          minHeight: 42,
+                          borderRadius: 999,
+                          paddingHorizontal: 16,
+                          paddingVertical: 10,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: "#EEF4FF",
+                          borderWidth: 1,
+                          borderColor: "#D7E3FF",
+                        },
+                        pressed ? styles.pressed : null,
+                      ]}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: "900",
+                          color: stylesVars.blue,
+                        }}
+                      >
+                        View Card
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
               </Pressable>
             );
           })}
@@ -841,10 +862,7 @@ export default function ViewProductStitchedVariants({
   return (
     <View style={styles.card}>
       <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>
-        Choose Variant
-      </Text>
-      <Text style={[styles.meta, { marginTop: 4 }]}>
-        First select a variant, then choose one available size.
+        {readOnly ? "Product Variants Offered" : "Choose a Variant"}
       </Text>
 
       <View style={{ marginTop: 12, gap: 14 }}>
@@ -878,11 +896,15 @@ export default function ViewProductStitchedVariants({
                   {variant.imageUrls.map((uri, imgIndex) => (
                     <Pressable
                       key={`${uri}-${imgIndex}`}
+                      disabled={readOnly}
                       onPress={() => {
+                        if (readOnly) return;
                         setPreviewVariant(variant);
                         setPreviewIndex(imgIndex);
                       }}
-                      style={({ pressed }) => [pressed ? styles.pressed : null]}
+                      style={({ pressed }) => [
+                        pressed && !readOnly ? styles.pressed : null,
+                      ]}
                     >
                       <Image
                         source={{ uri }}
@@ -950,70 +972,74 @@ export default function ViewProductStitchedVariants({
                 ) : null}
               </View>
 
-              <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-                <Pressable
-                  disabled={!hasAvailableSize}
-                  onPress={() => setActiveVariantId(variant.id)}
-                  style={({ pressed }) => [
-                    {
-                      minHeight: 42,
-                      borderRadius: 999,
-                      paddingHorizontal: 16,
-                      paddingVertical: 10,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: isActive
-                        ? stylesVars.blue
-                        : stylesVars.blueSoft,
-                      opacity: hasAvailableSize ? 1 : 0.5,
-                    },
-                    pressed && hasAvailableSize ? styles.pressed : null,
-                  ]}
+              {!readOnly ? (
+                <View
+                  style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}
                 >
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontWeight: "900",
-                      color: isActive ? "#FFFFFF" : stylesVars.blue,
-                    }}
+                  <Pressable
+                    disabled={!hasAvailableSize}
+                    onPress={() => setActiveVariantId(variant.id)}
+                    style={({ pressed }) => [
+                      {
+                        minHeight: 42,
+                        borderRadius: 999,
+                        paddingHorizontal: 16,
+                        paddingVertical: 10,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: isActive
+                          ? stylesVars.blue
+                          : stylesVars.blueSoft,
+                        opacity: hasAvailableSize ? 1 : 0.5,
+                      },
+                      pressed && hasAvailableSize ? styles.pressed : null,
+                    ]}
                   >
-                    {isActive ? "Variant Selected" : "Select Variant"}
-                  </Text>
-                </Pressable>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "900",
+                        color: isActive ? "#FFFFFF" : stylesVars.blue,
+                      }}
+                    >
+                      {isActive ? "Variant Selected" : "Select Variant"}
+                    </Text>
+                  </Pressable>
 
-                <Pressable
-                  onPress={() => {
-                    setPreviewVariant(variant);
-                    setPreviewIndex(0);
-                  }}
-                  style={({ pressed }) => [
-                    {
-                      minHeight: 42,
-                      borderRadius: 999,
-                      paddingHorizontal: 16,
-                      paddingVertical: 10,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: "#EEF4FF",
-                      borderWidth: 1,
-                      borderColor: "#D7E3FF",
-                    },
-                    pressed ? styles.pressed : null,
-                  ]}
-                >
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontWeight: "900",
-                      color: stylesVars.blue,
+                  <Pressable
+                    onPress={() => {
+                      setPreviewVariant(variant);
+                      setPreviewIndex(0);
                     }}
+                    style={({ pressed }) => [
+                      {
+                        minHeight: 42,
+                        borderRadius: 999,
+                        paddingHorizontal: 16,
+                        paddingVertical: 10,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: "#EEF4FF",
+                        borderWidth: 1,
+                        borderColor: "#D7E3FF",
+                      },
+                      pressed ? styles.pressed : null,
+                    ]}
                   >
-                    View Card
-                  </Text>
-                </Pressable>
-              </View>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "900",
+                        color: stylesVars.blue,
+                      }}
+                    >
+                      View Card
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
 
-              {isActive ? (
+              {readOnly || isActive ? (
                 <View style={{ gap: 8 }}>
                   <Text
                     style={[
@@ -1021,7 +1047,9 @@ export default function ViewProductStitchedVariants({
                       { color: stylesVars.blue, fontWeight: "800" },
                     ]}
                   >
-                    Select from the available sizes:
+                    {readOnly
+                      ? "Offered sizes and stock:"
+                      : "Select from the available sizes:"}
                   </Text>
 
                   <View
@@ -1030,15 +1058,16 @@ export default function ViewProductStitchedVariants({
                     {variant.sizes.map((row: StitchedVariantSize) => {
                       const out = row.qty <= 0;
                       const low = row.qty > 0 && row.qty <= 2;
-                      const selected = selectedSize === row.size;
+                      const selected = !readOnly && selectedSize === row.size;
 
                       return (
                         <Pressable
                           key={`${variant.id}-${row.size}`}
-                          disabled={out}
-                          onPress={() =>
-                            onSelect(makeSelection(variant, row, basePrice))
-                          }
+                          disabled={readOnly || out}
+                          onPress={() => {
+                            if (readOnly) return;
+                            onSelect(makeSelection(variant, row, basePrice));
+                          }}
                           style={({ pressed }) => [
                             {
                               width: 92,
@@ -1064,7 +1093,9 @@ export default function ViewProductStitchedVariants({
                               justifyContent: "center",
                               gap: 5,
                             },
-                            pressed && !out ? styles.pressed : null,
+                            pressed && !readOnly && !out
+                              ? styles.pressed
+                              : null,
                           ]}
                         >
                           <Text

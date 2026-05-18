@@ -88,9 +88,7 @@ export default function MadeOrderVariantEditor({
   const name = safeStr(variant?.name);
   const images = useMemo(() => normalizeImages(variant?.images), [variant]);
 
-  const displayName =
-    safeStr(variant?.display_name) ||
-    buildMadeOrderVariantDisplayName(variantNo, name);
+  const displayName = safeStr(variant?.display_name) || name;
 
   function patch(patchValue: Partial<MadeOrderVariant>) {
     const nextName =
@@ -106,7 +104,9 @@ export default function MadeOrderVariantEditor({
       variant_no: nextVariantNo,
       label: safeStr(variant?.label) || `Variant ${nextVariantNo}`,
       name: nextName,
-      display_name: buildMadeOrderVariantDisplayName(nextVariantNo, nextName),
+      display_name: nextName
+        ? buildMadeOrderVariantDisplayName(nextVariantNo, nextName)
+        : "",
       additional_price_pkr: safeInt(
         patchValue.additional_price_pkr !== undefined
           ? patchValue.additional_price_pkr
@@ -194,8 +194,10 @@ export default function MadeOrderVariantEditor({
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.variantKicker}>{label}</Text>
-          <Text style={styles.variantTitle}>{displayName}</Text>
+          <Text style={styles.variantTitle}>{label}</Text>
+          {displayName ? (
+            <Text style={styles.variantSubtitle}>{displayName}</Text>
+          ) : null}
         </View>
 
         {canRemove && onRemove ? (
@@ -329,18 +331,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
-  variantKicker: {
+  variantTitle: {
+    color: apColors.text,
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  variantSubtitle: {
+    marginTop: 2,
     color: apColors.muted,
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 0.4,
     textTransform: "uppercase",
-  },
-  variantTitle: {
-    marginTop: 2,
-    color: apColors.text,
-    fontSize: 16,
-    fontWeight: "900",
   },
   removeBtn: {
     borderWidth: 1,
