@@ -22,9 +22,6 @@ export async function getDressTypes(): Promise<DressTypeItem[]> {
     .order("sort_order", { ascending: true })
     .order("name", { ascending: true });
 
-  console.log(data);
-  console.log("ee", error);
-
   if (error) {
     console.error("Error fetching dress types:", error);
     return [];
@@ -39,8 +36,8 @@ export async function getDressTypes(): Promise<DressTypeItem[]> {
         : {
             id: String(item.id),
             code: String(item.code),
-            name: String(item.name)
-          }
+            name: String(item.name),
+          },
     )
     .filter((item): item is DressTypeItem => item !== null);
 }

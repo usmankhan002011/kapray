@@ -1,17 +1,29 @@
 // File: components/product/view-product/ViewProduct.screen.tsx
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
   BackHandler,
+  Image,
   Dimensions,
   Pressable,
   ScrollView,
   Text,
   View,
 } from "react-native";
-import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from "expo-router";
+import {
+  useFocusEffect,
+  useLocalSearchParams,
+  useRouter,
+  useSegments,
+} from "expo-router";
 
 import { supabase } from "@/utils/supabase/client";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -21,6 +33,9 @@ import { makeViewProductStyles, stylesVars } from "./ViewProduct.styles";
 import ViewProductTailoringSelection, {
   TailoringSelection,
 } from "./ViewProduct.tailoring.selection";
+import ViewProductStitchedVariants, {
+  StitchedVariant,
+} from "./ViewProduct.variants.stitched";
 import {
   normalizeTailoringPresetArray,
   safeInt0,
@@ -248,6 +263,126 @@ function encodeJsonParam(v: unknown) {
   }
 }
 
+function uniqueNonEmptyStrings(values: Array<string | null | undefined>) {
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const raw of values) {
+    const s = String(raw ?? "").trim();
+    if (!s) continue;
+
+    const key = s.toLowerCase();
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    out.push(s);
+  }
+
+  return out;
+}
+
+function resolveTailoringPresetImageUrls(
+  preset: any,
+  resolvePublicUrl: (path: string | null | undefined) => string | null,
+) {
+  if (!preset) return [];
+
+  const candidates: unknown[] = [
+    ...(Array.isArray(preset?.images) ? preset.images : []),
+    ...(Array.isArray(preset?.image_urls) ? preset.image_urls : []),
+    ...(Array.isArray(preset?.imageUrls) ? preset.imageUrls : []),
+    ...(Array.isArray(preset?.image_paths) ? preset.image_paths : []),
+    ...(Array.isArray(preset?.imagePaths) ? preset.imagePaths : []),
+    ...(Array.isArray(preset?.style_images) ? preset.style_images : []),
+    ...(Array.isArray(preset?.style_image_paths)
+      ? preset.style_image_paths
+      : []),
+    ...(Array.isArray(preset?.media?.images) ? preset.media.images : []),
+    ...(Array.isArray(preset?.media?.image_paths)
+      ? preset.media.image_paths
+      : []),
+    preset?.image_url,
+    preset?.imageUrl,
+    preset?.image_path,
+    preset?.imagePath,
+    preset?.image,
+    preset?.url,
+    preset?.uri,
+    preset?.path,
+  ];
+
+  const urls = candidates
+    .map((item) => {
+      if (item == null) return null;
+
+      if (typeof item === "string" || typeof item === "number") {
+        const raw = String(item).trim();
+        if (!raw) return null;
+        return resolvePublicUrl(raw) || raw;
+      }
+
+      if (typeof item === "object") {
+        const obj = item as Record<string, unknown>;
+        const raw = String(
+          obj.url ??
+            obj.uri ??
+            obj.path ??
+            obj.image_url ??
+            obj.imageUrl ??
+            obj.image_path ??
+            obj.imagePath ??
+            obj.image ??
+            "",
+        ).trim();
+
+        if (!raw) return null;
+        return resolvePublicUrl(raw) || raw;
+      }
+
+      return null;
+    })
+    .filter(Boolean) as string[];
+
+  return uniqueNonEmptyStrings(urls);
+}
+
+function firstStitchedVariantImagePath(v: StitchedVariant | null): string {
+  if (!v) return "";
+
+  const raw = (v as any)?.raw ?? {};
+  const rawVariant = (v as any)?.rawVariant ?? {};
+
+  const candidates = [
+    // New canonical selected-variant shape from ViewProduct.variants.stitched.tsx.
+    (v as any)?.image_paths,
+    rawVariant?.image_paths,
+
+    // Backward-compatible variant/raw shapes.
+    raw?.image_paths,
+    raw?.variant_image_paths,
+    raw?.images,
+    raw?.imagePaths,
+    raw?.media?.image_paths,
+    raw?.media?.images,
+    raw?.image_path,
+    raw?.variant_image_path,
+    raw?.image,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      const first = candidate.find((item) => String(item ?? "").trim());
+      if (first) return String(first).trim();
+      continue;
+    }
+
+    const s = String(candidate ?? "").trim();
+    if (s) return s;
+  }
+
+  return "";
+}
+
 export default function ViewProductScreen() {
   const { styles } = useMemo(() => makeViewProductStyles(width, FOOTER_H), []);
   const router = useRouter();
@@ -261,7 +396,9 @@ export default function ViewProductScreen() {
   }, [segments]);
 
   const vendorIdFromVendor = useAppSelector((s: any) => s?.vendor?.id ?? null);
-  const vendorIdFromVendorSlice = useAppSelector((s: any) => s?.vendorSlice?.id ?? null);
+  const vendorIdFromVendorSlice = useAppSelector(
+    (s: any) => s?.vendorSlice?.id ?? null,
+  );
   const vendorIdFromVendorSliceVendor = useAppSelector(
     (s: any) => s?.vendorSlice?.vendor?.id ?? null,
   );
@@ -272,7 +409,9 @@ export default function ViewProductScreen() {
     vendorIdFromVendorSliceVendor;
 
   const productId = useMemo<number | null>(() => {
-    const raw = firstParam((params as any)?.id ?? (params as any)?.product_id ?? null);
+    const raw = firstParam(
+      (params as any)?.id ?? (params as any)?.product_id ?? null,
+    );
     if (!raw) return null;
 
     const decoded = safeDecode(raw);
@@ -283,7 +422,9 @@ export default function ViewProductScreen() {
   }, [params]);
 
   const productCode = useMemo<string | null>(() => {
-    const raw = firstParam((params as any)?.code ?? (params as any)?.product_code ?? null);
+    const raw = firstParam(
+      (params as any)?.code ?? (params as any)?.product_code ?? null,
+    );
     if (!raw) return null;
     return safeDecode(raw);
   }, [params]);
@@ -333,7 +474,11 @@ export default function ViewProductScreen() {
   const [buyerWantsTailoring, _setBuyerWantsTailoring] = useState(false);
   const [buyerWantsDyeing, _setBuyerWantsDyeing] = useState(false);
 
-  const [tailoringSelection, setTailoringSelection] = useState<TailoringSelection | null>(null);
+  const [tailoringSelection, setTailoringSelection] =
+    useState<TailoringSelection | null>(null);
+
+  const [selectedStitchedVariant, setSelectedStitchedVariant] =
+    useState<StitchedVariant | null>(null);
 
   const setBuyerWantsTailoring = useCallback(
     (next: boolean) => {
@@ -379,6 +524,7 @@ export default function ViewProductScreen() {
   }, []);
 
   const resetBuyerSelections = useCallback(() => {
+    setSelectedStitchedVariant(null);
     _setBuyerWantsTailoring(false);
     _setBuyerWantsDyeing(false);
     setTailoringSelection(null);
@@ -408,6 +554,10 @@ export default function ViewProductScreen() {
     resetBuyerSelections();
     router.replace("/(tabs)");
   }, [resetBuyerSelections, router]);
+
+  useEffect(() => {
+    setSelectedStitchedVariant(null);
+  }, [productId, productCode]);
 
   useEffect(() => {
     if (!choiceKey) return;
@@ -509,7 +659,10 @@ export default function ViewProductScreen() {
       return;
     }
 
-    const safeIdx = Math.max(0, Math.min(selectedMediaIndex, mediaItems.length - 1));
+    const safeIdx = Math.max(
+      0,
+      Math.min(selectedMediaIndex, mediaItems.length - 1),
+    );
     const it = mediaItems[safeIdx];
 
     if (it?.kind === "video" && activeVideoUrl !== it.url) {
@@ -530,9 +683,7 @@ export default function ViewProductScreen() {
       setMissingParam(false);
       setLoading(true);
 
-      let q = supabase
-        .from("products")
-        .select(`
+      let q = supabase.from("products").select(`
           id,
           vendor_id,
           product_code,
@@ -686,23 +837,38 @@ export default function ViewProductScreen() {
         return;
       }
 
-      const dressTypeIds = normalizeIdList(spec?.dressTypeIds ?? spec?.dressTypes ?? []);
-      const fabricTypeIds = normalizeIdList(spec?.fabricTypeIds ?? spec?.fabricTypes ?? []);
-      const workTypeIds = normalizeIdList(spec?.workTypeIds ?? spec?.workTypes ?? []);
-      const densityIds = normalizeIdList(spec?.workDensityIds ?? spec?.workDensities ?? []);
-      const originIds = normalizeIdList(spec?.originCityIds ?? spec?.originCities ?? []);
-      const wearIds = normalizeIdList(spec?.wearStateIds ?? spec?.wearStates ?? []);
-      const colorIds = normalizeIdList(spec?.colorShadeIds ?? spec?.colorShades ?? []);
+      const dressTypeIds = normalizeIdList(
+        spec?.dressTypeIds ?? spec?.dressTypes ?? [],
+      );
+      const fabricTypeIds = normalizeIdList(
+        spec?.fabricTypeIds ?? spec?.fabricTypes ?? [],
+      );
+      const workTypeIds = normalizeIdList(
+        spec?.workTypeIds ?? spec?.workTypes ?? [],
+      );
+      const densityIds = normalizeIdList(
+        spec?.workDensityIds ?? spec?.workDensities ?? [],
+      );
+      const originIds = normalizeIdList(
+        spec?.originCityIds ?? spec?.originCities ?? [],
+      );
+      const wearIds = normalizeIdList(
+        spec?.wearStateIds ?? spec?.wearStates ?? [],
+      );
+      const colorIds = normalizeIdList(
+        spec?.colorShadeIds ?? spec?.colorShades ?? [],
+      );
 
       try {
-        const [dressType, fabric, work, density, origin, wear] = await Promise.all([
-          resolveNamesByIds(LOOKUP.dressTypes, dressTypeIds),
-          resolveNamesByIds(LOOKUP.fabricTypes, fabricTypeIds),
-          resolveNamesByIds(LOOKUP.workTypes, workTypeIds),
-          resolveNamesByIds(LOOKUP.workDensities, densityIds),
-          resolveNamesByIds(LOOKUP.originCities, originIds),
-          resolveNamesByIds(LOOKUP.wearStates, wearIds),
-        ]);
+        const [dressType, fabric, work, density, origin, wear] =
+          await Promise.all([
+            resolveNamesByIds(LOOKUP.dressTypes, dressTypeIds),
+            resolveNamesByIds(LOOKUP.fabricTypes, fabricTypeIds),
+            resolveNamesByIds(LOOKUP.workTypes, workTypeIds),
+            resolveNamesByIds(LOOKUP.workDensities, densityIds),
+            resolveNamesByIds(LOOKUP.originCities, originIds),
+            resolveNamesByIds(LOOKUP.wearStates, wearIds),
+          ]);
 
         const color = resolveColorNames(colorIds);
 
@@ -752,7 +918,10 @@ export default function ViewProductScreen() {
         return true;
       };
 
-      const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+      const sub = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress,
+      );
       return () => sub.remove();
     }, [exitBuyerToResults, isBuyerRoute]),
   );
@@ -763,7 +932,9 @@ export default function ViewProductScreen() {
 
     return (
       <View style={styles.specRow}>
-        <Text style={[styles.specLabel, { color: stylesVars.blue }]}>{title}:</Text>
+        <Text style={[styles.specLabel, { color: stylesVars.blue }]}>
+          {title}:
+        </Text>
         <Text style={styles.specValue}>{list.join(", ")}</Text>
       </View>
     );
@@ -815,6 +986,36 @@ export default function ViewProductScreen() {
     );
   };
 
+  const productCategory = useMemo<ProductCategory | null>(() => {
+    const fromDb = (product as any)?.product_category;
+    if (isProductCategory(fromDb)) return fromDb;
+
+    const fromSpec = (product as any)?.spec?.product_category;
+    if (isProductCategory(fromSpec)) return fromSpec;
+
+    return null;
+  }, [product]);
+
+  const isStitchedReady = useMemo(() => {
+    if (productCategory) return productCategory === "stitched_ready";
+
+    const price = (product as any)?.price ?? {};
+    const spec = (product as any)?.spec ?? {};
+
+    return (
+      String(price?.mode ?? "") === "stitched_total" ||
+      String(price?.mode ?? "") === "stitched_ready" ||
+      String(spec?.product_category ?? "") === "stitched_ready"
+    );
+  }, [product, productCategory]);
+
+  const isMadeOnOrder = useMemo(() => {
+    return (
+      Boolean((product as any)?.made_on_order) ||
+      Boolean((product as any)?.spec?.made_on_order)
+    );
+  }, [product]);
+
   const priceText = useMemo(() => {
     const price = (product as any)?.price ?? {};
     const mode = String(price?.mode ?? "");
@@ -824,38 +1025,103 @@ export default function ViewProductScreen() {
       return v ? `PKR ${v} / meter` : "—";
     }
 
+    if (isStitchedReady && selectedStitchedVariant?.pricePkr) {
+      return `Total Cost: PKR ${selectedStitchedVariant.pricePkr}`;
+    }
+
     const t = price?.cost_pkr_total;
+
+    // Stitched buyer flows → premium starting-price wording
+    if ((isMadeOnOrder || isStitchedReady) && t) {
+      return `From PKR ${t}`;
+    }
+
     return t ? `PKR ${t} (total)` : "—";
-  }, [product]);
+  }, [isMadeOnOrder, isStitchedReady, product, selectedStitchedVariant]);
 
   const pricePerMeterPkr = useMemo(() => {
     const price = (product as any)?.price ?? {};
     return safePositiveNumber(price?.cost_pkr_per_meter);
   }, [product]);
 
-  const stitchedTotalPkr = useMemo(() => {
+  const baseStitchedProductPricePkr = useMemo(() => {
     const price = (product as any)?.price ?? {};
-    return safePositiveNumber(price?.cost_pkr_total);
+    const spec = (product as any)?.spec ?? {};
+
+    return (
+      safePositiveNumber(price?.cost_pkr_total) ||
+      safePositiveNumber(price?.costPkrTotal) ||
+      safePositiveNumber(price?.total_cost_pkr) ||
+      safePositiveNumber(price?.stitched_total_cost_pkr) ||
+      safePositiveNumber((product as any)?.cost_pkr_total) ||
+      safePositiveNumber((product as any)?.total_cost_pkr) ||
+      safePositiveNumber((product as any)?.stitched_total_cost_pkr) ||
+      safePositiveNumber(spec?.cost_pkr_total) ||
+      safePositiveNumber(spec?.total_cost_pkr) ||
+      safePositiveNumber(spec?.stitched_total_cost_pkr) ||
+      0
+    );
   }, [product]);
+
+  const stitchedTotalPkr = useMemo(() => {
+    if (isStitchedReady && selectedStitchedVariant?.pricePkr) {
+      return safePositiveNumber(selectedStitchedVariant.pricePkr);
+    }
+
+    return baseStitchedProductPricePkr;
+  }, [baseStitchedProductPricePkr, isStitchedReady, selectedStitchedVariant]);
 
   const sizeText = useMemo(() => {
+    if (isStitchedReady && selectedStitchedVariant?.size) {
+      return selectedStitchedVariant.size;
+    }
+
     const price = (product as any)?.price ?? {};
-    const sizes = Array.isArray(price?.available_sizes) ? price.available_sizes : [];
+    const sizes = Array.isArray(price?.available_sizes)
+      ? price.available_sizes
+      : [];
     return sizes.length ? sizes.join(", ") : "—";
-  }, [product]);
+  }, [isMadeOnOrder, isStitchedReady, product, selectedStitchedVariant]);
 
   const inventoryText = useMemo(() => {
-    const made =
-      Boolean((product as any)?.made_on_order) ||
-      Boolean((product as any)?.spec?.made_on_order);
+    if (!product) return "—";
 
-    if (made) return "Made on order";
+    if (isStitchedReady && selectedStitchedVariant?.stockQty != null) {
+      return String(selectedStitchedVariant.stockQty);
+    }
 
-    const n = Number((product as any)?.inventory_qty ?? 0);
+    if (isStitchedReady && !selectedStitchedVariant) {
+      return "Select size";
+    }
+
+    if (isMadeOnOrder) return "Made on order";
+
+    const raw = (product as any)?.inventory_qty;
+    if (raw == null) return "—";
+
+    const n = Number(raw);
     if (!Number.isFinite(n)) return "—";
 
     return String(n);
-  }, [product]);
+  }, [isMadeOnOrder, isStitchedReady, product, selectedStitchedVariant]);
+
+  const isOutOfStock = useMemo(() => {
+    if (!product) return false;
+
+    if (isStitchedReady && selectedStitchedVariant?.stockQty != null) {
+      return selectedStitchedVariant.stockQty <= 0;
+    }
+
+    if (isMadeOnOrder) return false;
+
+    const raw = (product as any)?.inventory_qty;
+    if (raw == null) return false;
+
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return false;
+
+    return n <= 0;
+  }, [isMadeOnOrder, isStitchedReady, product, selectedStitchedVariant]);
 
   const moreDescriptionText = useMemo(() => {
     const spec = (product as any)?.spec ?? {};
@@ -870,24 +1136,22 @@ export default function ViewProductScreen() {
     return String(product.vendor_id) === String(vendorId);
   }, [isBuyerRoute, product?.vendor_id, vendorId]);
 
+  const showVendorOutOfStockWarning = useMemo(() => {
+    return Boolean(product) && !loading && isVendorSelf && isOutOfStock;
+  }, [product, loading, isVendorSelf, isOutOfStock]);
+
+  // Buyer actions control purchase/footer/vendor-profile buttons.
+  // Vendor self-view is a read-only preview: it can see offerings,
+  // but cannot select dyeing, tailoring, variants, or purchase.
   const showBuyerActions = isBuyerRoute ? true : !isVendorSelf;
-
-  const productCategory = useMemo<ProductCategory | null>(() => {
-    const fromDb = (product as any)?.product_category;
-    if (isProductCategory(fromDb)) return fromDb;
-
-    const fromSpec = (product as any)?.spec?.product_category;
-    if (isProductCategory(fromSpec)) return fromSpec;
-
-    return null;
-  }, [product]);
+  const showVendorReadOnlyPreview = Boolean(product) && isVendorSelf;
+  const showReadOnlyProductOfferings =
+    Boolean(product) && (showBuyerActions || showVendorReadOnlyPreview);
 
   const isUnstitched = useMemo(() => {
     if (productCategory) return productCategory !== "stitched_ready";
-
-    const price = (product as any)?.price ?? {};
-    return String(price?.mode ?? "") === "unstitched_per_meter";
-  }, [product, productCategory]);
+    return !isStitchedReady;
+  }, [isStitchedReady, productCategory]);
 
   const showDyeing = useMemo(() => {
     if (!product || !isUnstitched) return false;
@@ -970,9 +1234,9 @@ export default function ViewProductScreen() {
     const spec = (product as any)?.spec ?? {};
     return Boolean(
       spec?.includes_trouser ??
-        spec?.has_trouser ??
-        spec?.product_has_trouser ??
-        false,
+      spec?.has_trouser ??
+      spec?.product_has_trouser ??
+      false,
     );
   }, [product]);
 
@@ -986,7 +1250,10 @@ export default function ViewProductScreen() {
   }, [tailoringStylePresets]);
 
   const sizeLengthMap = useMemo(() => {
-    return ((product as any)?.spec?.size_length_m ?? {}) as Record<string, unknown>;
+    return ((product as any)?.spec?.size_length_m ?? {}) as Record<
+      string,
+      unknown
+    >;
   }, [product]);
 
   const hasAnySizeLengthMap = useMemo(() => {
@@ -1001,7 +1268,8 @@ export default function ViewProductScreen() {
   const tailoringAvailabilityLine = useMemo(() => {
     if (!isUnstitched) return "Tailoring: not applicable";
     if (!vendorOffersTailoring) return "Tailoring: vendor does not offer";
-    if (!productTailoringEnabled) return "Tailoring: not enabled for this product";
+    if (!productTailoringEnabled)
+      return "Tailoring: not enabled for this product";
     if (tailoringCostPkr <= 0) return "Tailoring: not available";
     return `Tailoring: available • PKR ${tailoringCostPkr}`;
   }, [
@@ -1061,20 +1329,41 @@ export default function ViewProductScreen() {
     return Boolean(product) && showBuyerActions && isUnstitched;
   }, [isUnstitched, product, showBuyerActions]);
 
+  const showVendorDyeingPreview = useMemo(() => {
+    return showVendorReadOnlyPreview && showDyeing;
+  }, [showDyeing, showVendorReadOnlyPreview]);
+
+  const showVendorTailoringPreview = useMemo(() => {
+    return showVendorReadOnlyPreview && isUnstitched;
+  }, [isUnstitched, showVendorReadOnlyPreview]);
+
   const categoryText = useMemo(() => {
-    if (productCategory === "stitched_ready") return "Stitched / Ready-to-wear";
+    if (productCategory === "stitched_ready" && isMadeOnOrder) {
+      return "Made on order";
+    }
+
+    if (productCategory === "stitched_ready") {
+      return "Stitched / Ready-to-wear";
+    }
+
     if (productCategory === "unstitched_dyeing_tailoring") {
       return "Unstitched + Dyeing + Tailoring";
     }
-    if (productCategory === "unstitched_dyeing") return "Unstitched + Dyeing";
-    if (productCategory === "unstitched_plain") return "Unstitched (Plain)";
+
+    if (productCategory === "unstitched_dyeing") {
+      return "Unstitched + Dyeing";
+    }
+
+    if (productCategory === "unstitched_plain") {
+      return "Unstitched (Plain)";
+    }
 
     if (isUnstitched) {
       return showDyeing ? "Unstitched + Dyeable" : "Unstitched";
     }
 
-    return "Stitched / Ready-to-wear";
-  }, [isUnstitched, productCategory, showDyeing]);
+    return isMadeOnOrder ? "Made on order" : "Stitched / Ready-to-wear";
+  }, [isMadeOnOrder, isUnstitched, productCategory, showDyeing]);
 
   const onOpenDyeing = useCallback(() => {
     if (!product) return;
@@ -1086,7 +1375,9 @@ export default function ViewProductScreen() {
         ? "/(buyer)/dye_palette_modal"
         : "/vendor/profile/(product-modals)/dyeing/dye_palette_modal",
       params: {
-        returnPath: isBuyerRoute ? "/flow/view-product" : "/vendor/profile/view-product",
+        returnPath: isBuyerRoute
+          ? "/flow/view-product"
+          : "/vendor/profile/view-product",
         productId: String(product.id),
         productCode: String(product.product_code || ""),
         dyeing_selected: "1",
@@ -1104,12 +1395,52 @@ export default function ViewProductScreen() {
     selectedDyeShadeId,
   ]);
 
+  const selectedRawVariantId = useMemo(() => {
+    if (!selectedStitchedVariant) return "";
+
+    return String(
+      (selectedStitchedVariant as any)?.rawVariant?.id ||
+        selectedStitchedVariant.id ||
+        "",
+    )
+      .split("::")[0]
+      .trim();
+  }, [selectedStitchedVariant]);
+
   const onPurchase = useCallback(() => {
     if (!product) return;
 
+    const selectedVariantMadeOnOrder =
+      isMadeOnOrder ||
+      Boolean((selectedStitchedVariant as any)?.made_on_order) ||
+      String((selectedStitchedVariant as any)?.variant_mode ?? "") ===
+        "made_order_variants" ||
+      String(
+        (selectedStitchedVariant as any)?.rawVariant?.variant_mode ?? "",
+      ) === "made_order_variants";
+
+    const selectedVariantMode = selectedVariantMadeOnOrder
+      ? "made_order_variants"
+      : String((selectedStitchedVariant as any)?.variant_mode ?? "");
+
+    if (isStitchedReady && !selectedStitchedVariant) {
+      Alert.alert(
+        selectedVariantMadeOnOrder
+          ? "Select variant"
+          : "Select variant and size",
+        selectedVariantMadeOnOrder
+          ? "Please select a made-on-order variant before continuing."
+          : "Please select a stitched ready-to-wear variant and size before continuing.",
+      );
+      return;
+    }
+
     if (tailoringEligible && buyerWantsTailoring) {
       if (!tailoringSelection?.presetId) {
-        Alert.alert("Select tailoring style", "Please select a tailoring style card.");
+        Alert.alert(
+          "Select tailoring style",
+          "Please select a tailoring style card.",
+        );
         return;
       }
 
@@ -1119,34 +1450,144 @@ export default function ViewProductScreen() {
       }
 
       if (!tailoringSelection?.sleeve) {
-        Alert.alert("Select sleeve variation", "Please select a sleeve variation.");
+        Alert.alert(
+          "Select sleeve variation",
+          "Please select a sleeve variation.",
+        );
         return;
       }
 
       if (tailoringIncludesTrouser && !tailoringSelection?.trouser) {
-        Alert.alert("Select trouser variation", "Please select a trouser variation.");
+        Alert.alert(
+          "Select trouser variation",
+          "Please select a trouser variation.",
+        );
         return;
       }
     }
 
     const imageUrl = imageUrls.length ? imageUrls[0] : "";
+    const selectedVariantImagePath = firstStitchedVariantImagePath(
+      selectedStitchedVariant,
+    );
+
+    const stitchedVariantReadyToProceed =
+      isStitchedReady &&
+      !!selectedStitchedVariant?.id &&
+      !!selectedStitchedVariant?.size;
 
     router.push({
-      pathname: "/flow/purchase/size" as any,
+      pathname: stitchedVariantReadyToProceed
+        ? ("/flow/purchase/place-order" as any)
+        : ("/flow/purchase/size" as any),
       params: {
         returnTo: "/flow/purchase/place-order",
+        bypass_size_step: stitchedVariantReadyToProceed ? "1" : "0",
         productId: String(product.id),
         productCode: String(product.product_code || ""),
+
         productName: String(product.title || ""),
+
         product_category: productCategory ? String(productCategory) : "",
+        made_on_order: isMadeOnOrder ? "1" : "0",
+        selected_variant_made_on_order: selectedVariantMadeOnOrder ? "1" : "0",
+        variant_mode: selectedVariantMode,
+        selected_variant_mode: selectedVariantMode,
         currency: "PKR",
         imageUrl,
 
-        price_per_meter_pkr: isUnstitched && pricePerMeterPkr > 0 ? String(pricePerMeterPkr) : "",
+        price_per_meter_pkr:
+          isUnstitched && pricePerMeterPkr > 0 ? String(pricePerMeterPkr) : "",
         stitched_total_pkr:
           !isUnstitched && stitchedTotalPkr > 0 ? String(stitchedTotalPkr) : "",
 
-        size_length_m: hasAnySizeLengthMap ? encodeJsonParam(sizeLengthMap) : "",
+        selected_variant_id:
+          isStitchedReady && selectedRawVariantId
+            ? encodeURIComponent(selectedRawVariantId)
+            : "",
+        selected_variant_title:
+          isStitchedReady && selectedStitchedVariant?.title
+            ? encodeURIComponent(String(selectedStitchedVariant.title))
+            : "",
+        selected_variant_size:
+          isStitchedReady && selectedStitchedVariant?.size
+            ? encodeURIComponent(String(selectedStitchedVariant.size))
+            : "",
+
+        selectedSize:
+          isStitchedReady && selectedStitchedVariant?.size
+            ? encodeURIComponent(String(selectedStitchedVariant.size))
+            : "",
+
+        selected_size:
+          isStitchedReady && selectedStitchedVariant?.size
+            ? encodeURIComponent(String(selectedStitchedVariant.size))
+            : "",
+        selected_variant_color:
+          isStitchedReady &&
+          !selectedVariantMadeOnOrder &&
+          selectedStitchedVariant?.color
+            ? encodeURIComponent(String(selectedStitchedVariant.color))
+            : "",
+        selected_variant_price_pkr:
+          isStitchedReady && selectedStitchedVariant?.pricePkr
+            ? encodeURIComponent(String(selectedStitchedVariant.pricePkr))
+            : "",
+        selected_variant_stock_qty:
+          isStitchedReady &&
+          !selectedVariantMadeOnOrder &&
+          selectedStitchedVariant?.stockQty != null
+            ? encodeURIComponent(String(selectedStitchedVariant.stockQty))
+            : "",
+
+        selected_variant_base_cost_pkr:
+          isStitchedReady && baseStitchedProductPricePkr > 0
+            ? encodeURIComponent(String(baseStitchedProductPricePkr))
+            : "",
+
+        selected_variant_additional_cost_pkr: isStitchedReady
+          ? encodeURIComponent(
+              String(
+                safePositiveNumber(
+                  (selectedStitchedVariant as any)?.additional_price_pkr,
+                ),
+              ),
+            )
+          : "",
+
+        selected_variant_total_cost_pkr:
+          isStitchedReady && selectedStitchedVariant?.pricePkr
+            ? encodeURIComponent(String(selectedStitchedVariant.pricePkr))
+            : "",
+        selected_variant_image_path:
+          isStitchedReady && selectedVariantImagePath
+            ? encodeURIComponent(selectedVariantImagePath)
+            : "",
+
+        selected_stitched_variant_id:
+          isStitchedReady && selectedRawVariantId
+            ? encodeURIComponent(selectedRawVariantId)
+            : "",
+        selected_stitched_size:
+          isStitchedReady && selectedStitchedVariant?.size
+            ? encodeURIComponent(String(selectedStitchedVariant.size))
+            : "",
+        selected_stitched_label:
+          isStitchedReady && selectedStitchedVariant?.label
+            ? encodeURIComponent(String(selectedStitchedVariant.label))
+            : "",
+        selected_stitched_sku:
+          isStitchedReady && selectedStitchedVariant?.sku
+            ? encodeURIComponent(String(selectedStitchedVariant.sku))
+            : "",
+        selected_stitched_variant_snapshot:
+          isStitchedReady && selectedStitchedVariant
+            ? encodeJsonParam(selectedStitchedVariant)
+            : "",
+
+        size_length_m: hasAnySizeLengthMap
+          ? encodeJsonParam(sizeLengthMap)
+          : "",
 
         dyeing_available: showDyeing ? "1" : "0",
         dyeing_selected: showDyeing && buyerWantsDyeing ? "1" : "0",
@@ -1155,7 +1596,9 @@ export default function ViewProductScreen() {
             ? encodeURIComponent(selectedDyeShadeId)
             : "",
         dye_hex:
-          buyerWantsDyeing && selectedDyeHex ? encodeURIComponent(selectedDyeHex) : "",
+          buyerWantsDyeing && selectedDyeHex
+            ? encodeURIComponent(selectedDyeHex)
+            : "",
         dye_label:
           buyerWantsDyeing && selectedDyeLabel
             ? encodeURIComponent(selectedDyeLabel)
@@ -1172,18 +1615,17 @@ export default function ViewProductScreen() {
         tailoring_turnaround_days: tailoringEligible
           ? encodeURIComponent(String(tailoringTurnaroundDays))
           : "",
-        tailoring_selected: tailoringEligible && buyerWantsTailoring ? "1" : "0",
+        tailoring_selected:
+          tailoringEligible && buyerWantsTailoring ? "1" : "0",
         selected_tailoring_style_id:
           tailoringEligible &&
           buyerWantsTailoring &&
           tailoringSelection?.presetId
             ? encodeURIComponent(String(tailoringSelection.presetId))
             : "",
-            
+
         selected_tailoring_style_title:
-          tailoringEligible &&
-          buyerWantsTailoring &&
-          tailoringSelection?.title
+          tailoringEligible && buyerWantsTailoring && tailoringSelection?.title
             ? encodeURIComponent(String(tailoringSelection.title))
             : "",
         selected_tailoring_style_image:
@@ -1204,15 +1646,11 @@ export default function ViewProductScreen() {
             : "",
 
         selected_neck_variation:
-          tailoringEligible &&
-          buyerWantsTailoring &&
-          tailoringSelection?.neck
+          tailoringEligible && buyerWantsTailoring && tailoringSelection?.neck
             ? encodeURIComponent(String(tailoringSelection.neck))
             : "",
         selected_sleeve_variation:
-          tailoringEligible &&
-          buyerWantsTailoring &&
-          tailoringSelection?.sleeve
+          tailoringEligible && buyerWantsTailoring && tailoringSelection?.sleeve
             ? encodeURIComponent(String(tailoringSelection.sleeve))
             : "",
         selected_trouser_variation:
@@ -1224,15 +1662,11 @@ export default function ViewProductScreen() {
             : "",
 
         selected_neck_style:
-          tailoringEligible &&
-          buyerWantsTailoring &&
-          tailoringSelection?.neck
+          tailoringEligible && buyerWantsTailoring && tailoringSelection?.neck
             ? encodeURIComponent(String(tailoringSelection.neck))
             : "",
         selected_sleeve_style:
-          tailoringEligible &&
-          buyerWantsTailoring &&
-          tailoringSelection?.sleeve
+          tailoringEligible && buyerWantsTailoring && tailoringSelection?.sleeve
             ? encodeURIComponent(String(tailoringSelection.sleeve))
             : "",
         selected_trouser_style:
@@ -1244,14 +1678,14 @@ export default function ViewProductScreen() {
             : "",
 
         custom_tailoring_note:
-          tailoringEligible &&
-          buyerWantsTailoring &&
-          tailoringSelection?.note
+          tailoringEligible && buyerWantsTailoring && tailoringSelection?.note
             ? encodeURIComponent(String(tailoringSelection.note).trim())
             : "",
 
         exports_enabled: vendorExportsEnabled ? "1" : "0",
-        export_regions: vendorExportRegions.length ? encodeJsonParam(vendorExportRegions) : "",
+        export_regions: vendorExportRegions.length
+          ? encodeJsonParam(vendorExportRegions)
+          : "",
 
         weight_kg: shippingWeightKg > 0 ? String(shippingWeightKg) : "",
         package_cm: packageCm ? encodeJsonParam(packageCm) : "",
@@ -1263,6 +1697,8 @@ export default function ViewProductScreen() {
     dyeingCostPkr,
     hasAnySizeLengthMap,
     imageUrls,
+    isMadeOnOrder,
+    isStitchedReady,
     isUnstitched,
     packageCm,
     pricePerMeterPkr,
@@ -1272,6 +1708,8 @@ export default function ViewProductScreen() {
     selectedDyeHex,
     selectedDyeLabel,
     selectedDyeShadeId,
+    selectedStitchedVariant,
+    selectedRawVariantId,
     shippingWeightKg,
     showDyeing,
     sizeLengthMap,
@@ -1298,7 +1736,12 @@ export default function ViewProductScreen() {
     });
   }, [router, vendorRow]);
 
-  const purchaseDisabled = !product || loading || missingParam;
+  const purchaseDisabled =
+    !product ||
+    loading ||
+    missingParam ||
+    isOutOfStock ||
+    (isStitchedReady && !selectedStitchedVariant);
 
   const CompactLine = ({ text }: { text: string | null }) => {
     if (!text) return null;
@@ -1310,14 +1753,20 @@ export default function ViewProductScreen() {
     );
   };
 
-  const titleLine = useMemo(() => compactLineValue(product?.title), [product?.title]);
-  const categoryLine = useMemo(() => compactLineValue(categoryText), [categoryText]);
+  const titleLine = useMemo(
+    () => compactLineValue(product?.title),
+    [product?.title],
+  );
+  const categoryLine = useMemo(
+    () => compactLineValue(categoryText),
+    [categoryText],
+  );
 
   const inventoryLine = useMemo(() => {
     const s = compactLineValue(inventoryText);
     if (!s) return null;
     if (s === "Made on order") return s;
-    return `Qty: ${s}`;
+    return `In Stock: ${s}`;
   }, [inventoryText]);
 
   const priceLine = useMemo(() => compactLineValue(priceText), [priceText]);
@@ -1328,8 +1777,14 @@ export default function ViewProductScreen() {
     return `Sizes: ${s}`;
   }, [sizeText]);
 
-  const uploadedDate = useMemo(() => formatDateOnly(product?.created_at), [product?.created_at]);
-  const modifiedDate = useMemo(() => formatDateOnly(product?.updated_at), [product?.updated_at]);
+  const uploadedDate = useMemo(
+    () => formatDateOnly(product?.created_at),
+    [product?.created_at],
+  );
+  const modifiedDate = useMemo(
+    () => formatDateOnly(product?.updated_at),
+    [product?.updated_at],
+  );
 
   const onTogglePlayPause = useCallback(() => {
     showControlsBriefly();
@@ -1354,7 +1809,10 @@ export default function ViewProductScreen() {
               }
               router.back();
             }}
-            style={({ pressed }) => [styles.linkBtn, pressed ? styles.pressed : null]}
+            style={({ pressed }) => [
+              styles.linkBtn,
+              pressed ? styles.pressed : null,
+            ]}
           >
             <Text style={styles.linkText}>Close</Text>
           </Pressable>
@@ -1362,7 +1820,9 @@ export default function ViewProductScreen() {
 
         {missingParam ? (
           <View style={styles.card}>
-            <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>Missing product</Text>
+            <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>
+              Missing product
+            </Text>
             <Text style={styles.meta} selectable>
               Provide route params as either:
               {"\n"}• /vendor/profile/view-product?id=123
@@ -1382,8 +1842,8 @@ export default function ViewProductScreen() {
         !!product?.vendor_id &&
         String(product.vendor_id) !== String(vendorId) ? (
           <Text style={styles.warn}>
-            Note: This product belongs to a different vendor_id than the current vendor
-            session.
+            Note: This product belongs to a different vendor_id than the current
+            vendor session.
           </Text>
         ) : null}
 
@@ -1409,9 +1869,49 @@ export default function ViewProductScreen() {
         <View style={styles.compactBlock}>
           <CompactLine text={titleLine} />
           <CompactLine text={categoryLine} />
-          <CompactLine text={priceLine} />
-          <CompactLine text={sizesLine} />
-          <CompactLine text={inventoryLine} />
+
+          {!isStitchedReady ? (
+            <>
+              <CompactLine text={priceLine} />
+              <CompactLine text={sizesLine} />
+              <CompactLine text={inventoryLine} />
+            </>
+          ) : null}
+
+          {!isStitchedReady &&
+          product &&
+          !loading &&
+          isOutOfStock &&
+          !isVendorSelf ? (
+            <Text style={{ color: "#B91C1C", fontWeight: "700", marginTop: 8 }}>
+              Out of stock
+            </Text>
+          ) : null}
+
+          {!isStitchedReady && showVendorOutOfStockWarning ? (
+            <View
+              style={{
+                marginTop: 10,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#FCA5A5",
+                backgroundColor: "#FEE2E2",
+                padding: 12,
+              }}
+            >
+              <Text
+                style={{
+                  color: "#B91C1C",
+                  fontWeight: "800",
+                  fontSize: 13,
+                  lineHeight: 18,
+                }}
+              >
+                Out of stock — update inventory to make this product visible
+                again
+              </Text>
+            </View>
+          ) : null}
 
           {isUnstitched ? (
             <>
@@ -1419,7 +1919,9 @@ export default function ViewProductScreen() {
             </>
           ) : null}
 
-          {showBuyerActions && isUnstitched && !hasAnySizeLengthMap ? (
+          {showReadOnlyProductOfferings &&
+          isUnstitched &&
+          !hasAnySizeLengthMap ? (
             <Text style={[styles.meta, { marginTop: 8 }]}>
               Size-length mapping not available.
             </Text>
@@ -1427,16 +1929,18 @@ export default function ViewProductScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>Product Details</Text>
+          <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>
+            Product Details
+          </Text>
 
           <ChipRow
             title="Dress Type"
             items={
               specNames.dressType.length
                 ? specNames.dressType
-                : (product as any)?.spec?.dressTypeNames ??
+                : ((product as any)?.spec?.dressTypeNames ??
                   (product as any)?.spec?.dressTypeLabels ??
-                  (product as any)?.spec?.dressTypeIds
+                  (product as any)?.spec?.dressTypeIds)
             }
           />
           <ChipRow
@@ -1444,9 +1948,9 @@ export default function ViewProductScreen() {
             items={
               specNames.fabric.length
                 ? specNames.fabric
-                : (product as any)?.spec?.fabricTypeNames ??
+                : ((product as any)?.spec?.fabricTypeNames ??
                   (product as any)?.spec?.fabricTypeLabels ??
-                  (product as any)?.spec?.fabricTypeIds
+                  (product as any)?.spec?.fabricTypeIds)
             }
           />
           <ChipRow
@@ -1454,9 +1958,9 @@ export default function ViewProductScreen() {
             items={
               specNames.color.length
                 ? specNames.color
-                : (product as any)?.spec?.colorShadeNames ??
+                : ((product as any)?.spec?.colorShadeNames ??
                   (product as any)?.spec?.colorShadeLabels ??
-                  (product as any)?.spec?.colorShadeIds
+                  (product as any)?.spec?.colorShadeIds)
             }
           />
           <ChipRow
@@ -1466,9 +1970,9 @@ export default function ViewProductScreen() {
                 ? (product as any)?.spec?.workSubTypeNames
                 : specNames.work.length
                   ? specNames.work
-                  : (product as any)?.spec?.workTypeNames ??
+                  : ((product as any)?.spec?.workTypeNames ??
                     (product as any)?.spec?.workTypeLabels ??
-                    (product as any)?.spec?.workTypeIds
+                    (product as any)?.spec?.workTypeIds)
             }
           />
           <ChipRow
@@ -1476,9 +1980,9 @@ export default function ViewProductScreen() {
             items={
               specNames.density.length
                 ? specNames.density
-                : (product as any)?.spec?.workDensityNames ??
+                : ((product as any)?.spec?.workDensityNames ??
                   (product as any)?.spec?.workDensityLabels ??
-                  (product as any)?.spec?.workDensityIds
+                  (product as any)?.spec?.workDensityIds)
             }
           />
           <ChipRow
@@ -1486,9 +1990,9 @@ export default function ViewProductScreen() {
             items={
               specNames.origin.length
                 ? specNames.origin
-                : (product as any)?.spec?.originCityNames ??
+                : ((product as any)?.spec?.originCityNames ??
                   (product as any)?.spec?.originCityLabels ??
-                  (product as any)?.spec?.originCityIds
+                  (product as any)?.spec?.originCityIds)
             }
           />
           <ChipRow
@@ -1496,99 +2000,163 @@ export default function ViewProductScreen() {
             items={
               specNames.wear.length
                 ? specNames.wear
-                : (product as any)?.spec?.wearStateNames ??
+                : ((product as any)?.spec?.wearStateNames ??
                   (product as any)?.spec?.wearStateLabels ??
-                  (product as any)?.spec?.wearStateIds
+                  (product as any)?.spec?.wearStateIds)
             }
           />
 
-          {safeText((product as any)?.spec?.more_description ?? "").trim() !== "—" ? (
+          {safeText((product as any)?.spec?.more_description ?? "").trim() !==
+          "—" ? (
             <View style={{ marginTop: 12 }}>
-              <Text style={[styles.specTitle, { color: stylesVars.blue }]}>More Description</Text>
+              <Text style={[styles.specTitle, { color: stylesVars.blue }]}>
+                More Description
+              </Text>
               <Text style={styles.moreDescText}>{moreDescriptionText}</Text>
             </View>
           ) : null}
         </View>
 
+        {product && isStitchedReady ? (
+          <>
+            <ViewProductStitchedVariants
+              product={product}
+              selectedVariant={selectedStitchedVariant}
+              onSelect={setSelectedStitchedVariant}
+              styles={styles}
+              stylesVars={stylesVars}
+              basePricePkr={baseStitchedProductPricePkr}
+              resolvePublicUrl={resolvePublicUrl}
+              resolveManyPublic={resolveManyPublic}
+              readOnly={showVendorReadOnlyPreview}
+            />
+
+            {product && !loading && isOutOfStock && !isVendorSelf ? (
+              <Text
+                style={{ color: "#B91C1C", fontWeight: "700", marginTop: 8 }}
+              >
+                Out of stock
+              </Text>
+            ) : null}
+
+            {showVendorOutOfStockWarning ? (
+              <View
+                style={{
+                  marginTop: 10,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#FCA5A5",
+                  backgroundColor: "#FEE2E2",
+                  padding: 12,
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#B91C1C",
+                    fontWeight: "800",
+                    fontSize: 13,
+                    lineHeight: 18,
+                  }}
+                >
+                  Out of stock — update inventory to make this product visible
+                  again
+                </Text>
+              </View>
+            ) : null}
+          </>
+        ) : null}
+
         {showBuyerActions && showDyeing ? (
           <View style={styles.card}>
-            <Text style={[styles.label, { color: stylesVars.blue }]}>Do you want dyeing?</Text>
-        <View style={{ marginTop: 10 }}>
-          <View style={{ flexDirection: "row", gap: 12, flexWrap: "wrap" }}>
-            <Pressable
-              onPress={() => {
-                setBuyerWantsDyeing(true);
-                onOpenDyeing();
-              }}
-              style={({ pressed }) => [
-                {
-                  paddingVertical: 10,
-                  paddingHorizontal: 14,
-                  borderRadius: 14,
-                  borderWidth: 1.5,
-                  borderColor: buyerWantsDyeing ? stylesVars.blue : "#D7E3FF",
-                  backgroundColor: buyerWantsDyeing ? stylesVars.blue : "#EEF4FF",
-                },
-                pressed ? styles.pressed : null,
-              ]}
-            >
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "800",
-                  color: buyerWantsDyeing ? "#FFFFFF" : stylesVars.blue,
-                }}
-              >
-                Yes • +PKR {dyeingCostPkr}
-              </Text>
-            </Pressable>
+            <Text style={[styles.label, { color: stylesVars.blue }]}>
+              Do you want dyeing?
+            </Text>
+            <View style={{ marginTop: 10 }}>
+              <View style={{ flexDirection: "row", gap: 12, flexWrap: "wrap" }}>
+                <Pressable
+                  onPress={() => {
+                    setBuyerWantsDyeing(true);
+                    onOpenDyeing();
+                  }}
+                  style={({ pressed }) => [
+                    {
+                      paddingVertical: 10,
+                      paddingHorizontal: 14,
+                      borderRadius: 14,
+                      borderWidth: 1.5,
+                      borderColor: buyerWantsDyeing
+                        ? stylesVars.blue
+                        : "#D7E3FF",
+                      backgroundColor: buyerWantsDyeing
+                        ? stylesVars.blue
+                        : "#EEF4FF",
+                    },
+                    pressed ? styles.pressed : null,
+                  ]}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "800",
+                      color: buyerWantsDyeing ? "#FFFFFF" : stylesVars.blue,
+                    }}
+                  >
+                    Yes • +PKR {dyeingCostPkr}
+                  </Text>
+                </Pressable>
 
-            <Pressable
-              onPress={() => {
-                setBuyerWantsDyeing(false);
-                setSelectedDyeShadeId("");
-                setSelectedDyeHex("");
-                setSelectedDyeLabel("");
-                clearCachedDyeSelection(
-                  productId != null ? String(productId) : null,
-                  productCode ?? "",
-                );
+                <Pressable
+                  onPress={() => {
+                    setBuyerWantsDyeing(false);
+                    setSelectedDyeShadeId("");
+                    setSelectedDyeHex("");
+                    setSelectedDyeLabel("");
+                    clearCachedDyeSelection(
+                      productId != null ? String(productId) : null,
+                      productCode ?? "",
+                    );
 
-                router.setParams({
-                  dyeing_selected: "0",
-                  dye_shade_id: undefined,
-                  dye_hex: undefined,
-                  dye_label: undefined,
-                } as any);
-              }}
-              style={({ pressed }) => [
-                {
-                  paddingVertical: 10,
-                  paddingHorizontal: 14,
-                  borderRadius: 14,
-                  borderWidth: 1.5,
-                  borderColor: !buyerWantsDyeing ? stylesVars.blue : "#D7E3FF",
-                  backgroundColor: !buyerWantsDyeing ? stylesVars.blue : "#EEF4FF",
-                },
-                pressed ? styles.pressed : null,
-              ]}
-            >
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "800",
-                  color: !buyerWantsDyeing ? "#FFFFFF" : stylesVars.blue,
-                }}
-              >
-                No
-              </Text>
-            </Pressable>
-          </View>
-        </View>
+                    router.setParams({
+                      dyeing_selected: "0",
+                      dye_shade_id: undefined,
+                      dye_hex: undefined,
+                      dye_label: undefined,
+                    } as any);
+                  }}
+                  style={({ pressed }) => [
+                    {
+                      paddingVertical: 10,
+                      paddingHorizontal: 14,
+                      borderRadius: 14,
+                      borderWidth: 1.5,
+                      borderColor: !buyerWantsDyeing
+                        ? stylesVars.blue
+                        : "#D7E3FF",
+                      backgroundColor: !buyerWantsDyeing
+                        ? stylesVars.blue
+                        : "#EEF4FF",
+                    },
+                    pressed ? styles.pressed : null,
+                  ]}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "800",
+                      color: !buyerWantsDyeing ? "#FFFFFF" : stylesVars.blue,
+                    }}
+                  >
+                    No
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
 
             {buyerWantsDyeing && selectedDyeHex ? (
               <View style={{ marginTop: 14 }}>
-                <Text style={[styles.label, { color: stylesVars.blue }]}>Selected Colour</Text>
+                <Text style={[styles.label, { color: stylesVars.blue }]}>
+                  Selected Colour
+                </Text>
 
                 <View
                   style={{
@@ -1603,6 +2171,24 @@ export default function ViewProductScreen() {
                 />
               </View>
             ) : null}
+          </View>
+        ) : null}
+
+        {showVendorDyeingPreview ? (
+          <View style={styles.card}>
+            <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>
+              Dyeing Offered
+            </Text>
+            <Text style={[styles.metaLine, { marginTop: 8 }]}>
+              Status: Available
+            </Text>
+            <Text style={styles.metaLine}>
+              Dyeing Cost: PKR {dyeingCostPkr.toLocaleString()}
+            </Text>
+            {/* <Text style={[styles.meta, { marginTop: 8 }]}>
+              This is a vendor preview only. Buyer shade selection is disabled
+              here.
+            </Text> */}
           </View>
         ) : null}
 
@@ -1621,11 +2207,350 @@ export default function ViewProductScreen() {
               onChange={setTailoringSelection}
               resolvePublicUrl={resolvePublicUrl}
             />
+
+            {buyerWantsTailoring && tailoringSelection?.presetId ? (
+              <View
+                style={{
+                  marginTop: 14,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: "#D7E3FF",
+                  backgroundColor: "#F8FAFC",
+                  padding: 12,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: "900",
+                    color: stylesVars.blue,
+                  }}
+                >
+                  Selected Tailoring Style
+                </Text>
+
+                <View
+                  style={{
+                    marginTop: 10,
+                    flexDirection: "row",
+                    gap: 12,
+                    alignItems: "flex-start",
+                  }}
+                >
+                  {tailoringSelection?.imageUrl ? (
+                    <Image
+                      source={{ uri: tailoringSelection.imageUrl }}
+                      style={{
+                        width: 82,
+                        height: 82,
+                        borderRadius: 14,
+                        backgroundColor: "#EEF2F7",
+                        borderWidth: 1,
+                        borderColor: "#E2E8F0",
+                      }}
+                      resizeMode="cover"
+                    />
+                  ) : null}
+
+                  <View style={{ flex: 1 }}>
+                    {tailoringSelection?.title ? (
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontWeight: "900",
+                          color: stylesVars.text,
+                          lineHeight: 18,
+                        }}
+                        numberOfLines={2}
+                      >
+                        {tailoringSelection.title}
+                      </Text>
+                    ) : null}
+
+                    {tailoringSelection?.extraCostPkr ? (
+                      <Text style={styles.metaLine}>
+                        Style Extra Cost: PKR{" "}
+                        {tailoringSelection.extraCostPkr.toLocaleString()}
+                      </Text>
+                    ) : null}
+
+                    {tailoringSelection?.neck ? (
+                      <Text style={styles.metaLine}>
+                        Neck: {tailoringSelection.neck}
+                      </Text>
+                    ) : null}
+                    {tailoringSelection?.sleeve ? (
+                      <Text style={styles.metaLine}>
+                        Sleeve: {tailoringSelection.sleeve}
+                      </Text>
+                    ) : null}
+                    {tailoringIncludesTrouser && tailoringSelection?.trouser ? (
+                      <Text style={styles.metaLine}>
+                        Trouser: {tailoringSelection.trouser}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+
+                {tailoringCostPkr > 0 ? (
+                  <Text
+                    style={[
+                      styles.metaLine,
+                      { fontWeight: "900", color: stylesVars.text },
+                    ]}
+                  >
+                    Tailoring Cost: PKR {tailoringCostPkr.toLocaleString()}
+                  </Text>
+                ) : null}
+
+                {tailoringTurnaroundDays > 0 ? (
+                  <Text style={styles.metaLine}>
+                    Turnaround: {tailoringTurnaroundDays} days
+                  </Text>
+                ) : null}
+
+                {tailoringSelection?.note ? (
+                  <Text style={[styles.meta, { marginTop: 8 }]}>
+                    {tailoringSelection.note}
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
           </View>
         ) : null}
 
+        {showVendorTailoringPreview ? (
+          <View style={styles.card}>
+            <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>
+              Tailoring Offered
+            </Text>
+
+            <Text style={[styles.metaLine, { marginTop: 8 }]}>
+              {tailoringAvailabilityLine}
+            </Text>
+            {tailoringTurnaroundDays > 0 ? (
+              <Text style={styles.metaLine}>
+                Turnaround: {tailoringTurnaroundDays} days
+              </Text>
+            ) : null}
+            {sizeLengthLine ? (
+              <Text style={styles.metaLine}>
+                Size Lengths: {sizeLengthLine}
+              </Text>
+            ) : null}
+
+            {hasTailoringStylePresets ? (
+              <View style={{ marginTop: 14, gap: 12 }}>
+                <Text style={[styles.specTitle, { color: stylesVars.blue }]}>
+                  Styles Offered
+                </Text>
+                {tailoringStylePresets.map((preset, index) => {
+                  const presetImageUrls = resolveTailoringPresetImageUrls(
+                    preset,
+                    resolvePublicUrl,
+                  );
+                  const extraCost = safeInt0(preset.extra_cost_pkr);
+                  const title =
+                    String(preset.title || "").trim() || `Style ${index + 1}`;
+
+                  return (
+                    <View
+                      key={preset.id || `${title}-${index}`}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: "#D7E3FF",
+                        borderRadius: 16,
+                        padding: 12,
+                        backgroundColor: "#FFFFFF",
+                        gap: 10,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          fontWeight: "900",
+                          color: stylesVars.text,
+                        }}
+                      >
+                        Style Card {index + 1}
+                      </Text>
+
+                      {presetImageUrls.length ? (
+                        <ScrollView
+                          horizontal
+                          nestedScrollEnabled
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={{ gap: 10 }}
+                        >
+                          {presetImageUrls.map((uri, imgIndex) => (
+                            <Image
+                              key={`${uri}-${imgIndex}`}
+                              source={{ uri }}
+                              style={{
+                                width: 210,
+                                height: 170,
+                                borderRadius: 14,
+                                backgroundColor: "#EEF2F7",
+                                borderWidth: 1,
+                                borderColor: "#E2E8F0",
+                              }}
+                              resizeMode="contain"
+                            />
+                          ))}
+                        </ScrollView>
+                      ) : null}
+
+                      <View style={{ gap: 3 }}>
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            fontWeight: "800",
+                            color: stylesVars.text,
+                          }}
+                        >
+                          {title}
+                        </Text>
+
+                        {extraCost > 0 ? (
+                          <Text style={styles.metaLine}>
+                            Extra Cost: PKR {extraCost.toLocaleString()}
+                          </Text>
+                        ) : null}
+                        {preset.note ? (
+                          <Text style={styles.meta}>{preset.note}</Text>
+                        ) : null}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : (
+              <Text style={[styles.meta, { marginTop: 10 }]}>
+                No tailoring style cards added for this product.
+              </Text>
+            )}
+          </View>
+        ) : null}
+
+        {showBuyerActions && isStitchedReady && selectedStitchedVariant
+          ? (() => {
+              const selectedImageUrl =
+                (Array.isArray((selectedStitchedVariant as any)?.imageUrls)
+                  ? (selectedStitchedVariant as any).imageUrls[0]
+                  : null) ||
+                resolvePublicUrl(
+                  firstStitchedVariantImagePath(selectedStitchedVariant),
+                );
+
+              const baseCost = safePositiveNumber(baseStitchedProductPricePkr);
+              const additionalCost = safePositiveNumber(
+                (selectedStitchedVariant as any)?.additional_price_pkr,
+              );
+              const totalCost =
+                safePositiveNumber(
+                  (selectedStitchedVariant as any)?.total_price_pkr ??
+                    (selectedStitchedVariant as any)?.pricePkr ??
+                    (selectedStitchedVariant as any)?.price_pkr,
+                ) || baseCost + additionalCost;
+
+              return (
+                <View style={styles.card}>
+                  <Text
+                    style={[styles.sectionTitle, { color: stylesVars.blue }]}
+                  >
+                    Selected Variant
+                  </Text>
+
+                  <View
+                    style={{
+                      marginTop: 12,
+                      flexDirection: "row",
+                      gap: 12,
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    {selectedImageUrl ? (
+                      <Image
+                        source={{ uri: selectedImageUrl }}
+                        style={{
+                          width: 82,
+                          height: 82,
+                          borderRadius: 14,
+                          backgroundColor: "#EEF2F7",
+                        }}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View
+                        style={{
+                          width: 82,
+                          height: 82,
+                          borderRadius: 14,
+                          backgroundColor: "#EEF2F7",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Text style={[styles.meta, { fontSize: 11 }]}>
+                          No image
+                        </Text>
+                      </View>
+                    )}
+
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          fontWeight: "900",
+                          color: stylesVars.text,
+                        }}
+                        numberOfLines={2}
+                      >
+                        {selectedStitchedVariant.rawVariant?.display_name ||
+                          selectedStitchedVariant.title ||
+                          selectedStitchedVariant.label}
+                      </Text>
+
+                      {!isMadeOnOrder ? (
+                        <>
+                          <Text style={styles.metaLine}>
+                            Selected Size: {selectedStitchedVariant.size}
+                          </Text>
+                          <Text style={styles.metaLine}>
+                            Available Stock:{" "}
+                            {selectedStitchedVariant.stockQty ?? "—"}
+                          </Text>
+                        </>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  <View style={{ marginTop: 12, gap: 5 }}>
+                    <Text style={styles.metaLine}>
+                      Base Cost: PKR {baseCost.toLocaleString()}
+                    </Text>
+                    <Text style={styles.metaLine}>
+                      Variant Additional Cost: PKR{" "}
+                      {additionalCost.toLocaleString()}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.metaLine,
+                        { fontWeight: "900", color: stylesVars.text },
+                      ]}
+                    >
+                      Total Cost: PKR {totalCost.toLocaleString()}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })()
+          : null}
+
         <View style={styles.card}>
-          <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>Meta</Text>
+          <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>
+            Meta
+          </Text>
           {uploadedDate ? (
             <Text style={styles.metaLine}>Date uploaded: {uploadedDate}</Text>
           ) : null}
@@ -1638,7 +2563,10 @@ export default function ViewProductScreen() {
       {showBuyerActions && (vendorRow as any)?.id != null ? (
         <Pressable
           onPress={onViewVendorProfile}
-          style={({ pressed }) => [styles.fabVendor, pressed ? styles.pressed : null]}
+          style={({ pressed }) => [
+            styles.fabVendor,
+            pressed ? styles.pressed : null,
+          ]}
         >
           <Text style={styles.fabVendorText}>Vendor</Text>
         </Pressable>

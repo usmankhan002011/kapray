@@ -9,11 +9,17 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  View
+  View,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import {
+  loadFavouriteProductIds,
+  saveFavouriteProductIds,
+} from "@/utils/favourites";
 import { useAppSelector } from "@/store/hooks";
 import { supabase } from "@/utils/supabase/client";
+import Wizard from "./wizard";
 
 const PRODUCTS_TABLE = "products";
 const BUCKET_VENDOR = "vendor_images";
@@ -27,19 +33,21 @@ const TABLE_WEAR_STATES = "wear_states";
 
 const PAGE_SIZE = 30;
 
+type ProductCategory =
+  | "unstitched_plain"
+  | "unstitched_dyeing"
+  | "unstitched_dyeing_tailoring"
+  | "stitched_ready";
+
 type ProductRow = {
   id: number;
   vendor_id?: number | null;
   product_code?: string | null;
   title?: string | null;
   created_at?: string | null;
+  inventory_qty?: number | null;
   made_on_order?: boolean;
-  product_category?:
-    | "unstitched_plain"
-    | "unstitched_dyeing"
-    | "unstitched_dyeing_tailoring"
-    | "stitched_ready"
-    | null;
+  product_category?: ProductCategory | null;
   spec?: any;
   price?: any;
   media?: any;
@@ -58,6 +66,13 @@ type ResultsCacheShape = {
   hasMore: boolean;
 };
 
+type VariantInventorySummary = {
+  totalQty: number;
+  availableSizes: number;
+  lowestPositiveQty: number;
+  hasStock: boolean;
+};
+
 let RESULTS_CACHE: ResultsCacheShape | null = null;
 
 function safeText(v: any) {
@@ -67,9 +82,7 @@ function safeText(v: any) {
 
 function normalizeIds(arr: any): string[] {
   if (!Array.isArray(arr)) return [];
-  return arr
-    .map((x) => String(x ?? "").trim())
-    .filter((x) => x.length > 0);
+  return arr.map((x) => String(x ?? "").trim()).filter((x) => x.length > 0);
 }
 
 // empty selection => ANY (pass)
@@ -98,6 +111,131 @@ function publicUrlForStoragePath(path: string | null): string | null {
   return data?.publicUrl ?? null;
 }
 
+function safeStockQty(v: unknown) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.trunc(n);
+}
+
+function getRawReadyVariants(product: any): any[] {
+  const price = product?.price ?? {};
+  const spec = product?.spec ?? {};
+  const inventory = product?.inventory ?? {};
+
+  const raw =
+    product?.variants ??
+    price?.variants ??
+    price?.ready_variants ??
+    price?.readyVariants ??
+    price?.stitched_variants ??
+    price?.stitchedVariants ??
+    spec?.variants ??
+    spec?.ready_variants ??
+    spec?.readyVariants ??
+    spec?.stitched_variants ??
+    spec?.stitchedVariants ??
+    inventory?.variants ??
+    inventory?.ready_variants ??
+    inventory?.stitched_variants ??
+    [];
+
+  return Array.isArray(raw) ? raw : [];
+}
+
+function getVariantInventorySummary(product: any): VariantInventorySummary {
+  const variants = getRawReadyVariants(product);
+  let totalQty = 0;
+  let lowestPositiveQty = Infinity;
+  const availableSizeSet = new Set<string>();
+
+  for (const variant of variants) {
+    const sizes = Array.isArray(variant?.sizes) ? variant.sizes : [];
+
+    for (const row of sizes) {
+      const size = String(
+        row?.size ?? row?.label ?? row?.name ?? row?.value ?? "",
+      )
+        .trim()
+        .toUpperCase();
+
+      const qty = Number(
+        row?.qty ??
+          row?.stock_qty ??
+          row?.stockQty ??
+          row?.stock ??
+          row?.quantity ??
+          0,
+      );
+
+      if (qty > 0) {
+        totalQty += qty;
+        if (size) availableSizeSet.add(size);
+        lowestPositiveQty = Math.min(lowestPositiveQty, qty);
+      }
+    }
+  }
+
+  const availableSizes = availableSizeSet.size;
+
+  return {
+    totalQty,
+    availableSizes,
+    lowestPositiveQty: lowestPositiveQty === Infinity ? 0 : lowestPositiveQty,
+    hasStock: totalQty > 0,
+  };
+}
+
+function getProductCategory(product: ProductRow): ProductCategory | null {
+  const fromDb = product?.product_category;
+  if (fromDb) return fromDb;
+
+  const fromSpec = product?.spec?.product_category;
+  if (
+    fromSpec === "unstitched_plain" ||
+    fromSpec === "unstitched_dyeing" ||
+    fromSpec === "unstitched_dyeing_tailoring" ||
+    fromSpec === "stitched_ready"
+  ) {
+    return fromSpec;
+  }
+
+  const priceMode = String(product?.price?.mode ?? "");
+  if (priceMode === "stitched_total") return "stitched_ready";
+  if (priceMode === "unstitched_per_meter") return "unstitched_plain";
+
+  return null;
+}
+
+function isStitchedReadyProduct(product: ProductRow) {
+  return getProductCategory(product) === "stitched_ready";
+}
+function productHasBuyerVisibleStock(product: ProductRow) {
+  if (Boolean(product?.made_on_order)) return true;
+
+  if (isStitchedReadyProduct(product)) {
+    return getVariantInventorySummary(product).hasStock;
+  }
+
+  return safeStockQty(product?.inventory_qty) > 0;
+}
+function stockBadgeText(product: ProductRow) {
+  if (Boolean(product?.made_on_order)) return "Made on order";
+
+  if (isStitchedReadyProduct(product)) {
+    const info = getVariantInventorySummary(product);
+
+    if (!info.hasStock) return "Out of stock";
+
+    const sizeText =
+      info.availableSizes === 1 ? "1 size" : `${info.availableSizes} sizes`;
+
+    return `Qty: ${info.totalQty} • ${sizeText} available`;
+  }
+
+  const qty = safeStockQty(product?.inventory_qty);
+  if (qty <= 0) return "Out of stock";
+  return `Qty: ${qty}`;
+}
 /**
  * Numeric PKR value for filtering:
  * - stitched_total => cost_pkr_total
@@ -132,7 +270,9 @@ function formatPrice(price: any): string {
   }
 
   if (typeof total === "number") return `PKR ${total.toLocaleString()}`;
-  if (typeof perMeter === "number") return `PKR ${perMeter.toLocaleString()} / meter`;
+  if (typeof perMeter === "number") {
+    return `PKR ${perMeter.toLocaleString()} / meter`;
+  }
 
   return "Price not set";
 }
@@ -156,7 +296,11 @@ function idsToNames(ids: string[], map: Map<string, string>): string[] {
 }
 
 // ✅ if user selected IDs but names not loaded yet, show Loading… (not Any)
-function namesOrLoading(label: string, selectedIds: any[], names: string[]): string {
+function namesOrLoading(
+  label: string,
+  selectedIds: any[],
+  names: string[],
+): string {
   const hasSelection = Array.isArray(selectedIds) && selectedIds.length > 0;
   if (!hasSelection) return `${label}: Any`;
   if (!names.length) return `${label}: Loading…`;
@@ -167,19 +311,51 @@ function formatPKR(n: number) {
   return `PKR ${Math.round(n).toLocaleString()}`;
 }
 
-function priceRangeSummary(minCostPkr: number | null, maxCostPkr: number | null) {
+function priceRangeSummary(
+  minCostPkr: number | null,
+  maxCostPkr: number | null,
+) {
   if (minCostPkr === null && maxCostPkr === null) return "Price: Any";
-  if (minCostPkr !== null && maxCostPkr === null) return `Price: ${formatPKR(minCostPkr)}+`;
-  if (minCostPkr === null && maxCostPkr !== null) return `Price: Up to ${formatPKR(maxCostPkr)}`;
+  if (minCostPkr !== null && maxCostPkr === null) {
+    return `Price: ${formatPKR(minCostPkr)}+`;
+  }
+  if (minCostPkr === null && maxCostPkr !== null) {
+    return `Price: Up to ${formatPKR(maxCostPkr)}`;
+  }
   return `Price: ${formatPKR(minCostPkr as number)} – ${formatPKR(maxCostPkr as number)}`;
+}
+
+function productCategoryLabel(productCategoryIds: string[]) {
+  if (!Array.isArray(productCategoryIds) || !productCategoryIds.length) {
+    return "Product Category: Any";
+  }
+
+  const labels = productCategoryIds
+    .map((id) => {
+      const key = String(id || "").trim();
+      if (key === "stitched_ready") return "Ready-to-Wear";
+      if (key === "stitched_made_order") return "Made-on-Order";
+      if (key === "unstitched") return "Unstitched";
+      return "";
+    })
+    .filter((x) => x.length > 0);
+
+  return labels.length
+    ? `Product Category: ${labels.join(", ")}`
+    : "Product Category: Any";
 }
 
 export default function ResultsScreen() {
   const router = useRouter();
   const filters = useAppSelector((s: any) => s.filters);
+  const [wizardVisible, setWizardVisible] = useState(false);
 
   // ✅ Dress Type is now MULTI-select (empty => Any)
   const dressTypeIds: string[] = filters?.dressTypeIds ?? [];
+
+  const hasDressTypeSelection = useMemo(() => {
+    return Array.isArray(dressTypeIds) && dressTypeIds.length > 0;
+  }, [dressTypeIds]);
 
   const fabricTypeIds: string[] = filters?.fabricTypeIds ?? [];
   const colorShadeIds: string[] = filters?.colorShadeIds ?? [];
@@ -187,6 +363,7 @@ export default function ResultsScreen() {
   const workDensityIds: string[] = filters?.workDensityIds ?? [];
   const originCityIds: string[] = filters?.originCityIds ?? [];
   const wearStateIds: string[] = filters?.wearStateIds ?? [];
+  const productCategoryIds: string[] = filters?.productCategoryIds ?? [];
 
   // ✅ cost range (nulls => Any)
   const minCostPkr: number | null = filters?.minCostPkr ?? null;
@@ -201,39 +378,83 @@ export default function ResultsScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(RESULTS_CACHE?.hasMore ?? true);
 
-  const [products, setProducts] = useState<ProductRow[]>(RESULTS_CACHE?.products ?? []);
+  const [products, setProducts] = useState<ProductRow[]>(
+    RESULTS_CACHE?.products ?? [],
+  );
 
   // lookups (names only)
-  const [dressTypes, setDressTypes] = useState<NameRow[]>(RESULTS_CACHE?.dressTypes ?? []);
-  const [fabricTypes, setFabricTypes] = useState<NameRow[]>(RESULTS_CACHE?.fabricTypes ?? []);
-  const [workTypes, setWorkTypes] = useState<NameRow[]>(RESULTS_CACHE?.workTypes ?? []);
-  const [workDensities, setWorkDensities] = useState<NameRow[]>(
-    RESULTS_CACHE?.workDensities ?? []
+  const [dressTypes, setDressTypes] = useState<NameRow[]>(
+    RESULTS_CACHE?.dressTypes ?? [],
   );
-  const [originCities, setOriginCities] = useState<NameRow[]>(RESULTS_CACHE?.originCities ?? []);
-  const [wearStates, setWearStates] = useState<NameRow[]>(RESULTS_CACHE?.wearStates ?? []);
+  const [fabricTypes, setFabricTypes] = useState<NameRow[]>(
+    RESULTS_CACHE?.fabricTypes ?? [],
+  );
+  const [workTypes, setWorkTypes] = useState<NameRow[]>(
+    RESULTS_CACHE?.workTypes ?? [],
+  );
+  const [workDensities, setWorkDensities] = useState<NameRow[]>(
+    RESULTS_CACHE?.workDensities ?? [],
+  );
+  const [originCities, setOriginCities] = useState<NameRow[]>(
+    RESULTS_CACHE?.originCities ?? [],
+  );
+  const [wearStates, setWearStates] = useState<NameRow[]>(
+    RESULTS_CACHE?.wearStates ?? [],
+  );
 
-  // ✅ local favourites (heart turns red). No DB yet.
+  // ✅ local favourites persisted on the buyer mobile. No DB yet.
   const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
   // ✅ sort (default: cost ascending)
   const [sortOpen, setSortOpen] = useState(false);
-  const [sortMode, setSortMode] = useState<"cost_asc" | "cost_desc" | "date">("cost_asc");
+  const [sortMode, setSortMode] = useState<"cost_asc" | "cost_desc" | "date">(
+    "cost_asc",
+  );
 
-  function toggleFavorite(productId: number) {
+  async function toggleFavorite(productId: number) {
     setFavoriteIds((prev) => {
       const next = new Set(prev);
       if (next.has(productId)) next.delete(productId);
       else next.add(productId);
+
+      void saveFavouriteProductIds(next).catch(() => {
+        Alert.alert(
+          "Favourite not saved",
+          "Please try again. The heart changed on screen but could not be stored on this device.",
+        );
+      });
+
       return next;
     });
   }
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadFavoriteIds() {
+      try {
+        const ids = await loadFavouriteProductIds();
+        if (!alive) return;
+        setFavoriteIds(ids);
+      } catch {
+        if (!alive) return;
+        setFavoriteIds(new Set<number>());
+      }
+    }
+
+    void loadFavoriteIds();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   async function fetchPage(from: number, to: number) {
     return supabase
       .from(PRODUCTS_TABLE)
       .select(
-        "id, vendor_id, product_code, title, created_at, made_on_order, product_category, spec, price, media"
+        "id, vendor_id, product_code, title, created_at, inventory_qty, made_on_order, product_category, spec, price, media",
       )
       .order("created_at", { ascending: false })
       .range(from, to);
@@ -256,16 +477,22 @@ export default function ResultsScreen() {
           workRes,
           densityRes,
           originRes,
-          wearRes
+          wearRes,
         ] = await Promise.all([
           fetchPage(0, PAGE_SIZE - 1),
 
-          (supabase as any).from(TABLE_DRESS_TYPE).select("id, name").order("id", { ascending: true }),
+          (supabase as any)
+            .from(TABLE_DRESS_TYPE)
+            .select("id, name")
+            .order("id", { ascending: true }),
           supabase
             .from(TABLE_FABRIC_TYPES)
             .select("id, name")
             .order("sort_order", { ascending: true }),
-          supabase.from(TABLE_WORK_TYPES).select("id, name").order("name", { ascending: true }),
+          supabase
+            .from(TABLE_WORK_TYPES)
+            .select("id, name")
+            .order("name", { ascending: true }),
           supabase
             .from(TABLE_WORK_DENSITIES)
             .select("id, name")
@@ -274,7 +501,10 @@ export default function ResultsScreen() {
             .from(TABLE_ORIGIN_CITIES)
             .select("id, name")
             .order("name", { ascending: true }),
-          supabase.from(TABLE_WEAR_STATES).select("id, name").order("name", { ascending: true })
+          supabase
+            .from(TABLE_WEAR_STATES)
+            .select("id, name")
+            .order("name", { ascending: true }),
         ]);
 
         if (!alive) return;
@@ -292,14 +522,15 @@ export default function ResultsScreen() {
             workDensities: (((densityRes as any).data as any) ?? []) as any,
             originCities: (((originRes as any).data as any) ?? []) as any,
             wearStates: (((wearRes as any).data as any) ?? []) as any,
-            hasMore: false
+            hasMore: false,
           };
-                } else {
+        } else {
           const rows = (((prodRes as any).data as any) ?? []) as ProductRow[];
           const nextDress = (((dressRes as any).data as any) ?? []) as any[];
           const nextFabric = (((fabricRes as any).data as any) ?? []) as any[];
           const nextWork = (((workRes as any).data as any) ?? []) as any[];
-          const nextDensity = (((densityRes as any).data as any) ?? []) as any[];
+          const nextDensity = (((densityRes as any).data as any) ??
+            []) as any[];
           const nextOrigin = (((originRes as any).data as any) ?? []) as any[];
           const nextWear = (((wearRes as any).data as any) ?? []) as any[];
           const nextHasMore = rows.length === PAGE_SIZE;
@@ -323,7 +554,7 @@ export default function ResultsScreen() {
             workDensities: nextDensity,
             originCities: nextOrigin,
             wearStates: nextWear,
-            hasMore: nextHasMore
+            hasMore: nextHasMore,
           };
         }
 
@@ -353,7 +584,7 @@ export default function ResultsScreen() {
     }
 
     if (!RESULTS_CACHE) {
-      loadAll();
+      void loadAll();
     } else {
       setLoading(false);
       setProducts(RESULTS_CACHE.products);
@@ -395,7 +626,7 @@ export default function ResultsScreen() {
           RESULTS_CACHE = {
             ...RESULTS_CACHE,
             products: next,
-            hasMore: rows.length === PAGE_SIZE
+            hasMore: rows.length === PAGE_SIZE,
           };
         } else {
           RESULTS_CACHE = {
@@ -406,7 +637,7 @@ export default function ResultsScreen() {
             workDensities,
             originCities,
             wearStates,
-            hasMore: rows.length === PAGE_SIZE
+            hasMore: rows.length === PAGE_SIZE,
           };
         }
 
@@ -423,7 +654,10 @@ export default function ResultsScreen() {
   const dressMap = useMemo(() => buildNameMap(dressTypes), [dressTypes]);
   const fabricMap = useMemo(() => buildNameMap(fabricTypes), [fabricTypes]);
   const workMap = useMemo(() => buildNameMap(workTypes), [workTypes]);
-  const densityMap = useMemo(() => buildNameMap(workDensities), [workDensities]);
+  const densityMap = useMemo(
+    () => buildNameMap(workDensities),
+    [workDensities],
+  );
   const originMap = useMemo(() => buildNameMap(originCities), [originCities]);
   const wearMap = useMemo(() => buildNameMap(wearStates), [wearStates]);
 
@@ -432,11 +666,49 @@ export default function ResultsScreen() {
       const spec = p?.spec ?? {};
       const price = p?.price ?? {};
 
+      if (!productHasBuyerVisibleStock(p)) return false;
+
       // ✅ vendor filter (multi-select). Empty => ANY
       if (vendorIds.length) {
         const vid =
-          p?.vendor_id === null || p?.vendor_id === undefined ? "" : String(p.vendor_id);
+          p?.vendor_id === null || p?.vendor_id === undefined
+            ? ""
+            : String(p.vendor_id);
         if (!vid || !vendorIds.includes(vid)) return false;
+      }
+
+      // ✅ product category MULTI-select (empty => ANY)
+      if (productCategoryIds.length) {
+        const category = getProductCategory(p);
+
+        let matchesProductCategory = false;
+
+        for (const selectedCategory of productCategoryIds) {
+          if (selectedCategory === "stitched_ready") {
+            if (!Boolean(p?.made_on_order) && category === "stitched_ready") {
+              matchesProductCategory = true;
+            }
+          }
+
+          if (selectedCategory === "stitched_made_order") {
+            if (Boolean(p?.made_on_order)) {
+              matchesProductCategory = true;
+            }
+          }
+
+          if (selectedCategory === "unstitched") {
+            const isUnstitched =
+              category === "unstitched_plain" ||
+              category === "unstitched_dyeing" ||
+              category === "unstitched_dyeing_tailoring";
+
+            if (isUnstitched) {
+              matchesProductCategory = true;
+            }
+          }
+        }
+
+        if (!matchesProductCategory) return false;
       }
 
       // ✅ dress type MULTI-select (empty => ANY)
@@ -463,6 +735,7 @@ export default function ResultsScreen() {
   }, [
     products,
     vendorIds,
+    productCategoryIds,
     dressTypeIds,
     fabricTypeIds,
     colorShadeIds,
@@ -471,12 +744,16 @@ export default function ResultsScreen() {
     originCityIds,
     wearStateIds,
     minCostPkr,
-    maxCostPkr
+    maxCostPkr,
   ]);
 
   // ✅ apply sort (cost asc/desc or date)
   const sorted = useMemo(() => {
-    const arr = [...(filtered ?? [])];
+    const base = showFavoritesOnly
+      ? (filtered ?? []).filter((p) => favoriteIds.has(Number(p.id)))
+      : (filtered ?? []);
+
+    const arr = [...base];
 
     if (sortMode === "cost_asc" || sortMode === "cost_desc") {
       const dir = sortMode === "cost_asc" ? 1 : -1;
@@ -517,7 +794,7 @@ export default function ResultsScreen() {
     });
 
     return arr;
-  }, [filtered, sortMode]);
+  }, [filtered, sortMode, showFavoritesOnly, favoriteIds]);
 
   // ✅ summary = NAMES ONLY (and "Loading…" if selection exists but names not loaded yet)
   const filtersSummary = useMemo(() => {
@@ -529,9 +806,12 @@ export default function ResultsScreen() {
     const wearNames = idsToNames(wearStateIds, wearMap);
 
     // colors are already names in Redux/spec
-    const colorNames = (colorShadeIds ?? []).map((x) => String(x).trim()).filter((x) => x.length > 0);
+    const colorNames = (colorShadeIds ?? [])
+      .map((x) => String(x).trim())
+      .filter((x) => x.length > 0);
 
     return [
+      productCategoryLabel(productCategoryIds),
       namesOrLoading("Dress", dressTypeIds, dressNames),
       namesOrLoading("Fabric", fabricTypeIds, fabricNames),
       namesOrLoading("Color", colorShadeIds, colorNames),
@@ -539,9 +819,10 @@ export default function ResultsScreen() {
       namesOrLoading("Density", workDensityIds, densityNames),
       namesOrLoading("Origin", originCityIds, originNames),
       namesOrLoading("Wear", wearStateIds, wearNames),
-      priceRangeSummary(minCostPkr, maxCostPkr)
+      priceRangeSummary(minCostPkr, maxCostPkr),
     ].join("  |  ");
   }, [
+    productCategoryIds,
     dressTypeIds,
     dressMap,
     fabricTypeIds,
@@ -556,58 +837,151 @@ export default function ResultsScreen() {
     wearStateIds,
     wearMap,
     minCostPkr,
-    maxCostPkr
+    maxCostPkr,
   ]);
 
   function openProduct(p: ProductRow) {
     router.push({
-      pathname: "/flow/view-product" as any,
-      params: { id: String(p.id) },
+      pathname: "/(tabs)/flow/view-product" as any,
+      params: { id: String(p.id), from: "results" },
     });
+  }
+
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <Image
+        source={require("../assets/images/completeLogo.png")}
+        style={styles.logo}
+        resizeMode="contain"
+      />
+
+      {hasDressTypeSelection ? (
+        <Pressable
+          onPress={() => setWizardVisible(true)}
+          style={({ pressed }) => [
+            styles.searchButton,
+            pressed ? styles.pressed : null,
+          ]}
+        >
+          <Ionicons name="search" size={18} color="#2563EB" />
+        </Pressable>
+      ) : (
+        <View style={styles.searchButtonPlaceholder} />
+      )}
+    </View>
+  );
+
+  const renderWizardModal = () => (
+    <Modal
+      visible={wizardVisible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setWizardVisible(false)}
+    >
+      <View style={styles.wizardModalOverlay}>
+        <View style={styles.wizardModalContent}>
+          <Wizard onClose={() => setWizardVisible(false)} />
+        </View>
+      </View>
+    </Modal>
+  );
+
+  if (!hasDressTypeSelection) {
+    return (
+      <View style={styles.container}>
+        {renderHeader()}
+
+        <View style={styles.wizardWrap}>
+          <Wizard />
+        </View>
+
+        {renderWizardModal()}
+      </View>
+    );
   }
 
   if (loading) {
     return (
-      <View style={[styles.center, styles.loadingScreen]}>
-        <ActivityIndicator />
-        <Text style={styles.muted}>Loading products…</Text>
+      <View style={styles.container}>
+        {renderHeader()}
+
+        <View style={[styles.center, styles.loadingScreen]}>
+          <ActivityIndicator />
+          <Text style={styles.muted}>Loading products…</Text>
+        </View>
+
+        {renderWizardModal()}
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      {renderHeader()}
+
       <View style={styles.topRow}>
         <Text style={styles.title} numberOfLines={1}>
-          Products ({sorted.length})
+          {showFavoritesOnly ? "Favourites" : "Products"} ({sorted.length})
         </Text>
 
         <View style={styles.topActions}>
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              showFavoritesOnly ? "Show all products" : "Show favourites"
+            }
+            onPress={() => setShowFavoritesOnly((v) => !v)}
+            style={({ pressed }) => [
+              styles.iconBtn,
+              showFavoritesOnly ? styles.iconBtnActive : null,
+              pressed ? { opacity: 0.7 } : null,
+            ]}
+          >
+            <Text style={styles.iconText}>
+              {showFavoritesOnly ? "❤️" : "🤍"}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open sorting"
             onPress={() => setSortOpen(true)}
-            style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
+            style={({ pressed }) => [
+              styles.iconBtn,
+              pressed ? { opacity: 0.7 } : null,
+            ]}
           >
             <Text style={styles.iconText}>↕️</Text>
           </Pressable>
 
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open filters"
             onPress={() =>
-            router.push({
-              pathname: "/flow/results-filters" as any,
-            })
-          }
-            style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
+              router.push({
+                pathname: "/(tabs)/flow/results-filters" as any,
+              })
+            }
+            style={({ pressed }) => [
+              styles.iconBtn,
+              pressed ? { opacity: 0.7 } : null,
+            ]}
           >
-            <Text style={styles.iconText}>🔍</Text>
+            <MaterialIcons name="filter-list" size={20} color="#111827" />
           </Pressable>
 
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Track order"
             onPress={() =>
-            router.push({
-              pathname: "/flow/orders/track" as any,
-            })
-          }
-            style={({ pressed }) => [styles.iconBtn, pressed ? { opacity: 0.7 } : null]}
+              router.push({
+                pathname: "/(tabs)/flow/orders/track" as any,
+              })
+            }
+            style={({ pressed }) => [
+              styles.iconBtn,
+              pressed ? { opacity: 0.7 } : null,
+            ]}
           >
             <Text style={styles.iconText}>📦</Text>
           </Pressable>
@@ -628,12 +1002,18 @@ export default function ResultsScreen() {
         animationType="fade"
         onRequestClose={() => setSortOpen(false)}
       >
-        <Pressable style={styles.modalBackdrop} onPress={() => setSortOpen(false)}>
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setSortOpen(false)}
+        >
           <Pressable style={styles.modalCard} onPress={() => {}}>
             <Text style={styles.modalTitle}>Sort</Text>
 
             <Pressable
-              style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
+              style={({ pressed }) => [
+                styles.modalItem,
+                pressed ? { opacity: 0.7 } : null,
+              ]}
               onPress={() => {
                 setSortMode("cost_asc");
                 setSortOpen(false);
@@ -646,13 +1026,18 @@ export default function ResultsScreen() {
                   <Text style={styles.modalItemSub}>Low to high</Text>
                 </View>
               </View>
-              <Text style={styles.modalRight}>{sortMode === "cost_asc" ? "✅" : ""}</Text>
+              <Text style={styles.modalRight}>
+                {sortMode === "cost_asc" ? "✅" : ""}
+              </Text>
             </Pressable>
 
             <View style={styles.divider} />
 
             <Pressable
-              style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
+              style={({ pressed }) => [
+                styles.modalItem,
+                pressed ? { opacity: 0.7 } : null,
+              ]}
               onPress={() => {
                 setSortMode("cost_desc");
                 setSortOpen(false);
@@ -665,13 +1050,18 @@ export default function ResultsScreen() {
                   <Text style={styles.modalItemSub}>High to low</Text>
                 </View>
               </View>
-              <Text style={styles.modalRight}>{sortMode === "cost_desc" ? "✅" : ""}</Text>
+              <Text style={styles.modalRight}>
+                {sortMode === "cost_desc" ? "✅" : ""}
+              </Text>
             </Pressable>
 
             <View style={styles.divider} />
 
             <Pressable
-              style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
+              style={({ pressed }) => [
+                styles.modalItem,
+                pressed ? { opacity: 0.7 } : null,
+              ]}
               onPress={() => {
                 setSortMode("date");
                 setSortOpen(false);
@@ -684,18 +1074,23 @@ export default function ResultsScreen() {
                   <Text style={styles.modalItemSub}>Newest first</Text>
                 </View>
               </View>
-              <Text style={styles.modalRight}>{sortMode === "date" ? "✅" : ""}</Text>
+              <Text style={styles.modalRight}>
+                {sortMode === "date" ? "✅" : ""}
+              </Text>
             </Pressable>
 
             <View style={styles.divider} />
 
             <Pressable
-              style={({ pressed }) => [styles.modalItem, pressed ? { opacity: 0.7 } : null]}
+              style={({ pressed }) => [
+                styles.modalItem,
+                pressed ? { opacity: 0.7 } : null,
+              ]}
               onPress={() => {
                 setSortOpen(false);
                 Alert.alert(
                   "Coming soon",
-                  "⭐ Sort by vendor rating is a feature coming soon."
+                  "⭐ Sort by vendor rating is a feature coming soon.",
                 );
               }}
             >
@@ -709,7 +1104,10 @@ export default function ResultsScreen() {
               <Text style={styles.soonPill}>Soon</Text>
             </Pressable>
 
-            <Pressable style={styles.modalCloseBtn} onPress={() => setSortOpen(false)}>
+            <Pressable
+              style={styles.modalCloseBtn}
+              onPress={() => setSortOpen(false)}
+            >
               <Text style={styles.modalCloseText}>Close</Text>
             </Pressable>
           </Pressable>
@@ -718,9 +1116,15 @@ export default function ResultsScreen() {
 
       {sorted.length === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.emptyTitle}>No matching products (loaded so far)</Text>
+          <Text style={styles.emptyTitle}>
+            {showFavoritesOnly
+              ? "No favourite products yet"
+              : "No matching products (loaded so far)"}
+          </Text>
           <Text style={styles.muted}>
-            Tip: press “Load more” to search more products, or broaden filters.
+            {showFavoritesOnly
+              ? "Tap 🤍 on any product to save it here."
+              : "Tip: press “Load more” to search more products, or broaden filters."}
           </Text>
         </View>
       ) : (
@@ -732,12 +1136,14 @@ export default function ResultsScreen() {
           contentContainerStyle={{ padding: 16 }}
           onEndReachedThreshold={0.6}
           onEndReached={() => {
-            if (!loadingMore && hasMore) fetchMore();
+            if (!loadingMore && hasMore) void fetchMore();
           }}
           renderItem={({ item }) => {
             const imgPath = firstImagePath(item.media);
             const url = publicUrlForStoragePath(imgPath);
             const isFav = favoriteIds.has(item.id);
+            const category = getProductCategory(item);
+            const badge = stockBadgeText(item);
 
             return (
               <Pressable style={styles.card} onPress={() => openProduct(item)}>
@@ -765,28 +1171,38 @@ export default function ResultsScreen() {
                   ) : (
                     <>
                       <Text style={styles.cardSub} numberOfLines={1}>
-                        {item?.product_category === "stitched_ready"
+                        {category === "stitched_ready"
                           ? "Ready-to-wear"
                           : "Unstitched"}
                       </Text>
 
-                      {item?.product_category === "unstitched_dyeing_tailoring" ? (
+                      {category === "unstitched_dyeing_tailoring" ? (
                         <Text style={styles.cardSub} numberOfLines={1}>
                           Tailoring available
                         </Text>
                       ) : null}
 
-                      {item?.product_category === "unstitched_dyeing" ? (
+                      {category === "unstitched_dyeing" ? (
                         <Text style={styles.cardSub} numberOfLines={1}>
                           Dyeing available
                         </Text>
                       ) : null}
+
+                      <Text style={styles.cardSub} numberOfLines={1}>
+                        {badge}
+                      </Text>
                     </>
                   )}
                 </View>
+
                 <View style={styles.actionRow}>
-                  <Pressable onPress={() => toggleFavorite(item.id)} style={styles.actionBtn}>
-                    <Text style={[styles.actionText, isFav ? styles.heartOn : null]}>
+                  <Pressable
+                    onPress={() => void toggleFavorite(item.id)}
+                    style={styles.actionBtn}
+                  >
+                    <Text
+                      style={[styles.actionText, isFav ? styles.heartOn : null]}
+                    >
                       {isFav ? "❤️" : "🤍"}
                     </Text>
                   </Pressable>
@@ -801,6 +1217,10 @@ export default function ResultsScreen() {
                   <ActivityIndicator />
                   <Text style={styles.muted}>Loading more…</Text>
                 </View>
+              ) : showFavoritesOnly ? (
+                <Text style={styles.endText}>
+                  favourites shown from loaded products
+                </Text>
               ) : hasMore ? (
                 <Pressable style={styles.loadMoreBtn} onPress={fetchMore}>
                   <Text style={styles.loadMoreText}>Load more</Text>
@@ -812,6 +1232,8 @@ export default function ResultsScreen() {
           }
         />
       )}
+
+      {renderWizardModal()}
     </View>
   );
 }
@@ -833,79 +1255,138 @@ const stylesVars = {
   overlayDark: "rgba(0,0,0,0.58)",
   overlaySoft: "rgba(255,255,255,0.14)",
   white: "#FFFFFF",
-  black: "#000000"
+  black: "#000000",
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
+    paddingTop: 24,
   },
 
-  topRow: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 10,
+  header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12
+    paddingLeft: 0,
+    paddingRight: 14,
+    paddingBottom: 2,
+    minHeight: 40,
+  },
+
+  logo: {
+    width: 165,
+    height: 58,
+    marginLeft: -25,
+  },
+
+  searchButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  searchButtonPlaceholder: {
+    width: 34,
+    height: 34,
+  },
+
+  wizardWrap: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingTop: 4,
+  },
+
+  wizardModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  wizardModalContent: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: stylesVars.cardBg,
+    borderRadius: 18,
+    padding: 24,
+  },
+
+  topRow: {
+    paddingHorizontal: 12,
+    paddingTop: 2,
+    paddingBottom: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
   },
 
   link: {
     fontSize: 14,
     color: stylesVars.blue,
-    fontWeight: "700"
+    fontWeight: "700",
   },
 
   title: {
     flex: 1,
-    textAlign: "center",
-    fontSize: 18,
-    fontWeight: "700",
+    textAlign: "left",
+    fontSize: 13,
+    fontWeight: "800",
     color: stylesVars.text,
-    paddingHorizontal: 10
   },
 
   topActions: {
     flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
     gap: 8,
-    alignItems: "center"
   },
 
   iconBtn: {
     width: 34,
     height: 34,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: "#D7E3FF"
+    borderColor: "#D7E3FF",
+  },
+
+  iconBtnActive: {
+    backgroundColor: stylesVars.dangerSoft,
+    borderColor: stylesVars.dangerBorder,
   },
 
   iconText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
-    color: stylesVars.blue
+    color: stylesVars.blue,
   },
 
   summaryBar: {
     paddingHorizontal: 16,
-    paddingBottom: 10
+    paddingBottom: 10,
   },
 
   summaryText: {
     fontSize: 12,
     color: stylesVars.mutedText,
-    fontWeight: "600"
+    fontWeight: "600",
   },
 
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.55)",
     padding: 20,
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   modalCard: {
@@ -913,7 +1394,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: stylesVars.border,
   },
 
   modalTitle: {
@@ -922,7 +1403,7 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     fontSize: 18,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   modalItem: {
@@ -930,41 +1411,41 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
   },
 
   modalLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10
+    gap: 10,
   },
 
   modalEmoji: {
-    fontSize: 18
+    fontSize: 18,
   },
 
   modalItemTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   modalItemSub: {
     fontSize: 12,
     fontWeight: "500",
     color: stylesVars.mutedText,
-    marginTop: 2
+    marginTop: 2,
   },
 
   modalRight: {
     fontSize: 14,
     fontWeight: "700",
-    color: stylesVars.blue
+    color: stylesVars.blue,
   },
 
   divider: {
     height: 1,
-    backgroundColor: stylesVars.border
+    backgroundColor: stylesVars.border,
   },
 
   soonPill: {
@@ -976,7 +1457,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: "#D7E3FF"
+    borderColor: "#D7E3FF",
   },
 
   modalCloseBtn: {
@@ -988,38 +1469,42 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
-    borderColor: "#D7E3FF"
+    borderColor: "#D7E3FF",
   },
 
   modalCloseText: {
     color: stylesVars.blue,
     fontWeight: "700",
-    fontSize: 14
+    fontSize: 14,
+  },
+
+  pressed: {
+    opacity: 0.82,
   },
 
   center: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 20
+    padding: 20,
   },
 
   loadingScreen: {
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
   emptyTitle: {
     fontSize: 18,
     fontWeight: "700",
     color: stylesVars.text,
-    marginBottom: 8
+    marginBottom: 8,
   },
 
   muted: {
     fontSize: 14,
     lineHeight: 20,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   card: {
@@ -1029,13 +1514,13 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: "hidden",
     backgroundColor: stylesVars.cardBg,
-    marginBottom: 10
+    marginBottom: 10,
   },
 
   image: {
     width: "100%",
     height: 140,
-    backgroundColor: "#F1F5F9"
+    backgroundColor: "#F1F5F9",
   },
 
   imagePlaceholder: {
@@ -1043,7 +1528,7 @@ const styles = StyleSheet.create({
     height: 140,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F1F5F9"
+    backgroundColor: "#F1F5F9",
   },
 
   cardTitle: {
@@ -1051,7 +1536,7 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     fontSize: 15,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   cardPrice: {
@@ -1059,7 +1544,7 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     fontSize: 13,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   cardSub: {
@@ -1069,7 +1554,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 14,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   actionRow: {
@@ -1077,28 +1562,28 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-start"
+    justifyContent: "flex-start",
   },
 
   actionBtn: {
-    flex: 1
+    flex: 1,
   },
 
   actionText: {
     fontSize: 13,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   heartOn: {
-    color: "#D11A2A"
+    color: "#D11A2A",
   },
 
   loadingRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingVertical: 10
+    paddingVertical: 10,
   },
 
   loadMoreBtn: {
@@ -1111,13 +1596,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D7E3FF",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   loadMoreText: {
     color: stylesVars.blue,
     fontWeight: "700",
-    fontSize: 14
+    fontSize: 14,
   },
 
   endText: {
@@ -1126,6 +1611,6 @@ const styles = StyleSheet.create({
     color: stylesVars.mutedText,
     fontWeight: "500",
     fontSize: 13,
-    lineHeight: 18
-  }
+    lineHeight: 18,
+  },
 });

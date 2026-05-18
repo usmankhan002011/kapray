@@ -16,6 +16,8 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { useAppSelector } from "@/store/hooks";
+import ExactMeasurementsModal from "../(tabs)/flow/purchase/exact-measurements-modal";
+import type { ExactMeasurementSheetRow } from "../(tabs)/flow/purchase/exact-measurements-sheet";
 
 type Params = { id?: string; from?: string };
 
@@ -54,6 +56,12 @@ type OrderRow = {
 
   courier_name: string | null;
   tracking_number: string | null;
+
+  vendor?: {
+    id?: number | null;
+    name?: string | null;
+    shop_name?: string | null;
+  } | null;
 };
 
 function money(currency: string, v: any) {
@@ -92,7 +100,9 @@ function numOrNull(v: any): number | null {
 function isUnstitchedFromSpec(spec: any): boolean {
   const s = spec && typeof spec === "object" ? spec : {};
 
-  const cat = String(s?.product_category ?? "").trim().toLowerCase();
+  const cat = String(s?.product_category ?? "")
+    .trim()
+    .toLowerCase();
   if (
     cat === "unstitched_plain" ||
     cat === "unstitched_dyeing" ||
@@ -118,6 +128,34 @@ function isUnstitchedFromSpec(spec: any): boolean {
   );
 }
 
+function isMadeOrderFromSpec(spec: any): boolean {
+  const s = spec && typeof spec === "object" ? spec : {};
+  const selectedVariant =
+    s?.selected_stitched_variant &&
+    typeof s.selected_stitched_variant === "object"
+      ? s.selected_stitched_variant
+      : s?.selected_variant && typeof s.selected_variant === "object"
+        ? s.selected_variant
+        : {};
+
+  const variantMode = String(
+    s?.variant_mode ??
+      s?.selected_variant_mode ??
+      selectedVariant?.variant_mode ??
+      selectedVariant?.variantMode ??
+      "",
+  )
+    .trim()
+    .toLowerCase();
+
+  return (
+    boolish(s?.made_on_order) ||
+    boolish(s?.selected_variant_made_on_order) ||
+    boolish(selectedVariant?.made_on_order) ||
+    variantMode === "made_order_variants"
+  );
+}
+
 function humanizeCat(v: any) {
   const s = String(v ?? "").trim();
   if (!s) return "—";
@@ -130,7 +168,9 @@ function humanizeCat(v: any) {
 
 function getDressCatFromSpec(spec: any): string {
   const s = spec && typeof spec === "object" ? spec : {};
-  const raw = safeText(s?.product_category ?? s?.dress_category ?? s?.dress_cat ?? "");
+  const raw = safeText(
+    s?.product_category ?? s?.dress_category ?? s?.dress_cat ?? "",
+  );
   if (raw === "—") return "—";
   return humanizeCat(raw);
 }
@@ -155,7 +195,8 @@ function pickFirstImageCandidate(media: any): string {
     m?.thumbnail_url,
   ];
 
-  if (Array.isArray(m?.images) && m.images.length) candidates.unshift(m.images[0]);
+  if (Array.isArray(m?.images) && m.images.length)
+    candidates.unshift(m.images[0]);
   if (Array.isArray(m?.thumbs) && m.thumbs.length) candidates.push(m.thumbs[0]);
 
   for (const c of candidates) {
@@ -181,7 +222,39 @@ function resolvePublicUrlFromPath(pathOrUrl: string) {
 function cleanVariationLabel(value: string, kind: "neck" | "sleeve") {
   if (!value || value === "—") return "";
   const pattern = kind === "neck" ? /\bneck\b/gi : /\bsleeve\b/gi;
-  return value.replace(pattern, "").replace(/\s{2,}/g, " ").trim();
+  return value
+    .replace(pattern, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function cleanVariantTitle(value: string, sizeValue: string) {
+  let title = String(value ?? "").trim();
+  const size = String(sizeValue ?? "").trim();
+
+  if (!title || title === "—") return "";
+  if (!size || size === "—") return title;
+
+  const commonSizeSuffixes = [
+    ` (${size})`,
+    ` - ${size}`,
+    ` – ${size}`,
+    ` — ${size}`,
+    ` / ${size}`,
+    ` | ${size}`,
+  ];
+
+  for (const suffix of commonSizeSuffixes) {
+    if (title.toLowerCase().endsWith(suffix.toLowerCase())) {
+      title = title.slice(0, -suffix.length).trim();
+      break;
+    }
+  }
+
+  return title
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s*[-–—|/]\s*$/, "")
+    .trim();
 }
 
 function buildAddressPreview(args: {
@@ -195,7 +268,9 @@ function buildAddressPreview(args: {
   const city = String(args.city ?? "").trim();
   const postalCode = String(args.postalCode ?? "").trim();
   const country = String(args.country ?? "").trim();
-  const destinationType = String(args.destinationType ?? "").trim().toLowerCase();
+  const destinationType = String(args.destinationType ?? "")
+    .trim()
+    .toLowerCase();
 
   const cityLine = [city, postalCode].filter(Boolean).join(" ");
   const endCountry = destinationType === "export" ? country : "";
@@ -259,8 +334,12 @@ function PriceRow({
 }) {
   return (
     <View style={styles.priceRow}>
-      <Text style={[styles.priceLabel, strong && styles.priceLabelStrong]}>{label}</Text>
-      <Text style={[styles.priceValue, strong && styles.priceValueStrong]}>{value}</Text>
+      <Text style={[styles.priceLabel, strong && styles.priceLabelStrong]}>
+        {label}
+      </Text>
+      <Text style={[styles.priceValue, strong && styles.priceValueStrong]}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -270,9 +349,18 @@ export default function OrderDetailScreen() {
   const params = useLocalSearchParams<Params>();
 
   const orderId = useMemo(() => String(params.id ?? "").trim(), [params.id]);
-  const fromParam = useMemo(() => String(params.from ?? "").trim().toLowerCase(), [params.from]);
+  const fromParam = useMemo(
+    () =>
+      String(params.from ?? "")
+        .trim()
+        .toLowerCase(),
+    [params.from],
+  );
 
-  const vendorIdFromStore = useAppSelector((s) => (s.vendor as any)?.id ?? null);
+  const vendorIdFromStore = useAppSelector(
+    (s) => (s.vendor as any)?.id ?? null,
+  );
+  const vendorFromStore = useAppSelector((s) => s.vendor as any);
 
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<OrderRow | null>(null);
@@ -281,6 +369,10 @@ export default function OrderDetailScreen() {
   const [courierName, setCourierName] = useState("");
   const [trackingNumber, setTrackingNumber] = useState("");
   const [saving, setSaving] = useState(false);
+  const [measurementsOpen, setMeasurementsOpen] = useState(false);
+
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [hasReviewed, setHasReviewed] = useState(false);
 
   const load = useCallback(async () => {
     if (!orderId) {
@@ -294,9 +386,15 @@ export default function OrderDetailScreen() {
 
       const { data, error } = await supabase
         .from("orders")
-        .select(`
+        .select(
+          `
           id,
           vendor_id,
+          vendor:vendor_id (
+            id,
+            name,
+            shop_name
+          ),
           created_at,
           order_no,
           status,
@@ -321,7 +419,8 @@ export default function OrderDetailScreen() {
           exact_measurements,
           courier_name,
           tracking_number
-        `)
+        `,
+        )
         .eq("id", Number(orderId))
         .single();
 
@@ -332,6 +431,7 @@ export default function OrderDetailScreen() {
       setOrder({
         id: Number(o.id),
         vendor_id: Number(o.vendor_id ?? 0),
+        vendor: o.vendor ?? null,
 
         created_at: String(o.created_at),
         order_no: o.order_no ?? null,
@@ -376,12 +476,57 @@ export default function OrderDetailScreen() {
     }
   }, [orderId]);
 
+  const loadReviewState = useCallback(async () => {
+    if (!orderId) {
+      setHasReviewed(false);
+      return;
+    }
+
+    try {
+      setReviewLoading(true);
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user?.id) {
+        setHasReviewed(false);
+        return;
+      }
+
+      const { data, error } = await (supabase as any)
+        .from("vendor_reviews")
+        .select("id")
+        .eq("order_id", Number(orderId))
+        .eq("buyer_user_id", user.id)
+        .limit(1);
+
+      if (error) {
+        console.warn("review state load error:", error.message);
+        setHasReviewed(false);
+        return;
+      }
+
+      setHasReviewed(Array.isArray(data) && data.length > 0);
+    } catch (e: any) {
+      console.warn("review state load error:", e?.message ?? e);
+      setHasReviewed(false);
+    } finally {
+      setReviewLoading(false);
+    }
+  }, [orderId]);
+
   useEffect(() => {
     load();
-  }, [load]);
+    loadReviewState();
+  }, [load, loadReviewState]);
 
   const isBuyerTrackView = useMemo(() => {
-    return fromParam === "track" || fromParam === "buyer-track" || fromParam === "buyer-order";
+    return (
+      fromParam === "track" ||
+      fromParam === "buyer-track" ||
+      fromParam === "buyer-order"
+    );
   }, [fromParam]);
 
   const isVendorView = useMemo(() => {
@@ -396,8 +541,17 @@ export default function OrderDetailScreen() {
     return isVendorView;
   }, [isBuyerTrackView, isVendorView]);
 
+  const canReview = useMemo(() => {
+    if (!order) return false;
+
+    const isDelivered = norm(order.status) === "delivered";
+
+    return isBuyerTrackView && isDelivered && !hasReviewed;
+  }, [order, isBuyerTrackView, hasReviewed]);
+
   const backTarget = useMemo(() => {
-    if (fromParam === "track" || fromParam === "buyer-track") return "/flow/orders/track";
+    if (fromParam === "track" || fromParam === "buyer-track")
+      return "/flow/orders/track";
     if (fromParam === "buyer-order") return "/";
     if (isVendorView) return "/orders";
     return "/";
@@ -415,40 +569,281 @@ export default function OrderDetailScreen() {
   }, [fromParam, backTarget, router]);
 
   useEffect(() => {
-    const subscription = BackHandler.addEventListener("hardwareBackPress", handleBack);
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      handleBack,
+    );
     return () => subscription.remove();
   }, [handleBack]);
 
   const spec = useMemo(() => {
-    return order?.spec_snapshot && typeof order.spec_snapshot === "object" ? order.spec_snapshot : {};
+    return order?.spec_snapshot && typeof order.spec_snapshot === "object"
+      ? order.spec_snapshot
+      : {};
   }, [order]);
 
   const isUnstitched = useMemo(() => isUnstitchedFromSpec(spec), [spec]);
 
   const exactPairs = useMemo(() => {
     if (!order || order.size_mode !== "exact") return [] as [string, string][];
+
     const m =
       order.exact_measurements && typeof order.exact_measurements === "object"
         ? order.exact_measurements
         : {};
-    return Object.entries(m)
-      .map(([k, v]) => [String(k), String(v ?? "").trim()] as [string, string])
+
+    const orderedNumericKeys = [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+    ];
+
+    const orderedMKeys = [
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+      "m5",
+      "m6",
+      "m7",
+      "m8",
+      "m9",
+      "m10",
+      "m11",
+      "m12",
+      "m13",
+      "m14",
+      "m15",
+      "m16",
+      "m17",
+    ];
+
+    const orderedLegacyKeys = [
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F",
+      "G",
+      "H",
+      "I",
+      "J",
+      "K",
+      "L",
+      "M",
+      "N",
+      "O",
+    ];
+
+    const numericPairs = orderedNumericKeys
+      .map((k) => [k, String(m[k] ?? "").trim()] as [string, string])
       .filter(([, v]) => !!v);
+
+    if (numericPairs.length) return numericPairs;
+
+    const mKeyPairs = orderedMKeys
+      .map(
+        (k, index) =>
+          [String(index + 1), String(m[k] ?? "").trim()] as [string, string],
+      )
+      .filter(([, v]) => !!v);
+
+    if (mKeyPairs.length) return mKeyPairs;
+
+    const legacyPairs = orderedLegacyKeys
+      .map((k) => [k, String(m[k] ?? "").trim()] as [string, string])
+      .filter(([, v]) => !!v);
+
+    return legacyPairs;
   }, [order]);
+
+  const customDimensions = useMemo(() => {
+    const raw = spec?.custom_dimensions;
+    if (!Array.isArray(raw))
+      return [] as Array<{ label: string; value: string }>;
+
+    return raw
+      .map((row: any) => ({
+        label: String(row?.label ?? "").trim(),
+        value: String(row?.value ?? "").trim(),
+      }))
+      .filter((row) => row.label && row.value);
+  }, [spec]);
+
+  const measurementRows = useMemo<ExactMeasurementSheetRow[]>(() => {
+    const measurementMap =
+      order?.exact_measurements && typeof order.exact_measurements === "object"
+        ? order.exact_measurements
+        : {};
+
+    const labels = [
+      "1. Neck",
+      "2. Across front",
+      "3. Bust",
+      "4. Under bust",
+      "5. Waist",
+      "6. Hips",
+      "7. Thigh",
+      "8. Upper arm",
+      "9. Elbow",
+      "10. Wrist",
+      "11. Shoulder to waist",
+      "12. Shoulder to floor",
+      "13. Shoulder to shoulder",
+      "14. Back neck to waist",
+      "15. Across back",
+      "16. Inner arm length",
+      "17. Ankle",
+    ];
+
+    const standardRows = labels
+      .map((label, index) => {
+        const nKey = String(index + 1);
+        const mKey = `m${index + 1}`;
+        const value = String(
+          measurementMap[nKey] ?? measurementMap[mKey] ?? "",
+        ).trim();
+
+        return {
+          order: index + 1,
+          label,
+          value,
+        };
+      })
+      .filter((row) => row.value);
+
+    const customRows = customDimensions.map((row, index) => ({
+      order: 100 + index,
+      label: row.label,
+      value: row.value,
+    }));
+
+    return [...standardRows, ...customRows];
+  }, [customDimensions, order]);
 
   const sizeLabel = useMemo(() => {
     if (!order) return "—";
     if (order.size_mode === "exact") {
-      return exactPairs.length ? "Exact measurements" : "Exact measurements not set";
+      return exactPairs.length
+        ? "Exact measurements"
+        : "Exact measurements not set";
     }
     return order.selected_size || "Not set";
   }, [order, exactPairs]);
 
   const selectedUnstitchedSize = useMemo(() => {
     if (!order) return "";
-    const raw = safeText(spec?.selected_unstitched_size ?? order.selected_size ?? "");
+    const raw = safeText(
+      spec?.selected_unstitched_size ?? order.selected_size ?? "",
+    );
     return raw === "—" ? "" : raw;
   }, [order, spec]);
+
+  const selectedStitchedVariant = useMemo(() => {
+    if (!order) return null;
+
+    const snapshot =
+      spec?.selected_stitched_variant &&
+      typeof spec.selected_stitched_variant === "object"
+        ? spec.selected_stitched_variant
+        : spec?.selected_variant && typeof spec.selected_variant === "object"
+          ? spec.selected_variant
+          : {};
+
+    const idRaw = safeText(
+      spec?.selected_variant_id ?? snapshot?.id ?? snapshot?.variant_id ?? "",
+    );
+    const titleRaw = safeText(
+      spec?.selected_variant_title ??
+        snapshot?.title ??
+        snapshot?.label ??
+        snapshot?.name ??
+        "",
+    );
+    const sizeRaw = safeText(
+      spec?.selected_variant_size ??
+        snapshot?.size ??
+        snapshot?.size_label ??
+        "",
+    );
+    const colorRaw = safeText(
+      spec?.selected_variant_color ?? snapshot?.color ?? snapshot?.colour ?? "",
+    );
+    const imageRaw = safeText(
+      spec?.selected_variant_image_path ??
+        snapshot?.image_path ??
+        snapshot?.image_paths?.[0] ??
+        snapshot?.images?.[0] ??
+        snapshot?.image ??
+        "",
+    );
+    const skuRaw = safeText(spec?.selected_variant_sku ?? snapshot?.sku ?? "");
+    const noteRaw = safeText(
+      spec?.selected_variant_note ?? snapshot?.note ?? "",
+    );
+    const stockQty = numOrNull(
+      spec?.selected_variant_stock_qty ??
+        snapshot?.stock_qty ??
+        snapshot?.stockQty ??
+        null,
+    );
+    const pricePkr = numOrNull(
+      spec?.selected_variant_price_pkr ??
+        snapshot?.price_pkr ??
+        snapshot?.pricePkr ??
+        snapshot?.price ??
+        null,
+    );
+
+    const hasVariant = [
+      idRaw,
+      titleRaw,
+      sizeRaw,
+      colorRaw,
+      imageRaw,
+      skuRaw,
+      noteRaw,
+    ].some((v) => v && v !== "—");
+
+    if (!hasVariant && pricePkr == null && stockQty == null) return null;
+
+    return {
+      id: idRaw === "—" ? "" : idRaw,
+      title: titleRaw === "—" ? "" : cleanVariantTitle(titleRaw, sizeRaw),
+      size: sizeRaw === "—" ? "" : sizeRaw,
+      color: colorRaw === "—" ? "" : colorRaw,
+      imageUrl: imageRaw === "—" ? "" : resolvePublicUrlFromPath(imageRaw),
+      sku: skuRaw === "—" ? "" : skuRaw,
+      note: noteRaw === "—" ? "" : noteRaw,
+      stockQty,
+      pricePkr,
+    };
+  }, [order, spec]);
+
+  const isMadeOrderStitchedOrder = useMemo(() => {
+    if (!order) return false;
+    return !isUnstitched && isMadeOrderFromSpec(spec);
+  }, [order, spec, isUnstitched]);
+
+  const isReadyStitchedOrder =
+    !!selectedStitchedVariant && !isUnstitched && !isMadeOrderStitchedOrder;
+
+  const isStitchedVariantOrder = !!selectedStitchedVariant && !isUnstitched;
 
   const selectedFabricLengthM = useMemo(() => {
     if (!order) return null;
@@ -489,7 +884,11 @@ export default function OrderDetailScreen() {
 
   const dyeSelected = useMemo(() => {
     if (!order) return false;
-    return boolish(spec?.dyeing_selected) || !!dyeHex || safeText(spec?.dye_label ?? "") !== "—";
+    return (
+      boolish(spec?.dyeing_selected) ||
+      !!dyeHex ||
+      safeText(spec?.dye_label ?? "") !== "—"
+    );
   }, [order, spec, dyeHex]);
 
   const dyeCostPkr = useMemo(() => {
@@ -507,7 +906,9 @@ export default function OrderDetailScreen() {
 
   const tailoringSelected = useMemo(() => {
     if (!order) return false;
-    return boolish(spec?.tailoring_enabled) || boolish(spec?.tailoring_selected);
+    return (
+      boolish(spec?.tailoring_enabled) || boolish(spec?.tailoring_selected)
+    );
   }, [order, spec]);
 
   const tailoringCostPkr = useMemo(() => {
@@ -627,10 +1028,13 @@ export default function OrderDetailScreen() {
     if (direct != null) return direct;
 
     const subtotal = numOrNull(order.subtotal_pkr);
-    const dye = dyeSelected ? numOrNull(dyeCostPkr) ?? 0 : 0;
-    const tailoring = tailoringSelected ? numOrNull(tailoringCostPkr) ?? 0 : 0;
+    const dye = dyeSelected ? (numOrNull(dyeCostPkr) ?? 0) : 0;
+    const tailoring = tailoringSelected
+      ? (numOrNull(tailoringCostPkr) ?? 0)
+      : 0;
     const styleExtra = tailoringStyleExtraCostPkr ?? 0;
-    if (subtotal != null) return Math.max(0, subtotal - dye - tailoring - styleExtra);
+    if (subtotal != null)
+      return Math.max(0, subtotal - dye - tailoring - styleExtra);
 
     return null;
   }, [
@@ -647,8 +1051,33 @@ export default function OrderDetailScreen() {
 
   const categoryLabel = useMemo(() => {
     if (!order) return "—";
+    if (isMadeOrderStitchedOrder) return "Made on order";
     return getDressCatFromSpec(spec);
-  }, [order, spec]);
+  }, [order, spec, isMadeOrderStitchedOrder]);
+
+  const vendorNameForMeasurements = useMemo(() => {
+    const fromSpec = safeText(
+      spec?.vendor_shop_name ?? spec?.vendor_name ?? "",
+    );
+    if (fromSpec !== "—") return fromSpec;
+
+    const fromOrderVendor = safeText(
+      order?.vendor?.shop_name ?? order?.vendor?.name ?? "",
+    );
+    if (fromOrderVendor !== "—") return fromOrderVendor;
+
+    const fromStore = safeText(
+      vendorFromStore?.shop_name ??
+        vendorFromStore?.owner_name ??
+        vendorFromStore?.name ??
+        "",
+    );
+    if (fromStore !== "—") return fromStore;
+
+    if (isVendorView) return "Your Store";
+
+    return "";
+  }, [spec, order?.vendor, vendorFromStore, isVendorView]);
 
   const bannerUrl = useMemo(() => {
     if (!order) return "";
@@ -667,7 +1096,8 @@ export default function OrderDetailScreen() {
     }
     if (s === "in_progress") return { next: "packed", label: "Mark Packed" };
     if (s === "packed") return { next: "dispatched", label: "Dispatch" };
-    if (s === "dispatched") return { next: "delivered", label: "Mark Delivered" };
+    if (s === "dispatched")
+      return { next: "delivered", label: "Mark Delivered" };
     return null;
   }, [order, isUnstitched]);
 
@@ -681,7 +1111,10 @@ export default function OrderDetailScreen() {
 
       if (ns === "dispatched") {
         if (!courierTrim || !trackingTrim) {
-          Alert.alert("Missing details", "Courier name and tracking number are required to dispatch.");
+          Alert.alert(
+            "Missing details",
+            "Courier name and tracking number are required to dispatch.",
+          );
           return;
         }
       }
@@ -696,14 +1129,20 @@ export default function OrderDetailScreen() {
           payload.tracking_number = trackingTrim;
         }
 
-        const { error } = await supabase.from("orders").update(payload).eq("id", order.id);
+        const { error } = await supabase
+          .from("orders")
+          .update(payload)
+          .eq("id", order.id);
         if (error) throw error;
 
         setDispatchOpen(false);
         await load();
       } catch (e: any) {
         console.warn("status update error:", e?.message ?? e);
-        Alert.alert("Update failed", e?.message ?? "Could not update order status.");
+        Alert.alert(
+          "Update failed",
+          e?.message ?? "Could not update order status.",
+        );
       } finally {
         setSaving(false);
       }
@@ -749,17 +1188,26 @@ export default function OrderDetailScreen() {
             contentContainerStyle={styles.container}
             showsVerticalScrollIndicator={false}
           >
-            <View style={[styles.headerCard, norm(order.status) === "placed" ? styles.headerCardNew : null]}>
+            <View
+              style={[
+                styles.headerCard,
+                norm(order.status) === "placed" ? styles.headerCardNew : null,
+              ]}
+            >
               <View style={styles.headerRow}>
                 <View style={styles.headerMeta}>
-                  <Text style={styles.orderNo}>{order.order_no || `Order #${order.id}`}</Text>
+                  <Text style={styles.orderNo}>
+                    {order.order_no || `Order #${order.id}`}
+                  </Text>
                   <Text style={styles.headerSubtext}>
                     Created {new Date(order.created_at).toLocaleString()}
                   </Text>
                 </View>
 
                 <View style={statusPillStyle}>
-                  <Text style={styles.statusPillText}>{humanizeCat(order.status)}</Text>
+                  <Text style={styles.statusPillText}>
+                    {humanizeCat(order.status)}
+                  </Text>
                 </View>
               </View>
             </View>
@@ -768,7 +1216,11 @@ export default function OrderDetailScreen() {
               <View style={styles.productRow}>
                 <View style={styles.imageBox}>
                   {bannerUrl ? (
-                    <Image source={{ uri: bannerUrl }} style={styles.image} resizeMode="cover" />
+                    <Image
+                      source={{ uri: bannerUrl }}
+                      style={styles.image}
+                      resizeMode="cover"
+                    />
                   ) : (
                     <View style={styles.imagePlaceholder}>
                       <Text style={styles.imagePlaceholderText}>No image</Text>
@@ -781,6 +1233,12 @@ export default function OrderDetailScreen() {
                     {order.title_snapshot}
                   </Text>
 
+                  {!!vendorNameForMeasurements ? (
+                    <Text style={styles.productVendorName} numberOfLines={1}>
+                      by {vendorNameForMeasurements}
+                    </Text>
+                  ) : null}
+
                   <View style={styles.productMetaInfo}>
                     <Text style={styles.productMetaLabel}>Category</Text>
                     <Text style={styles.productMetaValue}>{categoryLabel}</Text>
@@ -789,128 +1247,236 @@ export default function OrderDetailScreen() {
                   {!!order.product_code_snapshot && (
                     <View style={styles.productMetaInfo}>
                       <Text style={styles.productMetaLabel}>Code</Text>
-                      <Text style={styles.productMetaValue}>{order.product_code_snapshot}</Text>
+                      <Text style={styles.productMetaValue}>
+                        {order.product_code_snapshot}
+                      </Text>
                     </View>
                   )}
 
-                  <Text style={styles.heroPrice}>
-                    {money(order.currency, baseProductCostPkr)}
-                  </Text>
+                  {!isStitchedVariantOrder ? (
+                    <Text style={styles.heroPrice}>
+                      {money(order.currency, baseProductCostPkr)}
+                    </Text>
+                  ) : null}
                 </View>
               </View>
             </SectionCard>
 
-            <SectionCard title="Customization">
-              <KVRow
-                label="Size"
-                value={order.size_mode === "exact" ? "Exact measurements" : sizeLabel}
-              />
-
-              {order.size_mode === "exact" && exactPairs.length ? (
-                <View style={styles.measurementsWrap}>
-                  {exactPairs.map(([k, v]) => (
-                    <View key={k} style={styles.measurementChip}>
-                      <Text style={styles.measurementChipText}>
-                        {k}: {v}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-
-              {isUnstitched ? (
-                <>
-                  <KVRow label="Selected size" value={selectedUnstitchedSize} />
-                  <KVRow label="Fabric length" value={selectedFabricLengthM != null ? `${selectedFabricLengthM} m` : ""} />
-                  <KVRow
-                    label="Rate"
-                    value={
-                      pricePerMeterPkr != null
-                        ? `${money(order.currency, pricePerMeterPkr)} / meter`
-                        : ""
-                    }
-                  />
-                </>
-              ) : null}
-
-              {dyeSelected ? (
-                <View style={styles.customBlock}>
-                  <View style={styles.kvRow}>
-                    <Text style={styles.kvLabel}>Dyeing color</Text>
-                    <View style={styles.colorPreviewRow}>
-                      {!!dyeHex && <View style={[styles.dyeSwatch, { backgroundColor: dyeHex }]} />}
-                      <Text style={styles.helper}>
-                        {dyeCostPkr != null ? money(order.currency, dyeCostPkr) : `${order.currency} —`}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              ) : null}
-
-              {tailoringSelected ? (
-                <View style={styles.customBlock}>
-                  <KVRow
-                    label="Tailoring"
-                    value={`${tailoringCostPkr != null ? money(order.currency, tailoringCostPkr) : "Included"}${
-                      tailoringTurnaroundDays != null ? ` • ${tailoringTurnaroundDays} days` : ""
-                    }`}
-                  />
-
-                  {!!selectedTailoringStyleImage && (
-                    <View style={styles.tailoringImageWrap}>
+            {selectedStitchedVariant ? (
+              <SectionCard title="Selected Variant">
+                <View style={styles.variantRow}>
+                  {selectedStitchedVariant.imageUrl ? (
+                    <View style={styles.variantImageWrap}>
                       <Image
-                        source={{ uri: selectedTailoringStyleImage }}
-                        style={styles.tailoringImage}
+                        source={{ uri: selectedStitchedVariant.imageUrl }}
+                        style={styles.variantImage}
                         resizeMode="cover"
                       />
                     </View>
-                  )}
-
-                  <KVRow label="Style" value={selectedTailoringStyleTitle} />
-                  <KVRow
-                    label="Neck"
-                    value={
-                      selectedNeckVariation &&
-                      selectedNeckVariation !== "no change in selected style"
-                        ? cleanVariationLabel(selectedNeckVariation, "neck")
-                        : ""
-                    }
-                  />
-                  <KVRow
-                    label="Sleeve"
-                    value={
-                      selectedSleeveVariation &&
-                      selectedSleeveVariation !== "no change in selected style"
-                        ? cleanVariationLabel(selectedSleeveVariation, "sleeve")
-                        : ""
-                    }
-                  />
-                  <KVRow
-                    label="Trouser"
-                    value={
-                      selectedTrouserVariation &&
-                      selectedTrouserVariation !== "no change in selected style"
-                        ? selectedTrouserVariation
-                        : ""
-                    }
-                  />
-
-                  {tailoringStyleExtraCostPkr != null ? (
-                    <KVRow
-                      label="Additional style cost"
-                      value={money(order.currency, tailoringStyleExtraCostPkr)}
-                    />
                   ) : null}
 
-                  {!!customTailoringNote && (
-                    <View style={styles.noteBox}>
-                      <Text style={styles.noteLabel}>Tailoring note</Text>
-                      <Text style={styles.noteText}>{customTailoringNote}</Text>
-                    </View>
-                  )}
+                  <View style={styles.variantInfoWrap}>
+                    <Text style={styles.variantTitle} numberOfLines={2}>
+                      {selectedStitchedVariant.title || "Selected variant"}
+                    </Text>
+                    {!isMadeOrderStitchedOrder ? (
+                      <KVRow
+                        label="Size"
+                        value={selectedStitchedVariant.size}
+                      />
+                    ) : null}
+                    <KVRow
+                      label="Product cost"
+                      value={
+                        selectedStitchedVariant.pricePkr != null
+                          ? money(
+                              order.currency,
+                              selectedStitchedVariant.pricePkr,
+                            )
+                          : baseProductCostPkr != null
+                            ? money(order.currency, baseProductCostPkr)
+                            : ""
+                      }
+                    />
+                    {!isMadeOrderStitchedOrder ? (
+                      <KVRow
+                        label="Stock"
+                        value={
+                          selectedStitchedVariant.stockQty != null
+                            ? String(selectedStitchedVariant.stockQty)
+                            : ""
+                        }
+                      />
+                    ) : null}
+                    <KVRow
+                      label="SKU"
+                      value={selectedStitchedVariant.sku}
+                      muted
+                    />
+                  </View>
                 </View>
-              ) : null}
-            </SectionCard>
+
+                {!!selectedStitchedVariant.note && (
+                  <View style={styles.noteBox}>
+                    <Text style={styles.noteLabel}>Variant note</Text>
+                    <Text style={styles.noteText}>
+                      {selectedStitchedVariant.note}
+                    </Text>
+                  </View>
+                )}
+              </SectionCard>
+            ) : null}
+
+            {!isReadyStitchedOrder ? (
+              <SectionCard title="Customization">
+                {order.size_mode !== "exact" ? (
+                  <KVRow
+                    label="Size"
+                    value={isUnstitched ? selectedUnstitchedSize : sizeLabel}
+                  />
+                ) : null}
+
+                {order.size_mode === "exact" && measurementRows.length ? (
+                  <View style={styles.inlineActionRow}>
+                    <Text style={styles.helper}>
+                      {measurementRows.length} dimensions saved
+                      {customDimensions.length
+                        ? ` • ${customDimensions.length} custom`
+                        : ""}
+                    </Text>
+
+                    <Pressable
+                      onPress={() => setMeasurementsOpen(true)}
+                      style={styles.secondaryInlineBtn}
+                    >
+                      <Text style={styles.secondaryInlineText}>
+                        View Exact Measurements
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+
+                {isUnstitched ? (
+                  <>
+                    <KVRow
+                      label="Fabric length"
+                      value={
+                        selectedFabricLengthM != null
+                          ? `${selectedFabricLengthM} m`
+                          : ""
+                      }
+                    />
+                    <KVRow
+                      label="Rate"
+                      value={
+                        pricePerMeterPkr != null
+                          ? `${money(order.currency, pricePerMeterPkr)} / meter`
+                          : ""
+                      }
+                    />
+                  </>
+                ) : null}
+
+                {dyeSelected ? (
+                  <View style={styles.customBlock}>
+                    <View style={styles.kvRow}>
+                      <Text style={styles.kvLabel}>Dyeing color</Text>
+                      <View style={styles.colorPreviewRow}>
+                        {!!dyeHex && (
+                          <View
+                            style={[
+                              styles.dyeSwatch,
+                              { backgroundColor: dyeHex },
+                            ]}
+                          />
+                        )}
+                        <Text style={styles.helper}>
+                          {dyeCostPkr != null
+                            ? money(order.currency, dyeCostPkr)
+                            : `${order.currency} —`}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                ) : null}
+
+                {tailoringSelected ? (
+                  <View style={styles.customBlock}>
+                    <KVRow
+                      label="Tailoring"
+                      value={`${tailoringCostPkr != null ? money(order.currency, tailoringCostPkr) : "Included"}${
+                        tailoringTurnaroundDays != null
+                          ? ` • ${tailoringTurnaroundDays} days`
+                          : ""
+                      }`}
+                    />
+
+                    {!!selectedTailoringStyleImage && (
+                      <View style={styles.tailoringImageWrap}>
+                        <Image
+                          source={{ uri: selectedTailoringStyleImage }}
+                          style={styles.tailoringImage}
+                          resizeMode="cover"
+                        />
+                      </View>
+                    )}
+
+                    <KVRow label="Style" value={selectedTailoringStyleTitle} />
+                    <KVRow
+                      label="Neck"
+                      value={
+                        selectedNeckVariation &&
+                        selectedNeckVariation !== "no change in selected style"
+                          ? cleanVariationLabel(selectedNeckVariation, "neck")
+                          : ""
+                      }
+                    />
+                    <KVRow
+                      label="Sleeve"
+                      value={
+                        selectedSleeveVariation &&
+                        selectedSleeveVariation !==
+                          "no change in selected style"
+                          ? cleanVariationLabel(
+                              selectedSleeveVariation,
+                              "sleeve",
+                            )
+                          : ""
+                      }
+                    />
+                    <KVRow
+                      label="Trouser"
+                      value={
+                        selectedTrouserVariation &&
+                        selectedTrouserVariation !==
+                          "no change in selected style"
+                          ? selectedTrouserVariation
+                          : ""
+                      }
+                    />
+
+                    {tailoringStyleExtraCostPkr != null ? (
+                      <KVRow
+                        label="Additional style cost"
+                        value={money(
+                          order.currency,
+                          tailoringStyleExtraCostPkr,
+                        )}
+                      />
+                    ) : null}
+
+                    {!!customTailoringNote && (
+                      <View style={styles.noteBox}>
+                        <Text style={styles.noteLabel}>Tailoring note</Text>
+                        <Text style={styles.noteText}>
+                          {customTailoringNote}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                ) : null}
+              </SectionCard>
+            ) : null}
 
             <SectionCard title="Buyer">
               <KVRow label="Name" value={order.buyer_name} />
@@ -928,20 +1494,32 @@ export default function OrderDetailScreen() {
                 <KVRow label="Address" value={order.delivery_address} />
               )}
 
-              <KVRow label="Delivery type" value={destinationType ? humanizeCat(destinationType) : ""} />
+              <KVRow
+                label="Delivery type"
+                value={destinationType ? humanizeCat(destinationType) : ""}
+              />
               <KVRow label="Region" value={exportRegion} muted />
-              <KVRow label="Weight" value={deliveryWeightKg != null ? `${deliveryWeightKg} kg` : ""} muted />
+              <KVRow
+                label="Weight"
+                value={deliveryWeightKg != null ? `${deliveryWeightKg} kg` : ""}
+                muted
+              />
               <KVRow label="Notes" value={order.notes} muted />
             </SectionCard>
 
             <SectionCard title="Tracking">
               <KVRow label="Courier" value={order.courier_name || "—"} />
-              <KVRow label="Tracking number" value={order.tracking_number || "—"} />
-              <Text style={styles.helper}>Buyer may track this order anytime from their Home screen.</Text>
+              <KVRow
+                label="Tracking number"
+                value={order.tracking_number || "—"}
+              />
+              <Text style={styles.helper}>
+                Buyer may track this order anytime from their Home screen.
+              </Text>
             </SectionCard>
 
             <SectionCard title="Price Summary">
-              {baseProductCostPkr != null ? (
+              {baseProductCostPkr != null && !isReadyStitchedOrder ? (
                 <PriceRow
                   label={isUnstitched ? "Total fabric cost" : "Product"}
                   value={money(order.currency, baseProductCostPkr)}
@@ -951,7 +1529,11 @@ export default function OrderDetailScreen() {
               {dyeSelected ? (
                 <PriceRow
                   label="Dyeing"
-                  value={dyeCostPkr != null ? money(order.currency, dyeCostPkr) : `${order.currency} —`}
+                  value={
+                    dyeCostPkr != null
+                      ? money(order.currency, dyeCostPkr)
+                      : `${order.currency} —`
+                  }
                 />
               ) : null}
 
@@ -973,16 +1555,59 @@ export default function OrderDetailScreen() {
                 />
               ) : null}
 
-              <PriceRow label="Subtotal" value={money(order.currency, order.subtotal_pkr)} />
-              <PriceRow label="Shipping" value={money(order.currency, order.delivery_pkr)} />
+              <PriceRow
+                label="Subtotal"
+                value={money(order.currency, order.subtotal_pkr)}
+              />
+              <PriceRow
+                label="Shipping"
+                value={money(order.currency, order.delivery_pkr)}
+              />
               {!!order.discount_pkr ? (
-                <PriceRow label="Discount" value={money(order.currency, order.discount_pkr)} />
+                <PriceRow
+                  label="Discount"
+                  value={money(order.currency, order.discount_pkr)}
+                />
               ) : null}
 
               <View style={styles.divider} />
 
-              <PriceRow label="Total" value={money(order.currency, order.total_pkr)} strong />
+              <PriceRow
+                label="Total"
+                value={money(order.currency, order.total_pkr)}
+                strong
+              />
             </SectionCard>
+
+            {isBuyerTrackView && norm(order.status) === "delivered" ? (
+              <SectionCard title="Review">
+                {hasReviewed ? (
+                  <Text style={styles.helper}>Review already submitted.</Text>
+                ) : (
+                  <Pressable
+                    onPress={() =>
+                      router.push({
+                        pathname: "/(buyer)/review-vendor-modal",
+                        params: {
+                          orderId: String(order.id),
+                          vendorId: String(order.vendor_id),
+                        },
+                      })
+                    }
+                    style={({ pressed }) => [
+                      styles.primaryBtn,
+                      pressed && styles.pressed,
+                      reviewLoading && styles.disabledBtn,
+                    ]}
+                    disabled={reviewLoading}
+                  >
+                    <Text style={styles.primaryText}>
+                      {reviewLoading ? "Checking..." : "Rate Vendor"}
+                    </Text>
+                  </Pressable>
+                )}
+              </SectionCard>
+            ) : null}
 
             {showVendorActions ? (
               <SectionCard title="Update Status">
@@ -990,18 +1615,28 @@ export default function OrderDetailScreen() {
                   nextAction.next === "dispatched" ? (
                     <Pressable
                       onPress={openDispatchModal}
-                      style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
+                      style={({ pressed }) => [
+                        styles.primaryBtn,
+                        pressed && styles.pressed,
+                      ]}
                       disabled={saving}
                     >
-                      <Text style={styles.primaryText}>{saving ? "Saving…" : nextAction.label}</Text>
+                      <Text style={styles.primaryText}>
+                        {saving ? "Saving…" : nextAction.label}
+                      </Text>
                     </Pressable>
                   ) : (
                     <Pressable
                       onPress={() => updateStatus(nextAction.next)}
-                      style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
+                      style={({ pressed }) => [
+                        styles.primaryBtn,
+                        pressed && styles.pressed,
+                      ]}
                       disabled={saving}
                     >
-                      <Text style={styles.primaryText}>{saving ? "Saving…" : nextAction.label}</Text>
+                      <Text style={styles.primaryText}>
+                        {saving ? "Saving…" : nextAction.label}
+                      </Text>
                     </Pressable>
                   )
                 ) : (
@@ -1013,11 +1648,32 @@ export default function OrderDetailScreen() {
             <View style={styles.bottomSpacer} />
           </ScrollView>
 
+          <ExactMeasurementsModal
+            visible={measurementsOpen}
+            onClose={() => setMeasurementsOpen(false)}
+            title="Exact Measurements"
+            rows={measurementRows}
+            inferredSize={selectedUnstitchedSize || order.selected_size || ""}
+            unit="cm"
+            fabricLengthM={selectedFabricLengthM ?? undefined}
+            fabricCostPkr={fabricCostPkr ?? undefined}
+            showGuideImage
+            orderNo={order.order_no || `Order #${order.id}`}
+            buyerName={order.buyer_name}
+            vendorName={vendorNameForMeasurements}
+            productName={order.title_snapshot}
+            productCode={order.product_code_snapshot}
+            productCategory={categoryLabel}
+            note={order.notes || undefined}
+          />
+
           <Modal visible={dispatchOpen} animationType="slide" transparent>
             <View style={styles.modalBackdrop}>
               <View style={styles.modalCard}>
                 <Text style={styles.modalTitle}>Dispatch Order</Text>
-                <Text style={styles.modalSub}>Courier name and tracking number are required.</Text>
+                <Text style={styles.modalSub}>
+                  Courier name and tracking number are required.
+                </Text>
 
                 <Text style={styles.fieldLabel}>Courier Name</Text>
                 <TextInput
@@ -1040,7 +1696,10 @@ export default function OrderDetailScreen() {
                 <View style={styles.modalBtns}>
                   <Pressable
                     onPress={() => setDispatchOpen(false)}
-                    style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
+                    style={({ pressed }) => [
+                      styles.secondaryBtn,
+                      pressed && styles.pressed,
+                    ]}
                     disabled={saving}
                   >
                     <Text style={styles.secondaryText}>Close</Text>
@@ -1048,10 +1707,15 @@ export default function OrderDetailScreen() {
 
                   <Pressable
                     onPress={() => updateStatus("dispatched")}
-                    style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
+                    style={({ pressed }) => [
+                      styles.primaryBtn,
+                      pressed && styles.pressed,
+                    ]}
                     disabled={saving}
                   >
-                    <Text style={styles.primaryText}>{saving ? "Saving…" : "Confirm Dispatch"}</Text>
+                    <Text style={styles.primaryText}>
+                      {saving ? "Saving…" : "Confirm Dispatch"}
+                    </Text>
                   </Pressable>
                 </View>
               </View>
@@ -1123,6 +1787,10 @@ const styles = StyleSheet.create({
 
   pressed: {
     opacity: 0.82,
+  },
+
+  disabledBtn: {
+    opacity: 0.6,
   },
 
   loading: {
@@ -1287,6 +1955,14 @@ const styles = StyleSheet.create({
     color: stylesVars.text,
   },
 
+  productVendorName: {
+    marginTop: -2,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "700",
+  },
+
   productMetaInfo: {
     gap: 2,
   },
@@ -1339,25 +2015,30 @@ const styles = StyleSheet.create({
     color: stylesVars.mutedText,
   },
 
-  measurementsWrap: {
+  inlineActionRow: {
     flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
     flexWrap: "wrap",
-    gap: 8,
   },
 
-  measurementChip: {
+  secondaryInlineBtn: {
+    minHeight: 38,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: stylesVars.white,
     borderWidth: 1,
     borderColor: "#D7E3FF",
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    backgroundColor: stylesVars.blueSoft,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
-  measurementChipText: {
-    fontSize: 12,
+  secondaryInlineText: {
     color: stylesVars.blue,
-    fontWeight: "800",
+    fontSize: 12,
+    fontWeight: "700",
   },
 
   customBlock: {
@@ -1377,6 +2058,39 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#CBD5E1",
+  },
+
+  variantRow: {
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "flex-start",
+  },
+
+  variantImageWrap: {
+    width: 112,
+    height: 132,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: "#F1F5F9",
+  },
+
+  variantImage: {
+    width: "100%",
+    height: "100%",
+  },
+
+  variantInfoWrap: {
+    flex: 1,
+    gap: 8,
+  },
+
+  variantTitle: {
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: "800",
+    color: stylesVars.text,
   },
 
   tailoringImageWrap: {

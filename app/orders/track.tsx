@@ -8,7 +8,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View
+  View,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
@@ -37,6 +37,7 @@ type OrderRow = {
 
   vendor_id: number;
   spec_snapshot?: any;
+  has_review?: boolean;
 };
 
 function norm(v: unknown) {
@@ -50,6 +51,11 @@ function normLower(v: unknown) {
 function safeText(v: any) {
   const t = String(v ?? "").trim();
   return t.length ? t : "—";
+}
+
+function cleanText(v: any) {
+  const t = String(v ?? "").trim();
+  return t.length ? t : "";
 }
 
 function humanizeCat(v: any) {
@@ -67,6 +73,27 @@ function money(currency: string, v: any) {
   const n = typeof v === "number" ? v : Number(v);
   if (Number.isNaN(n)) return `${currency} —`;
   return `${currency} ${n.toLocaleString()}`;
+}
+
+function numOrNull(v: any): number | null {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function getSelectedVariant(spec: any) {
+  const title = cleanText(spec?.selected_variant_title);
+  const size = cleanText(spec?.selected_variant_size);
+  const color = cleanText(spec?.selected_variant_color);
+  const price = numOrNull(spec?.selected_variant_price_pkr);
+
+  return {
+    hasVariant: !!(title || size || color || price != null),
+    title,
+    size,
+    color,
+    price,
+  };
 }
 
 export default function TrackOrdersScreen() {
@@ -113,7 +140,7 @@ export default function TrackOrdersScreen() {
       const mapped: VendorRow[] = (data ?? []).map((v: any) => ({
         id: Number(v.id),
         shop_name: v.shop_name ?? null,
-        name: v.name ?? null
+        name: v.name ?? null,
       }));
 
       setVendorOptions(mapped);
@@ -162,7 +189,7 @@ export default function TrackOrdersScreen() {
           currency,
           vendor_id,
           spec_snapshot
-        `
+        `,
         )
         .eq("buyer_mobile", mobile)
         .order("created_at", { ascending: false })
@@ -192,8 +219,36 @@ export default function TrackOrdersScreen() {
         total_pkr: o.total_pkr != null ? Number(o.total_pkr) : null,
         currency: String(o.currency ?? "PKR"),
         vendor_id: Number(o.vendor_id ?? 0),
-        spec_snapshot: o.spec_snapshot ?? {}
+        spec_snapshot: o.spec_snapshot ?? {},
+        has_review: false,
       }));
+
+      const deliveredIds = mapped
+        .filter((o) => normLower(o.status) === "delivered")
+        .map((o) => o.id);
+
+      if (deliveredIds.length) {
+        const { data: reviewRows, error: reviewError } = await (supabase as any)
+          .from("vendor_reviews")
+          .select("order_id")
+          .in("order_id", deliveredIds);
+
+        if (reviewError) {
+          console.warn("review lookup error:", reviewError.message);
+        } else {
+          const reviewedIds = new Set<number>(
+            Array.isArray(reviewRows)
+              ? reviewRows
+                  .map((r: any) => Number(r?.order_id))
+                  .filter((n: number) => Number.isFinite(n))
+              : [],
+          );
+
+          mapped.forEach((row) => {
+            row.has_review = reviewedIds.has(row.id);
+          });
+        }
+      }
 
       setRows(mapped);
     } catch (e: any) {
@@ -214,7 +269,10 @@ export default function TrackOrdersScreen() {
           setSelectedVendor(item);
           setVendorOptions([]);
         }}
-        style={({ pressed }) => [styles.vendorOption, pressed && styles.pressed]}
+        style={({ pressed }) => [
+          styles.vendorOption,
+          pressed && styles.pressed,
+        ]}
       >
         <Text style={styles.vendorOptionTitle} numberOfLines={1}>
           {label}
@@ -233,28 +291,43 @@ export default function TrackOrdersScreen() {
     const amount = money(item.currency, item.total_pkr);
     const status = normLower(item.status);
 
-    const spec = item.spec_snapshot && typeof item.spec_snapshot === "object" ? item.spec_snapshot : {};
-    const dressCat = humanizeCat(spec?.product_category ?? spec?.dress_category ?? spec?.dress_cat ?? "");
+    const spec =
+      item.spec_snapshot && typeof item.spec_snapshot === "object"
+        ? item.spec_snapshot
+        : {};
+
+    const dressCat = humanizeCat(
+      spec?.product_category ?? spec?.dress_category ?? spec?.dress_cat ?? "",
+    );
+
+    const selectedVariant = getSelectedVariant(spec);
+    const showReviewSubmitted = status === "delivered" && !!item.has_review;
 
     return (
       <Pressable
         onPress={() =>
           router.push({
             pathname: "/flow/orders/[id]" as any,
-            params: { id: String(item.id), from: "track" }
+            params: { id: String(item.id), from: "track" },
           })
         }
         style={({ pressed }) => [
           styles.card,
           pressed && styles.pressed,
-          status === "placed" && styles.cardNewRed
+          status === "placed" && styles.cardNewRed,
         ]}
       >
         <View style={styles.rowBetween}>
           <Text style={styles.orderNo} numberOfLines={1}>
             {orderLabel}
           </Text>
-          <Text style={[styles.badge, status === "placed" ? styles.badgeRed : styles.badgeBlue]} numberOfLines={1}>
+          <Text
+            style={[
+              styles.badge,
+              status === "placed" ? styles.badgeRed : styles.badgeBlue,
+            ]}
+            numberOfLines={1}
+          >
             {item.status}
           </Text>
         </View>
@@ -266,6 +339,28 @@ export default function TrackOrdersScreen() {
         <Text style={styles.small} numberOfLines={1}>
           Dress Cat: {dressCat}
         </Text>
+
+        {selectedVariant.hasVariant ? (
+          <View style={styles.variantBox}>
+            <Text style={styles.variantTitle} numberOfLines={1}>
+              Selected Variant:{" "}
+              {selectedVariant.title || "Ready-to-wear variant"}
+            </Text>
+
+            <Text style={styles.variantMeta} numberOfLines={1}>
+              {selectedVariant.size ? `Size: ${selectedVariant.size}` : ""}
+              {selectedVariant.size && selectedVariant.color ? " • " : ""}
+              {selectedVariant.color ? `Color: ${selectedVariant.color}` : ""}
+              {(selectedVariant.size || selectedVariant.color) &&
+              selectedVariant.price != null
+                ? " • "
+                : ""}
+              {selectedVariant.price != null
+                ? money(item.currency, selectedVariant.price)
+                : ""}
+            </Text>
+          </View>
+        ) : null}
 
         <View style={styles.rowBetween}>
           <Text style={styles.small} numberOfLines={1}>
@@ -279,13 +374,23 @@ export default function TrackOrdersScreen() {
         <Text style={styles.small} numberOfLines={1}>
           City: {item.city || "—"}
         </Text>
+
+        {showReviewSubmitted ? (
+          <View style={styles.reviewPill}>
+            <Text style={styles.reviewPillText}>Review submitted</Text>
+          </View>
+        ) : null}
       </Pressable>
     );
   };
 
   const selectedVendorLabel = useMemo(() => {
     if (!selectedVendor) return "";
-    return safeText(selectedVendor.shop_name || selectedVendor.name || `Vendor #${selectedVendor.id}`);
+    return safeText(
+      selectedVendor.shop_name ||
+        selectedVendor.name ||
+        `Vendor #${selectedVendor.id}`,
+    );
   }, [selectedVendor]);
 
   return (
@@ -325,7 +430,13 @@ export default function TrackOrdersScreen() {
                 <Text style={styles.selectedVendorSub}>Filter applied</Text>
               </View>
 
-              <Pressable onPress={clearVendor} style={({ pressed }) => [styles.clearBtn, pressed && styles.pressed]}>
+              <Pressable
+                onPress={clearVendor}
+                style={({ pressed }) => [
+                  styles.clearBtn,
+                  pressed && styles.pressed,
+                ]}
+              >
                 <Text style={styles.clearBtnText}>Clear</Text>
               </Pressable>
             </View>
@@ -365,14 +476,18 @@ export default function TrackOrdersScreen() {
             style={({ pressed }) => [
               styles.primaryBtn,
               (!canSearch || loading) && styles.disabledBtn,
-              pressed && canSearch && !loading && styles.pressed
+              pressed && canSearch && !loading && styles.pressed,
             ]}
           >
-            <Text style={styles.primaryText}>{loading ? "Searching…" : "Track Order"}</Text>
+            <Text style={styles.primaryText}>
+              {loading ? "Searching…" : "Track Order"}
+            </Text>
           </Pressable>
 
           {!canSearch ? (
-            <Text style={styles.helper}>Enter buyer mobile (at least 10 digits) to search.</Text>
+            <Text style={styles.helper}>
+              Enter buyer mobile (at least 10 digits) to search.
+            </Text>
           ) : null}
         </View>
       </View>
@@ -390,9 +505,12 @@ export default function TrackOrdersScreen() {
           contentContainerStyle={styles.list}
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>{searched ? "No orders found" : "Search to view orders"}</Text>
+              <Text style={styles.emptyTitle}>
+                {searched ? "No orders found" : "Search to view orders"}
+              </Text>
               <Text style={styles.emptyText}>
-                Tip: Use buyer mobile + optional buyer name + optional vendor filter to narrow results.
+                Tip: Use buyer mobile + optional buyer name + optional vendor
+                filter to narrow results.
               </Text>
             </View>
           }
@@ -416,33 +534,35 @@ const stylesVars = {
   danger: "#B91C1C",
   dangerSoft: "#FEE2E2",
   dangerBorder: "#FCA5A5",
+  success: "#166534",
+  successSoft: "#DCFCE7",
   white: "#FFFFFF",
-  black: "#000000"
+  black: "#000000",
 };
 
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
   header: {
     padding: 16,
     gap: 10,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
   title: {
     fontSize: 18,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   subtitle: {
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   cardForm: {
@@ -451,14 +571,14 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 18,
     gap: 10,
-    backgroundColor: stylesVars.cardBg
+    backgroundColor: stylesVars.cardBg,
   },
 
   label: {
     fontSize: 13,
     fontWeight: "700",
     color: stylesVars.text,
-    letterSpacing: 0.2
+    letterSpacing: 0.2,
   },
 
   input: {
@@ -470,7 +590,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: stylesVars.text,
     fontWeight: "500",
-    backgroundColor: stylesVars.white
+    backgroundColor: stylesVars.white,
   },
 
   vendorOptionsBox: {
@@ -479,20 +599,20 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: "hidden",
     maxHeight: 220,
-    backgroundColor: stylesVars.cardBg
+    backgroundColor: stylesVars.cardBg,
   },
 
   vendorOption: {
     padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: stylesVars.borderSoft,
-    backgroundColor: stylesVars.cardBg
+    backgroundColor: stylesVars.cardBg,
   },
 
   vendorOptionTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   vendorOptionSub: {
@@ -500,7 +620,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: "500",
     color: stylesVars.mutedText,
-    marginTop: 2
+    marginTop: 2,
   },
 
   selectedVendorRow: {
@@ -511,17 +631,17 @@ const styles = StyleSheet.create({
     borderColor: stylesVars.border,
     borderRadius: 12,
     padding: 12,
-    backgroundColor: stylesVars.cardBg
+    backgroundColor: stylesVars.cardBg,
   },
 
   selectedVendorInfo: {
-    flex: 1
+    flex: 1,
   },
 
   selectedVendorTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   selectedVendorSub: {
@@ -529,7 +649,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: "500",
     color: stylesVars.mutedText,
-    marginTop: 2
+    marginTop: 2,
   },
 
   clearBtn: {
@@ -541,13 +661,13 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     backgroundColor: stylesVars.blueSoft,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   clearBtnText: {
     fontSize: 13,
     fontWeight: "700",
-    color: stylesVars.blue
+    color: stylesVars.blue,
   },
 
   primaryBtn: {
@@ -557,48 +677,48 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 2
+    marginTop: 2,
   },
 
   primaryText: {
     color: stylesVars.white,
     fontWeight: "700",
-    fontSize: 14
+    fontSize: 14,
   },
 
   disabledBtn: {
-    opacity: 0.6
+    opacity: 0.6,
   },
 
   pressed: {
-    opacity: 0.82
+    opacity: 0.82,
   },
 
   loadingRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10
+    gap: 10,
   },
 
   helper: {
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   loadingArea: {
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10
+    gap: 10,
   },
 
   list: {
     padding: 16,
     paddingTop: 6,
     gap: 12,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
   card: {
@@ -607,40 +727,63 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 18,
     gap: 8,
-    backgroundColor: stylesVars.cardBg
+    backgroundColor: stylesVars.cardBg,
   },
 
   cardNewRed: {
     borderColor: stylesVars.dangerBorder,
-    backgroundColor: "#FFF7F7"
+    backgroundColor: "#FFF7F7",
   },
 
   rowBetween: {
     flexDirection: "row",
     justifyContent: "space-between",
     gap: 10,
-    alignItems: "center"
+    alignItems: "center",
   },
 
   orderNo: {
     fontSize: 16,
     fontWeight: "700",
     flex: 1,
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   line: {
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.subText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   small: {
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
+  },
+
+  variantBox: {
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: stylesVars.blueSoft,
+    borderRadius: 12,
+    padding: 10,
+    gap: 3,
+  },
+
+  variantTitle: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: stylesVars.blue,
+    fontWeight: "800",
+  },
+
+  variantMeta: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: stylesVars.subText,
+    fontWeight: "600",
   },
 
   badge: {
@@ -649,29 +792,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    overflow: "hidden"
+    overflow: "hidden",
   },
 
   badgeRed: {
     color: stylesVars.danger,
-    backgroundColor: stylesVars.dangerSoft
+    backgroundColor: stylesVars.dangerSoft,
   },
 
   badgeBlue: {
     color: stylesVars.blue,
-    backgroundColor: stylesVars.blueSoft
+    backgroundColor: stylesVars.blueSoft,
+  },
+
+  reviewPill: {
+    alignSelf: "flex-start",
+    marginTop: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: stylesVars.successSoft,
+  },
+
+  reviewPillText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: stylesVars.success,
   },
 
   empty: {
     padding: 20,
     gap: 8,
-    alignItems: "center"
+    alignItems: "center",
   },
 
   emptyTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   emptyText: {
@@ -679,6 +837,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: stylesVars.mutedText,
     textAlign: "center",
-    fontWeight: "500"
-  }
+    fontWeight: "500",
+  },
 });

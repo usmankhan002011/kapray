@@ -8,9 +8,10 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  View
+  TextInput,
+  View,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { useAppSelector } from "@/store/hooks";
 
@@ -19,13 +20,31 @@ const BUCKET_VENDOR = "vendor_images";
 
 const PAGE_SIZE = 30;
 
+type ProductCategory =
+  | "unstitched_plain"
+  | "unstitched_dyeing"
+  | "unstitched_dyeing_tailoring"
+  | "stitched_ready";
+
 type ProductRow = {
   id: string;
   product_code: string | null;
   title: string | null;
   created_at?: string | null;
+  inventory_qty?: number | null;
+  made_on_order?: boolean | null;
+  product_category?: ProductCategory | null;
+  spec?: any;
+  price?: any;
   media?: any;
   banner_url?: string | null;
+};
+
+type VariantInventorySummary = {
+  totalQty: number;
+  availableSizes: number;
+  variantCount: number;
+  hasStock: boolean;
 };
 
 function safeInt(v: any) {
@@ -56,25 +75,209 @@ function publicUrlForStoragePath(path: string | null): string | null {
   return data?.publicUrl ?? null;
 }
 
+function getVariantInventorySummary(
+  product: ProductRow,
+): VariantInventorySummary {
+  const price = product?.price ?? {};
+  const spec = product?.spec ?? {};
+
+  const variants =
+    price?.variants ??
+    price?.ready_variants ??
+    price?.readyVariants ??
+    price?.stitched_variants ??
+    price?.stitchedVariants ??
+    spec?.variants ??
+    spec?.ready_variants ??
+    spec?.readyVariants ??
+    spec?.stitched_variants ??
+    spec?.stitchedVariants ??
+    [];
+
+  let totalQty = 0;
+  let variantCount = 0;
+  const availableSizeKeys = new Set<string>();
+
+  for (const variant of Array.isArray(variants) ? variants : []) {
+    const sizes = Array.isArray(variant?.sizes) ? variant.sizes : [];
+    let variantHasStock = false;
+
+    for (const row of sizes) {
+      const qty = Number(
+        row?.qty ??
+          row?.stock_qty ??
+          row?.stockQty ??
+          row?.stock ??
+          row?.quantity ??
+          0,
+      );
+
+      if (Number.isFinite(qty) && qty > 0) {
+        totalQty += Math.trunc(qty);
+        variantHasStock = true;
+
+        const sizeKey = String(
+          row?.size ??
+            row?.size_label ??
+            row?.sizeLabel ??
+            row?.label ??
+            row?.name ??
+            "",
+        )
+          .trim()
+          .toLowerCase();
+
+        if (sizeKey) {
+          availableSizeKeys.add(sizeKey);
+        }
+      }
+    }
+
+    if (variantHasStock) {
+      variantCount += 1;
+    }
+  }
+
+  return {
+    totalQty,
+    availableSizes: Math.min(6, availableSizeKeys.size),
+    variantCount,
+    hasStock: totalQty > 0,
+  };
+}
+
+function isStitchedReadyProduct(item: ProductRow) {
+  const category = String(item?.product_category ?? "").trim();
+  const price = item?.price ?? {};
+  const spec = item?.spec ?? {};
+
+  return (
+    category === "stitched_ready" ||
+    String(price?.mode ?? "") === "stitched_total" ||
+    String(price?.mode ?? "") === "stitched_ready" ||
+    String(spec?.product_category ?? "") === "stitched_ready"
+  );
+}
+
+function getStockSummaryText(item: ProductRow) {
+  if (item?.made_on_order) return "Made on order";
+
+  if (isStitchedReadyProduct(item)) {
+    const info = getVariantInventorySummary(item);
+
+    if (!info.hasStock) return "Variant stock: 0 total";
+
+    const sizeWord = info.availableSizes === 1 ? "size" : "sizes";
+    const variantWord = info.variantCount === 1 ? "variant" : "variants";
+    return `Variant stock: ${info.totalQty} total • ${info.availableSizes} ${sizeWord} • ${info.variantCount} ${variantWord}`;
+  }
+
+  return `Qty: ${Math.max(0, Number(item?.inventory_qty ?? 0))}`;
+}
+
+function isOutOfStock(item: ProductRow) {
+  if (item?.made_on_order) return false;
+
+  if (isStitchedReadyProduct(item)) {
+    return !getVariantInventorySummary(item).hasStock;
+  }
+
+  return Number(item?.inventory_qty ?? 0) <= 0;
+}
+
+function getSearchCategories(searchText: string): ProductCategory[] {
+  const q = searchText.toLowerCase().replace(/[_-]+/g, " ").trim();
+  if (!q) return [];
+
+  const words = q.split(/\s+/).filter(Boolean);
+  const hasWord = (word: string) => words.includes(word);
+  const hasPhrase = (phrase: string) => q.includes(phrase);
+
+  if (
+    hasPhrase("ready to wear") ||
+    hasPhrase("ready wear") ||
+    hasPhrase("stitched ready")
+  ) {
+    return ["stitched_ready"];
+  }
+
+  if (hasWord("stitched") && !hasWord("unstitched")) {
+    return ["stitched_ready"];
+  }
+
+  if (hasWord("unstitched")) {
+    if (hasWord("tailoring") || hasWord("tailor")) {
+      return ["unstitched_dyeing_tailoring"];
+    }
+
+    if (hasWord("dyeing") || hasWord("dyed") || hasWord("dye")) {
+      return ["unstitched_dyeing", "unstitched_dyeing_tailoring"];
+    }
+
+    if (hasWord("plain")) {
+      return ["unstitched_plain"];
+    }
+
+    return [
+      "unstitched_plain",
+      "unstitched_dyeing",
+      "unstitched_dyeing_tailoring",
+    ];
+  }
+
+  if (hasWord("plain")) return ["unstitched_plain"];
+  if (hasWord("tailoring") || hasWord("tailor"))
+    return ["unstitched_dyeing_tailoring"];
+  if (hasWord("dyeing") || hasWord("dyed") || hasWord("dye")) {
+    return ["unstitched_dyeing", "unstitched_dyeing_tailoring"];
+  }
+
+  return [];
+}
+
+function applyVendorProductSearch(query: any, searchText: string) {
+  const safeQuery = searchText.replace(/[%_,]/g, " ").trim();
+  if (!safeQuery) return query;
+
+  const categoryMatches = getSearchCategories(safeQuery);
+
+  if (categoryMatches.length === 1) {
+    return query.eq("product_category", categoryMatches[0]);
+  }
+
+  if (categoryMatches.length > 1) {
+    return query.in("product_category", categoryMatches);
+  }
+
+  return query.or(
+    [`product_code.ilike.%${safeQuery}%`, `title.ilike.%${safeQuery}%`].join(
+      ",",
+    ),
+  );
+}
+
 export default function VendorProductsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
 
-  // vendor.id is bigint in your DB -> treat as number
   const vendorIdRaw =
     useAppSelector((s: any) => s?.vendorSlice?.vendor?.id ?? null) ??
     useAppSelector((s: any) => s?.vendor?.id ?? null);
 
   const vendorId = safeInt(vendorIdRaw);
 
-  const [loading, setLoading] = useState(false); // initial / refresh
-  const [loadingMore, setLoadingMore] = useState(false); // pagination
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [hasMore, setHasMore] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const heading = useMemo(() => {
     return vendorId ? `Products (Vendor #${vendorId})` : "Products";
   }, [vendorId]);
+
+  const trimmedSearch = searchQuery.trim();
+  const searching = trimmedSearch.length > 0;
 
   async function fetchProductsReset() {
     if (!vendorId) {
@@ -86,10 +289,18 @@ export default function VendorProductsScreen() {
       setLoading(true);
       setHasMore(true);
 
-      const { data, error } = await supabase
+      let query = supabase
         .from(PRODUCTS_TABLE)
-        .select("id, product_code, title, created_at, media")
-        .eq("vendor_id", vendorId)
+        .select(
+          "id, product_code, title, created_at, inventory_qty, made_on_order, product_category, spec, price, media",
+        )
+        .eq("vendor_id", vendorId);
+
+      if (trimmedSearch) {
+        query = applyVendorProductSearch(query, trimmedSearch);
+      }
+
+      const { data, error } = await query
         .order("created_at", { ascending: false })
         .range(0, PAGE_SIZE - 1);
 
@@ -103,7 +314,7 @@ export default function VendorProductsScreen() {
         const imgPath = firstImagePath((r as any).media);
         return {
           ...r,
-          banner_url: publicUrlForStoragePath(imgPath)
+          banner_url: publicUrlForStoragePath(imgPath),
         };
       });
 
@@ -127,10 +338,18 @@ export default function VendorProductsScreen() {
       const from = products.length;
       const to = from + PAGE_SIZE - 1;
 
-      const { data, error } = await supabase
+      let query = supabase
         .from(PRODUCTS_TABLE)
-        .select("id, product_code, title, created_at, media")
-        .eq("vendor_id", vendorId)
+        .select(
+          "id, product_code, title, created_at, inventory_qty, made_on_order, product_category, spec, price, media",
+        )
+        .eq("vendor_id", vendorId);
+
+      if (trimmedSearch) {
+        query = applyVendorProductSearch(query, trimmedSearch);
+      }
+
+      const { data, error } = await query
         .order("created_at", { ascending: false })
         .range(from, to);
 
@@ -144,7 +363,7 @@ export default function VendorProductsScreen() {
         const imgPath = firstImagePath((r as any).media);
         return {
           ...r,
-          banner_url: publicUrlForStoragePath(imgPath)
+          banner_url: publicUrlForStoragePath(imgPath),
         };
       });
 
@@ -162,14 +381,14 @@ export default function VendorProductsScreen() {
     }
   }
 
-  useEffect(() => {
-    setProducts([]);
-    setHasMore(true);
-    if (vendorId) fetchProductsReset();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vendorId]);
+  useFocusEffect(
+    React.useCallback(() => {
+      if (vendorId) {
+        void fetchProductsReset();
+      }
+    }, [vendorId, trimmedSearch]),
+  );
 
-  // If we returned here with a new product_id, fetch and insert it at the top immediately
   useEffect(() => {
     const newIdRaw = String((params as any)?.new_product_id ?? "").trim();
     const newId = safeInt(newIdRaw);
@@ -181,7 +400,9 @@ export default function VendorProductsScreen() {
       try {
         const { data, error } = await supabase
           .from(PRODUCTS_TABLE)
-          .select("id, product_code, title, created_at, media")
+          .select(
+            "id, product_code, title, created_at, inventory_qty, made_on_order, product_category, spec, price, media",
+          )
           .eq("id", newId)
           .eq("vendor_id", vendorId)
           .single();
@@ -208,40 +429,74 @@ export default function VendorProductsScreen() {
     };
   }, [params, vendorId]);
 
+  function openProduct(item: ProductRow) {
+    router.push(
+      `/vendor/profile/view-product?product_id=${encodeURIComponent(
+        item.id,
+      )}` as any,
+    );
+  }
+
+  function editProduct(item: ProductRow) {
+    router.push({
+      pathname: "/vendor/profile/update-product",
+      params: {
+        productId: item.id,
+        product_id: item.id,
+      },
+    } as any);
+  }
+
   function renderItem({ item }: { item: ProductRow }) {
     const code = safeText(item.product_code);
     const title = safeText(item.title);
+    const stockText = getStockSummaryText(item);
+    const outOfStock = isOutOfStock(item);
 
     return (
-      <Pressable
-        style={({ pressed }) => [styles.item, pressed ? styles.pressed : null]}
-        onPress={() =>
-          router.push(
-            `/vendor/profile/view-product?product_id=${encodeURIComponent(
-              item.id
-            )}` as any
-          )
-        }
-      >
-        <View style={styles.thumbWrap}>
-          {item.banner_url ? (
-            <Image source={{ uri: item.banner_url }} style={styles.thumb} />
-          ) : (
-            <View style={styles.thumbFallback}>
-              <Text style={styles.thumbFallbackText}>No Image</Text>
-            </View>
-          )}
-        </View>
+      <View style={styles.item}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.itemMain,
+            pressed ? styles.pressed : null,
+          ]}
+          onPress={() => openProduct(item)}
+        >
+          <View style={styles.thumbWrap}>
+            {item.banner_url ? (
+              <Image source={{ uri: item.banner_url }} style={styles.thumb} />
+            ) : (
+              <View style={styles.thumbFallback}>
+                <Text style={styles.thumbFallbackText}>No Image</Text>
+              </View>
+            )}
+          </View>
 
-        <View style={styles.itemMid}>
-          <Text style={styles.itemCode}>{code}</Text>
-          <Text style={styles.itemTitle} numberOfLines={1}>
-            {title}
-          </Text>
-        </View>
+          <View style={styles.itemMid}>
+            <Text style={styles.itemCode}>{code}</Text>
+            <Text style={styles.itemTitle} numberOfLines={1}>
+              {title}
+            </Text>
 
-        <Text style={styles.itemArrow}>›</Text>
-      </Pressable>
+            <Text style={styles.stockText}>{stockText}</Text>
+
+            {outOfStock ? (
+              <Text style={styles.outOfStockText}>Out of stock</Text>
+            ) : null}
+          </View>
+        </Pressable>
+        <View style={styles.itemActions}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionBtn,
+              pressed ? styles.pressed : null,
+            ]}
+            onPress={() => editProduct(item)}
+          >
+            <Text style={styles.actionText}>Edit</Text>
+          </Pressable>
+        </View>
+      </View>
     );
   }
 
@@ -269,32 +524,40 @@ export default function VendorProductsScreen() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.meta}>Add products & manage inventory here.</Text>
-
-            <View style={styles.btnRow}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.primaryBtn,
-                  pressed ? styles.pressed : null
-                ]}
-                onPress={() => router.push("/vendor/profile/add-product")}
-              >
-                <Text style={styles.primaryText}>Add New Product</Text>
-              </Pressable>
-
-              <Pressable
-                style={({ pressed }) => [
-                  styles.secondaryBtn,
-                  pressed ? styles.pressed : null
-                ]}
-                onPress={() => router.push("/vendor/profile/update-product")}
-              >
-                <Text style={styles.secondaryText}>Update Product</Text>
-              </Pressable>
-            </View>
+            <Pressable
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                pressed ? styles.pressed : null,
+              ]}
+              onPress={() => router.push("/vendor/profile/add-product")}
+            >
+              <Text style={styles.primaryText}>Add New Product</Text>
+            </Pressable>
           </View>
 
-          <Text style={styles.section}>Recent Products</Text>
+          {vendorId ? (
+            <View style={styles.searchCard}>
+              <Text style={styles.searchLabel}>Search your products</Text>
+              <TextInput
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search by code, name, or category (stitched, unstitched)"
+                placeholderTextColor={stylesVars.mutedText}
+                autoCapitalize="none"
+                autoCorrect={false}
+                clearButtonMode="while-editing"
+                style={styles.searchInput}
+              />
+            </View>
+          ) : null}
+
+          <Text style={styles.listInstruction}>
+            Tap any product to view. Edit to update
+          </Text>
+
+          <Text style={styles.section}>
+            {searching ? "Search Results" : "Recent Products"}
+          </Text>
 
           {!vendorId ? (
             <View style={styles.listCard}>
@@ -308,6 +571,12 @@ export default function VendorProductsScreen() {
                 <ActivityIndicator />
                 <Text style={styles.loadingText}>Loading products…</Text>
               </View>
+            </View>
+          ) : searching && !products.length ? (
+            <View style={styles.listCard}>
+              <Text style={styles.empty}>
+                No matching products found for this vendor.
+              </Text>
             </View>
           ) : !products.length ? (
             <View style={styles.listCard}>
@@ -329,7 +598,7 @@ export default function VendorProductsScreen() {
                 onPress={fetchMore}
                 style={({ pressed }) => [
                   styles.loadMoreBtn,
-                  pressed ? styles.pressed : null
+                  pressed ? styles.pressed : null,
                 ]}
               >
                 <Text style={styles.loadMoreText}>Load more</Text>
@@ -345,55 +614,47 @@ export default function VendorProductsScreen() {
     />
   );
 }
-
 const stylesVars = {
   bg: "#F8FAFC",
   cardBg: "#FFFFFF",
   border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
   blue: "#2563EB",
   blueSoft: "#EEF4FF",
   text: "#0F172A",
   subText: "#475569",
   mutedText: "#64748B",
-  placeholder: "#94A3B8",
   danger: "#B91C1C",
-  dangerSoft: "#FEE2E2",
-  dangerBorder: "#FCA5A5",
-  overlayDark: "rgba(0,0,0,0.58)",
-  overlaySoft: "rgba(255,255,255,0.14)",
   white: "#FFFFFF",
-  black: "#000000"
 };
 
 const styles = StyleSheet.create({
   content: {
     padding: 16,
     paddingBottom: 24,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
   topBar: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    gap: 12
+    gap: 12,
   },
 
   title: {
     fontSize: 18,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   refresh: {
     fontSize: 14,
     fontWeight: "700",
-    color: stylesVars.blue
+    color: stylesVars.blue,
   },
 
   disabledText: {
-    opacity: 0.6
+    opacity: 0.6,
   },
 
   card: {
@@ -402,20 +663,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
-    padding: 18
+    padding: 18,
   },
 
   meta: {
-    marginTop: 6,
+    marginBottom: 14,
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
-  },
-
-  btnRow: {
-    marginTop: 14,
-    gap: 10
+    fontWeight: "500",
   },
 
   primaryBtn: {
@@ -425,38 +681,64 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     backgroundColor: stylesVars.blue,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   primaryText: {
     color: stylesVars.white,
     fontWeight: "700",
-    fontSize: 14
+    fontSize: 14,
   },
 
-  secondaryBtn: {
-    minHeight: 48,
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    backgroundColor: stylesVars.blueSoft,
+  searchCard: {
+    marginTop: 14,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#D7E3FF",
-    alignItems: "center",
-    justifyContent: "center"
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.cardBg,
+    padding: 14,
   },
 
-  secondaryText: {
-    color: stylesVars.blue,
-    fontWeight: "700",
-    fontSize: 14
+  searchLabel: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: stylesVars.text,
+    marginBottom: 8,
+  },
+
+  searchInput: {
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: "#F8FAFC",
+    paddingHorizontal: 12,
+    color: stylesVars.text,
+    fontSize: 10,
+    fontWeight: "600",
+  },
+
+  searchHint: {
+    marginTop: 8,
+    fontSize: 12,
+    lineHeight: 17,
+    color: stylesVars.mutedText,
+    fontWeight: "500",
+  },
+
+  listInstruction: {
+    marginTop: 16,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "600",
   },
 
   section: {
-    marginTop: 18,
+    marginTop: 6,
     fontSize: 15,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   listCard: {
@@ -465,7 +747,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
-    padding: 18
+    padding: 18,
   },
 
   item: {
@@ -473,12 +755,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: stylesVars.border,
     borderRadius: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
     backgroundColor: stylesVars.cardBg,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    overflow: "hidden",
+  },
+
+  itemMain: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingLeft: 10,
   },
 
   thumbWrap: {
@@ -488,35 +776,35 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: "#F1F5F9",
     borderWidth: 1,
-    borderColor: stylesVars.border
+    borderColor: stylesVars.border,
   },
 
   thumb: {
     width: 54,
-    height: 54
+    height: 54,
   },
 
   thumbFallback: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   thumbFallbackText: {
     color: stylesVars.mutedText,
     fontWeight: "600",
-    fontSize: 10
+    fontSize: 10,
   },
 
   itemMid: {
     flex: 1,
-    paddingHorizontal: 10
+    paddingHorizontal: 10,
   },
 
   itemCode: {
     fontSize: 12,
     fontWeight: "700",
-    color: stylesVars.blue
+    color: stylesVars.blue,
   },
 
   itemTitle: {
@@ -524,38 +812,69 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "500",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
-  itemArrow: {
-    fontSize: 22,
+  stockText: {
+    marginTop: 2,
+    fontSize: 12,
+    color: stylesVars.mutedText,
+    fontWeight: "600",
+  },
+
+  outOfStockText: {
+    marginTop: 2,
+    fontSize: 12,
+    color: stylesVars.danger,
     fontWeight: "700",
-    color: stylesVars.subText
+  },
+
+  itemActions: {
+    paddingRight: 10,
+    paddingLeft: 4,
+    justifyContent: "center",
+  },
+
+  actionBtn: {
+    minWidth: 70,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  actionText: {
+    color: stylesVars.blue,
+    fontWeight: "800",
+    fontSize: 12,
   },
 
   empty: {
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   loadingRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingVertical: 6
+    paddingVertical: 6,
   },
 
   loadingText: {
     fontSize: 13,
     color: stylesVars.mutedText,
-    fontWeight: "600"
+    fontWeight: "600",
   },
 
   footer: {
     paddingTop: 8,
-    paddingBottom: 10
+    paddingBottom: 10,
   },
 
   loadMoreBtn: {
@@ -568,13 +887,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D7E3FF",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   loadMoreText: {
     color: stylesVars.blue,
     fontWeight: "700",
-    fontSize: 14
+    fontSize: 14,
   },
 
   endText: {
@@ -583,10 +902,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   pressed: {
-    opacity: 0.82
-  }
+    opacity: 0.82,
+  },
 });

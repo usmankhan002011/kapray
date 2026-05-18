@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Alert,
   FlatList,
@@ -7,23 +13,32 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
-  View
+  View,
 } from "react-native";
 import { VideoView, useVideoPlayer } from "expo-video";
-import { useEvent } from "expo";
 
 export type MediaItem =
   | { kind: "image"; url: string }
-  | { kind: "video"; url: string; thumbUrl?: string | null; bytes?: number | null };
+  | {
+      kind: "video";
+      url: string;
+      thumbUrl?: string | null;
+      bytes?: number | null;
+    };
+
+type ImageMediaItem = Extract<MediaItem, { kind: "image" }>;
+type VideoMediaItem = Extract<MediaItem, { kind: "video" }>;
 
 function safeText(v: any) {
   const t = String(v ?? "").trim();
   return t.length ? t : "—";
 }
 
-async function headContentLength(url: string, timeoutMs = 2500): Promise<number | null> {
+async function headContentLength(
+  url: string,
+  timeoutMs = 2500,
+): Promise<number | null> {
   try {
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), timeoutMs);
@@ -31,7 +46,9 @@ async function headContentLength(url: string, timeoutMs = 2500): Promise<number 
     const res = await fetch(url, { method: "HEAD", signal: controller.signal });
     clearTimeout(t);
 
-    const len = res.headers?.get?.("content-length") ?? res.headers?.get?.("Content-Length");
+    const len =
+      res.headers?.get?.("content-length") ??
+      res.headers?.get?.("Content-Length");
     if (!len) return null;
 
     const n = Number(len);
@@ -63,7 +80,7 @@ export function useProductMedia(params: {
     return resolveManyPublic(media?.videos);
   }, [product, resolveManyPublic]);
 
-  // ✅ Sort videos by size (smallest first) using HEAD Content-Length (best-effort)
+  // Sort videos by size (smallest first) using HEAD Content-Length (best-effort).
   const [videoSizes, setVideoSizes] = useState<Record<string, number>>({});
   const [videoUrls, setVideoUrls] = useState<string[]>([]);
 
@@ -80,8 +97,6 @@ export function useProductMedia(params: {
       }
 
       const sizes: Record<string, number> = {};
-
-      // ✅ small concurrency to avoid spikes
       const CONCURRENCY = 2;
       let idx = 0;
 
@@ -95,7 +110,9 @@ export function useProductMedia(params: {
       }
 
       await Promise.all(
-        Array.from({ length: Math.min(CONCURRENCY, urls.length) }, () => worker())
+        Array.from({ length: Math.min(CONCURRENCY, urls.length) }, () =>
+          worker(),
+        ),
       );
 
       if (!alive) return;
@@ -121,13 +138,12 @@ export function useProductMedia(params: {
     };
   }, [videoUrlsRaw]);
 
-  // Build media items (images first, then videos sorted by size)
   const mediaItems = useMemo<MediaItem[]>(() => {
     const imgs: MediaItem[] = imageUrls.map((u) => ({ kind: "image", url: u }));
 
     const vids: MediaItem[] = videoUrls.map((u) => {
       const rawIndex = videoUrlsRaw.indexOf(u);
-      const thumbUrl = rawIndex >= 0 ? thumbUrls[rawIndex] ?? null : null;
+      const thumbUrl = rawIndex >= 0 ? (thumbUrls[rawIndex] ?? null) : null;
       const bytes = videoSizes[u] ?? null;
       return { kind: "video", url: u, thumbUrl, bytes };
     });
@@ -146,7 +162,7 @@ export function useProductMedia(params: {
     videoUrlsRaw,
     videoUrls,
     videoSizes,
-    mediaItems
+    mediaItems,
   };
 }
 
@@ -185,107 +201,122 @@ export function MediaBlock(props: {
     setMediaViewerIndex,
     activeVideoUrl,
     setActiveVideoUrl,
-    videoCoverVisible,
     setVideoCoverVisible,
-    videoControlsVisible,
-    showControlsBriefly,
-    onTogglePlayPause,
     width,
-    styles
+    styles,
   } = props;
 
-  const mediaViewerRef = useRef<FlatList<MediaItem>>(null);
-
-  const selectedMedia = useMemo<MediaItem | null>(() => {
-    if (!mediaItems.length) return null;
-    const safeIdx = Math.max(0, Math.min(selectedMediaIndex, mediaItems.length - 1));
-    return mediaItems[safeIdx] ?? null;
-  }, [mediaItems, selectedMediaIndex]);
-
-  const openMediaViewerAt = useCallback(
-    (idx: number) => {
-      if (!mediaItems.length) return;
-      const safeIdx = Math.max(0, Math.min(idx, mediaItems.length - 1));
-      setMediaViewerIndex(safeIdx);
-      setMediaViewerVisible(true);
-
-      const it = mediaItems[safeIdx];
-      if (it?.kind === "video") {
-        setActiveVideoUrl(it.url);
-        setVideoCoverVisible(true);
-      }
-    },
-    [mediaItems, setMediaViewerIndex, setMediaViewerVisible, setActiveVideoUrl, setVideoCoverVisible]
+  const imageItems = useMemo(
+    () => mediaItems.filter((it): it is ImageMediaItem => it.kind === "image"),
+    [mediaItems],
   );
+
+  const videoItems = useMemo(
+    () => mediaItems.filter((it): it is VideoMediaItem => it.kind === "video"),
+    [mediaItems],
+  );
+
+  const imageViewerRef = useRef<FlatList<ImageMediaItem>>(null);
+  const videoPagerRef = useRef<FlatList<VideoMediaItem>>(null);
+
+  const videoPageWidth = Math.max(260, width - 60);
+
+  const selectedVideoIndex = useMemo(() => {
+    if (!videoItems.length) return 0;
+    const idx = videoItems.findIndex((it) => it.url === activeVideoUrl);
+    return idx >= 0 ? idx : 0;
+  }, [activeVideoUrl, videoItems]);
+
+  const selectedImageIndex = useMemo(() => {
+    if (!imageItems.length) return 0;
+
+    const selected = mediaItems[selectedMediaIndex];
+    if (selected?.kind !== "image") return 0;
+
+    const idx = imageItems.findIndex((it) => it.url === selected.url);
+    return idx >= 0 ? idx : 0;
+  }, [imageItems, mediaItems, selectedMediaIndex]);
+
+  const selectedImage = useMemo(() => {
+    if (!imageItems.length) return null;
+    return imageItems[selectedImageIndex] ?? imageItems[0] ?? null;
+  }, [imageItems, selectedImageIndex]);
 
   useEffect(() => {
-    if (!mediaViewerVisible) return;
-    if (!mediaItems.length) return;
+    if (!videoItems.length) {
+      if (activeVideoUrl) setActiveVideoUrl("");
+      return;
+    }
 
-    const t = setTimeout(() => {
-      try {
-        mediaViewerRef.current?.scrollToIndex({ index: mediaViewerIndex, animated: false });
-      } catch {
-        // ignore
-      }
-    }, 0);
-
-    return () => clearTimeout(t);
-  }, [mediaViewerVisible, mediaViewerIndex, mediaItems.length]);
-
-  const isVideoSelected = useMemo(() => {
-    return selectedMedia?.kind === "video" && selectedMedia?.url === activeVideoUrl;
-  }, [selectedMedia, activeVideoUrl]);
-
-  const activeViewerItem = useMemo(() => mediaItems[mediaViewerIndex], [mediaItems, mediaViewerIndex]);
-  const activeViewerIsVideo = useMemo(
-    () => activeViewerItem?.kind === "video" && activeViewerItem?.url === activeVideoUrl,
-    [activeViewerItem, activeVideoUrl]
-  );
+    if (
+      !activeVideoUrl ||
+      !videoItems.some((it) => it.url === activeVideoUrl)
+    ) {
+      setActiveVideoUrl(videoItems[0].url);
+      setVideoCoverVisible(false);
+    }
+  }, [activeVideoUrl, setActiveVideoUrl, setVideoCoverVisible, videoItems]);
 
   const player = useVideoPlayer(activeVideoUrl || "");
-  const { status } = useEvent(player as any, "statusChange", { status: (player as any)?.status });
-  const { isPlaying } = useEvent(player as any, "playingChange", {
-    isPlaying: (player as any)?.playing
-  });
 
-  // ✅ Autoplay when activeVideoUrl changes
+  useEffect(() => {
+    try {
+      if (player) (player as any).loop = false;
+    } catch {
+      // ignore
+    }
+  }, [player]);
+
+  // When user scrolls to another video, start that video automatically.
+  // Native controls remain available on the active VideoView.
   useEffect(() => {
     if (!activeVideoUrl) return;
+
     const t = setTimeout(() => {
       try {
         (player as any)?.play?.();
       } catch {
-        // ignore
+        // ignore autoplay failures; user can still press native play.
       }
-    }, 0);
+    }, 120);
+
     return () => clearTimeout(t);
   }, [activeVideoUrl, player]);
 
-  const coverHideTimerRef = useRef<any>(null);
+  useEffect(() => {
+    if (!mediaViewerVisible) return;
+    if (!imageItems.length) return;
+
+    const t = setTimeout(() => {
+      try {
+        imageViewerRef.current?.scrollToIndex({
+          index: Math.max(0, Math.min(mediaViewerIndex, imageItems.length - 1)),
+          animated: false,
+        });
+      } catch {
+        // ignore
+      }
+    }, 0);
+
+    return () => clearTimeout(t);
+  }, [imageItems.length, mediaViewerIndex, mediaViewerVisible]);
 
   useEffect(() => {
-    return () => {
-      if (coverHideTimerRef.current) clearTimeout(coverHideTimerRef.current);
-    };
-  }, []);
+    if (!videoItems.length) return;
 
-  // ✅ Hide cover only AFTER we are actually playing (prevents black flash)
-  useEffect(() => {
-    if (!activeVideoUrl) return;
+    const t = setTimeout(() => {
+      try {
+        videoPagerRef.current?.scrollToIndex({
+          index: selectedVideoIndex,
+          animated: false,
+        });
+      } catch {
+        // ignore
+      }
+    }, 0);
 
-    if (isPlaying) {
-      if (coverHideTimerRef.current) clearTimeout(coverHideTimerRef.current);
-
-      coverHideTimerRef.current = setTimeout(() => {
-        setVideoCoverVisible(false);
-      }, 120);
-
-      return;
-    }
-
-    setVideoCoverVisible(true);
-  }, [activeVideoUrl, isPlaying, status, setVideoCoverVisible]);
+    return () => clearTimeout(t);
+  }, [selectedVideoIndex, videoItems.length]);
 
   async function openExternal(url: string) {
     const u = String(url || "").trim();
@@ -299,213 +330,291 @@ export function MediaBlock(props: {
     Linking.openURL(u);
   }
 
-  const onSelectMedia = useCallback(
-    (idx: number) => {
-      const item = mediaItems[idx];
-      if (!item) return;
+  const openImageViewerAt = useCallback(
+    (imageIdx: number) => {
+      if (!imageItems.length) return;
+      const safeIdx = Math.max(0, Math.min(imageIdx, imageItems.length - 1));
+      const imageUrl = imageItems[safeIdx]?.url;
+      const globalIdx = mediaItems.findIndex(
+        (it) => it.kind === "image" && it.url === imageUrl,
+      );
 
-      setSelectedMediaIndex(idx);
-
-      if (item.kind === "video") {
-        setActiveVideoUrl(item.url);
-        setVideoCoverVisible(true);
-      }
-
-      openMediaViewerAt(idx);
+      setSelectedMediaIndex(globalIdx >= 0 ? globalIdx : safeIdx);
+      setMediaViewerIndex(safeIdx);
+      setMediaViewerVisible(true);
     },
-    [mediaItems, setSelectedMediaIndex, setActiveVideoUrl, setVideoCoverVisible, openMediaViewerAt]
+    [
+      imageItems,
+      mediaItems,
+      setMediaViewerIndex,
+      setMediaViewerVisible,
+      setSelectedMediaIndex,
+    ],
   );
 
-  const Hero = useMemo(() => {
-    if (!selectedMedia) return null;
+  const selectImageAt = useCallback(
+    (imageIdx: number) => {
+      if (!imageItems.length) return;
 
-    if (selectedMedia.kind === "video") {
-      const thumb = selectedMedia.thumbUrl ?? null;
-
-      return (
-        <View style={styles.heroWrap}>
-          <View style={styles.heroVideoBox}>
-            {isVideoSelected ? (
-              <VideoView player={player} style={styles.heroVideo} nativeControls={false} />
-            ) : null}
-
-            {thumb && (videoCoverVisible || !isVideoSelected) ? (
-              <Image source={{ uri: thumb }} style={styles.heroCover} />
-            ) : null}
-
-            {videoControlsVisible ? (
-              <Pressable onPress={onTogglePlayPause} style={styles.videoControlsOverlay}>
-                <View style={styles.videoControlPill}>
-                  <Text style={styles.videoControlText}>⏯</Text>
-                </View>
-              </Pressable>
-            ) : null}
-
-            <Pressable onPress={() => showControlsBriefly()} style={StyleSheet.absoluteFill} />
-          </View>
-
-          <Pressable
-            onPress={() => openMediaViewerAt(selectedMediaIndex)}
-            style={styles.heroOpenViewerBtn}
-          >
-            <Text style={styles.heroOpenViewerText}>Open</Text>
-          </Pressable>
-        </View>
+      const safeIdx = Math.max(0, Math.min(imageIdx, imageItems.length - 1));
+      const imageUrl = imageItems[safeIdx]?.url;
+      const globalIdx = mediaItems.findIndex(
+        (it) => it.kind === "image" && it.url === imageUrl,
       );
-    }
 
-    return (
-      <Pressable
-        onPress={() => openMediaViewerAt(selectedMediaIndex)}
-        style={({ pressed }) => [styles.heroWrap, pressed ? styles.pressed : null]}
-      >
-        <Image source={{ uri: selectedMedia.url }} style={styles.heroImage} />
-      </Pressable>
-    );
-  }, [
-    selectedMedia,
-    player,
-    isVideoSelected,
-    videoCoverVisible,
-    videoControlsVisible,
-    showControlsBriefly,
-    onTogglePlayPause,
-    openMediaViewerAt,
-    selectedMediaIndex,
-    styles
-  ]);
+      setSelectedMediaIndex(globalIdx >= 0 ? globalIdx : safeIdx);
+      setMediaViewerIndex(safeIdx);
+    },
+    [imageItems, mediaItems, setMediaViewerIndex, setSelectedMediaIndex],
+  );
+
+  const selectVideoAt = useCallback(
+    (videoIdx: number, animated = true) => {
+      if (!videoItems.length) return;
+
+      const safeIdx = Math.max(0, Math.min(videoIdx, videoItems.length - 1));
+      const item = videoItems[safeIdx];
+      if (!item) return;
+
+      const globalIdx = mediaItems.findIndex(
+        (it) => it.kind === "video" && it.url === item.url,
+      );
+
+      if (globalIdx >= 0) setSelectedMediaIndex(globalIdx);
+      setActiveVideoUrl(item.url);
+      setVideoCoverVisible(false);
+
+      try {
+        videoPagerRef.current?.scrollToIndex({ index: safeIdx, animated });
+      } catch {
+        // ignore
+      }
+    },
+    [
+      mediaItems,
+      setActiveVideoUrl,
+      setSelectedMediaIndex,
+      setVideoCoverVisible,
+      videoItems,
+    ],
+  );
 
   if (!mediaItems.length) return null;
 
   return (
     <>
-      <View style={styles.mediaBlock}>
-        {Hero}
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Images</Text>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.thumbRow}>
-            {mediaItems.map((it, idx) => {
-              const isOn = idx === selectedMediaIndex;
+        {imageItems.length && selectedImage ? (
+          <>
+            <Pressable
+              onPress={() => openImageViewerAt(selectedImageIndex)}
+              style={({ pressed }) => [
+                styles.imageHeroWrap,
+                pressed ? styles.pressed : null,
+              ]}
+            >
+              <Image
+                source={{ uri: selectedImage.url }}
+                style={styles.imageHero}
+              />
 
-              if (it.kind === "image") {
+              <View style={styles.imageHeroCount}>
+                <Text style={styles.indexText}>
+                  {selectedImageIndex + 1} / {imageItems.length}
+                </Text>
+              </View>
+            </Pressable>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.hRow}>
+                {imageItems.map((it, idx) => {
+                  const isOn = idx === selectedImageIndex;
+
+                  return (
+                    <Pressable
+                      key={`${it.url}-${idx}`}
+                      onPress={() => selectImageAt(idx)}
+                      onLongPress={() => openImageViewerAt(idx)}
+                      style={({ pressed }) => [
+                        styles.thumbWrap,
+                        isOn ? styles.thumbOn : null,
+                        pressed ? styles.pressed : null,
+                      ]}
+                    >
+                      <Image source={{ uri: it.url }} style={styles.thumb} />
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </>
+        ) : (
+          <Text style={styles.empty}>—</Text>
+        )}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Videos</Text>
+
+        {videoItems.length ? (
+          <>
+            <FlatList
+              ref={videoPagerRef}
+              data={videoItems}
+              horizontal
+              pagingEnabled
+              keyExtractor={(item, i) => `${item.url}-${i}`}
+              getItemLayout={(_, i) => ({
+                length: videoPageWidth,
+                offset: videoPageWidth * i,
+                index: i,
+              })}
+              onScrollToIndexFailed={() => {
+                // ignore
+              }}
+              onMomentumScrollEnd={(e) => {
+                const next =
+                  Math.round(e.nativeEvent.contentOffset.x / videoPageWidth) ||
+                  0;
+                selectVideoAt(next, false);
+              }}
+              initialNumToRender={1}
+              maxToRenderPerBatch={1}
+              windowSize={3}
+              showsHorizontalScrollIndicator={false}
+              renderItem={({ item, index }) => {
+                const isActive = item.url === activeVideoUrl;
+
                 return (
                   <Pressable
-                    key={`${it.kind}-${it.url}-${idx}`}
-                    onPress={() => onSelectMedia(idx)}
-                    style={({ pressed }) => [
-                      styles.thumbWrap,
-                      isOn ? styles.thumbOn : null,
-                      pressed ? styles.pressed : null
-                    ]}
+                    onPress={() => {
+                      if (!isActive) selectVideoAt(index);
+                    }}
+                    onLongPress={() => openExternal(item.url)}
+                    style={[styles.videoPage, { width: videoPageWidth }]}
                   >
-                    <Image source={{ uri: it.url }} style={styles.thumb} />
+                    <View style={styles.videoBox}>
+                      {isActive ? (
+                        <VideoView
+                          player={player}
+                          style={styles.video}
+                          allowsFullscreen
+                          allowsPictureInPicture
+                        />
+                      ) : item.thumbUrl ? (
+                        <Image
+                          source={{ uri: item.thumbUrl }}
+                          style={styles.videoPagerCover}
+                        />
+                      ) : (
+                        <View style={styles.videoPlaceholderLarge}>
+                          <Text style={styles.videoPlaceholderText}>
+                            Video {index + 1}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                   </Pressable>
                 );
-              }
+              }}
+            />
 
-              return (
-                <Pressable
-                  key={`${it.kind}-${it.url}-${idx}`}
-                  onPress={() => onSelectMedia(idx)}
-                  onLongPress={() => openExternal(it.url)}
-                  style={({ pressed }) => [
-                    styles.thumbWrap,
-                    isOn ? styles.thumbOn : null,
-                    pressed ? styles.pressed : null
-                  ]}
-                >
-                  {it.thumbUrl ? (
-                    <Image source={{ uri: it.thumbUrl }} style={styles.thumb} />
-                  ) : (
-                    <View style={styles.videoPlaceholder}>
-                      <Text style={styles.videoPlaceholderText}>Video</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.hRow}>
+                {videoItems.map((it, idx) => (
+                  <Pressable
+                    key={`${it.url}-${idx}`}
+                    onPress={() => selectVideoAt(idx)}
+                    onLongPress={() => openExternal(it.url)}
+                    style={({ pressed }) => [
+                      styles.thumbWrap,
+                      activeVideoUrl === it.url ? styles.videoThumbOn : null,
+                      pressed ? styles.pressed : null,
+                    ]}
+                  >
+                    {it.thumbUrl ? (
+                      <Image
+                        source={{ uri: it.thumbUrl }}
+                        style={styles.thumb}
+                      />
+                    ) : (
+                      <View style={styles.videoPlaceholder}>
+                        <Text style={styles.videoPlaceholderText}>
+                          Video {idx + 1}
+                        </Text>
+                      </View>
+                    )}
+
+                    <View style={styles.playBadge}>
+                      <Text style={styles.playBadgeText}>▶</Text>
                     </View>
-                  )}
-                  <View style={styles.playBadge}>
-                    <Text style={styles.playBadgeText}>▶</Text>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
-        </ScrollView>
+                  </Pressable>
+                ))}
+              </View>
+            </ScrollView>
+          </>
+        ) : (
+          <Text style={styles.empty}>—</Text>
+        )}
       </View>
 
       <Modal
         visible={mediaViewerVisible}
-        transparent={false}
+        transparent
         onRequestClose={() => setMediaViewerVisible(false)}
       >
         <View style={styles.viewerContainer}>
           <FlatList
-            ref={mediaViewerRef}
-            data={mediaItems}
+            ref={imageViewerRef}
+            data={imageItems}
             horizontal
             pagingEnabled
-            keyExtractor={(it, i) => `${it.kind}-${it.url}-${i}`}
-            getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
+            keyExtractor={(item, i) => `${item.url}-${i}`}
+            getItemLayout={(_, i) => ({
+              length: width,
+              offset: width * i,
+              index: i,
+            })}
             initialScrollIndex={Math.max(
               0,
-              Math.min(mediaViewerIndex, Math.max(0, mediaItems.length - 1))
+              Math.min(mediaViewerIndex, Math.max(0, imageItems.length - 1)),
             )}
             onScrollToIndexFailed={() => {
               // ignore
             }}
             onMomentumScrollEnd={(e) => {
-              const next = Math.round(e.nativeEvent.contentOffset.x / width) || 0;
-              setMediaViewerIndex(next);
+              const next =
+                Math.round(e.nativeEvent.contentOffset.x / width) || 0;
+              const safeNext = Math.max(
+                0,
+                Math.min(next, imageItems.length - 1),
+              );
+              const imageUrl = imageItems[safeNext]?.url;
+              const globalIdx = mediaItems.findIndex(
+                (it) => it.kind === "image" && it.url === imageUrl,
+              );
 
-              const item = mediaItems[next];
-              if (item?.kind === "video") {
-                setActiveVideoUrl(item.url);
-                setVideoCoverVisible(true);
-              }
+              setMediaViewerIndex(safeNext);
+              if (globalIdx >= 0) setSelectedMediaIndex(globalIdx);
             }}
-            initialNumToRender={1}
-            maxToRenderPerBatch={1}
-            windowSize={3}
-            updateCellsBatchingPeriod={50}
-            removeClippedSubviews
-            showsHorizontalScrollIndicator={false}
-            renderItem={({ item, index }) => {
-              if (item.kind === "video") {
-                const isActive = index === mediaViewerIndex && activeViewerIsVideo;
-                const thumb = item.thumbUrl ?? null;
-
-                return (
-                  <View style={styles.viewerPage}>
-                    {isActive ? (
-                      <VideoView player={player} style={styles.viewerVideo} nativeControls={false} />
-                    ) : null}
-
-                    {thumb && (!isActive || videoCoverVisible) ? (
-                      <Image source={{ uri: thumb }} style={styles.viewerCover} />
-                    ) : null}
-
-                    {videoControlsVisible && isActive ? (
-                      <Pressable onPress={onTogglePlayPause} style={styles.videoControlsOverlay}>
-                        <View style={styles.videoControlPill}>
-                          <Text style={styles.videoControlText}>⏯</Text>
-                        </View>
-                      </Pressable>
-                    ) : null}
-
-                    <Pressable onPress={() => showControlsBriefly()} style={StyleSheet.absoluteFill} />
-                  </View>
-                );
-              }
-
-              return <Image source={{ uri: item.url }} style={styles.viewerImage} />;
-            }}
+            renderItem={({ item }) => (
+              <Image source={{ uri: item.url }} style={styles.viewerImage} />
+            )}
           />
 
-          <Pressable style={styles.closeButton} onPress={() => setMediaViewerVisible(false)}>
+          <Pressable
+            style={styles.closeButton}
+            onPress={() => setMediaViewerVisible(false)}
+          >
             <Text style={styles.closeText}>✕</Text>
           </Pressable>
 
           <View style={styles.indexCaption}>
             <Text style={styles.indexText}>
-              {mediaItems.length ? mediaViewerIndex + 1 : 0} / {mediaItems.length}
+              {imageItems.length ? mediaViewerIndex + 1 : 0} /{" "}
+              {imageItems.length}
             </Text>
           </View>
         </View>
@@ -524,8 +633,15 @@ export function FooterBar(props: {
 
   styles: any;
 }) {
-  const { showBuyerActions, FOOTER_H, safePriceText, productTitle, purchaseDisabled, onPurchase, styles } =
-    props;
+  const {
+    showBuyerActions,
+    FOOTER_H,
+    safePriceText,
+    productTitle,
+    purchaseDisabled,
+    onPurchase,
+    styles,
+  } = props;
 
   if (!showBuyerActions) return null;
 
@@ -546,7 +662,7 @@ export function FooterBar(props: {
         style={({ pressed }) => [
           styles.footerBtn,
           purchaseDisabled ? styles.footerBtnDisabled : null,
-          pressed && !purchaseDisabled ? styles.pressed : null
+          pressed && !purchaseDisabled ? styles.pressed : null,
         ]}
       >
         <Text style={styles.footerBtnText}>Purchase</Text>

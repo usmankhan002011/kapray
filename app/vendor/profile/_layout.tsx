@@ -20,7 +20,7 @@ export default function VendorProfileTabsLayout() {
         screenOptions={{
           headerShown: false,
           tabBarShowLabel: false,
-          tabBarStyle: styles.tabBar
+          tabBarStyle: styles.tabBar,
         }}
       >
         {/* PRODUCTS TAB */}
@@ -29,7 +29,7 @@ export default function VendorProfileTabsLayout() {
           options={{
             tabBarIcon: ({ focused }) => (
               <CircleTab label="PRODUCTS" focused={focused} />
-            )
+            ),
           }}
         />
 
@@ -39,7 +39,7 @@ export default function VendorProfileTabsLayout() {
           options={{
             tabBarIcon: ({ focused }) => (
               <CircleTab label="ORDERS" focused={focused} />
-            )
+            ),
           }}
         />
 
@@ -49,7 +49,7 @@ export default function VendorProfileTabsLayout() {
           options={{
             tabBarIcon: ({ focused }) => (
               <CircleTab label="SETTINGS" focused={focused} />
-            )
+            ),
           }}
         />
 
@@ -68,6 +68,7 @@ export default function VendorProfileTabsLayout() {
 
         {/* HIDE VIEW-PRODUCT ROUTE */}
         <Tabs.Screen name="view-product/index" options={{ href: null }} />
+        <Tabs.Screen name="reviews" options={{ href: null }} />
       </Tabs>
     </ProductDraftProvider>
   );
@@ -90,7 +91,7 @@ const stylesVars = {
   overlayDark: "rgba(0,0,0,0.58)",
   overlaySoft: "rgba(255,255,255,0.14)",
   white: "#FFFFFF",
-  black: "#000000"
+  black: "#000000",
 };
 
 const styles = StyleSheet.create({
@@ -100,7 +101,7 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     backgroundColor: stylesVars.cardBg,
     borderTopWidth: 1,
-    borderTopColor: stylesVars.border
+    borderTopColor: stylesVars.border,
   },
 
   circle: {
@@ -111,20 +112,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D7E3FF",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   circleActive: {
-    backgroundColor: stylesVars.blue
+    backgroundColor: stylesVars.blue,
   },
 
   circleText: {
     fontSize: 12,
     fontWeight: "700",
-    color: stylesVars.blue
+    color: stylesVars.blue,
   },
 
   circleTextActive: {
-    color: stylesVars.white
-  }
+    color: stylesVars.white,
+  },
 });

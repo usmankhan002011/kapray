@@ -115,7 +115,9 @@ function makePresetId() {
   return `style_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function createEmptyStylePreset(includesTrouser: boolean): TailoringStylePreset {
+function createEmptyStylePreset(
+  includesTrouser: boolean,
+): TailoringStylePreset {
   return {
     id: makePresetId(),
     title: "",
@@ -146,11 +148,17 @@ function normalizePresetImages(v: unknown): TailoringPresetImage[] {
 
     out.push({
       uri,
-      width: Number.isFinite(Number(obj?.width)) ? Number(obj.width) : undefined,
-      height: Number.isFinite(Number(obj?.height)) ? Number(obj.height) : undefined,
+      width: Number.isFinite(Number(obj?.width))
+        ? Number(obj.width)
+        : undefined,
+      height: Number.isFinite(Number(obj?.height))
+        ? Number(obj.height)
+        : undefined,
       fileName: obj?.fileName ?? null,
       mimeType: obj?.mimeType ?? null,
-      fileSize: Number.isFinite(Number(obj?.fileSize)) ? Number(obj.fileSize) : null,
+      fileSize: Number.isFinite(Number(obj?.fileSize))
+        ? Number(obj.fileSize)
+        : null,
       path: safeStr(obj?.path ?? "") || null,
       url: safeStr(obj?.url ?? "") || null,
     });
@@ -160,7 +168,9 @@ function normalizePresetImages(v: unknown): TailoringPresetImage[] {
 }
 
 function filterAllowed(values: unknown, allowed: string[]) {
-  const allow = new Set(normalizeStringArray(allowed).map((x) => x.toLowerCase()));
+  const allow = new Set(
+    normalizeStringArray(allowed).map((x) => x.toLowerCase()),
+  );
   return normalizeStringArray(values).filter((x) => allow.has(x.toLowerCase()));
 }
 
@@ -178,9 +188,10 @@ function normalizeTailoringStylePresets(
     const p = (item ?? {}) as any;
 
     const defaultNeck = filterAllowed([p?.default_neck], neckOptions)[0] ?? "";
-    const defaultSleeve = filterAllowed([p?.default_sleeve], sleeveOptions)[0] ?? "";
+    const defaultSleeve =
+      filterAllowed([p?.default_sleeve], sleeveOptions)[0] ?? "";
     const defaultTrouser = includesTrouser
-      ? filterAllowed([p?.default_trouser], trouserOptions)[0] ?? ""
+      ? (filterAllowed([p?.default_trouser], trouserOptions)[0] ?? "")
       : "";
 
     const allowedNeck = normalizeStringArray([
@@ -260,7 +271,14 @@ const BinaryToggle = ({
       <Text style={apStyles.label}>{label}</Text>
       {hint ? <Text style={apStyles.metaHint}>{hint}</Text> : null}
 
-      <View style={{ flexDirection: "row", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+      <View
+        style={{
+          flexDirection: "row",
+          gap: 10,
+          marginTop: 8,
+          flexWrap: "wrap",
+        }}
+      >
         <Pressable
           onPress={() => onChange(true)}
           style={({ pressed }) => [
@@ -331,7 +349,8 @@ const MultiSelectGroup = ({
   if (!items.length) {
     return (
       <Text style={[apStyles.metaHint, { marginTop: 8 }]}>
-        {title}: <Text style={{ fontWeight: "700", color: apColors.text }}>—</Text>
+        {title}:{" "}
+        <Text style={{ fontWeight: "700", color: apColors.text }}>—</Text>
       </Text>
     );
   }
@@ -366,7 +385,9 @@ const MultiSelectGroup = ({
                   borderRadius: 10,
                   borderWidth: 1,
                   borderColor: isSelected ? apColors.blue : "#D7E3FF",
-                  backgroundColor: isSelected ? apColors.blue : apColors.blueSoft,
+                  backgroundColor: isSelected
+                    ? apColors.blue
+                    : apColors.blueSoft,
                   alignItems: "center",
                   justifyContent: "center",
                 },
@@ -405,7 +426,8 @@ const SingleSelectGroup = ({
   if (!items.length) {
     return (
       <Text style={[apStyles.metaHint, { marginTop: 8 }]}>
-        {title}: <Text style={{ fontWeight: "700", color: apColors.text }}>—</Text>
+        {title}:{" "}
+        <Text style={{ fontWeight: "700", color: apColors.text }}>—</Text>
       </Text>
     );
   }
@@ -440,7 +462,9 @@ const SingleSelectGroup = ({
                   borderRadius: 10,
                   borderWidth: 1,
                   borderColor: isSelected ? apColors.blue : "#D7E3FF",
-                  backgroundColor: isSelected ? apColors.blue : apColors.blueSoft,
+                  backgroundColor: isSelected
+                    ? apColors.blue
+                    : apColors.blueSoft,
                   alignItems: "center",
                   justifyContent: "center",
                 },
@@ -494,7 +518,7 @@ const TailoringPresetCard = memo(function TailoringPresetCard({
   removePresetImage: (presetId: string, uri: string) => void;
 }) {
   const images = preset.images ?? [];
-  
+
   const allowedNeck = preset.allowed_neck_variations ?? [];
   const allowedSleeve = preset.allowed_sleeve_variations ?? [];
   const allowedTrouser = preset.allowed_trouser_variations ?? [];
@@ -586,7 +610,10 @@ const TailoringPresetCard = memo(function TailoringPresetCard({
         onChangeText={(t) =>
           updatePreset(preset.id, (prev) => ({
             ...prev,
-            extra_cost_pkr: Math.max(0, Number(t.replace(/[^\d.]/g, "") || "0")),
+            extra_cost_pkr: Math.max(
+              0,
+              Number(t.replace(/[^\d.]/g, "") || "0"),
+            ),
           }))
         }
         placeholder="e.g., 1500"
@@ -650,7 +677,9 @@ const TailoringPresetCard = memo(function TailoringPresetCard({
                       backgroundColor: "rgba(11,47,107,0.88)",
                     }}
                   >
-                    <Text style={{ color: "#fff", fontWeight: "900", fontSize: 10 }}>
+                    <Text
+                      style={{ color: "#fff", fontWeight: "900", fontSize: 10 }}
+                    >
                       Banner
                     </Text>
                   </View>
@@ -671,7 +700,9 @@ const TailoringPresetCard = memo(function TailoringPresetCard({
                     ]}
                     hitSlop={10}
                   >
-                    <Text style={{ color: "#fff", fontWeight: "900", fontSize: 10 }}>
+                    <Text
+                      style={{ color: "#fff", fontWeight: "900", fontSize: 10 }}
+                    >
                       Make Banner
                     </Text>
                   </Pressable>
@@ -695,7 +726,9 @@ const TailoringPresetCard = memo(function TailoringPresetCard({
                   ]}
                   hitSlop={10}
                 >
-                  <Text style={{ color: "#fff", fontWeight: "900", fontSize: 12 }}>
+                  <Text
+                    style={{ color: "#fff", fontWeight: "900", fontSize: 12 }}
+                  >
                     ✕
                   </Text>
                 </Pressable>
@@ -748,7 +781,9 @@ const TailoringPresetCard = memo(function TailoringPresetCard({
           selected={allowedTrouser}
           onToggle={(item) =>
             updatePreset(preset.id, (prev) => {
-              const next = normalizeStringArray(prev.allowed_trouser_variations);
+              const next = normalizeStringArray(
+                prev.allowed_trouser_variations,
+              );
               let changed: string[] = [];
               toggleStringInArray(item, next, (arr) => {
                 changed = arr;
@@ -789,20 +824,22 @@ export default function Q06B2TailoringStyles() {
   const category = inferCategoryFromDraft(draft);
   const needsTailoring = category === "unstitched_dyeing_tailoring";
 
-  const [vendorOffersTailoring, setVendorOffersTailoring] = useState<boolean>(false);
-  const [vendorTailoringOptions, setVendorTailoringOptions] = useState<VendorTailoringOptions>({
-    blouse_neck: [],
-    sleeves: [],
-    trouser: [],
-  });
+  const [vendorOffersTailoring, setVendorOffersTailoring] =
+    useState<boolean>(false);
+  const [vendorTailoringOptions, setVendorTailoringOptions] =
+    useState<VendorTailoringOptions>({
+      blouse_neck: [],
+      sleeves: [],
+      trouser: [],
+    });
   const [vendorLoading, setVendorLoading] = useState<boolean>(false);
 
   const [includesTrouser, setIncludesTrouser] = useState<boolean>(() =>
     Boolean(
       (draft?.spec as any)?.includes_trouser ??
-        (draft?.spec as any)?.has_trouser ??
-        (draft?.spec as any)?.product_has_trouser ??
-        false,
+      (draft?.spec as any)?.has_trouser ??
+      (draft?.spec as any)?.product_has_trouser ??
+      false,
     ),
   );
 
@@ -826,9 +863,9 @@ export default function Q06B2TailoringStyles() {
       (draft?.spec as any)?.tailoring_style_presets,
       Boolean(
         (draft?.spec as any)?.includes_trouser ??
-          (draft?.spec as any)?.has_trouser ??
-          (draft?.spec as any)?.product_has_trouser ??
-          false,
+        (draft?.spec as any)?.has_trouser ??
+        (draft?.spec as any)?.product_has_trouser ??
+        false,
       ),
       [...BLOUSE_NECK_PATTERNS],
       [...BLOUSE_SLEEVE_PATTERNS],
@@ -842,7 +879,10 @@ export default function Q06B2TailoringStyles() {
       return;
     }
     if (typeof ctx.setDraft === "function") {
-      ctx.setDraft((prev: any) => ({ ...prev, spec: { ...(prev?.spec ?? {}), ...patch } }));
+      ctx.setDraft((prev: any) => ({
+        ...prev,
+        spec: { ...(prev?.spec ?? {}), ...patch },
+      }));
       return;
     }
     draft.spec = { ...(draft?.spec ?? {}), ...patch };
@@ -852,7 +892,9 @@ export default function Q06B2TailoringStyles() {
     presetId: string,
     updater: (prev: TailoringStylePreset) => TailoringStylePreset,
   ) {
-    setStylePresets((prev) => prev.map((p) => (p.id === presetId ? updater(p) : p)));
+    setStylePresets((prev) =>
+      prev.map((p) => (p.id === presetId ? updater(p) : p)),
+    );
   }
 
   function removePreset(presetId: string) {
@@ -860,7 +902,10 @@ export default function Q06B2TailoringStyles() {
   }
 
   function addPreset() {
-    setStylePresets((prev) => [...prev, createEmptyStylePreset(includesTrouser)]);
+    setStylePresets((prev) => [
+      ...prev,
+      createEmptyStylePreset(includesTrouser),
+    ]);
   }
 
   async function pickPresetImages(presetId: string) {
@@ -910,7 +955,9 @@ export default function Q06B2TailoringStyles() {
   function removePresetImage(presetId: string, uri: string) {
     updatePreset(presetId, (prev) => ({
       ...prev,
-      images: normalizePresetImages(prev.images).filter((x) => safeStr(x.uri) !== uri),
+      images: normalizePresetImages(prev.images).filter(
+        (x) => safeStr(x.uri) !== uri,
+      ),
     }));
   }
 
@@ -961,7 +1008,8 @@ export default function Q06B2TailoringStyles() {
           return;
         }
 
-        const options = ((data as any)?.tailoring_options ?? {}) as VendorTailoringOptions;
+        const options = ((data as any)?.tailoring_options ??
+          {}) as VendorTailoringOptions;
 
         setVendorOffersTailoring(Boolean((data as any)?.offers_tailoring));
         setVendorTailoringOptions({
@@ -1008,7 +1056,14 @@ export default function Q06B2TailoringStyles() {
         trouserOptions,
       ),
     });
-  }, [needsTailoring, includesTrouser, stylePresets, neckOptions, sleeveOptions, trouserOptions]);
+  }, [
+    needsTailoring,
+    includesTrouser,
+    stylePresets,
+    neckOptions,
+    sleeveOptions,
+    trouserOptions,
+  ]);
 
   const canContinue = useMemo(() => {
     if (!vendorId) return false;
@@ -1022,7 +1077,13 @@ export default function Q06B2TailoringStyles() {
       if (!Array.isArray(p.images) || p.images.length < 1) return false;
       return true;
     });
-  }, [vendorId, needsTailoring, vendorOffersTailoring, stylePresets, includesTrouser]);
+  }, [
+    vendorId,
+    needsTailoring,
+    vendorOffersTailoring,
+    stylePresets,
+    includesTrouser,
+  ]);
 
   function closeScreen() {
     if (returnTo) {
@@ -1034,12 +1095,15 @@ export default function Q06B2TailoringStyles() {
 
   function onContinue() {
     if (!vendorId) {
-      Alert.alert("Vendor not loaded", "Please ensure vendorSlice has vendor.id.");
+      Alert.alert(
+        "Vendor not loaded",
+        "Please ensure vendorSlice has vendor.id.",
+      );
       return;
     }
 
     if (!needsTailoring) {
-      router.push("/vendor/profile/add-product/q06c-shipping" as any);
+      router.push("/vendor/profile/add-product/review" as any);
       return;
     }
 
@@ -1060,20 +1124,29 @@ export default function Q06B2TailoringStyles() {
     );
 
     if (!cleaned.length) {
-      Alert.alert("Add styles", "Please add at least one tailoring style card.");
+      Alert.alert(
+        "Add styles",
+        "Please add at least one tailoring style card.",
+      );
       return;
     }
 
     for (const p of cleaned) {
       if (!safeStr(p.title)) {
-        Alert.alert("Missing title", "Each tailoring style card must have a title.");
+        Alert.alert(
+          "Missing title",
+          "Each tailoring style card must have a title.",
+        );
         return;
       }
       if (!p.images?.length) {
-        Alert.alert("Missing image", `Please add at least one image for "${p.title || "a style"}".`);
+        Alert.alert(
+          "Missing image",
+          `Please add at least one image for "${p.title || "a style"}".`,
+        );
         return;
       }
-           // no default_trouser validation
+      // no default_trouser validation
     }
 
     patchSpec({
@@ -1086,7 +1159,7 @@ export default function Q06B2TailoringStyles() {
       return;
     }
 
-    router.push("/vendor/profile/add-product/q06c-shipping" as any);
+    router.push("/vendor/profile/add-product/review" as any);
   }
 
   return (
@@ -1101,7 +1174,10 @@ export default function Q06B2TailoringStyles() {
 
           <Pressable
             onPress={closeScreen}
-            style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
+            style={({ pressed }) => [
+              apStyles.linkBtn,
+              pressed ? apStyles.pressed : null,
+            ]}
           >
             <Text style={apStyles.linkText}>Close</Text>
           </Pressable>
@@ -1138,7 +1214,8 @@ export default function Q06B2TailoringStyles() {
                 Tailoring is not enabled in vendor profile
               </Text>
               <Text style={apStyles.metaHint}>
-                Enable stitching / tailoring in vendor profile before using this product category.
+                Enable stitching / tailoring in vendor profile before using this
+                product category.
               </Text>
             </View>
           ) : (
@@ -1153,7 +1230,7 @@ export default function Q06B2TailoringStyles() {
                 borderColor: "#D7E3FF",
               }}
             >
-             <BinaryToggle
+              <BinaryToggle
                 label="Does this product include trouser?"
                 value={includesTrouser}
                 onChange={setIncludesTrouser}
@@ -1164,9 +1241,14 @@ export default function Q06B2TailoringStyles() {
                   <View style={{ marginTop: 14 }}>
                     <Pressable
                       onPress={addPreset}
-                      style={({ pressed }) => [apStyles.primaryBtn, pressed ? apStyles.pressed : null]}
+                      style={({ pressed }) => [
+                        apStyles.primaryBtn,
+                        pressed ? apStyles.pressed : null,
+                      ]}
                     >
-                      <Text style={apStyles.primaryText}>Add Tailoring Style</Text>
+                      <Text style={apStyles.primaryText}>
+                        Add Tailoring Style
+                      </Text>
                     </Pressable>
                   </View>
 
@@ -1203,7 +1285,8 @@ export default function Q06B2TailoringStyles() {
                   <View style={{ marginTop: 14 }}>
                     {/* count label */}
                     <Text style={[apStyles.metaHint, { marginBottom: 6 }]}>
-                      {stylePresets.length} {stylePresets.length === 1 ? "style" : "styles"} added
+                      {stylePresets.length}{" "}
+                      {stylePresets.length === 1 ? "style" : "styles"} added
                     </Text>
 
                     {/* smaller secondary button */}

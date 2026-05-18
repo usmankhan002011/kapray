@@ -1,6 +1,15 @@
 // app/vendor-search.tsx
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -24,12 +33,16 @@ export default function VendorSearchScreen() {
   const router = useRouter();
   const dispatch = useAppDispatch();
 
-  const selectedFromRedux: string[] = useAppSelector((s: any) => s?.filters?.vendorIds ?? []);
+  const selectedFromRedux: string[] = useAppSelector(
+    (s: any) => s?.filters?.vendorIds ?? [],
+  );
 
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [vendors, setVendors] = useState<VendorRow[]>([]);
-  const [selected, setSelected] = useState<Set<string>>(new Set(selectedFromRedux.map(String)));
+  const [selected, setSelected] = useState<Set<string>>(
+    new Set(selectedFromRedux.map(String)),
+  );
 
   useEffect(() => {
     let alive = true;
@@ -94,6 +107,13 @@ export default function VendorSearchScreen() {
     setSelected(new Set());
   }
 
+  function openVendorProfile(id: string) {
+    router.push({
+      pathname: "/(buyer)/view-profile",
+      params: { vendorId: id },
+    } as any);
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.topRow}>
@@ -105,7 +125,13 @@ export default function VendorSearchScreen() {
           Vendors
         </Text>
 
-        <Pressable onPress={apply} style={({ pressed }) => [styles.applyBtn, pressed ? { opacity: 0.7 } : null]}>
+        <Pressable
+          onPress={apply}
+          style={({ pressed }) => [
+            styles.applyBtn,
+            pressed ? { opacity: 0.7 } : null,
+          ]}
+        >
           <Text style={styles.applyText}>✅ Apply</Text>
         </Pressable>
       </View>
@@ -121,10 +147,21 @@ export default function VendorSearchScreen() {
           autoCorrect={false}
         />
 
-        <Pressable onPress={clear} style={({ pressed }) => [styles.clearBtn, pressed ? { opacity: 0.7 } : null]}>
+        <Pressable
+          onPress={clear}
+          style={({ pressed }) => [
+            styles.clearBtn,
+            pressed ? { opacity: 0.7 } : null,
+          ]}
+        >
           <Text style={styles.clearText}>🧹 Clear</Text>
         </Pressable>
       </View>
+
+      <Text style={styles.helperText}>
+        Search vendors, tap View Profile for details, or select vendors to view
+        only their products.
+      </Text>
 
       <Text style={styles.meta}>
         Selected: <Text style={styles.metaStrong}>{selected.size}</Text>
@@ -146,18 +183,34 @@ export default function VendorSearchScreen() {
             const on = selected.has(id);
 
             return (
-              <Pressable onPress={() => toggle(id)} style={styles.row}>
-                <View style={{ flex: 1 }}>
+              <View style={styles.row}>
+                <Pressable
+                  onPress={() => openVendorProfile(id)}
+                  style={({ pressed }) => [
+                    styles.rowLeft,
+                    pressed ? { opacity: 0.7 } : null,
+                  ]}
+                >
                   <Text style={styles.rowTitle} numberOfLines={1}>
                     {safe(item.name)}
                   </Text>
                   <Text style={styles.rowSub} numberOfLines={1}>
                     {safe(item.shop_name)} • {safe(item.location)}
                   </Text>
-                </View>
+                  <Text style={styles.viewProfileText}>View Profile</Text>
+                </Pressable>
 
-                <Text style={styles.tick}>{on ? "✅" : "⬜️"}</Text>
-              </Pressable>
+                <Pressable
+                  onPress={() => toggle(id)}
+                  style={({ pressed }) => [
+                    styles.tickBtn,
+                    pressed ? { opacity: 0.7 } : null,
+                  ]}
+                  hitSlop={8}
+                >
+                  <Text style={styles.tick}>{on ? "✅" : "⬜️"}</Text>
+                </Pressable>
+              </View>
             );
           }}
           ListEmptyComponent={
@@ -180,10 +233,17 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
   },
   link: { fontSize: 16, color: "#111", fontWeight: "900" },
-  title: { flex: 1, textAlign: "center", fontSize: 18, fontWeight: "900", color: "#111", paddingHorizontal: 10 },
+  title: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#111",
+    paddingHorizontal: 10,
+  },
 
   applyBtn: {
     borderRadius: 10,
@@ -191,11 +251,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     backgroundColor: "#EAF2FF",
     borderWidth: 1,
-    borderColor: "#D9E2F2"
+    borderColor: "#D9E2F2",
   },
   applyText: { fontSize: 13, fontWeight: "900", color: "#0B2F6B" },
 
-  searchWrap: { paddingHorizontal: 16, paddingBottom: 8, flexDirection: "row", gap: 10, alignItems: "center" },
+  searchWrap: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "center",
+  },
   searchInput: {
     flex: 1,
     borderWidth: 1,
@@ -205,7 +271,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
     color: "#111",
-    backgroundColor: "#fff"
+    backgroundColor: "#fff",
   },
   clearBtn: {
     borderRadius: 12,
@@ -213,19 +279,52 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     backgroundColor: "#F4F4F5",
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.08)"
+    borderColor: "rgba(0,0,0,0.08)",
   },
   clearText: { fontSize: 13, fontWeight: "900", color: "#111" },
 
-  meta: { paddingHorizontal: 16, paddingBottom: 6, fontSize: 12, color: "#60708A", fontWeight: "800" },
+  helperText: {
+    paddingHorizontal: 16,
+    paddingTop: 2,
+    paddingBottom: 8,
+    fontSize: 13,
+    color: "#6B7280",
+    fontWeight: "700",
+  },
+
+  meta: {
+    paddingHorizontal: 16,
+    paddingBottom: 6,
+    fontSize: 12,
+    color: "#60708A",
+    fontWeight: "800",
+  },
   metaStrong: { color: "#111", fontWeight: "900" },
 
-  row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+  },
+  rowLeft: {
+    flex: 1,
+  },
   rowTitle: { fontSize: 14, fontWeight: "900", color: "#111" },
   rowSub: { fontSize: 12, fontWeight: "700", color: "#60708A", marginTop: 3 },
+  viewProfileText: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: "#0B2F6B",
+    marginTop: 5,
+  },
+  tickBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+  },
   tick: { fontSize: 18, fontWeight: "900" },
 
   sep: { height: 1, backgroundColor: "rgba(0,0,0,0.06)" },
   center: { padding: 24, alignItems: "center", justifyContent: "center" },
-  muted: { fontSize: 14, color: "#666", marginTop: 8 }
+  muted: { fontSize: 14, color: "#666", marginTop: 8 },
 });

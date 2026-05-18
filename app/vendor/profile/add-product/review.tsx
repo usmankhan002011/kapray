@@ -1,9 +1,25 @@
 // app/vendor/profile/add-product/review.tsx
 import React, { useMemo } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Alert,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
+import {
+  getMadeOrderVariantFinalPrice,
+  getReadyVariantFinalPrice,
+  normalizeMadeOrderVariants,
+  sumReadyVariantQty,
+  MadeOrderVariant as SharedMadeOrderVariant,
+  ReadyVariant as SharedReadyVariant,
+} from "@/utils/kapray/productVariants";
 
 type ProductCategory =
   | "unstitched_plain"
@@ -11,7 +27,40 @@ type ProductCategory =
   | "unstitched_dyeing_tailoring"
   | "stitched_ready";
 
-type SizeLengthMap = Partial<Record<"XS" | "S" | "M" | "L" | "XL" | "XXL", number>>;
+type ReadyVariantSize = {
+  size: string;
+  qty: number;
+};
+
+type ReadyVariant = SharedReadyVariant & {
+  title?: string;
+  color?: string;
+  size?: string;
+  price_pkr?: number;
+  stock_qty?: number;
+  sku?: string;
+  note?: string;
+  image_paths?: any;
+  variant_image_paths?: any;
+  variant_images?: any;
+  image_path?: any;
+  image?: any;
+};
+
+type MadeOrderVariant = SharedMadeOrderVariant & {
+  title?: string;
+  color?: string;
+  note?: string;
+  image_paths?: any;
+  variant_image_paths?: any;
+  variant_images?: any;
+  image_path?: any;
+  image?: any;
+};
+
+type SizeLengthMap = Partial<
+  Record<"XS" | "S" | "M" | "L" | "XL" | "XXL", number>
+>;
 
 type TailoringStylePresetImage = {
   uri?: string | null;
@@ -114,7 +163,14 @@ function categoryLabel(cat: ProductCategory) {
 function formatSizeLengthMap(sizeLengthMap: SizeLengthMap | undefined | null) {
   if (!sizeLengthMap || typeof sizeLengthMap !== "object") return "Not set";
 
-  const orderedKeys: (keyof SizeLengthMap)[] = ["XS", "S", "M", "L", "XL", "XXL"];
+  const orderedKeys: (keyof SizeLengthMap)[] = [
+    "XS",
+    "S",
+    "M",
+    "L",
+    "XL",
+    "XXL",
+  ];
   const parts = orderedKeys
     .map((key) => {
       const val = sizeLengthMap[key];
@@ -143,13 +199,21 @@ function normalizePresetArray(v: unknown): TailoringStylePreset[] {
 function countPresetImages(preset: TailoringStylePreset) {
   return Array.isArray(preset?.images) ? preset.images.length : 0;
 }
-function summarizePreset(preset: TailoringStylePreset, includesTrouser: boolean) {
+
+function summarizePreset(
+  preset: TailoringStylePreset,
+  includesTrouser: boolean,
+) {
   const title = safeStr(preset?.title) || "Untitled style";
   const imgCount = countPresetImages(preset);
   const extra = safeNum(preset?.extra_cost_pkr);
 
-  const neckCount = normalizeStringArray(preset?.allowed_neck_variations).length;
-  const sleeveCount = normalizeStringArray(preset?.allowed_sleeve_variations).length;
+  const neckCount = normalizeStringArray(
+    preset?.allowed_neck_variations,
+  ).length;
+  const sleeveCount = normalizeStringArray(
+    preset?.allowed_sleeve_variations,
+  ).length;
   const trouserCount = includesTrouser
     ? normalizeStringArray(preset?.allowed_trouser_variations).length
     : 0;
@@ -173,6 +237,177 @@ function summarizePreset(preset: TailoringStylePreset, includesTrouser: boolean)
 
   return parts.join(" • ");
 }
+
+function normalizeReadyVariants(v: any): ReadyVariant[] {
+  const arr = Array.isArray(v) ? v : [];
+
+  return arr.map((item: any, index: number) => {
+    const variantNo = safeInt(item?.variant_no) ?? index + 1;
+    const id = safeStr(item?.id) || `variant-${variantNo}`;
+    const name = safeStr(item?.name ?? item?.color ?? item?.title ?? "");
+    const label = safeStr(item?.label) || `Variant ${variantNo}`;
+    const displayName =
+      safeStr(item?.display_name) ||
+      safeStr(item?.title) ||
+      (name ? `Variant ${variantNo}: ${name}` : label);
+
+    return {
+      ...item,
+      id,
+      variant_no: variantNo,
+      label,
+      name,
+      display_name: displayName,
+      additional_price_pkr: safeNum(item?.additional_price_pkr),
+      images: Array.isArray(item?.images) ? item.images : [],
+      sizes: Array.isArray(item?.sizes) ? item.sizes : [],
+    } as ReadyVariant;
+  });
+}
+
+function normalizeReadyVariantImagePaths(variant: ReadyVariant): string[] {
+  const raw =
+    variant?.image_paths ??
+    variant?.variant_image_paths ??
+    variant?.images ??
+    variant?.variant_images ??
+    variant?.image_path ??
+    variant?.image ??
+    [];
+
+  const arr = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const item of arr) {
+    const s =
+      typeof item === "string"
+        ? safeStr(item)
+        : safeStr(item?.path ?? item?.uri ?? item?.url ?? "");
+
+    if (!s) continue;
+    if (seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+  }
+
+  return out;
+}
+
+function countReadyVariantImages(variant: ReadyVariant) {
+  return normalizeReadyVariantImagePaths(variant).length;
+}
+
+function firstReadyVariantImageUri(variant: ReadyVariant) {
+  return normalizeReadyVariantImagePaths(variant)[0] || "";
+}
+
+function getReadyVariantTitle(variant: ReadyVariant) {
+  return (
+    safeStr(variant?.display_name) ||
+    safeStr(variant?.title) ||
+    safeStr(variant?.label) ||
+    safeStr(variant?.name) ||
+    "Variant"
+  );
+}
+
+function summarizeReadyVariant(variant: ReadyVariant, basePrice: number) {
+  const title = getReadyVariantTitle(variant);
+  const imgCount = countReadyVariantImages(variant);
+  const finalPrice = getReadyVariantFinalPrice(basePrice, variant as any);
+  const sizes = Array.isArray(variant?.sizes) ? variant.sizes : [];
+  const sizeText = sizes.length
+    ? sizes
+        .map((s: any) => `${safeStr(s?.size)} (${safeNum(s?.qty)})`)
+        .join(", ")
+    : "No sizes";
+  const sku = safeStr(variant?.sku);
+  const note = safeStr(variant?.note);
+
+  return [
+    title,
+    `Rs ${finalPrice.toLocaleString()}`,
+    `${imgCount} image${imgCount === 1 ? "" : "s"}`,
+    sizeText,
+    sku ? `SKU: ${sku}` : "",
+    note,
+  ]
+    .filter(Boolean)
+    .join(" • ");
+}
+
+function normalizeMadeOrderVariantImagePaths(
+  variant: MadeOrderVariant,
+): string[] {
+  const rawSources = [
+    variant?.image_paths,
+    variant?.variant_image_paths,
+    variant?.images,
+    variant?.variant_images,
+    variant?.image_path,
+    variant?.image,
+  ];
+
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const raw of rawSources) {
+    const arr = Array.isArray(raw) ? raw : raw ? [raw] : [];
+
+    for (const item of arr) {
+      const s =
+        typeof item === "string"
+          ? safeStr(item)
+          : safeStr(item?.uri ?? item?.url ?? item?.path ?? "");
+
+      if (!s) continue;
+      if (seen.has(s)) continue;
+      seen.add(s);
+      out.push(s);
+    }
+  }
+
+  return out;
+}
+
+function countMadeOrderVariantImages(variant: MadeOrderVariant) {
+  return normalizeMadeOrderVariantImagePaths(variant).length;
+}
+
+function firstMadeOrderVariantImageUri(variant: MadeOrderVariant) {
+  return normalizeMadeOrderVariantImagePaths(variant)[0] || "";
+}
+
+function getMadeOrderVariantTitle(variant: MadeOrderVariant) {
+  return (
+    safeStr(variant?.display_name) ||
+    safeStr(variant?.title) ||
+    safeStr(variant?.label) ||
+    safeStr(variant?.name) ||
+    "Variant"
+  );
+}
+
+function summarizeMadeOrderVariant(
+  variant: MadeOrderVariant,
+  basePrice: number,
+) {
+  const imgCount = countMadeOrderVariantImages(variant);
+  const finalPrice = getMadeOrderVariantFinalPrice(basePrice, variant as any);
+  const days = Math.max(0, Math.trunc(safeNum(variant?.estimated_days)));
+  const note = safeStr((variant as any)?.note);
+
+  return [
+    `Rs ${finalPrice.toLocaleString()}`,
+    `${days} day${days === 1 ? "" : "s"}`,
+    `${imgCount} image${imgCount === 1 ? "" : "s"}`,
+    note,
+  ]
+    .filter(Boolean)
+    .join(" • ");
+}
+
 export default function AddProductReviewScreen() {
   const router = useRouter();
 
@@ -184,15 +419,52 @@ export default function AddProductReviewScreen() {
 
   const { draft } = useProductDraft();
 
-  const cat = useMemo<ProductCategory>(() => inferCategoryFromDraft(draft), [draft]);
+  const cat = useMemo<ProductCategory>(
+    () => inferCategoryFromDraft(draft),
+    [draft],
+  );
 
   const madeOnOrder = Boolean((draft.spec as any)?.made_on_order ?? false);
-  const inventoryQty = madeOnOrder ? 0 : Number(draft.inventory_qty ?? 0);
 
   const isStitched = cat === "stitched_ready";
   const isUnstitched = !isStitched;
-  const needsDyeing = cat === "unstitched_dyeing" || cat === "unstitched_dyeing_tailoring";
+  const needsDyeing =
+    cat === "unstitched_dyeing" || cat === "unstitched_dyeing_tailoring";
   const needsTailoring = cat === "unstitched_dyeing_tailoring";
+
+  const hasReadyVariants =
+    isStitched &&
+    !madeOnOrder &&
+    safeStr((draft.spec as any)?.variant_mode) === "ready_variants";
+
+  const hasMadeOrderVariants =
+    isStitched &&
+    madeOnOrder &&
+    safeStr((draft.spec as any)?.variant_mode) === "made_order_variants";
+
+  const readyVariants = useMemo(
+    () => normalizeReadyVariants((draft.price as any)?.variants),
+    [draft.price],
+  );
+
+  const madeOrderVariants = useMemo(
+    () =>
+      normalizeMadeOrderVariants(
+        (draft.price as any)?.made_order_variants,
+      ) as MadeOrderVariant[],
+    [draft.price],
+  );
+
+  const readyVariantQty = useMemo(
+    () => sumReadyVariantQty(readyVariants),
+    [readyVariants],
+  );
+
+  const inventoryQty = madeOnOrder
+    ? 0
+    : hasReadyVariants
+      ? readyVariantQty
+      : Number(draft.inventory_qty ?? 0);
 
   const costPerMeter = Number((draft.price as any)?.cost_pkr_per_meter ?? 0);
   const costTotal = Number((draft.price as any)?.cost_pkr_total ?? 0);
@@ -202,10 +474,14 @@ export default function AddProductReviewScreen() {
     Number((draft.spec as any)?.dyeing_cost_pkr ?? 0);
 
   const tailoringCost = Number((draft.price as any)?.tailoring_cost_pkr ?? 0);
-  const tailoringDays = Number((draft.spec as any)?.tailoring_turnaround_days ?? 0);
+  const tailoringDays = Number(
+    (draft.spec as any)?.tailoring_turnaround_days ?? 0,
+  );
 
   const sizes = (draft.price as any)?.available_sizes ?? [];
-  const sizeLengthMap = (draft.spec as any)?.size_length_m as SizeLengthMap | undefined;
+  const sizeLengthMap = (draft.spec as any)?.size_length_m as
+    | SizeLengthMap
+    | undefined;
 
   const weightKg = safeNum((draft.spec as any)?.weight_kg);
   const packageCm = (draft.spec as any)?.package_cm ?? {};
@@ -215,11 +491,13 @@ export default function AddProductReviewScreen() {
   const imageCount = (draft.media.images ?? []).length;
   const videoCount = (draft.media.videos ?? []).length;
 
+  const pieceCount = safeNum((draft.spec as any)?.piece_count);
+
   const includesTrouser = Boolean(
     (draft.spec as any)?.includes_trouser ??
-      (draft.spec as any)?.has_trouser ??
-      (draft.spec as any)?.product_has_trouser ??
-      false,
+    (draft.spec as any)?.has_trouser ??
+    (draft.spec as any)?.product_has_trouser ??
+    false,
   );
 
   const tailoringStylePresets = useMemo(
@@ -229,7 +507,8 @@ export default function AddProductReviewScreen() {
 
   function dressTypeSummary() {
     const names = (draft.spec as any)?.dressTypeNames as any[] | undefined;
-    if (Array.isArray(names) && names.length) return formatPicked(names, "Not set");
+    if (Array.isArray(names) && names.length)
+      return formatPicked(names, "Not set");
 
     const ids = (draft.spec.dressTypeIds ?? []).map((x: any) => String(x));
     if (!ids.length) return "Not set";
@@ -267,7 +546,8 @@ export default function AddProductReviewScreen() {
 
   function workSummary() {
     const subNames = (draft.spec as any)?.workSubTypeNames as any[] | undefined;
-    if (Array.isArray(subNames) && subNames.length) return formatPicked(subNames, "Any");
+    if (Array.isArray(subNames) && subNames.length)
+      return formatPicked(subNames, "Any");
 
     const names = (draft.spec as any)?.workTypeNames as any[] | undefined;
     if (Array.isArray(names) && names.length) return formatPicked(names, "Any");
@@ -308,7 +588,9 @@ export default function AddProductReviewScreen() {
       parts.push("No dyeing");
     }
     if (needsTailoring) {
-      parts.push(`Tailoring: ${tailoringCost > 0 ? `${tailoringCost} PKR` : "Not set"}`);
+      parts.push(
+        `Tailoring: ${tailoringCost > 0 ? `${tailoringCost} PKR` : "Not set"}`,
+      );
       parts.push(`${Number.isFinite(tailoringDays) ? tailoringDays : 0} days`);
     } else {
       parts.push("No tailoring");
@@ -330,7 +612,10 @@ export default function AddProductReviewScreen() {
 
   function goSubmit() {
     if (!vendorId) {
-      Alert.alert("Vendor not loaded", "Please ensure vendorSlice has vendor.id.");
+      Alert.alert(
+        "Vendor not loaded",
+        "Please ensure vendorSlice has vendor.id.",
+      );
       return;
     }
     router.push("/vendor/profile/add-product/submit" as any);
@@ -351,7 +636,10 @@ export default function AddProductReviewScreen() {
 
         <Pressable
           onPress={close}
-          style={({ pressed }) => [styles.linkBtn, pressed ? styles.pressed : null]}
+          style={({ pressed }) => [
+            styles.linkBtn,
+            pressed ? styles.pressed : null,
+          ]}
         >
           <Text style={styles.linkText}>Close</Text>
         </Pressable>
@@ -359,7 +647,9 @@ export default function AddProductReviewScreen() {
 
       {!vendorId ? (
         <View style={[styles.card, styles.errorCard]}>
-          <Text style={[styles.sectionTitle, styles.errorTitle]}>Vendor not loaded</Text>
+          <Text style={[styles.sectionTitle, styles.errorTitle]}>
+            Vendor not loaded
+          </Text>
           <Text style={[styles.meta, styles.errorMeta]}>
             Please ensure vendorSlice has vendor.id (bigint).
           </Text>
@@ -371,33 +661,64 @@ export default function AddProductReviewScreen() {
 
         <Pressable
           onPress={() => goEdit("/vendor/profile/add-product")}
-          style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+          style={({ pressed }) => [
+            styles.rowBtn,
+            pressed ? styles.pressed : null,
+          ]}
         >
           <Text style={styles.rowTitle}>Title *</Text>
-          <Text style={styles.rowValue}>{safeStr(draft.title) || "Not set"}</Text>
+          <Text style={styles.rowValue}>
+            {safeStr(draft.title) || "Not set"}
+          </Text>
         </Pressable>
 
         <Pressable
           onPress={() => goEdit("/vendor/profile/add-product/q02-category")}
-          style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+          style={({ pressed }) => [
+            styles.rowBtn,
+            pressed ? styles.pressed : null,
+          ]}
         >
           <Text style={styles.rowTitle}>Category *</Text>
           <Text style={styles.rowValue}>{categoryLabel(cat)}</Text>
         </Pressable>
 
         <Pressable
-          onPress={() => goEdit("/vendor/profile/add-product/q03-made-on-order")}
-          style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+          onPress={() =>
+            goEdit("/vendor/profile/add-product/q03-made-on-order")
+          }
+          style={({ pressed }) => [
+            styles.rowBtn,
+            pressed ? styles.pressed : null,
+          ]}
         >
           <Text style={styles.rowTitle}>Made on order</Text>
           <Text style={styles.rowValue}>{madeOnOrder ? "Yes" : "No"}</Text>
         </Pressable>
 
         <Pressable
-          onPress={() => goEdit("/vendor/profile/add-product/q04-inventory")}
-          style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+          onPress={() =>
+            goEdit(
+              hasReadyVariants
+                ? "/vendor/profile/add-product/q06b3-ready-variants"
+                : hasMadeOrderVariants
+                  ? "/vendor/profile/add-product/q06b4-made-order-variants"
+                  : "/vendor/profile/add-product/q04-inventory",
+            )
+          }
+          style={({ pressed }) => [
+            styles.rowBtn,
+            pressed ? styles.pressed : null,
+          ]}
         >
-          <Text style={styles.rowTitle}>Inventory Quantity *</Text>
+          <Text style={styles.rowTitle}>
+            Inventory Quantity *
+            {hasReadyVariants
+              ? " (from variants)"
+              : madeOnOrder
+                ? " (made on order)"
+                : ""}
+          </Text>
           <Text style={styles.rowValue}>
             {Number.isFinite(inventoryQty) ? String(inventoryQty) : "0"}
           </Text>
@@ -410,46 +731,222 @@ export default function AddProductReviewScreen() {
         {isStitched ? (
           <>
             <Pressable
-              onPress={() => goEdit("/vendor/profile/add-product/q05a-stitched-total-cost")}
-              style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+              onPress={() =>
+                goEdit("/vendor/profile/add-product/q05a-stitched-total-cost")
+              }
+              style={({ pressed }) => [
+                styles.rowBtn,
+                pressed ? styles.pressed : null,
+              ]}
             >
-              <Text style={styles.rowTitle}>Total Cost (PKR) *</Text>
-              <Text style={styles.rowValue}>{costTotal > 0 ? String(costTotal) : "Not set"}</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => goEdit("/vendor/profile/add-product/q06a-sizes")}
-              style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
-            >
-              <Text style={styles.rowTitle}>Available Sizes</Text>
+              <Text style={styles.rowTitle}>Base Cost (PKR) *</Text>
               <Text style={styles.rowValue}>
-                {Array.isArray(sizes) && sizes.length ? sizes.join(", ") : "Not set"}
+                {costTotal > 0
+                  ? `From Rs ${costTotal.toLocaleString()}`
+                  : "Not set"}
               </Text>
             </Pressable>
+
+            {hasMadeOrderVariants ? (
+              <>
+                <Pressable
+                  onPress={() =>
+                    goEdit(
+                      "/vendor/profile/add-product/q06b4-made-order-variants",
+                    )
+                  }
+                  style={({ pressed }) => [
+                    styles.rowBtn,
+                    pressed ? styles.pressed : null,
+                  ]}
+                >
+                  <Text style={styles.rowTitle}>Made-on-order designs</Text>
+                  <Text style={styles.rowValue}>
+                    {madeOrderVariants.length
+                      ? `${madeOrderVariants.length} design(s) • Inventory 0`
+                      : "Not set"}
+                  </Text>
+                </Pressable>
+
+                {madeOrderVariants.map((variant, index) => {
+                  const imageUri = firstMadeOrderVariantImageUri(variant);
+                  const title = getMadeOrderVariantTitle(variant);
+                  const summary = summarizeMadeOrderVariant(variant, costTotal);
+
+                  return (
+                    <Pressable
+                      key={`${safeStr((variant as any).id) || "made-order-variant"}-${index}`}
+                      onPress={() =>
+                        goEdit(
+                          "/vendor/profile/add-product/q06b4-made-order-variants",
+                        )
+                      }
+                      style={({ pressed }) => [
+                        styles.variantCard,
+                        pressed ? styles.pressed : null,
+                      ]}
+                    >
+                      {imageUri ? (
+                        <Image
+                          source={{ uri: imageUri }}
+                          style={styles.variantImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={styles.variantImagePlaceholder}>
+                          <Text style={styles.variantImagePlaceholderText}>
+                            No image
+                          </Text>
+                        </View>
+                      )}
+
+                      <View style={styles.variantBody}>
+                        <Text style={styles.rowTitle}>{title}</Text>
+                        <Text style={styles.rowValue}>{summary}</Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </>
+            ) : hasReadyVariants ? (
+              <>
+                <Pressable
+                  onPress={() =>
+                    goEdit(
+                      "/vendor/profile/add-product/q06b1-ready-variant-choice",
+                    )
+                  }
+                  style={({ pressed }) => [
+                    styles.rowBtn,
+                    pressed ? styles.pressed : null,
+                  ]}
+                >
+                  <Text style={styles.rowTitle}>Ready-to-wear variants</Text>
+                  <Text style={styles.rowValue}>
+                    {readyVariants.length
+                      ? `${readyVariants.length} variant(s) • Total stock ${readyVariantQty}`
+                      : "Not set"}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() =>
+                    goEdit("/vendor/profile/add-product/q06b2-piece-count")
+                  }
+                  style={({ pressed }) => [
+                    styles.rowBtn,
+                    pressed ? styles.pressed : null,
+                  ]}
+                >
+                  <Text style={styles.rowTitle}>Number of pieces</Text>
+                  <Text style={styles.rowValue}>
+                    {pieceCount > 0
+                      ? `${pieceCount} piece${pieceCount > 1 ? "s" : ""}`
+                      : "Not set"}
+                  </Text>
+                </Pressable>
+
+                {readyVariants.map((variant, index) => {
+                  const imageUri = firstReadyVariantImageUri(variant);
+                  const title = getReadyVariantTitle(variant);
+                  const summary = summarizeReadyVariant(variant, costTotal);
+
+                  return (
+                    <Pressable
+                      key={`${safeStr((variant as any).id) || "variant"}-${index}`}
+                      onPress={() =>
+                        goEdit(
+                          "/vendor/profile/add-product/q06b3-ready-variants",
+                        )
+                      }
+                      style={({ pressed }) => [
+                        styles.variantCard,
+                        pressed ? styles.pressed : null,
+                      ]}
+                    >
+                      {imageUri ? (
+                        <Image
+                          source={{ uri: imageUri }}
+                          style={styles.variantImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={styles.variantImagePlaceholder}>
+                          <Text style={styles.variantImagePlaceholderText}>
+                            No image
+                          </Text>
+                        </View>
+                      )}
+
+                      <View style={styles.variantBody}>
+                        <Text style={styles.rowTitle}>{title}</Text>
+                        <Text style={styles.rowValue}>{summary}</Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </>
+            ) : (
+              <Pressable
+                onPress={() => goEdit("/vendor/profile/add-product/q06a-sizes")}
+                style={({ pressed }) => [
+                  styles.rowBtn,
+                  pressed ? styles.pressed : null,
+                ]}
+              >
+                <Text style={styles.rowTitle}>Available Sizes</Text>
+                <Text style={styles.rowValue}>
+                  {Array.isArray(sizes) && sizes.length
+                    ? sizes.join(", ")
+                    : "Not set"}
+                </Text>
+              </Pressable>
+            )}
           </>
         ) : (
           <>
             <Pressable
-              onPress={() => goEdit("/vendor/profile/add-product/q05b-unstitched-cost-per-meter")}
-              style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+              onPress={() =>
+                goEdit(
+                  "/vendor/profile/add-product/q05b-unstitched-cost-per-meter",
+                )
+              }
+              style={({ pressed }) => [
+                styles.rowBtn,
+                pressed ? styles.pressed : null,
+              ]}
             >
               <Text style={styles.rowTitle}>Cost per Meter (PKR) *</Text>
               <Text style={styles.rowValue}>
                 {costPerMeter > 0 ? String(costPerMeter) : "Not set"}
               </Text>
             </Pressable>
-            
+
             <Pressable
-              onPress={() => goEdit("/vendor/profile/add-product/q05c-unstitched-fabric-length")}
-              style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+              onPress={() =>
+                goEdit(
+                  "/vendor/profile/add-product/q05c-unstitched-fabric-length",
+                )
+              }
+              style={({ pressed }) => [
+                styles.rowBtn,
+                pressed ? styles.pressed : null,
+              ]}
             >
               <Text style={styles.rowTitle}>Fabric length by size</Text>
-              <Text style={styles.rowValue}>{formatSizeLengthMap(sizeLengthMap)}</Text>
+              <Text style={styles.rowValue}>
+                {formatSizeLengthMap(sizeLengthMap)}
+              </Text>
             </Pressable>
 
             <Pressable
-              onPress={() => goEdit("/vendor/profile/add-product/q06b-services-costs")}
-              style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+              onPress={() =>
+                goEdit("/vendor/profile/add-product/q06b-services-costs")
+              }
+              style={({ pressed }) => [
+                styles.rowBtn,
+                pressed ? styles.pressed : null,
+              ]}
             >
               <Text style={styles.rowTitle}>Services summary</Text>
               <Text style={styles.rowValue}>{serviceSummary()}</Text>
@@ -458,16 +955,28 @@ export default function AddProductReviewScreen() {
             {needsTailoring ? (
               <>
                 <Pressable
-                  onPress={() => goEdit("/vendor/profile/add-product/q06b2-tailoring-styles")}
-                  style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+                  onPress={() =>
+                    goEdit("/vendor/profile/add-product/q06b2-tailoring-styles")
+                  }
+                  style={({ pressed }) => [
+                    styles.rowBtn,
+                    pressed ? styles.pressed : null,
+                  ]}
                 >
                   <Text style={styles.rowTitle}>Product includes trouser</Text>
-                  <Text style={styles.rowValue}>{includesTrouser ? "Yes" : "No"}</Text>
+                  <Text style={styles.rowValue}>
+                    {includesTrouser ? "Yes" : "No"}
+                  </Text>
                 </Pressable>
 
                 <Pressable
-                  onPress={() => goEdit("/vendor/profile/add-product/q06b2-tailoring-styles")}
-                  style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+                  onPress={() =>
+                    goEdit("/vendor/profile/add-product/q06b2-tailoring-styles")
+                  }
+                  style={({ pressed }) => [
+                    styles.rowBtn,
+                    pressed ? styles.pressed : null,
+                  ]}
                 >
                   <Text style={styles.rowTitle}>Tailoring style cards</Text>
                   <Text style={styles.rowValue}>
@@ -480,11 +989,20 @@ export default function AddProductReviewScreen() {
                 {tailoringStylePresets.map((preset, index) => (
                   <Pressable
                     key={`${safeStr(preset.id) || "style"}-${index}`}
-                    onPress={() => goEdit("/vendor/profile/add-product/q06b2-tailoring-styles")}
-                    style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+                    onPress={() =>
+                      goEdit(
+                        "/vendor/profile/add-product/q06b2-tailoring-styles",
+                      )
+                    }
+                    style={({ pressed }) => [
+                      styles.rowBtn,
+                      pressed ? styles.pressed : null,
+                    ]}
                   >
                     <Text style={styles.rowTitle}>Style Card {index + 1}</Text>
-                    <Text style={styles.rowValue}>{summarizePreset(preset, includesTrouser)}</Text>
+                    <Text style={styles.rowValue}>
+                      {summarizePreset(preset, includesTrouser)}
+                    </Text>
                   </Pressable>
                 ))}
               </>
@@ -498,15 +1016,23 @@ export default function AddProductReviewScreen() {
 
         <Pressable
           onPress={() => goEdit("/vendor/profile/add-product/q06c-shipping")}
-          style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+          style={({ pressed }) => [
+            styles.rowBtn,
+            pressed ? styles.pressed : null,
+          ]}
         >
           <Text style={styles.rowTitle}>Weight (kg)</Text>
-          <Text style={styles.rowValue}>{weightKg > 0 ? String(weightKg) : "Not set"}</Text>
+          <Text style={styles.rowValue}>
+            {weightKg > 0 ? String(weightKg) : "Not set"}
+          </Text>
         </Pressable>
 
         <Pressable
           onPress={() => goEdit("/vendor/profile/add-product/q06c-shipping")}
-          style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+          style={({ pressed }) => [
+            styles.rowBtn,
+            pressed ? styles.pressed : null,
+          ]}
         >
           <Text style={styles.rowTitle}>Package dimensions</Text>
           <Text style={styles.rowValue}>{formatPackageCm(packageCm)}</Text>
@@ -518,18 +1044,28 @@ export default function AddProductReviewScreen() {
 
         <Pressable
           onPress={() => goEdit("/vendor/profile/add-product/q09-images")}
-          style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+          style={({ pressed }) => [
+            styles.rowBtn,
+            pressed ? styles.pressed : null,
+          ]}
         >
           <Text style={styles.rowTitle}>Images *</Text>
-          <Text style={styles.rowValue}>{imageCount ? `${imageCount} selected` : "Not set"}</Text>
+          <Text style={styles.rowValue}>
+            {imageCount ? `${imageCount} selected` : "Not set"}
+          </Text>
         </Pressable>
 
         <Pressable
           onPress={() => goEdit("/vendor/profile/add-product/q10-videos")}
-          style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+          style={({ pressed }) => [
+            styles.rowBtn,
+            pressed ? styles.pressed : null,
+          ]}
         >
           <Text style={styles.rowTitle}>Videos</Text>
-          <Text style={styles.rowValue}>{videoCount ? `${videoCount} selected` : "None"}</Text>
+          <Text style={styles.rowValue}>
+            {videoCount ? `${videoCount} selected` : "None"}
+          </Text>
         </Pressable>
       </View>
 
@@ -538,7 +1074,10 @@ export default function AddProductReviewScreen() {
 
         <Pressable
           onPress={() => goEdit("/vendor/profile/add-product/q11-description")}
-          style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+          style={({ pressed }) => [
+            styles.rowBtn,
+            pressed ? styles.pressed : null,
+          ]}
         >
           <Text style={styles.rowTitle}>Dress Type *</Text>
           <Text style={styles.rowValue}>{dressTypeValue}</Text>
@@ -546,7 +1085,10 @@ export default function AddProductReviewScreen() {
 
         <Pressable
           onPress={() => goEdit("/vendor/profile/add-product/q11-description")}
-          style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+          style={({ pressed }) => [
+            styles.rowBtn,
+            pressed ? styles.pressed : null,
+          ]}
         >
           <Text style={styles.rowTitle}>Fabric</Text>
           <Text style={styles.rowValue}>{fabricValue}</Text>
@@ -554,7 +1096,10 @@ export default function AddProductReviewScreen() {
 
         <Pressable
           onPress={() => goEdit("/vendor/profile/add-product/q11-description")}
-          style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+          style={({ pressed }) => [
+            styles.rowBtn,
+            pressed ? styles.pressed : null,
+          ]}
         >
           <Text style={styles.rowTitle}>Color</Text>
           <Text style={styles.rowValue}>{colorValue}</Text>
@@ -562,7 +1107,10 @@ export default function AddProductReviewScreen() {
 
         <Pressable
           onPress={() => goEdit("/vendor/profile/add-product/q11-description")}
-          style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+          style={({ pressed }) => [
+            styles.rowBtn,
+            pressed ? styles.pressed : null,
+          ]}
         >
           <Text style={styles.rowTitle}>Work</Text>
           <Text style={styles.rowValue}>{workValue}</Text>
@@ -570,7 +1118,10 @@ export default function AddProductReviewScreen() {
 
         <Pressable
           onPress={() => goEdit("/vendor/profile/add-product/q11-description")}
-          style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+          style={({ pressed }) => [
+            styles.rowBtn,
+            pressed ? styles.pressed : null,
+          ]}
         >
           <Text style={styles.rowTitle}>Density</Text>
           <Text style={styles.rowValue}>{densityValue}</Text>
@@ -578,7 +1129,10 @@ export default function AddProductReviewScreen() {
 
         <Pressable
           onPress={() => goEdit("/vendor/profile/add-product/q11-description")}
-          style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+          style={({ pressed }) => [
+            styles.rowBtn,
+            pressed ? styles.pressed : null,
+          ]}
         >
           <Text style={styles.rowTitle}>Origin</Text>
           <Text style={styles.rowValue}>{originValue}</Text>
@@ -586,23 +1140,36 @@ export default function AddProductReviewScreen() {
 
         <Pressable
           onPress={() => goEdit("/vendor/profile/add-product/q11-description")}
-          style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+          style={({ pressed }) => [
+            styles.rowBtn,
+            pressed ? styles.pressed : null,
+          ]}
         >
           <Text style={styles.rowTitle}>Wear State</Text>
           <Text style={styles.rowValue}>{wearValue}</Text>
         </Pressable>
 
         <Pressable
-          onPress={() => goEdit("/vendor/profile/add-product/q12-more-description")}
-          style={({ pressed }) => [styles.rowBtn, pressed ? styles.pressed : null]}
+          onPress={() =>
+            goEdit("/vendor/profile/add-product/q12-more-description")
+          }
+          style={({ pressed }) => [
+            styles.rowBtn,
+            pressed ? styles.pressed : null,
+          ]}
         >
           <Text style={styles.rowTitle}>More Description</Text>
-          <Text style={styles.rowValue}>{moreDescription ? moreDescription : "None"}</Text>
+          <Text style={styles.rowValue}>
+            {moreDescription ? moreDescription : "None"}
+          </Text>
         </Pressable>
       </View>
 
       <Pressable
-        style={({ pressed }) => [styles.primaryBtn, pressed ? styles.pressed : null]}
+        style={({ pressed }) => [
+          styles.primaryBtn,
+          pressed ? styles.pressed : null,
+        ]}
         onPress={goSubmit}
       >
         <Text style={styles.primaryText}>Continue to Save</Text>
@@ -708,6 +1275,55 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "500",
+  },
+
+  variantCard: {
+    marginTop: 10,
+    borderRadius: 14,
+    padding: 10,
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    flexDirection: "row",
+    gap: 12,
+  },
+
+  variantImage: {
+    width: 78,
+    height: 92,
+    borderRadius: 12,
+    backgroundColor: stylesVars.borderSoft,
+  },
+
+  variantImagePlaceholder: {
+    width: 78,
+    height: 92,
+    borderRadius: 12,
+    backgroundColor: stylesVars.borderSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 8,
+  },
+
+  variantImagePlaceholderText: {
+    color: stylesVars.placeholder,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+
+  variantBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  variantTitle: {
+    marginTop: 3,
+    color: stylesVars.text,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "800",
   },
 
   primaryBtn: {

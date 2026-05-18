@@ -158,6 +158,55 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       overflow: "hidden",
     },
 
+    // Legacy-style horizontal media row used by Images and Videos cards.
+    hRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingTop: 10,
+      paddingRight: 2,
+      paddingBottom: 2,
+    },
+
+    imageHeroWrap: {
+      marginTop: 10,
+      width: "100%",
+      height: 250,
+      borderRadius: 16,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: stylesVars.border,
+      backgroundColor: "#F1F5F9",
+    },
+
+    imageHero: {
+      width: "100%",
+      height: "100%",
+      resizeMode: "cover",
+      backgroundColor: "#F1F5F9",
+    },
+
+    imageHeroBannerTag: {
+      position: "absolute",
+      left: 10,
+      top: 10,
+      paddingHorizontal: 9,
+      paddingVertical: 4,
+      borderRadius: 999,
+      backgroundColor: "rgba(0,0,0,0.58)",
+    },
+
+    imageHeroCount: {
+      position: "absolute",
+      right: 10,
+      bottom: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 999,
+      backgroundColor: "rgba(0,0,0,0.45)",
+    },
+
+    // Kept for backward compatibility with the previous unified media block.
     heroWrap: {
       width: "100%",
       backgroundColor: stylesVars.cardBg,
@@ -220,9 +269,9 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
     },
 
     thumbWrap: {
-      width: 84,
-      height: 84,
-      borderRadius: 16,
+      width: 88,
+      height: 88,
+      borderRadius: 14,
       overflow: "hidden",
       borderWidth: 1,
       borderColor: stylesVars.border,
@@ -234,10 +283,59 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       borderWidth: 2,
     },
 
+    videoThumbOn: {
+      borderColor: stylesVars.blue,
+      borderWidth: 2,
+    },
+
     thumb: {
       width: "100%",
       height: "100%",
+      resizeMode: "cover",
       backgroundColor: "#F1F5F9",
+    },
+
+    bannerTag: {
+      position: "absolute",
+      left: 6,
+      top: 6,
+      paddingHorizontal: 7,
+      paddingVertical: 3,
+      borderRadius: 999,
+      backgroundColor: "rgba(0,0,0,0.58)",
+    },
+
+    bannerTagText: {
+      color: stylesVars.white,
+      fontSize: 9,
+      fontWeight: "800",
+    },
+
+    videoPage: {
+      paddingTop: 10,
+      paddingRight: 10,
+    },
+
+    videoBox: {
+      height: 230,
+      borderRadius: 16,
+      overflow: "hidden",
+      backgroundColor: stylesVars.black,
+      borderWidth: 1,
+      borderColor: stylesVars.border,
+    },
+
+    video: {
+      width: "100%",
+      height: "100%",
+      backgroundColor: stylesVars.black,
+    },
+
+    videoPagerCover: {
+      width: "100%",
+      height: "100%",
+      resizeMode: "cover",
+      backgroundColor: stylesVars.black,
     },
 
     videoPlaceholder: {
@@ -246,12 +344,23 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: stylesVars.blueSoft,
+      paddingHorizontal: 6,
+    },
+
+    videoPlaceholderLarge: {
+      width: "100%",
+      height: "100%",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: stylesVars.blueSoft,
+      paddingHorizontal: 12,
     },
 
     videoPlaceholderText: {
       color: stylesVars.blue,
       fontWeight: "700",
       fontSize: 11,
+      textAlign: "center",
     },
 
     playBadge: {
@@ -295,6 +404,13 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       color: stylesVars.white,
       fontWeight: "700",
       fontSize: 18,
+    },
+
+    empty: {
+      marginTop: 8,
+      color: stylesVars.placeholder,
+      fontSize: 13,
+      fontWeight: "500",
     },
 
     specTitle: {

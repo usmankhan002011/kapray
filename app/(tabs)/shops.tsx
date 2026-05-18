@@ -1,6 +1,15 @@
 // app/vendor-search.tsx
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -24,12 +33,16 @@ export default function VendorSearchScreen() {
   const router = useRouter();
   const dispatch = useAppDispatch();
 
-  const selectedFromRedux: string[] = useAppSelector((s: any) => s?.filters?.vendorIds ?? []);
+  const selectedFromRedux: string[] = useAppSelector(
+    (s: any) => s?.filters?.vendorIds ?? [],
+  );
 
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [vendors, setVendors] = useState<VendorRow[]>([]);
-  const [selected, setSelected] = useState<Set<string>>(new Set(selectedFromRedux.map(String)));
+  const [selected, setSelected] = useState<Set<string>>(
+    new Set(selectedFromRedux.map(String)),
+  );
 
   useEffect(() => {
     let alive = true;
@@ -94,6 +107,13 @@ export default function VendorSearchScreen() {
     setSelected(new Set());
   }
 
+  function openVendorProfile(id: string) {
+    router.push({
+      pathname: "/(buyer)/view-profile",
+      params: { vendorId: id },
+    } as any);
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.topRow}>
@@ -105,7 +125,13 @@ export default function VendorSearchScreen() {
           Vendors
         </Text>
 
-        <Pressable onPress={apply} style={({ pressed }) => [styles.applyBtn, pressed ? styles.pressed : null]}>
+        <Pressable
+          onPress={apply}
+          style={({ pressed }) => [
+            styles.applyBtn,
+            pressed ? styles.pressed : null,
+          ]}
+        >
           <Text style={styles.applyText}>✅ Apply</Text>
         </Pressable>
       </View>
@@ -121,10 +147,20 @@ export default function VendorSearchScreen() {
           autoCorrect={false}
         />
 
-        <Pressable onPress={clear} style={({ pressed }) => [styles.clearBtn, pressed ? styles.pressed : null]}>
+        <Pressable
+          onPress={clear}
+          style={({ pressed }) => [
+            styles.clearBtn,
+            pressed ? styles.pressed : null,
+          ]}
+        >
           <Text style={styles.clearText}>🧹 Clear</Text>
         </Pressable>
       </View>
+
+      <Text style={styles.helperText}>
+        Select vendors to filter their products.
+      </Text>
 
       <Text style={styles.meta}>
         Selected: <Text style={styles.metaStrong}>{selected.size}</Text>
@@ -146,18 +182,34 @@ export default function VendorSearchScreen() {
             const on = selected.has(id);
 
             return (
-              <Pressable onPress={() => toggle(id)} style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]}>
-                <View style={styles.rowLeft}>
+              <View style={styles.row}>
+                <Pressable
+                  onPress={() => openVendorProfile(id)}
+                  style={({ pressed }) => [
+                    styles.rowLeft,
+                    pressed ? styles.pressed : null,
+                  ]}
+                >
                   <Text style={styles.rowTitle} numberOfLines={1}>
                     {safe(item.name)}
                   </Text>
                   <Text style={styles.rowSub} numberOfLines={1}>
                     {safe(item.shop_name)} • {safe(item.location)}
                   </Text>
-                </View>
+                  <Text style={styles.viewProfileText}>View Profile</Text>
+                </Pressable>
 
-                <Text style={styles.tick}>{on ? "✅" : "⬜️"}</Text>
-              </Pressable>
+                <Pressable
+                  onPress={() => toggle(id)}
+                  style={({ pressed }) => [
+                    styles.tickBtn,
+                    pressed ? styles.pressed : null,
+                  ]}
+                  hitSlop={8}
+                >
+                  <Text style={styles.tick}>{on ? "✅" : "⬜️"}</Text>
+                </Pressable>
+              </View>
             );
           }}
           ListEmptyComponent={
@@ -188,13 +240,13 @@ const stylesVars = {
   overlayDark: "rgba(0,0,0,0.58)",
   overlaySoft: "rgba(255,255,255,0.14)",
   white: "#FFFFFF",
-  black: "#000000"
+  black: "#000000",
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: stylesVars.bg
+    backgroundColor: stylesVars.bg,
   },
 
   topRow: {
@@ -204,13 +256,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12
+    gap: 12,
   },
 
   link: {
     fontSize: 14,
     color: stylesVars.blue,
-    fontWeight: "700"
+    fontWeight: "700",
   },
 
   title: {
@@ -219,7 +271,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     color: stylesVars.text,
-    paddingHorizontal: 10
+    paddingHorizontal: 10,
   },
 
   applyBtn: {
@@ -231,13 +283,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D7E3FF",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   applyText: {
     fontSize: 13,
     fontWeight: "700",
-    color: stylesVars.blue
+    color: stylesVars.blue,
   },
 
   searchWrap: {
@@ -245,7 +297,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     flexDirection: "row",
     gap: 10,
-    alignItems: "center"
+    alignItems: "center",
   },
 
   searchInput: {
@@ -257,7 +309,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
     color: stylesVars.text,
-    backgroundColor: stylesVars.white
+    backgroundColor: stylesVars.white,
   },
 
   clearBtn: {
@@ -269,13 +321,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: stylesVars.border,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   clearText: {
     fontSize: 13,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
+  },
+
+  helperText: {
+    paddingHorizontal: 16,
+    paddingTop: 2,
+    paddingBottom: 8,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.subText,
+    fontWeight: "500",
   },
 
   meta: {
@@ -283,34 +345,34 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
     fontSize: 12,
     color: stylesVars.mutedText,
-    fontWeight: "500"
+    fontWeight: "500",
   },
 
   metaStrong: {
     color: stylesVars.text,
-    fontWeight: "700"
+    fontWeight: "700",
   },
 
   listContent: {
     padding: 16,
-    paddingTop: 10
+    paddingTop: 10,
   },
 
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingVertical: 12
+    paddingVertical: 12,
   },
 
   rowLeft: {
-    flex: 1
+    flex: 1,
   },
 
   rowTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: stylesVars.text
+    color: stylesVars.text,
   },
 
   rowSub: {
@@ -318,33 +380,46 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: "500",
     color: stylesVars.mutedText,
-    marginTop: 3
+    marginTop: 3,
+  },
+
+  viewProfileText: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "700",
+    color: stylesVars.blue,
+    marginTop: 4,
+  },
+
+  tickBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 8,
   },
 
   tick: {
     fontSize: 18,
-    fontWeight: "700"
+    fontWeight: "700",
   },
 
   sep: {
     height: 1,
-    backgroundColor: stylesVars.border
+    backgroundColor: stylesVars.border,
   },
 
   center: {
     padding: 24,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
 
   muted: {
     fontSize: 14,
     color: stylesVars.mutedText,
     fontWeight: "500",
-    marginTop: 8
+    marginTop: 8,
   },
 
   pressed: {
-    opacity: 0.82
-  }
+    opacity: 0.82,
+  },
 });

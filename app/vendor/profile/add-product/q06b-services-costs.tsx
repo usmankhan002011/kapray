@@ -84,26 +84,34 @@ export default function Q06BServicesCosts() {
   const category = inferCategoryFromDraft(draft);
 
   const needsDyeing =
-    category === "unstitched_dyeing" || category === "unstitched_dyeing_tailoring";
+    category === "unstitched_dyeing" ||
+    category === "unstitched_dyeing_tailoring";
   const needsTailoring = category === "unstitched_dyeing_tailoring";
 
-  const [vendorOffersTailoring, setVendorOffersTailoring] = useState<boolean>(false);
+  const [vendorOffersTailoring, setVendorOffersTailoring] =
+    useState<boolean>(false);
   const [vendorLoading, setVendorLoading] = useState<boolean>(false);
 
   const [dyeingCost, setDyeingCost] = useState<string>(() => {
-    const fromPrice = safeNumOrZero((draft?.price as any)?.dyeing_cost_pkr ?? 0);
+    const fromPrice = safeNumOrZero(
+      (draft?.price as any)?.dyeing_cost_pkr ?? 0,
+    );
     if (fromPrice > 0) return String(fromPrice);
     const fromSpec = safeNumOrZero((draft?.spec as any)?.dyeing_cost_pkr ?? 0);
     return fromSpec > 0 ? String(fromSpec) : "";
   });
 
   const [tailoringCost, setTailoringCost] = useState<string>(() => {
-    const fromPrice = safeNumOrZero((draft?.price as any)?.tailoring_cost_pkr ?? 0);
+    const fromPrice = safeNumOrZero(
+      (draft?.price as any)?.tailoring_cost_pkr ?? 0,
+    );
     return fromPrice > 0 ? String(fromPrice) : "";
   });
 
   const [turnaroundDays, setTurnaroundDays] = useState<string>(() => {
-    const fromSpec = safeNumOrZero((draft?.spec as any)?.tailoring_turnaround_days ?? 0);
+    const fromSpec = safeNumOrZero(
+      (draft?.spec as any)?.tailoring_turnaround_days ?? 0,
+    );
     return fromSpec > 0 ? String(fromSpec) : "";
   });
 
@@ -113,7 +121,10 @@ export default function Q06BServicesCosts() {
       return;
     }
     if (typeof ctx.setDraft === "function") {
-      ctx.setDraft((prev: any) => ({ ...prev, spec: { ...(prev?.spec ?? {}), ...patch } }));
+      ctx.setDraft((prev: any) => ({
+        ...prev,
+        spec: { ...(prev?.spec ?? {}), ...patch },
+      }));
       return;
     }
     draft.spec = { ...(draft?.spec ?? {}), ...patch };
@@ -125,7 +136,10 @@ export default function Q06BServicesCosts() {
       return;
     }
     if (typeof ctx.setDraft === "function") {
-      ctx.setDraft((prev: any) => ({ ...prev, price: { ...(prev?.price ?? {}), ...patch } }));
+      ctx.setDraft((prev: any) => ({
+        ...prev,
+        price: { ...(prev?.price ?? {}), ...patch },
+      }));
       return;
     }
     draft.price = { ...(draft?.price ?? {}), ...patch };
@@ -241,7 +255,10 @@ export default function Q06BServicesCosts() {
 
   function onContinue() {
     if (!vendorId) {
-      Alert.alert("Vendor not loaded", "Please ensure vendorSlice has vendor.id.");
+      Alert.alert(
+        "Vendor not loaded",
+        "Please ensure vendorSlice has vendor.id.",
+      );
       return;
     }
 
@@ -256,7 +273,10 @@ export default function Q06BServicesCosts() {
     if (needsDyeing) {
       const d = Number(sanitizeNumber(dyeingCost) || "0");
       if (!Number.isFinite(d) || d <= 0) {
-        Alert.alert("Invalid dyeing cost", "Please enter a valid dyeing cost (PKR).");
+        Alert.alert(
+          "Invalid dyeing cost",
+          "Please enter a valid dyeing cost (PKR).",
+        );
         return;
       }
       patchPrice({ dyeing_cost_pkr: d });
@@ -266,11 +286,17 @@ export default function Q06BServicesCosts() {
     if (needsTailoring) {
       const t = Number(sanitizeNumber(tailoringCost) || "0");
       if (!Number.isFinite(t) || t <= 0) {
-        Alert.alert("Invalid tailoring cost", "Please enter a valid tailoring cost (PKR).");
+        Alert.alert(
+          "Invalid tailoring cost",
+          "Please enter a valid tailoring cost (PKR).",
+        );
         return;
       }
 
-      const days = turnaroundDays === "" ? 0 : Number(sanitizeNumber(turnaroundDays) || "0");
+      const days =
+        turnaroundDays === ""
+          ? 0
+          : Number(sanitizeNumber(turnaroundDays) || "0");
       if (!Number.isFinite(days) || days < 0) {
         Alert.alert("Invalid turnaround", "Turnaround days must be 0 or more.");
         return;
@@ -286,7 +312,7 @@ export default function Q06BServicesCosts() {
         return;
       }
 
-      router.push("/vendor/profile/add-product/q06b2-tailoring-styles" as any);
+      router.push("/vendor/profile/add-product/q06c-shipping" as any);
       return;
     }
 
@@ -325,7 +351,10 @@ export default function Q06BServicesCosts() {
 
           <Pressable
             onPress={closeScreen}
-            style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
+            style={({ pressed }) => [
+              apStyles.linkBtn,
+              pressed ? apStyles.pressed : null,
+            ]}
           >
             <Text style={apStyles.linkText}>Close</Text>
           </Pressable>
@@ -384,8 +413,8 @@ export default function Q06BServicesCosts() {
                     Tailoring is not enabled in vendor profile
                   </Text>
                   <Text style={apStyles.metaHint}>
-                    Enable stitching / tailoring in vendor profile before using this product
-                    category.
+                    Enable stitching / tailoring in vendor profile before using
+                    this product category.
                   </Text>
                 </View>
               ) : null}

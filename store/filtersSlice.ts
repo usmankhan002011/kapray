@@ -2,6 +2,11 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 type Multi = string[];
 
+export type ProductCategoryFilter =
+  | "stitched_ready"
+  | "stitched_made_order"
+  | "unstitched";
+
 export type FiltersState = {
   dressTypeId: string | null;
   dressTypeIds: Multi;
@@ -13,6 +18,19 @@ export type FiltersState = {
   originCityIds: Multi;
   wearStateIds: Multi;
   priceBandIds: Multi;
+
+  /**
+   * Multi-select product category filter.
+   * Empty array means All / Any.
+   */
+  productCategoryIds: ProductCategoryFilter[];
+
+  /**
+   * Legacy compatibility field.
+   * Keep this until all older screens are migrated.
+   * "all" means productCategoryIds is empty.
+   */
+  productCategory: "all" | ProductCategoryFilter;
 
   minCostPkr: number | null;
   maxCostPkr: number | null;
@@ -32,19 +50,47 @@ const initialState: FiltersState = {
   wearStateIds: [],
   priceBandIds: [],
 
+  productCategoryIds: [],
+  productCategory: "all",
+
   minCostPkr: null,
   maxCostPkr: null,
 
-  vendorIds: []
+  vendorIds: [],
 };
 
 function toggleId(arr: string[], id: string) {
   return arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id];
 }
 
+function normalizeProductCategoryIds(arr: any): ProductCategoryFilter[] {
+  if (!Array.isArray(arr)) return [];
+
+  const allowed = new Set<ProductCategoryFilter>([
+    "stitched_ready",
+    "stitched_made_order",
+    "unstitched",
+  ]);
+
+  const unique: ProductCategoryFilter[] = [];
+
+  for (const raw of arr) {
+    const id = String(raw ?? "").trim() as ProductCategoryFilter;
+    if (!allowed.has(id)) continue;
+    if (!unique.includes(id)) unique.push(id);
+  }
+
+  return unique;
+}
+
+function syncLegacyProductCategory(state: FiltersState) {
+  state.productCategory =
+    state.productCategoryIds.length === 1 ? state.productCategoryIds[0] : "all";
+}
+
 function clampCostRange(
   minCostPkr: number | null,
-  maxCostPkr: number | null
+  maxCostPkr: number | null,
 ): { minCostPkr: number | null; maxCostPkr: number | null } {
   if (minCostPkr === null || maxCostPkr === null) {
     return { minCostPkr, maxCostPkr };
@@ -147,6 +193,39 @@ const filtersSlice = createSlice({
       state.priceBandIds = toggleId(state.priceBandIds, action.payload);
     },
 
+    clearProductCategory: (state) => {
+      state.productCategoryIds = [];
+      state.productCategory = "all";
+    },
+    toggleProductCategory: (
+      state,
+      action: PayloadAction<ProductCategoryFilter>,
+    ) => {
+      state.productCategoryIds = normalizeProductCategoryIds(
+        toggleId(state.productCategoryIds, action.payload),
+      );
+      syncLegacyProductCategory(state);
+    },
+    setProductCategoryIds: (
+      state,
+      action: PayloadAction<ProductCategoryFilter[]>,
+    ) => {
+      state.productCategoryIds = normalizeProductCategoryIds(action.payload);
+      syncLegacyProductCategory(state);
+    },
+
+    /**
+     * Legacy single-select action.
+     * Kept so older screens do not break while we migrate.
+     */
+    setProductCategory: (
+      state,
+      action: PayloadAction<ProductCategoryFilter>,
+    ) => {
+      state.productCategoryIds = [action.payload];
+      state.productCategory = action.payload;
+    },
+
     clearCostRange: (state) => {
       state.minCostPkr = null;
       state.maxCostPkr = null;
@@ -156,7 +235,7 @@ const filtersSlice = createSlice({
       action: PayloadAction<{
         minCostPkr: number | null;
         maxCostPkr: number | null;
-      }>
+      }>,
     ) => {
       const nextMin = action.payload?.minCostPkr ?? null;
       const nextMax = action.payload?.maxCostPkr ?? null;
@@ -173,8 +252,8 @@ const filtersSlice = createSlice({
     },
     setVendorIds: (state, action: PayloadAction<string[]>) => {
       state.vendorIds = action.payload ?? [];
-    }
-  }
+    },
+  },
 });
 
 export const {
@@ -203,12 +282,17 @@ export const {
   clearPriceBands,
   togglePriceBand,
 
+  clearProductCategory,
+  toggleProductCategory,
+  setProductCategoryIds,
+  setProductCategory,
+
   clearCostRange,
   setCostRange,
 
   clearVendors,
   toggleVendor,
-  setVendorIds
+  setVendorIds,
 } = filtersSlice.actions;
 
 export default filtersSlice.reducer;
