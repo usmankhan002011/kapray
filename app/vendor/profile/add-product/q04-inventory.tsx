@@ -1,9 +1,16 @@
 import React, { useMemo, useRef, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, TextInput } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
+import FastNumberInput from "@/components/product/add-product/FastNumberInput";
+import {
+  AddProductCard,
+  AddProductField,
+  AddProductFooter,
+  AddProductScreen,
+} from "@/components/product/add-product/AddProductWizard";
 
 type ProductCategory =
   | "unstitched_plain"
@@ -70,19 +77,30 @@ export default function Q04Inventory() {
   const madeOnOrder = Boolean((draft?.spec as any)?.made_on_order ?? false);
   const category = inferCategoryFromDraft(draft);
 
-  const [qtyText, setQtyText] = useState<string>(
-    String(madeOnOrder ? 0 : (draft?.inventory_qty ?? 0))
-  );
+  const [qtyText, setQtyText] = useState<string>(() => {
+    if (madeOnOrder) return "0";
+    const existingQty = Number(draft?.inventory_qty);
+    return Number.isFinite(existingQty) && existingQty > 0
+      ? String(Math.trunc(existingQty))
+      : "";
+  });
 
   const canContinue = useMemo(() => {
     if (!vendorId) return false;
     if (madeOnOrder) return true;
 
-    const q = Number(qtyText);
+    const cleanedQty = sanitizeNumber(qtyText);
+    if (!cleanedQty) return false;
+
+    const q = Number(cleanedQty);
     return Number.isFinite(q) && q >= 0;
   }, [vendorId, madeOnOrder, qtyText]);
+  const disabledHint = !vendorId
+    ? "Vendor not loaded."
+    : !canContinue
+      ? "Enter inventory quantity, 0 or more."
+      : "";
 
-  // ✅ Auto focus when screen becomes active (only if editable)
   useFocusEffect(
     React.useCallback(() => {
       if (madeOnOrder) return;
@@ -105,7 +123,8 @@ export default function Q04Inventory() {
     }
 
     if (!madeOnOrder) {
-      const q = Number(sanitizeNumber(qtyText) || "0");
+      const cleanedQty = sanitizeNumber(qtyText);
+      const q = Number(cleanedQty);
       if (!Number.isFinite(q) || q < 0) {
         Alert.alert("Invalid quantity", "Please enter a valid inventory quantity (0 or more).");
         return;
@@ -124,36 +143,32 @@ export default function Q04Inventory() {
   }
 
   return (
-    <View style={apStyles.screen}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={apStyles.screen}
-        contentContainerStyle={apStyles.content}
-      >
-        <View style={apStyles.headerRow}>
-          <Text style={apStyles.title}>Inventory</Text>
-
-          <Pressable
-            onPress={() => router.back()}
-            style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
-          >
-            <Text style={apStyles.linkText}>Close</Text>
-          </Pressable>
-        </View>
-
-        <View style={apStyles.card}>
-          <Text style={apStyles.label}>Inventory quantity *</Text>
-
-          {madeOnOrder ? (
-            <Text style={apStyles.metaHint}>Made on order. Inventory will be set as 0.</Text>
-          ) : (
-            <Text style={apStyles.metaHint}>Enter how many pieces are available.</Text>
-          )}
-
-          <TextInput
+    <AddProductScreen
+      title="Inventory"
+      onBack={() => router.back()}
+      footer={
+        <AddProductFooter
+          onPrimaryPress={onContinue}
+          primaryDisabled={!canContinue}
+          disabledHint={disabledHint}
+        />
+      }
+    >
+      <AddProductCard>
+        <AddProductField
+          label="Inventory quantity"
+          required
+          hint={
+            madeOnOrder
+              ? "Made on order. Inventory will be set as 0."
+              : "Enter how many pieces are available."
+          }
+          style={{ marginTop: 0 }}
+        >
+          <FastNumberInput
             ref={inputRef}
-            value={String(madeOnOrder ? 0 : qtyText)}
-            onChangeText={(t) => setQtyText(sanitizeNumber(t))}
+            value={madeOnOrder ? "0" : qtyText}
+            onChangeText={setQtyText}
             placeholder="e.g., 10"
             placeholderTextColor={apColors.muted}
             style={[apStyles.input, madeOnOrder ? { opacity: 0.55 } : null]}
@@ -162,24 +177,8 @@ export default function Q04Inventory() {
             editable={!madeOnOrder}
             returnKeyType="done"
           />
-
-          {/* <Text style={apStyles.metaHint}>
-            Category: <Text style={{ fontWeight: "900", color: apColors.text }}>{category}</Text>
-          </Text> */}
-
-          <Pressable
-            style={({ pressed }) => [
-              apStyles.primaryBtn,
-              !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null
-            ]}
-            onPress={onContinue}
-            disabled={!canContinue}
-          >
-            <Text style={apStyles.primaryText}>Continue</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </View>
+        </AddProductField>
+      </AddProductCard>
+    </AddProductScreen>
   );
 }

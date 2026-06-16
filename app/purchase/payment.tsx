@@ -29,6 +29,7 @@ type Params = {
   selected_variant_made_on_order?: string;
   variant_mode?: string;
   selected_variant_mode?: string;
+  selected_variant_snapshot?: string;
 
   price?: string;
   currency?: string;
@@ -458,25 +459,74 @@ export default function PaymentScreen() {
     const dyeShadeId = safeDecode(params.dye_shade_id);
     const dyeHex = safeDecode(params.dye_hex);
     const dyeLabel = safeDecode(params.dye_label);
-    const selectedVariantId = safeDecode(params.selected_variant_id);
-    const selectedVariantTitle = safeDecode(params.selected_variant_title);
-    const selectedVariantSize = safeDecode(params.selected_variant_size);
-    const selectedVariantColor = safeDecode(params.selected_variant_color);
-    const selectedVariantPricePkr = safePositiveNumber(
-      safeDecode(params.selected_variant_price_pkr),
-    );
-    const selectedVariantImagePath = safeDecode(
-      params.selected_variant_image_path,
-    );
-    const selectedVariantMode = safeDecode(
-      firstNonEmpty(params.selected_variant_mode, params.variant_mode),
-    );
     const selectedStitchedVariantSnapshot = safeJsonDecode<any>(
-      params.selected_stitched_variant_snapshot,
+      firstNonEmpty(
+        params.selected_stitched_variant_snapshot,
+        params.selected_variant_snapshot,
+      ),
       null,
     );
     const rawVariantSnapshot =
       selectedStitchedVariantSnapshot?.rawVariant ?? {};
+    const rawSizeSnapshot = selectedStitchedVariantSnapshot?.rawSize ?? {};
+    const selectedVariantMode = safeDecode(
+      firstNonEmpty(
+        params.selected_variant_mode,
+        params.variant_mode,
+        selectedStitchedVariantSnapshot?.variant_mode,
+        rawVariantSnapshot?.variant_mode,
+      ),
+    );
+    const selectedVariantId = safeDecode(
+      firstNonEmpty(
+        params.selected_variant_id,
+        selectedStitchedVariantSnapshot?.id,
+        rawVariantSnapshot?.id,
+      ),
+    );
+    const selectedVariantTitle = safeDecode(
+      firstNonEmpty(
+        params.selected_variant_title,
+        selectedStitchedVariantSnapshot?.title,
+        selectedStitchedVariantSnapshot?.label,
+        rawVariantSnapshot?.display_name,
+        rawVariantSnapshot?.label,
+      ),
+    );
+    const selectedVariantSize = safeDecode(
+      firstNonEmpty(
+        params.selected_variant_size,
+        selectedStitchedVariantSnapshot?.size,
+        rawSizeSnapshot?.size,
+      ),
+    );
+    const selectedVariantColor = safeDecode(
+      firstNonEmpty(
+        params.selected_variant_color,
+        selectedStitchedVariantSnapshot?.color,
+        rawVariantSnapshot?.name,
+        rawVariantSnapshot?.color,
+      ),
+    );
+    const selectedVariantPricePkr = safePositiveNumber(
+      firstNonEmpty(
+        safeDecode(params.selected_variant_price_pkr),
+        selectedStitchedVariantSnapshot?.pricePkr,
+        selectedStitchedVariantSnapshot?.price_pkr,
+        selectedStitchedVariantSnapshot?.total_price_pkr,
+      ),
+    );
+    const selectedVariantImagePath = safeDecode(
+      firstNonEmpty(
+        params.selected_variant_image_path,
+        Array.isArray(selectedStitchedVariantSnapshot?.image_paths)
+          ? selectedStitchedVariantSnapshot.image_paths[0]
+          : "",
+        Array.isArray(rawVariantSnapshot?.image_paths)
+          ? rawVariantSnapshot.image_paths[0]
+          : "",
+      ),
+    );
     const productCategoryRaw = norm(params.product_category);
     const isMadeOnOrder =
       productCategoryRaw === "stitched_ready" &&
@@ -488,6 +538,13 @@ export default function PaymentScreen() {
           "made_order_variants" ||
         Boolean(rawVariantSnapshot?.made_on_order) ||
         rawVariantSnapshot?.variant_mode === "made_order_variants");
+    const isSimpleReadyStitched =
+      productCategoryRaw === "stitched_ready" &&
+      !isMadeOnOrder &&
+      (selectedVariantMode === "simple_ready" ||
+        selectedStitchedVariantSnapshot?.variant_mode === "simple_ready" ||
+        rawVariantSnapshot?.variant_mode === "simple_ready" ||
+        selectedVariantId.split("::")[0] === "simple-ready");
 
     const dyeingSelected = parseBoolParam(params.dyeing_selected) === true;
     const dyeCostPkr = dyeingSelected
@@ -573,6 +630,7 @@ export default function PaymentScreen() {
         firstNonEmpty(params.productName, params.product_name) || "Product",
       productCategory: productCategoryRaw,
       madeOnOrder: isMadeOnOrder,
+      isSimpleReadyStitched,
       selectedVariantMode,
       selectedStitchedVariantSnapshot,
       imageUrl: firstNonEmpty(params.imageUrl, params.image_url),
@@ -727,9 +785,10 @@ export default function PaymentScreen() {
       const exactMap: Record<string, string> = {};
       for (const [k, v] of data.exactPairs) exactMap[k] = v;
 
-      const selectedVariantIdForRpc = data.selectedVariantId
-        ? String(data.selectedVariantId).split("::")[0].trim()
-        : "";
+      const selectedVariantIdForRpc =
+        !data.isSimpleReadyStitched && data.selectedVariantId
+          ? String(data.selectedVariantId).split("::")[0].trim()
+          : "";
 
       const specSnapshot =
         pRow.spec && typeof pRow.spec === "object"
@@ -783,6 +842,10 @@ export default function PaymentScreen() {
           data.selectedVariantPricePkr || 0;
         (specSnapshot as any).selected_variant_image_path =
           data.selectedVariantImagePath || "";
+        if (data.selectedVariantMode) {
+          (specSnapshot as any).selected_variant_mode =
+            data.selectedVariantMode;
+        }
         if (data.madeOnOrder) {
           (specSnapshot as any).selected_variant_made_on_order = true;
           (specSnapshot as any).selected_variant_mode = "made_order_variants";
@@ -952,11 +1015,11 @@ export default function PaymentScreen() {
 
   const selectedStitchedVariantTitle = isReadyToWearStitched
     ? cleanReadyToWearTitle(
-        data.selectedVariantTitle || "Selected variant",
+        data.selectedVariantTitle || "Selected style",
         data.selectedVariantSize || data.sizeLabel,
       )
     : data.selectedVariantTitle;
-  // Keep original image handling untouched: imageUrl already carries the correct selected variant image.
+  // Keep original image handling untouched: imageUrl already carries the correct selected style image.
   const productSummaryImageUrl = data.imageUrl;
   const productSummaryTitle = isReadyToWearStitched
     ? cleanReadyToWearTitle(
@@ -1021,7 +1084,7 @@ export default function PaymentScreen() {
                   <>
                     <View style={styles.productMetaInfo}>
                       <Text style={styles.productMetaLabel}>
-                        Selected variant
+                        Selected style
                       </Text>
                       <Text style={styles.productMetaValue}>
                         {selectedStitchedVariantTitle || "Not selected"}
@@ -1067,28 +1130,28 @@ export default function PaymentScreen() {
                 data.selectedVariantColor) ? (
                 <View style={styles.customBlock}>
                   <KVRow
-                    label="Selected variant"
+                    label="Selected style"
                     value={
                       data.selectedVariantTitle ||
                       data.selectedVariantSize ||
-                      "Selected variant"
+                      "Selected style"
                     }
                   />
                   {!!data.selectedVariantSize && (
                     <KVRow
-                      label="Variant size"
+                      label="Style size"
                       value={data.selectedVariantSize}
                     />
                   )}
                   {!!data.selectedVariantColor && (
                     <KVRow
-                      label="Variant color"
+                      label="Style color"
                       value={data.selectedVariantColor}
                     />
                   )}
                   {data.selectedVariantPricePkr > 0 ? (
                     <KVRow
-                      label="Variant price"
+                      label="Style price"
                       value={formatMoney(
                         data.currency,
                         data.selectedVariantPricePkr,

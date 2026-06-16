@@ -1,11 +1,23 @@
 import React, { useMemo, useRef, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apStyles, apColors } from "@/components/product/addProductStyles";
+import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 import { getDeliveryCost } from "@/utils/kapray/delivery";
 import { EXPORT_REGIONS } from "@/data/kapray/exportRegions";
+import {
+  AddProductCard,
+  AddProductChip,
+  AddProductField,
+  AddProductFooter,
+  AddProductScreen,
+} from "@/components/product/add-product/AddProductWizard";
+
+type DimensionUnit = "cm" | "in";
+
+const CM_PER_INCH = 2.54;
 
 function sanitizeNumber(input: string) {
   const cleaned = input.replace(/[^\d.]/g, "");
@@ -18,6 +30,55 @@ function safeInt(v: any) {
   const n = Number(v);
   if (!Number.isFinite(n)) return null;
   return Math.trunc(n);
+}
+
+function initialPositiveNumberText(v: any) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? String(v) : "";
+}
+
+function formatDimensionNumber(n: number) {
+  if (!Number.isFinite(n) || n <= 0) return "";
+  const rounded = Math.round(n * 100) / 100;
+  return String(rounded)
+    .replace(/(\.\d*?)0+$/, "$1")
+    .replace(/\.$/, "");
+}
+
+function positiveNumberFromText(text: string) {
+  const n = Number(sanitizeNumber(text));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function dimensionToCm(text: string, unit: DimensionUnit) {
+  const n = positiveNumberFromText(text);
+  if (n <= 0) return 0;
+  return unit === "in" ? n * CM_PER_INCH : n;
+}
+
+function getInitialDimensionUnit(spec: any): DimensionUnit {
+  return spec?.package_dimension_unit === "in" ? "in" : "cm";
+}
+
+function initialDimensionText(spec: any, key: "length" | "width" | "height", unit: DimensionUnit) {
+  if (unit === "in") {
+    const fromIn = Number(spec?.package_in?.[key]);
+    if (Number.isFinite(fromIn) && fromIn > 0) return formatDimensionNumber(fromIn);
+
+    const fromCm = Number(spec?.package_cm?.[key]);
+    return Number.isFinite(fromCm) && fromCm > 0
+      ? formatDimensionNumber(fromCm / CM_PER_INCH)
+      : "";
+  }
+
+  return initialPositiveNumberText(spec?.package_cm?.[key]);
+}
+
+function convertDimensionText(text: string, from: DimensionUnit, to: DimensionUnit) {
+  if (from === to) return text;
+  const n = positiveNumberFromText(text);
+  if (n <= 0) return "";
+  return formatDimensionNumber(from === "in" ? n * CM_PER_INCH : n / CM_PER_INCH);
 }
 
 export default function Q06CShipping() {
@@ -53,18 +114,29 @@ export default function Q06CShipping() {
     draft.spec = { ...(draft?.spec ?? {}), ...patch };
   }
 
-  const [weight, setWeight] = useState<string>(String(draft?.spec?.weight_kg ?? ""));
-  const [length, setLength] = useState<string>(String(draft?.spec?.package_cm?.length ?? ""));
-  const [width, setWidth] = useState<string>(String(draft?.spec?.package_cm?.width ?? ""));
-  const [height, setHeight] = useState<string>(String(draft?.spec?.package_cm?.height ?? ""));
+  const [weight, setWeight] = useState<string>(
+    initialPositiveNumberText(draft?.spec?.weight_kg),
+  );
+  const [dimensionUnit, setDimensionUnit] = useState<DimensionUnit>(() =>
+    getInitialDimensionUnit(draft?.spec),
+  );
+  const [length, setLength] = useState<string>(
+    initialDimensionText(draft?.spec, "length", dimensionUnit),
+  );
+  const [width, setWidth] = useState<string>(
+    initialDimensionText(draft?.spec, "width", dimensionUnit),
+  );
+  const [height, setHeight] = useState<string>(
+    initialDimensionText(draft?.spec, "height", dimensionUnit),
+  );
 
   const canContinue = useMemo(() => {
     if (!vendorId) return false;
 
-    const w = Number(weight);
-    const l = Number(length);
-    const wi = Number(width);
-    const h = Number(height);
+    const w = positiveNumberFromText(weight);
+    const l = positiveNumberFromText(length);
+    const wi = positiveNumberFromText(width);
+    const h = positiveNumberFromText(height);
 
     return (
       Number.isFinite(w) &&
@@ -77,12 +149,24 @@ export default function Q06CShipping() {
       h > 0
     );
   }, [vendorId, weight, length, width, height]);
+  const dimensionUnitLabel = dimensionUnit === "in" ? "inches" : "cm";
+  const disabledHint = !vendorId
+    ? "Vendor not loaded."
+    : positiveNumberFromText(weight) <= 0
+      ? "Enter package weight in kg."
+      : positiveNumberFromText(length) <= 0
+        ? `Enter package length in ${dimensionUnitLabel}.`
+        : positiveNumberFromText(width) <= 0
+          ? `Enter package width in ${dimensionUnitLabel}.`
+          : positiveNumberFromText(height) <= 0
+            ? `Enter package height in ${dimensionUnitLabel}.`
+            : "";
 
   const shippingPreview = useMemo(() => {
-    const actualWeightKg = Number(weight);
-    const rawLengthCm = Number(length);
-    const rawWidthCm = Number(width);
-    const rawHeightCm = Number(height);
+    const actualWeightKg = positiveNumberFromText(weight);
+    const rawLengthCm = dimensionToCm(length, dimensionUnit);
+    const rawWidthCm = dimensionToCm(width, dimensionUnit);
+    const rawHeightCm = dimensionToCm(height, dimensionUnit);
 
     const safeActualWeightKg =
       Number.isFinite(actualWeightKg) && actualWeightKg > 0 ? actualWeightKg : 0;
@@ -196,7 +280,7 @@ export default function Q06CShipping() {
       suggestedChargeableWeightKg,
       suggestedHeightCm,
     };
-  }, [height, length, weight, width]);
+  }, [dimensionUnit, height, length, weight, width]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -215,16 +299,28 @@ export default function Q06CShipping() {
     router.back();
   }
 
+  function onChangeDimensionUnit(nextUnit: DimensionUnit) {
+    if (nextUnit === dimensionUnit) return;
+
+    setLength((prev) => convertDimensionText(prev, dimensionUnit, nextUnit));
+    setWidth((prev) => convertDimensionText(prev, dimensionUnit, nextUnit));
+    setHeight((prev) => convertDimensionText(prev, dimensionUnit, nextUnit));
+    setDimensionUnit(nextUnit);
+  }
+
   function onContinue() {
     if (!vendorId) {
       Alert.alert("Vendor not loaded", "Please ensure vendorSlice has vendor.id.");
       return;
     }
 
-    const w = Number(sanitizeNumber(weight));
-    const l = Number(sanitizeNumber(length));
-    const wi = Number(sanitizeNumber(width));
-    const h = Number(sanitizeNumber(height));
+    const w = positiveNumberFromText(weight);
+    const lengthInput = positiveNumberFromText(length);
+    const widthInput = positiveNumberFromText(width);
+    const heightInput = positiveNumberFromText(height);
+    const l = dimensionToCm(length, dimensionUnit);
+    const wi = dimensionToCm(width, dimensionUnit);
+    const h = dimensionToCm(height, dimensionUnit);
 
     if (!Number.isFinite(w) || w <= 0) {
       Alert.alert("Invalid weight", "Enter valid weight in kg.");
@@ -239,16 +335,21 @@ export default function Q06CShipping() {
       !Number.isFinite(h) ||
       h <= 0
     ) {
-      Alert.alert("Invalid dimensions", "Enter valid package dimensions in cm.");
+      Alert.alert("Invalid dimensions", "Enter valid package dimensions.");
       return;
     }
 
     patchSpec({
       weight_kg: w,
+      package_dimension_unit: dimensionUnit,
+      package_in:
+        dimensionUnit === "in"
+          ? { length: lengthInput, width: widthInput, height: heightInput }
+          : null,
       package_cm: {
-        length: l,
-        width: wi,
-        height: h,
+        length: Math.round(l * 100) / 100,
+        width: Math.round(wi * 100) / 100,
+        height: Math.round(h * 100) / 100,
       },
     });
 
@@ -282,123 +383,95 @@ export default function Q06CShipping() {
         : "#86EFAC";
 
   return (
-    <View style={apStyles.screen}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={apStyles.screen}
-        contentContainerStyle={apStyles.content}
-      >
-        <View style={apStyles.headerRow}>
-          <Text style={apStyles.title}>Shipping details</Text>
-
-          <Pressable
-            onPress={closeScreen}
-            style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
-          >
-            <Text style={apStyles.linkText}>Close</Text>
-          </Pressable>
-        </View>
-
-        <View style={apStyles.card}>
-          <Text style={apStyles.label}>Weight (kg) *</Text>
-          <TextInput
+    <AddProductScreen
+      title="Shipping details"
+      onBack={closeScreen}
+      footer={
+        <AddProductFooter
+          onPrimaryPress={onContinue}
+          primaryDisabled={!canContinue}
+          disabledHint={disabledHint}
+        />
+      }
+    >
+      <AddProductCard>
+        <AddProductField label="Weight (kg)" required style={{ marginTop: 0 }}>
+          <FastNumberInput
             ref={weightRef}
             value={weight}
-            onChangeText={(t) => setWeight(sanitizeNumber(t))}
+            onChangeText={setWeight}
             placeholder="e.g., 1.2"
             placeholderTextColor={apColors.muted}
             style={apStyles.input}
             keyboardType="decimal-pad"
             maxLength={6}
+            returnKeyType="next"
           />
+        </AddProductField>
 
-          <Text
-            style={{
-              fontSize: 15,
-              fontWeight: "700",
-              color: apColors.text,
-              marginTop: 14,
-              marginBottom: 6,
-            }}
-          >
-            Package dimensions (cm)
-          </Text>
+        <AddProductField label="Package dimensions">
+          <View style={styles.unitRow}>
+            <AddProductChip
+              label="cm"
+              selected={dimensionUnit === "cm"}
+              onPress={() => onChangeDimensionUnit("cm")}
+            />
+            <AddProductChip
+              label="in"
+              selected={dimensionUnit === "in"}
+              onPress={() => onChangeDimensionUnit("in")}
+            />
+          </View>
 
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              marginTop: 8,
-            }}
-          >
-            <View style={{ width: "32%" }}>
+          <View style={styles.dimensionRow}>
+            <View style={styles.dimensionField}>
               <Text style={apStyles.label}>Length</Text>
-              <TextInput
+              <FastNumberInput
                 value={length}
-                onChangeText={(t) => setLength(sanitizeNumber(t))}
+                onChangeText={setLength}
                 placeholder="L"
                 placeholderTextColor={apColors.muted}
                 style={apStyles.input}
                 keyboardType="decimal-pad"
+                returnKeyType="next"
               />
             </View>
 
-            <View style={{ width: "32%" }}>
+            <View style={styles.dimensionField}>
               <Text style={apStyles.label}>Width</Text>
-              <TextInput
+              <FastNumberInput
                 value={width}
-                onChangeText={(t) => setWidth(sanitizeNumber(t))}
+                onChangeText={setWidth}
                 placeholder="W"
                 placeholderTextColor={apColors.muted}
                 style={apStyles.input}
                 keyboardType="decimal-pad"
+                returnKeyType="next"
               />
             </View>
 
-            <View style={{ width: "32%" }}>
+            <View style={styles.dimensionField}>
               <Text style={apStyles.label}>Height</Text>
-              <TextInput
+              <FastNumberInput
                 value={height}
-                onChangeText={(t) => setHeight(sanitizeNumber(t))}
+                onChangeText={setHeight}
                 placeholder="H"
                 placeholderTextColor={apColors.muted}
                 style={apStyles.input}
                 keyboardType="decimal-pad"
+                returnKeyType="done"
               />
             </View>
           </View>
+        </AddProductField>
 
-          <View
-            style={{
-              marginTop: 12,
-              padding: 10,
-              borderWidth: 1,
-              borderColor: apColors.border,
-              borderRadius: 12,
-              backgroundColor: apColors.blueSoft,
-              gap: 4,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 10,
-                lineHeight: 14,
-                color: apColors.subText,
-                fontWeight: "600",
-              }}
-            >
+          <View style={styles.preview}>
+            <Text style={styles.previewText}>
               Used for courier calculation (actual vs volumetric).
             </Text>
 
             {!!shippingPreview.actualWeightKg && (
-              <Text
-                style={{
-                  fontSize: 10,
-                  lineHeight: 14,
-                  color: apColors.subText,
-                  fontWeight: "600",
-                }}
-              >
+              <Text style={styles.previewText}>
                 Actual Weight: {shippingPreview.actualWeightKg.toFixed(2)} kg
               </Text>
             )}
@@ -406,101 +479,54 @@ export default function Q06CShipping() {
             {!!shippingPreview.lengthCm &&
               !!shippingPreview.widthCm &&
               !!shippingPreview.heightCm && (
-                <Text
-                  style={{
-                    fontSize: 10,
-                    lineHeight: 14,
-                    color: apColors.subText,
-                    fontWeight: "600",
-                  }}
-                >
-                  Rated Dimensions: {shippingPreview.lengthCm} × {shippingPreview.widthCm} ×{" "}
+                <Text style={styles.previewText}>
+                  Rated Dimensions: {shippingPreview.lengthCm} x {shippingPreview.widthCm} x{" "}
                   {shippingPreview.heightCm} cm
                 </Text>
               )}
 
             {!!shippingPreview.dimensionalWeightKg && (
-              <Text
-                style={{
-                  fontSize: 10,
-                  lineHeight: 14,
-                  color: apColors.subText,
-                  fontWeight: "600",
-                }}
-              >
+              <Text style={styles.previewMetricText}>
                 Dimensional Weight: {shippingPreview.dimensionalWeightKg.toFixed(2)} kg
               </Text>
             )}
 
             {!!shippingPreview.roundedChargeableWeightKg && (
-              <Text
-                style={{
-                  fontSize: 10,
-                  lineHeight: 14,
-                  color: apColors.text,
-                  fontWeight: "800",
-                }}
-              >
+              <Text style={styles.previewStrongText}>
                 Chargeable Weight: {shippingPreview.roundedChargeableWeightKg.toFixed(1)} kg
               </Text>
             )}
 
             {!!shippingPreview.roundedChargeableWeightKg && (
               <View
-                style={{
-                  marginTop: 4,
-                  paddingHorizontal: 8,
-                  paddingVertical: 7,
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: efficiencyBorder,
-                  backgroundColor: efficiencyBg,
-                  gap: 3,
-                }}
+                style={[
+                  styles.efficiencyBox,
+                  { borderColor: efficiencyBorder, backgroundColor: efficiencyBg },
+                ]}
               >
                 <Text
-                  style={{
-                    fontSize: 10,
-                    lineHeight: 14,
-                    color: efficiencyColor,
-                    fontWeight: "800",
-                  }}
+                  style={[styles.efficiencyTitle, { color: efficiencyColor }]}
                 >
                   Packaging Status: {shippingPreview.efficiencyLabel}
                 </Text>
 
                 {shippingPreview.warningText ? (
                   <Text
-                    style={{
-                      fontSize: 10,
-                      lineHeight: 14,
-                      color: efficiencyColor,
-                      fontWeight: "600",
-                    }}
+                    style={[styles.efficiencyText, { color: efficiencyColor }]}
                   >
-                    ⚠️ {shippingPreview.warningText}
+                    Warning: {shippingPreview.warningText}
                   </Text>
                 ) : (
                   <Text
-                    style={{
-                      fontSize: 10,
-                      lineHeight: 14,
-                      color: efficiencyColor,
-                      fontWeight: "600",
-                    }}
+                    style={[styles.efficiencyText, { color: efficiencyColor }]}
                   >
-                    ✓ Package size looks efficient for the entered physical weight.
+                    OK: Package size looks efficient for the entered physical weight.
                   </Text>
                 )}
 
                 {shippingPreview.suggestionText ? (
                   <Text
-                    style={{
-                      fontSize: 10,
-                      lineHeight: 14,
-                      color: efficiencyColor,
-                      fontWeight: "600",
-                    }}
+                    style={[styles.efficiencyText, { color: efficiencyColor }]}
                   >
                     Suggestion: {shippingPreview.suggestionText}
                   </Text>
@@ -509,41 +535,17 @@ export default function Q06CShipping() {
             )}
 
             {!!shippingPreview.inlandAmountPkr && (
-              <Text
-                style={{
-                  fontSize: 10,
-                  lineHeight: 14,
-                  color: apColors.text,
-                  fontWeight: "700",
-                  marginTop: 2,
-                }}
-              >
-                Inland Estimated Courier (avg Pakistan distance): PKR {shippingPreview.inlandAmountPkr}
+              <Text style={styles.previewAmountText}>
+                Within Pakistan Estimated Courier (avg distance): PKR {shippingPreview.inlandAmountPkr}
               </Text>
             )}
 
-            <Text
-              style={{
-                fontSize: 10,
-                lineHeight: 14,
-                color: apColors.text,
-                fontWeight: "700",
-                marginTop: 4,
-              }}
-            >
+            <Text style={styles.previewHeadingText}>
               Export Estimated Courier:
             </Text>
 
             {shippingPreview.exportAmounts.map((item) => (
-              <Text
-                key={item.region}
-                style={{
-                  fontSize: 10,
-                  lineHeight: 14,
-                  color: apColors.subText,
-                  fontWeight: "600",
-                }}
-              >
+              <Text key={item.region} style={styles.previewText}>
                 {item.region}:{" "}
                 {item.amountPkr && Number(item.amountPkr) > 0
                   ? `PKR ${item.amountPkr}`
@@ -551,20 +553,82 @@ export default function Q06CShipping() {
               </Text>
             ))}
           </View>
-
-          <Pressable
-            style={({ pressed }) => [
-              apStyles.primaryBtn,
-              !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null,
-            ]}
-            onPress={onContinue}
-            disabled={!canContinue}
-          >
-            <Text style={apStyles.primaryText}>Continue</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </View>
+      </AddProductCard>
+    </AddProductScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  unitRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+  },
+  dimensionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
+  dimensionField: {
+    width: "32%",
+  },
+  preview: {
+    marginTop: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: apColors.border,
+    borderRadius: 8,
+    backgroundColor: apColors.blueSoft,
+    gap: 4,
+  },
+  previewText: {
+    fontSize: 10,
+    lineHeight: 14,
+    color: apColors.subText,
+    fontWeight: "600",
+  },
+  previewMetricText: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: apColors.text,
+    fontWeight: "700",
+  },
+  previewStrongText: {
+    fontSize: 13,
+    lineHeight: 17,
+    color: apColors.text,
+    fontWeight: "800",
+  },
+  previewAmountText: {
+    marginTop: 2,
+    fontSize: 10,
+    lineHeight: 14,
+    color: apColors.text,
+    fontWeight: "700",
+  },
+  previewHeadingText: {
+    marginTop: 4,
+    fontSize: 10,
+    lineHeight: 14,
+    color: apColors.text,
+    fontWeight: "700",
+  },
+  efficiencyBox: {
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 3,
+  },
+  efficiencyTitle: {
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: "800",
+  },
+  efficiencyText: {
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: "600",
+  },
+});

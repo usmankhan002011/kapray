@@ -1,9 +1,16 @@
 import React, { useMemo, useRef, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, TextInput } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
+import FastNumberInput from "@/components/product/add-product/FastNumberInput";
+import {
+  AddProductCard,
+  AddProductField,
+  AddProductFooter,
+  AddProductScreen,
+} from "@/components/product/add-product/AddProductWizard";
 
 function sanitizeNumber(input: string) {
   const cleaned = input.replace(/[^\d.]/g, "");
@@ -37,9 +44,14 @@ export default function Q05BUnstitchedCostPerMeter() {
 
   const canContinue = useMemo(() => {
     if (!vendorId) return false;
-    const n = Number(text);
+    const n = Number(sanitizeNumber(text));
     return Number.isFinite(n) && n > 0;
   }, [vendorId, text]);
+  const disabledHint = !vendorId
+    ? "Vendor not loaded."
+    : !canContinue
+      ? "Enter the fabric cost per meter."
+      : "";
 
   useFocusEffect(
     React.useCallback(() => {
@@ -82,30 +94,23 @@ export default function Q05BUnstitchedCostPerMeter() {
   }
 
   return (
-    <View style={apStyles.screen}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={apStyles.screen}
-        contentContainerStyle={apStyles.content}
-      >
-        <View style={apStyles.headerRow}>
-          <Text style={apStyles.title}>Cost per meter</Text>
-
-          <Pressable
-            onPress={closeScreen}
-            style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
-          >
-            <Text style={apStyles.linkText}>Close</Text>
-          </Pressable>
-        </View>
-
-        <View style={apStyles.card}>
-          <Text style={apStyles.label}>Cost per meter (PKR) *</Text>
-
-          <TextInput
+    <AddProductScreen
+      title="Cost per meter"
+      onBack={closeScreen}
+      footer={
+        <AddProductFooter
+          onPrimaryPress={onContinue}
+          primaryDisabled={!canContinue}
+          disabledHint={disabledHint}
+        />
+      }
+    >
+      <AddProductCard>
+        <AddProductField label="Cost per meter (PKR)" required style={{ marginTop: 0 }}>
+          <FastNumberInput
             ref={inputRef}
             value={text}
-            onChangeText={(t) => setText(sanitizeNumber(t))}
+            onChangeText={setText}
             placeholder="e.g., 1800"
             placeholderTextColor={apColors.muted}
             style={apStyles.input}
@@ -113,20 +118,8 @@ export default function Q05BUnstitchedCostPerMeter() {
             maxLength={12}
             returnKeyType="done"
           />
-
-          <Pressable
-            style={({ pressed }) => [
-              apStyles.primaryBtn,
-              !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null,
-            ]}
-            onPress={onContinue}
-            disabled={!canContinue}
-          >
-            <Text style={apStyles.primaryText}>Continue</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </View>
+        </AddProductField>
+      </AddProductCard>
+    </AddProductScreen>
   );
 }

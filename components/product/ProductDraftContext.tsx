@@ -25,6 +25,7 @@ export type ProductDraftPrice = {
   cost_pkr_per_meter?: number | null;
   cost_pkr_total?: number | null;
   available_sizes?: string[];
+  simple_ready_inventory?: Array<{ size: string; qty: number }>;
 };
 
 export type ProductDraftMedia = {
@@ -93,7 +94,8 @@ const DEFAULT_DRAFT: ProductDraft = {
     mode: "stitched_total",
     cost_pkr_per_meter: null,
     cost_pkr_total: null,
-    available_sizes: []
+    available_sizes: [],
+    simple_ready_inventory: []
   },
   media: {
     images: [],

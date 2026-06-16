@@ -1185,6 +1185,9 @@ export default function PlaceOrderScreen() {
         selected_variant_snapshot: base.selectedVariantSnapshot
           ? encodeURIComponent(JSON.stringify(base.selectedVariantSnapshot))
           : "",
+        selected_stitched_variant_snapshot: base.selectedVariantSnapshot
+          ? encodeURIComponent(JSON.stringify(base.selectedVariantSnapshot))
+          : "",
 
         currency: base.currency,
         imageUrl: resolved.imageUrl,
@@ -1345,7 +1348,7 @@ export default function PlaceOrderScreen() {
   const displayCountry = destinationType === "inland" ? "Pakistan" : country;
   const selectedReadyVariantTitle = resolved.shouldShowSelectedStitchedVariant
     ? cleanReadyToWearTitle(
-        base.selectedVariantTitle || "Selected variant",
+        base.selectedVariantTitle || "Selected style",
         resolved.isMadeOrderStitched
           ? ""
           : base.selectedVariantSize || base.sizeLabel,
@@ -1414,7 +1417,7 @@ export default function PlaceOrderScreen() {
                   <>
                     <View style={styles.productMetaInfo}>
                       <Text style={styles.productMetaLabel}>
-                        Selected variant
+                        Selected style
                       </Text>
                       <Text style={styles.productMetaValue}>
                         {selectedReadyVariantTitle || "Not selected"}
@@ -1469,7 +1472,7 @@ export default function PlaceOrderScreen() {
             <SectionCard title="Customization">
               {!resolved.isUnstitched ? (
                 <KVRow
-                  label="Selected variant"
+                  label="Selected style"
                   value={base.selectedVariantTitle || "Not selected"}
                 />
               ) : null}

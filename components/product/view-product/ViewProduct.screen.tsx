@@ -1142,7 +1142,7 @@ export default function ViewProductScreen() {
 
   // Buyer actions control purchase/footer/vendor-profile buttons.
   // Vendor self-view is a read-only preview: it can see offerings,
-  // but cannot select dyeing, tailoring, variants, or purchase.
+  // but cannot select dyeing, tailoring, styles, or purchase.
   const showBuyerActions = isBuyerRoute ? true : !isVendorSelf;
   const showVendorReadOnlyPreview = Boolean(product) && isVendorSelf;
   const showReadOnlyProductOfferings =
@@ -1426,11 +1426,11 @@ export default function ViewProductScreen() {
     if (isStitchedReady && !selectedStitchedVariant) {
       Alert.alert(
         selectedVariantMadeOnOrder
-          ? "Select variant"
-          : "Select variant and size",
+          ? "Select style"
+          : "Select style and size",
         selectedVariantMadeOnOrder
-          ? "Please select a made-on-order variant before continuing."
-          : "Please select a stitched ready-to-wear variant and size before continuing.",
+          ? "Please select a made-on-order style before continuing."
+          : "Please select a stitched ready-to-wear style and size before continuing.",
       );
       return;
     }
@@ -2458,7 +2458,7 @@ export default function ViewProductScreen() {
                   <Text
                     style={[styles.sectionTitle, { color: stylesVars.blue }]}
                   >
-                    Selected Variant
+                    Selected Style
                   </Text>
 
                   <View
@@ -2530,7 +2530,7 @@ export default function ViewProductScreen() {
                       Base Cost: PKR {baseCost.toLocaleString()}
                     </Text>
                     <Text style={styles.metaLine}>
-                      Variant Additional Cost: PKR{" "}
+                      Style Additional Cost: PKR{" "}
                       {additionalCost.toLocaleString()}
                     </Text>
                     <Text

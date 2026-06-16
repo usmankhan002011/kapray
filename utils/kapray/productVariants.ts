@@ -14,6 +14,8 @@ export type ReadyVariantSize = {
   qty: number;
 };
 
+export type SimpleReadyInventoryRow = ReadyVariantSize;
+
 export type ReadyVariant = {
   id: string;
   variant_no: number;
@@ -57,6 +59,59 @@ function safeInt(v: unknown) {
   const n = Number(v);
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.trunc(n));
+}
+
+export function normalizeSimpleReadyInventory(
+  v: unknown,
+): SimpleReadyInventoryRow[] {
+  const arr = Array.isArray(v) ? v : [];
+  const seen = new Set<string>();
+  const rows: SimpleReadyInventoryRow[] = [];
+
+  for (const item of arr) {
+    const obj = (item ?? {}) as any;
+    const size = safeStr(
+      typeof item === "string" || typeof item === "number"
+        ? item
+        : obj?.size ?? obj?.label ?? "",
+    );
+    const key = size.toLowerCase();
+
+    if (!size || seen.has(key)) continue;
+    seen.add(key);
+    rows.push({
+      size,
+      qty: safeInt(obj?.qty ?? obj?.stock_qty ?? obj?.stock ?? 0),
+    });
+  }
+
+  return rows;
+}
+
+export function sumSimpleReadyInventory(rows: SimpleReadyInventoryRow[]) {
+  return normalizeSimpleReadyInventory(rows).reduce(
+    (total, row) => total + safeInt(row.qty),
+    0,
+  );
+}
+
+export function validateSimpleReadyInventory(
+  rows: SimpleReadyInventoryRow[],
+) {
+  const cleaned = normalizeSimpleReadyInventory(rows);
+  if (!cleaned.length) return "Please select at least one available size.";
+
+  for (const row of cleaned) {
+    if (!Number.isFinite(Number(row.qty)) || Number(row.qty) < 0) {
+      return `${row.size} has an invalid quantity.`;
+    }
+  }
+
+  if (sumSimpleReadyInventory(cleaned) <= 0) {
+    return "Total stock across sizes must be more than 0.";
+  }
+
+  return "";
 }
 
 export function normalizeReadyVariantImagePaths(v: unknown): string[] {
@@ -130,16 +185,16 @@ export function normalizeReadyVariantImages(v: unknown): ReadyVariantImage[] {
 
 export function buildReadyVariantDisplayName(variantNo: number, name: string) {
   const clean = safeStr(name);
-  return clean ? `Variant ${variantNo}: ${clean}` : `Variant ${variantNo}`;
+  return clean ? `Style ${variantNo}: ${clean}` : `Style ${variantNo}`;
 }
 
 export function makeReadyVariant(variantNo: number): ReadyVariant {
   return {
     id: `variant-${variantNo}`,
     variant_no: variantNo,
-    label: `Variant ${variantNo}`,
+    label: `Style ${variantNo}`,
     name: "",
-    display_name: `Variant ${variantNo}`,
+    display_name: `Style ${variantNo}`,
     additional_price_pkr: 0,
     image_paths: [],
     images: [],
@@ -176,7 +231,9 @@ export function normalizeReadyVariant(v: unknown, index: number): ReadyVariant {
   return {
     id: safeStr(obj?.id) || `variant-${variantNo}`,
     variant_no: variantNo,
-    label: safeStr(obj?.label) || `Variant ${variantNo}`,
+    label:
+      safeStr(obj?.label).replace(/^Variant\b/i, "Style") ||
+      `Style ${variantNo}`,
     name,
     display_name:
       safeStr(obj?.display_name) ||
@@ -216,7 +273,7 @@ export function getReadyVariantFinalPrice(
 }
 
 export function validateReadyVariants(variants: ReadyVariant[]) {
-  if (!variants?.length) return "Please add at least one variant.";
+  if (!variants?.length) return "Please add at least one style.";
 
   for (const variant of variants) {
     const title = variant.display_name || variant.label;
@@ -248,7 +305,7 @@ export function validateReadyVariants(variants: ReadyVariant[]) {
   }
 
   const totalQty = sumReadyVariantQty(variants);
-  if (totalQty <= 0) return "Total stock across variants must be more than 0.";
+  if (totalQty <= 0) return "Total stock across styles must be more than 0.";
 
   return "";
 }
@@ -258,16 +315,16 @@ export function buildMadeOrderVariantDisplayName(
   name: string,
 ) {
   const clean = safeStr(name);
-  return clean ? `Variant ${variantNo}: ${clean}` : `Variant ${variantNo}`;
+  return clean ? `Style ${variantNo}: ${clean}` : `Style ${variantNo}`;
 }
 
 export function makeMadeOrderVariant(variantNo: number): MadeOrderVariant {
   return {
     id: `made-order-variant-${variantNo}`,
     variant_no: variantNo,
-    label: `Variant ${variantNo}`,
+    label: `Style ${variantNo}`,
     name: "",
-    display_name: `Variant ${variantNo}`,
+    display_name: `Style ${variantNo}`,
     additional_price_pkr: 0,
     estimated_days: 7,
     image_paths: [],
@@ -294,7 +351,9 @@ export function normalizeMadeOrderVariant(
   return {
     id: safeStr(obj?.id) || `made-order-variant-${variantNo}`,
     variant_no: variantNo,
-    label: safeStr(obj?.label) || `Variant ${variantNo}`,
+    label:
+      safeStr(obj?.label).replace(/^Variant\b/i, "Style") ||
+      `Style ${variantNo}`,
     name,
     display_name:
       safeStr(obj?.display_name) ||
@@ -324,7 +383,7 @@ export function getMadeOrderVariantFinalPrice(
 
 export function validateMadeOrderVariants(variants: MadeOrderVariant[]) {
   if (!variants?.length)
-    return "Please add at least one made-on-order variant.";
+    return "Please add at least one made-on-order style.";
 
   for (const variant of variants) {
     const title = variant.display_name || variant.label;

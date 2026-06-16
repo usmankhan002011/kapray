@@ -14,7 +14,7 @@ export type StitchedVariantSize = {
   qty: number;
 };
 
-type VariantMode = "ready_variants" | "made_order_variants" | "";
+type VariantMode = "ready_variants" | "made_order_variants" | "simple_ready" | "";
 
 type ReadyVariantCard = {
   id: string;
@@ -94,7 +94,7 @@ type Props = {
   /** Kept for compatibility; this component does not auto-select a purchasable size. */
   autoSelectFirstAvailable?: boolean;
 
-  /** Read-only preview mode for vendor self-view. No variant/size selection actions. */
+  /** Read-only preview mode for vendor self-view. No style/size selection actions. */
   readOnly?: boolean;
 };
 
@@ -300,7 +300,13 @@ function getVariantMode(product: any): VariantMode {
       "",
   );
 
-  if (mode === "ready_variants" || mode === "made_order_variants") return mode;
+  if (
+    mode === "ready_variants" ||
+    mode === "made_order_variants" ||
+    mode === "simple_ready"
+  ) {
+    return mode;
+  }
   return "";
 }
 
@@ -343,6 +349,25 @@ function getRawMadeOrderVariants(product: any) {
     spec?.madeOrderVariants ??
     inventory?.made_order_variants ??
     inventory?.madeOrderVariants ??
+    [];
+
+  return Array.isArray(raw) ? raw : [];
+}
+
+function getRawSimpleReadyInventory(product: any) {
+  const price = product?.price ?? {};
+  const spec = product?.spec ?? {};
+  const inventory = product?.inventory ?? {};
+
+  const raw =
+    price?.simple_ready_inventory ??
+    price?.simpleReadyInventory ??
+    spec?.simple_ready_inventory ??
+    spec?.simpleReadyInventory ??
+    inventory?.simple_ready_inventory ??
+    inventory?.simpleReadyInventory ??
+    product?.simple_ready_inventory ??
+    product?.simpleReadyInventory ??
     [];
 
   return Array.isArray(raw) ? raw : [];
@@ -403,10 +428,12 @@ function normalizeReadyVariantCards(
       const name = safeText(
         v?.name ?? v?.color ?? v?.design ?? v?.title ?? v?.label ?? "",
       );
-      const label = safeText(v?.label) || `Variant ${variantNo}`;
+      const label =
+        safeText(v?.label).replace(/^Variant\b/i, "Style") ||
+        `Style ${variantNo}`;
       const displayName =
         safeText(v?.display_name ?? v?.displayName) ||
-        (name ? `Variant ${variantNo}: ${name}` : label);
+        (name ? `Style ${variantNo}: ${name}` : label);
       const additionalPrice = safeNumber(
         v?.additional_price_pkr ??
           v?.additionalPricePkr ??
@@ -443,6 +470,75 @@ function normalizeReadyVariantCards(
     .filter((v: ReadyVariantCard | null): v is ReadyVariantCard => Boolean(v));
 }
 
+function normalizeSimpleReadyCard(
+  product: any,
+  resolvePublicUrl?: (path: string | null | undefined) => string | null,
+  resolveManyPublic?: (paths: any) => string[],
+): ReadyVariantCard | null {
+  const price = product?.price ?? {};
+  const rawRows = getRawSimpleReadyInventory(product);
+
+  let sizes = normalizeSizeRows({ sizes: rawRows }).filter(
+    (row) => !!row.size,
+  );
+
+  if (!sizes.length && Array.isArray(price?.available_sizes)) {
+    const fallbackQty = safeInt(product?.inventory_qty ?? price?.inventory_qty);
+    sizes = price.available_sizes
+      .map((size: unknown): StitchedVariantSize => ({
+        size: safeText(size),
+        qty: fallbackQty,
+      }))
+      .filter((row: StitchedVariantSize) => !!row.size);
+  }
+
+  if (!sizes.length) return null;
+
+  const media = product?.media ?? {};
+  const imagePaths = uniqueNonEmpty([
+    ...safeArray(media?.image_paths),
+    ...safeArray(media?.imagePaths),
+    ...safeArray(media?.images),
+    ...safeArray(media?.image_urls),
+    ...safeArray(media?.imageUrls),
+    product?.image_path,
+    product?.imagePath,
+    product?.image,
+    product?.image_url,
+    product?.imageUrl,
+    product?.thumbnail_path,
+    product?.thumbnailPath,
+    product?.thumbnail_url,
+    product?.thumbnailUrl,
+  ].map((item) => {
+    if (typeof item === "string" || typeof item === "number") {
+      return safeText(item);
+    }
+    return rawImageFromObject(item);
+  }));
+
+  return {
+    id: "simple-ready",
+    variant_no: 1,
+    label: "Ready-to-wear",
+    name: "",
+    display_name: "Ready-to-wear",
+    additional_price_pkr: 0,
+    image_paths: imagePaths,
+    imageUrls: resolveVariantImageUrls(
+      imagePaths,
+      resolvePublicUrl,
+      resolveManyPublic,
+    ),
+    sizes,
+    raw: {
+      id: "simple-ready",
+      variant_mode: "simple_ready",
+      simple_ready_inventory: sizes,
+    },
+  };
+}
+
 function normalizeMadeOrderVariantCards(
   product: any,
   resolvePublicUrl?: (path: string | null | undefined) => string | null,
@@ -456,10 +552,12 @@ function normalizeMadeOrderVariantCards(
 
       const variantNo = safeInt(v?.variant_no ?? v?.variantNo) || index + 1;
       const name = safeText(v?.name ?? v?.color ?? v?.design ?? v?.title ?? "");
-      const label = safeText(v?.label) || `Variant ${variantNo}`;
+      const label =
+        safeText(v?.label).replace(/^Variant\b/i, "Style") ||
+        `Style ${variantNo}`;
       const displayName =
         safeText(v?.display_name ?? v?.displayName) ||
-        (name ? `Variant ${variantNo}: ${name}` : label);
+        (name ? `Style ${variantNo}: ${name}` : label);
       const additionalPrice = safeNumber(
         v?.additional_price_pkr ??
           v?.additionalPricePkr ??
@@ -510,6 +608,10 @@ function makeSelection(
 ): StitchedVariant {
   const total = basePrice + variant.additional_price_pkr;
   const title = `${variant.display_name} - ${sizeRow.size}`;
+  const mode =
+    String(variant.raw?.variant_mode ?? "") === "simple_ready"
+      ? "simple_ready"
+      : "ready_variants";
 
   return {
     id: `${variant.id}::${sizeRow.size}`,
@@ -528,7 +630,7 @@ function makeSelection(
     image_paths: variant.image_paths,
     imageUrls: variant.imageUrls,
     made_on_order: false,
-    variant_mode: "ready_variants",
+    variant_mode: mode,
     raw: variant.raw,
     rawVariant: variant,
     rawSize: sizeRow,
@@ -576,11 +678,21 @@ function stockMessage(qty: number) {
   return `${qty} in stock`;
 }
 
+function isAllSize(row: StitchedVariantSize) {
+  return safeText(row?.size).toLowerCase() === "all";
+}
+
 export function normalizeStitchedVariants(product: any): StitchedVariant[] {
   const basePrice = getProductBasePrice(product);
   const cards = normalizeReadyVariantCards(product);
+  const simpleReadyCard = normalizeSimpleReadyCard(product);
+  const displayCards = cards.length
+    ? cards
+    : simpleReadyCard
+      ? [simpleReadyCard]
+      : [];
 
-  return cards.flatMap((variant) =>
+  return displayCards.flatMap((variant) =>
     variant.sizes.map((sizeRow) => makeSelection(variant, sizeRow, basePrice)),
   );
 }
@@ -641,6 +753,20 @@ export default function ViewProductStitchedVariants({
     [product, resolveManyPublic, resolvePublicUrl],
   );
 
+  const simpleReadyCard = useMemo(
+    () =>
+      normalizeSimpleReadyCard(product, resolvePublicUrl, resolveManyPublic),
+    [product, resolveManyPublic, resolvePublicUrl],
+  );
+
+  const displayReadyVariants = variants.length
+    ? variants
+    : simpleReadyCard
+      ? [simpleReadyCard]
+      : [];
+
+  const showingSimpleReady = !variants.length && !!simpleReadyCard;
+
   useEffect(() => {
     const selectedRawId = selectedVariant?.rawVariant?.id;
     if (selectedRawId) {
@@ -652,13 +778,21 @@ export default function ViewProductStitchedVariants({
     return (
       <View style={styles.card}>
         <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>
-          {readOnly ? "Variants Offered" : "Choose a Variant"}
+          {readOnly ? "Styles Offered" : "Choose a Style"}
         </Text>
         {!readOnly ? (
           <Text style={[styles.meta, { marginTop: 4 }]}></Text>
         ) : null}
 
-        <View style={{ marginTop: 12, gap: 14 }}>
+        <View
+          style={{
+            marginTop: 12,
+            flexDirection: "row",
+            flexWrap: "wrap",
+            justifyContent: "space-between",
+            rowGap: 12,
+          }}
+        >
           {madeOrderVariants.map((variant, index) => {
             const isActive = activeVariantId === variant.id;
             const finalPrice = basePrice + variant.additional_price_pkr;
@@ -678,8 +812,9 @@ export default function ViewProductStitchedVariants({
                     borderColor: isActive ? stylesVars.blue : "#D7E3FF",
                     backgroundColor: isActive ? "#F7FAFF" : "#FFFFFF",
                     borderRadius: 16,
-                    padding: 12,
+                    padding: 10,
                     gap: 10,
+                    width: "48.2%",
                   },
                   pressed && !readOnly ? styles.pressed : null,
                 ]}
@@ -692,7 +827,7 @@ export default function ViewProductStitchedVariants({
                       color: stylesVars.text,
                     }}
                   >
-                    Variant {index + 1}
+                    Style {index + 1}
                   </Text>
                 ) : null}
 
@@ -718,8 +853,8 @@ export default function ViewProductStitchedVariants({
                         <Image
                           source={{ uri }}
                           style={{
-                            width: Math.min(210, width - 90),
-                            height: 170,
+                            width: 128,
+                            height: 180,
                             borderRadius: 14,
                             backgroundColor: "#EEF2F7",
                           }}
@@ -731,14 +866,14 @@ export default function ViewProductStitchedVariants({
                 ) : (
                   <View
                     style={{
-                      height: 150,
+                      height: 120,
                       borderRadius: 14,
                       backgroundColor: "#EEF2F7",
                       alignItems: "center",
                       justifyContent: "center",
                     }}
                   >
-                    <Text style={styles.meta}>No variant image</Text>
+                    <Text style={styles.meta}>No style image</Text>
                   </View>
                 )}
 
@@ -803,7 +938,7 @@ export default function ViewProductStitchedVariants({
                           color: isActive ? "#FFFFFF" : stylesVars.blue,
                         }}
                       >
-                        {isActive ? "Variant Selected" : "Tap to Select"}
+                        {isActive ? "Style Selected" : "Tap to Select"}
                       </Text>
                     </View>
 
@@ -857,23 +992,38 @@ export default function ViewProductStitchedVariants({
     );
   }
 
-  if (!variants.length) return null;
+  if (!displayReadyVariants.length) return null;
 
   return (
     <View style={styles.card}>
       <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>
-        {readOnly ? "Product Variants Offered" : "Choose a Variant"}
+        {showingSimpleReady
+          ? readOnly
+            ? "Ready-to-wear Sizes Offered"
+            : "Choose a Size"
+          : readOnly
+            ? "Product Styles Offered"
+            : "Choose a Style"}
       </Text>
 
-      <View style={{ marginTop: 12, gap: 14 }}>
-        {variants.map((variant) => {
+      <View
+        style={{
+          marginTop: 12,
+          flexDirection: "row",
+          flexWrap: "wrap",
+          justifyContent: "space-between",
+          rowGap: 12,
+        }}
+      >
+        {displayReadyVariants.map((variant) => {
+          const visibleSizes = variant.sizes.filter((row) => !isAllSize(row));
           const isActive = activeVariantId === variant.id;
           const selectedSize =
             selectedVariant?.rawVariant?.id === variant.id
               ? selectedVariant?.size
               : "";
           const finalPrice = basePrice + variant.additional_price_pkr;
-          const hasAvailableSize = variant.sizes.some((row) => row.qty > 0);
+          const hasAvailableSize = visibleSizes.some((row) => row.qty > 0);
 
           return (
             <View
@@ -883,8 +1033,9 @@ export default function ViewProductStitchedVariants({
                 borderColor: isActive ? stylesVars.blue : "#D7E3FF",
                 backgroundColor: isActive ? "#F7FAFF" : "#FFFFFF",
                 borderRadius: 16,
-                padding: 12,
+                padding: 10,
                 gap: 10,
+                width: showingSimpleReady ? "100%" : "48.2%",
               }}
             >
               {variant.imageUrls.length ? (
@@ -909,8 +1060,10 @@ export default function ViewProductStitchedVariants({
                       <Image
                         source={{ uri }}
                         style={{
-                          width: Math.min(210, width - 90),
-                          height: 170,
+                          width: showingSimpleReady ? width - 64 : 128,
+                          height: showingSimpleReady
+                            ? Math.min(420, (width - 64) * 1.18)
+                            : 180,
                           borderRadius: 14,
                           backgroundColor: "#EEF2F7",
                         }}
@@ -922,14 +1075,16 @@ export default function ViewProductStitchedVariants({
               ) : (
                 <View
                   style={{
-                    height: 150,
+                    height: showingSimpleReady
+                      ? Math.min(360, (width - 64) * 0.85)
+                      : 120,
                     borderRadius: 14,
                     backgroundColor: "#EEF2F7",
                     alignItems: "center",
                     justifyContent: "center",
                   }}
                 >
-                  <Text style={styles.meta}>No variant image</Text>
+                  <Text style={styles.meta}>No style image</Text>
                 </View>
               )}
 
@@ -953,9 +1108,11 @@ export default function ViewProductStitchedVariants({
                 <Text style={styles.metaLine}>
                   Base price: {money(basePrice)}
                 </Text>
-                <Text style={styles.metaLine}>
-                  Additional cost: {money(variant.additional_price_pkr)}
-                </Text>
+                {!showingSimpleReady ? (
+                  <Text style={styles.metaLine}>
+                    Additional cost: {money(variant.additional_price_pkr)}
+                  </Text>
+                ) : null}
                 <Text
                   style={[
                     styles.metaLine,
@@ -972,7 +1129,7 @@ export default function ViewProductStitchedVariants({
                 ) : null}
               </View>
 
-              {!readOnly ? (
+              {!readOnly && !showingSimpleReady ? (
                 <View
                   style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}
                 >
@@ -1002,7 +1159,7 @@ export default function ViewProductStitchedVariants({
                         color: isActive ? "#FFFFFF" : stylesVars.blue,
                       }}
                     >
-                      {isActive ? "Variant Selected" : "Select Variant"}
+                      {isActive ? "Style Selected" : "Select Style"}
                     </Text>
                   </Pressable>
 
@@ -1039,7 +1196,7 @@ export default function ViewProductStitchedVariants({
                 </View>
               ) : null}
 
-              {readOnly || isActive ? (
+              {readOnly || isActive || showingSimpleReady ? (
                 <View style={{ gap: 8 }}>
                   <Text
                     style={[
@@ -1055,7 +1212,7 @@ export default function ViewProductStitchedVariants({
                   <View
                     style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}
                   >
-                    {variant.sizes.map((row: StitchedVariantSize) => {
+                    {visibleSizes.map((row: StitchedVariantSize) => {
                       const out = row.qty <= 0;
                       const low = row.qty > 0 && row.qty <= 2;
                       const selected = !readOnly && selectedSize === row.size;
@@ -1070,7 +1227,7 @@ export default function ViewProductStitchedVariants({
                           }}
                           style={({ pressed }) => [
                             {
-                              width: 92,
+                              width: "48%",
                               minHeight: 74,
                               borderRadius: 14,
                               paddingHorizontal: 10,
@@ -1220,7 +1377,7 @@ function VariantPreviewModal({
                   color: stylesVars.text,
                 }}
               >
-                {previewVariant?.display_name ?? "Variant"}
+                {previewVariant?.display_name ?? "Style"}
               </Text>
 
               <Pressable

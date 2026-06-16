@@ -11,7 +11,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import {
   loadFavouriteProductIds,
@@ -185,6 +185,77 @@ function getVariantInventorySummary(product: any): VariantInventorySummary {
   };
 }
 
+function getRawSimpleReadyInventory(product: any): any[] {
+  const price = product?.price ?? {};
+  const spec = product?.spec ?? {};
+  const inventory = product?.inventory ?? {};
+
+  const raw =
+    price?.simple_ready_inventory ??
+    price?.simpleReadyInventory ??
+    spec?.simple_ready_inventory ??
+    spec?.simpleReadyInventory ??
+    inventory?.simple_ready_inventory ??
+    inventory?.simpleReadyInventory ??
+    [];
+
+  return Array.isArray(raw) ? raw : [];
+}
+
+function getSimpleReadyInventorySummary(
+  product: ProductRow,
+): VariantInventorySummary {
+  const rows = getRawSimpleReadyInventory(product);
+  let totalQty = 0;
+  let lowestPositiveQty = Infinity;
+  const availableSizeSet = new Set<string>();
+
+  for (const row of rows) {
+    const size = String(row?.size ?? row?.label ?? row?.name ?? "")
+      .trim()
+      .toUpperCase();
+    const qty = safeStockQty(
+      row?.qty ?? row?.stock_qty ?? row?.stock ?? row?.quantity ?? 0,
+    );
+
+    if (qty <= 0) continue;
+    totalQty += qty;
+    if (size) availableSizeSet.add(size);
+    lowestPositiveQty = Math.min(lowestPositiveQty, qty);
+  }
+
+  if (totalQty <= 0) {
+    totalQty = safeStockQty(product?.inventory_qty);
+  }
+
+  if (!availableSizeSet.size && totalQty > 0) {
+    for (const item of normalizeIds(product?.price?.available_sizes)) {
+      availableSizeSet.add(item.toUpperCase());
+    }
+  }
+
+  return {
+    totalQty,
+    availableSizes: availableSizeSet.size,
+    lowestPositiveQty:
+      lowestPositiveQty === Infinity ? totalQty : lowestPositiveQty,
+    hasStock: totalQty > 0,
+  };
+}
+
+function getStitchedInventorySummary(
+  product: ProductRow,
+): VariantInventorySummary {
+  const mode = String(product?.spec?.variant_mode ?? "").trim();
+  const variantSummary = getVariantInventorySummary(product);
+
+  if (mode === "ready_variants") return variantSummary;
+  if (mode === "simple_ready") return getSimpleReadyInventorySummary(product);
+  if (variantSummary.hasStock) return variantSummary;
+
+  return getSimpleReadyInventorySummary(product);
+}
+
 function getProductCategory(product: ProductRow): ProductCategory | null {
   const fromDb = product?.product_category;
   if (fromDb) return fromDb;
@@ -213,7 +284,7 @@ function productHasBuyerVisibleStock(product: ProductRow) {
   if (Boolean(product?.made_on_order)) return true;
 
   if (isStitchedReadyProduct(product)) {
-    return getVariantInventorySummary(product).hasStock;
+    return getStitchedInventorySummary(product).hasStock;
   }
 
   return safeStockQty(product?.inventory_qty) > 0;
@@ -222,7 +293,7 @@ function stockBadgeText(product: ProductRow) {
   if (Boolean(product?.made_on_order)) return "Made on order";
 
   if (isStitchedReadyProduct(product)) {
-    const info = getVariantInventorySummary(product);
+    const info = getStitchedInventorySummary(product);
 
     if (!info.hasStock) return "Out of stock";
 
@@ -459,6 +530,34 @@ export default function ResultsScreen() {
       .order("created_at", { ascending: false })
       .range(from, to);
   }
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!RESULTS_CACHE) return;
+
+      let alive = true;
+
+      async function refreshProducts() {
+        const { data, error } = await fetchPage(0, PAGE_SIZE - 1);
+        if (!alive || error) return;
+
+        const rows = ((data as any) ?? []) as ProductRow[];
+        const nextHasMore = rows.length === PAGE_SIZE;
+
+        setProducts(rows);
+        setHasMore(nextHasMore);
+        RESULTS_CACHE = RESULTS_CACHE
+          ? { ...RESULTS_CACHE, products: rows, hasMore: nextHasMore }
+          : RESULTS_CACHE;
+      }
+
+      void refreshProducts();
+
+      return () => {
+        alive = false;
+      };
+    }, []),
+  );
 
   useEffect(() => {
     let alive = true;

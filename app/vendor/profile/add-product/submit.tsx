@@ -3,9 +3,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -16,10 +13,20 @@ import * as VideoThumbnails from "expo-video-thumbnails";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { supabase } from "@/utils/supabase/client";
+import {
+  AddProductCard,
+  AddProductFooter,
+  AddProductNotice,
+  AddProductScreen,
+} from "@/components/product/add-product/AddProductWizard";
+import { apStyles } from "@/components/product/addProductStyles";
 
 import {
   normalizeReadyVariants,
+  normalizeSimpleReadyInventory,
+  sumSimpleReadyInventory,
   sumReadyVariantQty,
+  validateSimpleReadyInventory,
   validateReadyVariants,
   normalizeMadeOrderVariants,
   validateMadeOrderVariants,
@@ -596,6 +603,9 @@ export default function AddProductSubmitScreen() {
     !madeOnOrder &&
     safeStr((draft.spec as any)?.variant_mode) === "ready_variants";
 
+  const isSimpleReady =
+    productCategory === "stitched_ready" && !madeOnOrder && !hasReadyVariants;
+
   const readyVariants = useMemo(
     () => normalizeReadyVariants((draft.price as any)?.variants),
     [draft.price],
@@ -604,6 +614,19 @@ export default function AddProductSubmitScreen() {
   const readyVariantQty = useMemo(
     () => sumReadyVariantQty(readyVariants),
     [readyVariants],
+  );
+
+  const simpleReadyInventory = useMemo(
+    () =>
+      normalizeSimpleReadyInventory(
+        (draft.price as any)?.simple_ready_inventory,
+      ),
+    [draft.price],
+  );
+
+  const simpleReadyQty = useMemo(
+    () => sumSimpleReadyInventory(simpleReadyInventory),
+    [simpleReadyInventory],
   );
 
   const madeOrderVariants = useMemo(
@@ -654,6 +677,13 @@ export default function AddProductSubmitScreen() {
         const variantError = validateReadyVariants(readyVariants);
         if (variantError) return false;
       }
+
+      if (isSimpleReady) {
+        const inventoryError = validateSimpleReadyInventory(
+          simpleReadyInventory,
+        );
+        if (inventoryError) return false;
+      }
     } else {
       const n = Number((draft.price as any)?.cost_pkr_per_meter ?? 0);
       if (!Number.isFinite(n) || n <= 0) return false;
@@ -691,7 +721,7 @@ export default function AddProductSubmitScreen() {
     if ((draft.media.images ?? []).length < 1) return false;
     if ((draft.spec.dressTypeIds ?? []).length < 1) return false;
 
-    if (!madeOnOrder && !hasReadyVariants) {
+    if (isUnstitched) {
       const q = Number(draft.inventory_qty ?? 0);
       if (!Number.isFinite(q) || q < 0) return false;
     }
@@ -708,6 +738,8 @@ export default function AddProductSubmitScreen() {
     madeOnOrder,
     productCategory,
     hasReadyVariants,
+    isSimpleReady,
+    simpleReadyInventory,
     readyVariants,
     readyVariantQty,
     madeOrderVariants,
@@ -723,6 +755,13 @@ export default function AddProductSubmitScreen() {
     tailoringStylePresets,
     includesTrouser,
   ]);
+  const saveHint = saving
+    ? "Saving product..."
+    : !vendorId
+      ? "Vendor not loaded."
+      : !canSave
+        ? "Complete missing items in Review before saving."
+        : "";
 
   async function saveProduct() {
     if (saving) return;
@@ -750,7 +789,7 @@ export default function AddProductSubmitScreen() {
       if (madeOnOrder) {
         const variantError = validateMadeOrderVariants(madeOrderVariants);
         if (variantError) {
-          Alert.alert("Invalid variants", variantError);
+          Alert.alert("Invalid styles", variantError);
           return;
         }
       }
@@ -758,7 +797,17 @@ export default function AddProductSubmitScreen() {
       if (hasReadyVariants) {
         const variantError = validateReadyVariants(readyVariants);
         if (variantError) {
-          Alert.alert("Incomplete ready variants", variantError);
+          Alert.alert("Incomplete ready styles", variantError);
+          return;
+        }
+      }
+
+      if (isSimpleReady) {
+        const inventoryError = validateSimpleReadyInventory(
+          simpleReadyInventory,
+        );
+        if (inventoryError) {
+          Alert.alert("Invalid size inventory", inventoryError);
           return;
         }
       }
@@ -861,7 +910,7 @@ export default function AddProductSubmitScreen() {
       return;
     }
 
-    if (!madeOnOrder && !hasReadyVariants) {
+    if (isUnstitched) {
       const q = Number(draft.inventory_qty ?? 0);
       if (!Number.isFinite(q) || q < 0) {
         Alert.alert("Invalid inventory", "Inventory must be 0 or more.");
@@ -872,8 +921,8 @@ export default function AddProductSubmitScreen() {
     if (!madeOnOrder && hasReadyVariants) {
       if (!Number.isFinite(readyVariantQty) || readyVariantQty <= 0) {
         Alert.alert(
-          "Invalid variant stock",
-          "Total stock across ready variants must be more than 0.",
+          "Invalid style stock",
+          "Total stock across ready styles must be more than 0.",
         );
         return;
       }
@@ -886,6 +935,8 @@ export default function AddProductSubmitScreen() {
         ? 0
         : hasReadyVariants
           ? readyVariantQty
+          : isSimpleReady
+            ? simpleReadyQty
           : Number(draft.inventory_qty ?? 0);
 
       const finalCategory: ProductCategory = productCategory;
@@ -962,7 +1013,14 @@ export default function AddProductSubmitScreen() {
           ...(draft.price ?? {}),
           mode: finalPriceMode,
 
-          // Keep local picked variant images out of the DB insert.
+          available_sizes: isSimpleReady
+            ? simpleReadyInventory.map((row) => row.size)
+            : (draft.price as any)?.available_sizes ?? [],
+          simple_ready_inventory: isSimpleReady
+            ? simpleReadyInventory
+            : [],
+
+          // Keep local picked style images out of the DB insert.
           // Final uploaded storage paths are written in the update below.
           variants: [],
           made_order_variants: [],
@@ -1143,175 +1201,48 @@ export default function AddProductSubmitScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>Save Product</Text>
+    <AddProductScreen
+      title="Save Product"
+      onBack={() => router.back()}
+      backLabel="Back"
+      footer={
+        <AddProductFooter
+          primaryLabel={saving ? "Saving..." : "Save Product"}
+          primaryIcon={saving ? "hourglass-empty" : "save"}
+          onPrimaryPress={saveProduct}
+          primaryDisabled={!canSave || saving}
+          disabledHint={saveHint}
+        />
+      }
+    >
 
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.linkBtn,
-            pressed ? styles.pressed : null,
-          ]}
-        >
-          <Text style={styles.linkText}>Back</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Ready to save</Text>
+      <AddProductCard>
+        <Text style={apStyles.sectionTitle}>Ready to save</Text>
 
         {vendorLoading ? (
-          <View style={styles.inlineRow}>
+          <View style={apStyles.loadingRow}>
             <ActivityIndicator />
-            <Text style={styles.meta}>Loading vendor settings…</Text>
+            <Text style={apStyles.loadingText}>Loading vendor settings...</Text>
           </View>
         ) : null}
 
         {!vendorId ? (
-          <Text style={[styles.meta, { color: "#991B1B" }]}>
+          <AddProductNotice tone="warning">
             Vendor not loaded. Please ensure vendorSlice has vendor.id (bigint).
-          </Text>
+          </AddProductNotice>
         ) : null}
 
         {!canSave ? (
-          <Text style={styles.meta}>
-            Some required fields are missing. Go back to Review and complete the
-            missing steps.
-          </Text>
+          <AddProductNotice tone="warning">
+            Complete missing items in Review before saving.
+          </AddProductNotice>
         ) : (
-          <Text style={styles.meta}>
+          <Text style={apStyles.metaHint}>
             Save Product to create the product and upload media.
           </Text>
         )}
-      </View>
+      </AddProductCard>
 
-      <Pressable
-        style={({ pressed }) => [
-          styles.saveBtn,
-          !canSave || saving ? styles.saveBtnDisabled : null,
-          pressed ? styles.pressed : null,
-        ]}
-        onPress={saveProduct}
-        disabled={!canSave || saving}
-      >
-        {saving ? (
-          <View style={styles.inlineRow}>
-            <ActivityIndicator color="#fff" />
-            <Text style={styles.saveText}>Saving…</Text>
-          </View>
-        ) : (
-          <Text style={styles.saveText}>Save Product</Text>
-        )}
-      </Pressable>
-    </ScrollView>
+    </AddProductScreen>
   );
 }
-
-const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
-  placeholder: "#94A3B8",
-  white: "#FFFFFF",
-};
-
-const styles = StyleSheet.create({
-  content: {
-    padding: 16,
-    paddingBottom: 24,
-    backgroundColor: stylesVars.bg,
-  },
-
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: stylesVars.text,
-  },
-
-  card: {
-    marginTop: 14,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg,
-    padding: 18,
-  },
-
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: stylesVars.text,
-    marginBottom: 2,
-  },
-
-  meta: {
-    marginTop: 6,
-    fontSize: 13,
-    lineHeight: 18,
-    color: stylesVars.mutedText,
-    fontWeight: "500",
-  },
-
-  inlineRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginTop: 10,
-  },
-
-  linkBtn: {
-    minHeight: 40,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: stylesVars.blueSoft,
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  linkText: {
-    color: stylesVars.blue,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-
-  saveBtn: {
-    marginTop: 14,
-    minHeight: 48,
-    borderRadius: 14,
-    paddingVertical: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: stylesVars.blue,
-  },
-
-  saveBtnDisabled: {
-    opacity: 0.6,
-  },
-
-  saveText: {
-    color: stylesVars.white,
-    fontWeight: "700",
-    fontSize: 14,
-  },
-
-  pressed: {
-    opacity: 0.82,
-  },
-});

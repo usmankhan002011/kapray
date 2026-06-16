@@ -1,17 +1,24 @@
 import React, { useMemo } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
+import { apColors, apStyles } from "@/components/product/addProductStyles";
+import {
+  AddProductCard,
+  AddProductField,
+  AddProductFooter,
+  AddProductScreen,
+} from "@/components/product/add-product/AddProductWizard";
 
 const MODALS = [
-  "dress-type_modal",
   "fabric_modal",
   "color_modal",
   "work_modal",
   "work-density_modal",
   "origin-city_modal",
-  "wear-state_modal"
+  "wear-state_modal",
 ] as const;
 
 type ModalName = (typeof MODALS)[number];
@@ -33,26 +40,6 @@ function formatPicked(list: any, emptyLabel: string) {
   return cleaned.join(", ");
 }
 
-const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
-  placeholder: "#94A3B8",
-  danger: "#B91C1C",
-  dangerSoft: "#FEE2E2",
-  dangerBorder: "#FCA5A5",
-  overlayDark: "rgba(0,0,0,0.58)",
-  overlaySoft: "rgba(255,255,255,0.14)",
-  white: "#FFFFFF",
-  black: "#000000"
-};
-
 function pickFirstString(v: unknown): string | null {
   if (typeof v === "string") return v.trim() || null;
   if (Array.isArray(v) && typeof v[0] === "string") return v[0].trim() || null;
@@ -70,12 +57,13 @@ export default function Q11Description() {
   const vendorId = safeInt(vendorIdRaw);
 
   const { draft } = useProductDraft() as any;
-
   const modalReturnTo = "/vendor/profile/add-product/q11-description";
 
   function goPickModal(name: ModalName) {
     const encoded = encodeURIComponent(modalReturnTo);
-    router.push(`/vendor/profile/(product-modals)/${name}?returnTo=${encoded}` as any);
+    router.push(
+      `/vendor/profile/(product-modals)/${name}?returnTo=${encoded}` as any,
+    );
   }
 
   function closeScreen() {
@@ -84,14 +72,6 @@ export default function Q11Description() {
       return;
     }
     router.back();
-  }
-
-  function dressTypeSummary() {
-    const names = (draft?.spec as any)?.dressTypeNames as any[] | undefined;
-    if (Array.isArray(names) && names.length) return formatPicked(names, "Not set");
-    const ids = (draft?.spec?.dressTypeIds ?? []).map((x: any) => String(x));
-    if (!ids.length) return "Not set";
-    return `${ids.length} selected`;
   }
 
   function fabricSummary() {
@@ -116,7 +96,7 @@ export default function Q11Description() {
       golden: "Golden",
       silver: "Silver",
       white: "White",
-      black: "Black"
+      black: "Black",
     };
 
     const mapped = list.map((id) => map[String(id)] ?? String(id));
@@ -124,8 +104,12 @@ export default function Q11Description() {
   }
 
   function workSummary() {
-    const subNames = (draft?.spec as any)?.workSubTypeNames as any[] | undefined;
-    if (Array.isArray(subNames) && subNames.length) return formatPicked(subNames, "Any");
+    const subNames = (draft?.spec as any)?.workSubTypeNames as
+      | any[]
+      | undefined;
+    if (Array.isArray(subNames) && subNames.length) {
+      return formatPicked(subNames, "Any");
+    }
 
     const names = (draft?.spec as any)?.workTypeNames as any[] | undefined;
     if (Array.isArray(names) && names.length) return formatPicked(names, "Any");
@@ -155,7 +139,6 @@ export default function Q11Description() {
     return list.length ? `${list.length} selected` : "Any";
   }
 
-  const dressTypeValue = dressTypeSummary();
   const fabricValue = fabricSummary();
   const colorValue = colorSummary();
   const workValue = workSummary();
@@ -163,19 +146,12 @@ export default function Q11Description() {
   const originValue = originSummary();
   const wearValue = wearStateSummary();
 
-  const canContinue = useMemo(() => {
-    if (!vendorId) return false;
-    return (draft?.spec?.dressTypeIds ?? []).length >= 1;
-  }, [vendorId, draft]);
+  const canContinue = useMemo(() => Boolean(vendorId), [vendorId]);
+  const disabledHint = !vendorId ? "Vendor not loaded." : "";
 
   function onContinue() {
     if (!vendorId) {
       Alert.alert("Vendor not loaded", "Please ensure vendorSlice has vendor.id.");
-      return;
-    }
-
-    if ((draft?.spec?.dressTypeIds ?? []).length < 1) {
-      Alert.alert("Dress type required", "Please select at least one dress type.");
       return;
     }
 
@@ -188,32 +164,25 @@ export default function Q11Description() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>Description</Text>
-
-        <Pressable
-          onPress={closeScreen}
-          style={({ pressed }) => [styles.linkBtn, pressed ? styles.pressed : null]}
+    <AddProductScreen
+      title="Description"
+      onBack={closeScreen}
+      footer={
+        <AddProductFooter
+          onPrimaryPress={onContinue}
+          primaryDisabled={!canContinue}
+          disabledHint={disabledHint}
+        />
+      }
+    >
+      <AddProductCard>
+        <AddProductField
+          label="Build Product Description"
+          style={{ marginTop: 0 }}
         >
-          <Text style={styles.linkText}>Close</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Build Product Description</Text>
-
         <View style={styles.btnRow}>
           <Pressable
-            style={({ pressed }) => [styles.pickBtn, pressed ? styles.pressed : null]}
-            onPress={() => goPickModal("dress-type_modal")}
-          >
-            <Text style={styles.pickTitle}>Dress Type *</Text>
-            <Text style={styles.pickValue}>{dressTypeValue}</Text>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [styles.pickBtn, pressed ? styles.pressed : null]}
+            style={({ pressed }) => [styles.pickBtn, pressed ? apStyles.pressed : null]}
             onPress={() => goPickModal("fabric_modal")}
           >
             <Text style={styles.pickTitle}>Fabric</Text>
@@ -221,7 +190,7 @@ export default function Q11Description() {
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [styles.pickBtn, pressed ? styles.pressed : null]}
+            style={({ pressed }) => [styles.pickBtn, pressed ? apStyles.pressed : null]}
             onPress={() => goPickModal("color_modal")}
           >
             <Text style={styles.pickTitle}>Color</Text>
@@ -229,7 +198,7 @@ export default function Q11Description() {
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [styles.pickBtn, pressed ? styles.pressed : null]}
+            style={({ pressed }) => [styles.pickBtn, pressed ? apStyles.pressed : null]}
             onPress={() => goPickModal("work_modal")}
           >
             <Text style={styles.pickTitle}>Work</Text>
@@ -237,7 +206,7 @@ export default function Q11Description() {
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [styles.pickBtn, pressed ? styles.pressed : null]}
+            style={({ pressed }) => [styles.pickBtn, pressed ? apStyles.pressed : null]}
             onPress={() => goPickModal("work-density_modal")}
           >
             <Text style={styles.pickTitle}>Density</Text>
@@ -245,7 +214,7 @@ export default function Q11Description() {
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [styles.pickBtn, pressed ? styles.pressed : null]}
+            style={({ pressed }) => [styles.pickBtn, pressed ? apStyles.pressed : null]}
             onPress={() => goPickModal("origin-city_modal")}
           >
             <Text style={styles.pickTitle}>Origin</Text>
@@ -253,133 +222,45 @@ export default function Q11Description() {
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [styles.pickBtn, pressed ? styles.pressed : null]}
+            style={({ pressed }) => [styles.pickBtn, pressed ? apStyles.pressed : null]}
             onPress={() => goPickModal("wear-state_modal")}
           >
             <Text style={styles.pickTitle}>Wear State</Text>
             <Text style={styles.pickValue}>{wearValue}</Text>
           </Pressable>
         </View>
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.primaryBtn,
-            !canContinue ? styles.primaryBtnDisabled : null,
-            pressed ? styles.pressed : null
-          ]}
-          onPress={onContinue}
-          disabled={!canContinue}
-        >
-          <Text style={styles.primaryText}>Continue</Text>
-        </Pressable>
-      </View>
-    </ScrollView>
+        </AddProductField>
+      </AddProductCard>
+    </AddProductScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    padding: 16,
-    paddingBottom: 24,
-    backgroundColor: stylesVars.bg
-  },
-
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12
-  },
-
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: stylesVars.text
-  },
-
-  linkBtn: {
-    minHeight: 40,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: stylesVars.blueSoft,
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
-    alignItems: "center",
-    justifyContent: "center"
-  },
-
-  linkText: {
-    color: stylesVars.blue,
-    fontSize: 14,
-    fontWeight: "700"
-  },
-
-  card: {
-    marginTop: 14,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg,
-    padding: 18
-  },
-
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: stylesVars.text,
-    marginBottom: 2
-  },
-
   btnRow: {
     marginTop: 12,
-    gap: 10
+    gap: 10,
   },
 
   pickBtn: {
-    borderRadius: 14,
+    borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    backgroundColor: stylesVars.blueSoft,
+    backgroundColor: apColors.blueSoft,
     borderWidth: 1,
-    borderColor: "#D7E3FF"
+    borderColor: "#D7E3FF",
   },
 
   pickTitle: {
-    color: stylesVars.blue,
+    color: apColors.blue,
     fontWeight: "700",
-    fontSize: 14
+    fontSize: 14,
   },
 
   pickValue: {
     marginTop: 4,
-    color: stylesVars.subText,
+    color: apColors.subText,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: "500"
+    fontWeight: "500",
   },
-
-  primaryBtn: {
-    marginTop: 14,
-    minHeight: 48,
-    borderRadius: 14,
-    paddingVertical: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: stylesVars.blue
-  },
-
-  primaryBtnDisabled: {
-    opacity: 0.6
-  },
-
-  primaryText: {
-    color: stylesVars.white,
-    fontWeight: "700",
-    fontSize: 14
-  },
-
-  pressed: {
-    opacity: 0.82
-  }
 });

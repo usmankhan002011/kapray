@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import {
   Alert,
   Pressable,
-  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -11,6 +11,13 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
+import {
+  AddProductCard,
+  AddProductField,
+  AddProductFooter,
+  AddProductSecondaryButton,
+  AddProductScreen,
+} from "@/components/product/add-product/AddProductWizard";
 
 function safeInt(v: any) {
   const n = Number(v);
@@ -103,6 +110,7 @@ export default function Q12MoreDescription() {
   );
 
   const canContinue = useMemo(() => Boolean(vendorId), [vendorId]);
+  const disabledHint = !vendorId ? "Vendor not loaded." : "";
 
   useFocusEffect(
     React.useCallback(() => {
@@ -164,13 +172,12 @@ export default function Q12MoreDescription() {
       }, 100);
 
       return () => clearTimeout(timer);
-    }, [appendManyRaw, appendOne, returnTo]),
+  }, [appendManyRaw, appendOne, returnTo]),
   );
 
   function onChangeText(next: string) {
-    const cleaned = safeStr(next);
-    setText(cleaned);
-    patchSpec({ more_description: cleaned });
+    setText(next);
+    patchSpec({ more_description: next });
   }
 
   function removeSentence(sentence: string) {
@@ -234,7 +241,7 @@ export default function Q12MoreDescription() {
 
     if (needsTailoring) {
       router.push(
-        "/vendor/profile/add-product/q06b2-tailoring-style-choice" as any,
+        "/vendor/profile/add-product/q06b2-tailoring-styles" as any,
       );
       return;
     }
@@ -250,48 +257,27 @@ export default function Q12MoreDescription() {
   }
 
   return (
-    <View style={apStyles.screen}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={apStyles.screen}
-        contentContainerStyle={apStyles.content}
-      >
-        <View style={apStyles.headerRow}>
-          <Text style={apStyles.title}>More description</Text>
-
-          <Pressable
-            onPress={closeScreen}
-            style={({ pressed }) => [
-              apStyles.linkBtn,
-              pressed ? apStyles.pressed : null,
-            ]}
-          >
-            <Text style={apStyles.linkText}>Close</Text>
-          </Pressable>
-        </View>
-
-        <View style={apStyles.card}>
-          <Text style={apStyles.label}>Build Description</Text>
-
-          <Pressable
+    <AddProductScreen
+      title="More description"
+      onBack={closeScreen}
+      footer={
+        <AddProductFooter
+          onPrimaryPress={onContinue}
+          primaryDisabled={!canContinue}
+          disabledHint={disabledHint}
+        />
+      }
+    >
+      <AddProductCard>
+        <AddProductField label="Build Description" style={{ marginTop: 0 }}>
+          <AddProductSecondaryButton
+            label="Open Builder"
             onPress={openBuilder}
-            style={({ pressed }) => [
-              apStyles.secondaryBtn,
-              pressed ? apStyles.pressed : null,
-            ]}
-          >
-            <Text style={apStyles.secondaryText}>Open Builder</Text>
-          </Pressable>
+          />
 
           {selectedSentences.length ? (
-            <View style={{ marginTop: 6 }}>
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  marginTop: 10,
-                }}
-              >
+            <View style={styles.builderBlock}>
+              <View style={styles.builderHeader}>
                 <Text style={apStyles.metaHint}>
                   Tap ✕ to remove a builder sentence.
                 </Text>
@@ -310,23 +296,16 @@ export default function Q12MoreDescription() {
               {selectedSentences.map((sentence) => (
                 <View
                   key={sentence}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "flex-start",
-                    marginTop: 12,
-                    padding: 10,
-                    backgroundColor: "#FFF5F5",
-                    borderRadius: 8,
-                  }}
+                  style={styles.sentenceRow}
                 >
                   <Pressable
                     onPress={() => removeSentence(sentence)}
-                    style={{ marginRight: 8 }}
+                    style={styles.removeSentenceBtn}
                   >
-                    <Text style={{ color: "red", fontWeight: "bold" }}>✕</Text>
+                    <Text style={styles.removeSentenceText}>✕</Text>
                   </Pressable>
 
-                  <Text style={{ flex: 1 }}>{sentence}</Text>
+                  <Text style={styles.sentenceText}>{sentence}</Text>
                 </View>
               ))}
             </View>
@@ -344,22 +323,41 @@ export default function Q12MoreDescription() {
             placeholderTextColor={apColors.muted}
             style={[apStyles.input, { minHeight: 120, marginTop: 10 }]}
             multiline
+            textAlignVertical="top"
             maxLength={800}
           />
-
-          <Pressable
-            style={({ pressed }) => [
-              apStyles.primaryBtn,
-              !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null,
-            ]}
-            onPress={onContinue}
-            disabled={!canContinue}
-          >
-            <Text style={apStyles.primaryText}>Continue</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </View>
+        </AddProductField>
+      </AddProductCard>
+    </AddProductScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  builderBlock: {
+    marginTop: 6,
+  },
+  builderHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10,
+    marginTop: 10,
+  },
+  sentenceRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: 12,
+    padding: 10,
+    backgroundColor: "#FFF5F5",
+    borderRadius: 8,
+  },
+  removeSentenceBtn: {
+    marginRight: 8,
+  },
+  removeSentenceText: {
+    color: apColors.danger,
+    fontWeight: "bold",
+  },
+  sentenceText: {
+    flex: 1,
+  },
+});

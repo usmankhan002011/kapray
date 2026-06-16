@@ -14,7 +14,12 @@ import * as ImagePicker from "expo-image-picker";
 
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
+import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 import { READY_STANDARD_SIZES } from "@/data/kapray/productPieces";
+import {
+  AddProductFooter,
+  AddProductScreen,
+} from "@/components/product/add-product/AddProductWizard";
 
 type ReadyVariantSize = {
   size: string;
@@ -92,7 +97,7 @@ function normalizeVariantImagePaths(v: any): string[] {
 
 function buildReadyVariantDisplayName(variantNo: number, name: string) {
   const clean = safeStr(name);
-  return clean ? `Variant ${variantNo}: ${clean}` : `Variant ${variantNo}`;
+  return clean ? `Style ${variantNo}: ${clean}` : `Style ${variantNo}`;
 }
 
 function makeVariantId(variantNo: number) {
@@ -103,9 +108,9 @@ function createEmptyVariant(variantNo: number): ReadyVariant {
   return {
     id: makeVariantId(variantNo),
     variant_no: variantNo,
-    label: `Variant ${variantNo}`,
+    label: `Style ${variantNo}`,
     name: "",
-    display_name: `Variant ${variantNo}`,
+    display_name: `Style ${variantNo}`,
     additional_price_pkr: 0,
     image_paths: [],
     sizes: [],
@@ -127,7 +132,9 @@ function normalizeReadyVariant(v: any, index: number): ReadyVariant {
   return {
     id: safeStr(v?.id) || makeVariantId(variantNo),
     variant_no: variantNo,
-    label: safeStr(v?.label) || `Variant ${variantNo}`,
+    label:
+      safeStr(v?.label).replace(/^Variant\b/i, "Style") ||
+      `Style ${variantNo}`,
     name,
     display_name:
       safeStr(v?.display_name) || buildReadyVariantDisplayName(variantNo, name),
@@ -168,7 +175,7 @@ function cleanReadyVariants(variants: ReadyVariant[]) {
     return {
       id: makeVariantId(variantNo),
       variant_no: variantNo,
-      label: `Variant ${variantNo}`,
+      label: `Style ${variantNo}`,
       name,
       display_name: buildReadyVariantDisplayName(variantNo, name),
       additional_price_pkr: safeInt(variant.additional_price_pkr),
@@ -185,10 +192,10 @@ function cleanReadyVariants(variants: ReadyVariant[]) {
 
 function validateReadyVariants(variants: ReadyVariant[]) {
   if (!variants.length)
-    return "Please add at least one ready-to-wear variant card.";
+    return "Please add at least one ready-to-wear style card.";
 
   for (const variant of variants) {
-    const title = variant.display_name || variant.label || "Variant";
+    const title = variant.display_name || variant.label || "Style";
 
     if (!safeStr(variant.name))
       return `${variant.label} needs a color or design name.`;
@@ -206,7 +213,7 @@ function validateReadyVariants(variants: ReadyVariant[]) {
   }
 
   if (sumReadyVariantQty(variants) <= 0) {
-    return "Total stock across variants must be more than 0.";
+    return "Total stock across styles must be more than 0.";
   }
 
   return "";
@@ -308,7 +315,7 @@ const ReadyVariantCard = memo(function ReadyVariantCard({
         }}
       >
         <Text style={{ fontSize: 13, fontWeight: "700", color: apColors.text }}>
-          Variant {idx + 1}
+          Style {idx + 1}
         </Text>
 
         <Pressable
@@ -345,7 +352,7 @@ const ReadyVariantCard = memo(function ReadyVariantCard({
       />
 
       <Text style={apStyles.label}>Additional price, if any (PKR)</Text>
-      <TextInput
+      <FastNumberInput
         value={String(
           Math.max(0, Number(variant.additional_price_pkr ?? 0) || 0),
         )}
@@ -361,7 +368,7 @@ const ReadyVariantCard = memo(function ReadyVariantCard({
         Final price: Rs {finalPrice.toLocaleString()} · Total stock: {totalQty}
       </Text>
 
-      <Text style={apStyles.label}>Variant images *</Text>
+      <Text style={apStyles.label}>Style images *</Text>
 
       <Pressable
         onPress={() => pickVariantImages(variant.id)}
@@ -372,7 +379,7 @@ const ReadyVariantCard = memo(function ReadyVariantCard({
         ]}
       >
         <Text style={apStyles.primaryText}>
-          Pick Variant Images {images.length ? `(${images.length})` : ""}
+          Pick Style Images {images.length ? `(${images.length})` : ""}
         </Text>
       </Pressable>
 
@@ -465,7 +472,7 @@ const ReadyVariantCard = memo(function ReadyVariantCard({
                   <Text
                     style={{ color: "#fff", fontWeight: "900", fontSize: 12 }}
                   >
-                    ✕
+                    X
                   </Text>
                 </Pressable>
               </View>
@@ -474,7 +481,7 @@ const ReadyVariantCard = memo(function ReadyVariantCard({
         </ScrollView>
       ) : (
         <Text style={[apStyles.metaHint, { marginTop: 8 }]}>
-          No variant images selected yet.
+          No style images selected yet.
         </Text>
       )}
 
@@ -505,13 +512,13 @@ const ReadyVariantCard = memo(function ReadyVariantCard({
               ]}
             >
               <Text style={apStyles.secondaryText}>
-                {selected ? "✓ " : ""}
+                {selected ? "Selected - " : ""}
                 {size}
               </Text>
             </Pressable>
 
             {selected ? (
-              <TextInput
+              <FastNumberInput
                 value={String(selected.qty || "")}
                 onChangeText={(t) => updateQty(size, t)}
                 placeholder={`Qty for ${size}`}
@@ -599,7 +606,7 @@ export default function Q06B3ReadyVariants() {
     }
 
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsMultipleSelection: true,
       quality: 0.9,
     });
@@ -653,9 +660,10 @@ export default function Q06B3ReadyVariants() {
     patchDraft({ inventory_qty: sumReadyVariantQty(cleaned) });
   }, [variants]);
 
-  const canContinue = useMemo(() => {
-    return !validateReadyVariants(cleanReadyVariants(variants));
+  const disabledHint = useMemo(() => {
+    return validateReadyVariants(cleanReadyVariants(variants)) || "";
   }, [variants]);
+  const canContinue = !disabledHint;
 
   function closeScreen() {
     if (returnTo) {
@@ -670,7 +678,7 @@ export default function Q06B3ReadyVariants() {
     const error = validateReadyVariants(cleaned);
 
     if (error) {
-      Alert.alert("Check variants", error);
+      Alert.alert("Check styles", error);
       return;
     }
 
@@ -690,25 +698,17 @@ export default function Q06B3ReadyVariants() {
   }
 
   return (
-    <View style={apStyles.screen}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={apStyles.screen}
-        contentContainerStyle={apStyles.content}
-      >
-        <View style={apStyles.headerRow}>
-          <Text style={apStyles.title}>Ready Variants</Text>
-
-          <Pressable
-            onPress={closeScreen}
-            style={({ pressed }) => [
-              apStyles.linkBtn,
-              pressed ? apStyles.pressed : null,
-            ]}
-          >
-            <Text style={apStyles.linkText}>Close</Text>
-          </Pressable>
-        </View>
+    <AddProductScreen
+      title="Ready Styles"
+      onBack={closeScreen}
+      footer={
+        <AddProductFooter
+          onPrimaryPress={onContinue}
+          primaryDisabled={!canContinue}
+          disabledHint={disabledHint}
+        />
+      }
+    >
 
         <View style={apStyles.card}>
           <View
@@ -730,7 +730,7 @@ export default function Q06B3ReadyVariants() {
                 marginBottom: 4,
               }}
             >
-              Ready-to-wear variant cards
+              Ready-to-wear style cards
             </Text>
             <Text style={apStyles.metaHint}>
               Add one card for each color/design. Each card may have its own
@@ -740,7 +740,7 @@ export default function Q06B3ReadyVariants() {
               Main product price will show: From Rs {basePrice.toLocaleString()}
             </Text>
             <Text style={[apStyles.metaHint, { marginTop: 4 }]}>
-              Total stock from variants: {totalQty}
+              Total stock from styles: {totalQty}
             </Text>
 
             {!variants.length ? (
@@ -753,12 +753,12 @@ export default function Q06B3ReadyVariants() {
                       pressed ? apStyles.pressed : null,
                     ]}
                   >
-                    <Text style={apStyles.primaryText}>Add Variant</Text>
+                    <Text style={apStyles.primaryText}>Add Style</Text>
                   </Pressable>
                 </View>
 
                 <Text style={[apStyles.metaHint, { marginTop: 12 }]}>
-                  No variant cards added yet.
+                  No style cards added yet.
                 </Text>
               </>
             ) : (
@@ -793,7 +793,7 @@ export default function Q06B3ReadyVariants() {
                 <View style={{ marginTop: 14 }}>
                   <Text style={[apStyles.metaHint, { marginBottom: 6 }]}>
                     {variants.length}{" "}
-                    {variants.length === 1 ? "variant" : "variants"} added
+                    {variants.length === 1 ? "style" : "styles"} added
                   </Text>
 
                   <Pressable
@@ -804,7 +804,7 @@ export default function Q06B3ReadyVariants() {
                     ]}
                   >
                     <Text style={apStyles.secondaryText}>
-                      Add More Variants
+                      Add More Styles
                     </Text>
                   </Pressable>
                 </View>
@@ -812,19 +812,7 @@ export default function Q06B3ReadyVariants() {
             )}
           </View>
 
-          <Pressable
-            style={({ pressed }) => [
-              apStyles.primaryBtn,
-              !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null,
-            ]}
-            onPress={onContinue}
-            disabled={!canContinue}
-          >
-            <Text style={apStyles.primaryText}>Continue</Text>
-          </Pressable>
         </View>
-      </ScrollView>
-    </View>
+    </AddProductScreen>
   );
 }

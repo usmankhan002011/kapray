@@ -1,9 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
+import FastNumberInput from "@/components/product/add-product/FastNumberInput";
+import {
+  AddProductCard,
+  AddProductField,
+  AddProductFooter,
+  AddProductScreen,
+} from "@/components/product/add-product/AddProductWizard";
 
 type ProductCategory =
   | "unstitched_plain"
@@ -16,6 +23,7 @@ type SizeKey = "XS" | "S" | "M" | "L" | "XL" | "XXL";
 const SIZE_KEYS: SizeKey[] = ["XS", "S", "M", "L", "XL", "XXL"];
 const DISPLAY_SIZE_KEYS: SizeKey[] = ["XS", "S", "M", "L", "XL", "XXL"];
 
+const XS_FACTOR = 0.9;
 const SIZE_FACTOR = 1.1;
 const AUTO_FILL_BG = "#EEF4FF";
 const EDITED_BG = "#FFFFFF";
@@ -78,7 +86,7 @@ function getBaseSLengthFromDraft(draft: any) {
   if (Number.isFinite(sVal) && sVal > 0) return String(roundLength(sVal));
 
   const xsVal = Number(sanitizeNumber(String(fromSpec?.XS ?? "")));
-  if (Number.isFinite(xsVal) && xsVal > 0) return String(roundLength(xsVal));
+  if (Number.isFinite(xsVal) && xsVal > 0) return String(roundLength(xsVal / XS_FACTOR));
 
   return "";
 }
@@ -100,7 +108,7 @@ function buildComputedSizeLengthMap(baseSInput: string): Partial<Record<SizeKey,
   const s = Number(sanitizeNumber(baseSInput ?? ""));
   if (!Number.isFinite(s) || s <= 0) return {};
 
-  const xs = roundLength(s);
+  const xs = roundLength(s * XS_FACTOR);
   const sizeS = roundLength(s);
   const m = roundLength(sizeS * SIZE_FACTOR);
   const l = roundLength(m * SIZE_FACTOR);
@@ -224,6 +232,13 @@ export default function Q05CUnstitchedFabricLength() {
     if (!vendorId) return false;
     return hasBaseSLength && hasAllSizes;
   }, [vendorId, hasBaseSLength, hasAllSizes]);
+  const disabledHint = !vendorId
+    ? "Vendor not loaded."
+    : !hasBaseSLength
+      ? "Enter fabric length for size S."
+      : !hasAllSizes
+        ? "Ensure all size lengths are valid."
+        : "";
 
   useFocusEffect(
     React.useCallback(() => {
@@ -324,46 +339,24 @@ export default function Q05CUnstitchedFabricLength() {
   }
 
   return (
-    <View style={apStyles.screen}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={apStyles.screen}
-        contentContainerStyle={[apStyles.content, { paddingBottom: 20 }]}
-      >
-        <View style={apStyles.headerRow}>
-          <Text style={apStyles.title}>Fabric length</Text>
-
-          <Pressable
-            onPress={closeScreen}
-            style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
-          >
-            <Text style={apStyles.linkText}>Close</Text>
-          </Pressable>
-        </View>
-
-        <View style={[apStyles.card, { padding: 14 }]}>
-          <Text
-            style={{
-              fontSize: 14,
-              fontWeight: "800",
-              color: apColors.text,
-              marginBottom: 4,
-            }}
-          >
-            Fabric length by size (meters)
-          </Text>
-
-          <Text style={[apStyles.metaHint, { marginBottom: 10 }]}>Enter fabric length for S. Edit others.</Text>
-
-          <View
-            style={{
-              marginTop: 14,
-              flexDirection: "row",
-              flexWrap: "wrap",
-              justifyContent: "space-between",
-              rowGap: 10,
-            }}
-          >
+    <AddProductScreen
+      title="Fabric length"
+      onBack={closeScreen}
+      footer={
+        <AddProductFooter
+          onPrimaryPress={onContinue}
+          primaryDisabled={!canContinue}
+          disabledHint={disabledHint}
+        />
+      }
+    >
+      <AddProductCard style={styles.card}>
+        <AddProductField
+          label="Fabric length by size (meters)"
+          hint="Enter fabric length for S. Edit others."
+          style={{ marginTop: 0 }}
+        >
+          <View style={styles.grid}>
             {DISPLAY_SIZE_KEYS.map((size) => {
               const isEdited = overriddenSizes[size];
               const isXS = size === "XS";
@@ -372,75 +365,22 @@ export default function Q05CUnstitchedFabricLength() {
               return (
                 <View
                   key={size}
-                  style={{
-                    width: "48.5%",
-                    borderWidth: 1,
-                    borderColor: apColors.border,
-                    borderRadius: 14,
-                    backgroundColor: isEdited ? EDITED_BG : AUTO_FILL_BG,
-                    padding: 10,
-                  }}
+                  style={[
+                    styles.sizeBox,
+                    { backgroundColor: isEdited ? EDITED_BG : AUTO_FILL_BG },
+                  ]}
                 >
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      marginBottom: 8,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 13,
-                        fontWeight: "800",
-                        color: apColors.text,
-                      }}
-                    >
-                      {size}
-                    </Text>
+                  <View style={styles.sizeHeader}>
+                    <Text style={styles.sizeLabel}>{size}</Text>
 
-                    {isXS ? (
-                      <View
-                        style={{
-                          paddingHorizontal: 8,
-                          paddingVertical: 2,
-                          borderRadius: 999,
-                          backgroundColor: "#E2E8F0",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            fontWeight: "700",
-                            color: apColors.subText ?? apColors.text,
-                          }}
-                        >
-                          Same as S
-                        </Text>
-                      </View>
-                    ) : isEdited ? (
-                      <View
-                        style={{
-                          paddingHorizontal: 8,
-                          paddingVertical: 2,
-                          borderRadius: 999,
-                          backgroundColor: "#E2E8F0",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            fontWeight: "700",
-                            color: apColors.subText ?? apColors.text,
-                          }}
-                        >
-                          Edited
-                        </Text>
+                    {isEdited && !isXS ? (
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>Edited</Text>
                       </View>
                     ) : null}
                   </View>
 
-                  <TextInput
+                  <FastNumberInput
                     ref={isS ? inputRef : undefined}
                     value={isS ? sLengthText : sizeTexts[size]}
                     onChangeText={(v) => onChangeSize(size, v)}
@@ -459,26 +399,57 @@ export default function Q05CUnstitchedFabricLength() {
                     ]}
                     keyboardType="decimal-pad"
                     maxLength={8}
+                    returnKeyType="done"
                   />
                 </View>
               );
             })}
           </View>
-
-          <Pressable
-            style={({ pressed }) => [
-              apStyles.primaryBtn,
-              { marginTop: 14 },
-              !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null,
-            ]}
-            onPress={onContinue}
-            disabled={!canContinue}
-          >
-            <Text style={apStyles.primaryText}>Continue</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </View>
+        </AddProductField>
+      </AddProductCard>
+    </AddProductScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    padding: 14,
+  },
+  grid: {
+    marginTop: 14,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    rowGap: 10,
+  },
+  sizeBox: {
+    width: "48.5%",
+    borderWidth: 1,
+    borderColor: apColors.border,
+    borderRadius: 8,
+    padding: 10,
+  },
+  sizeHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+    gap: 6,
+  },
+  sizeLabel: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: apColors.text,
+  },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: "#E2E8F0",
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: apColors.subText,
+  },
+});

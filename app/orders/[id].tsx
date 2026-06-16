@@ -1263,7 +1263,7 @@ export default function OrderDetailScreen() {
             </SectionCard>
 
             {selectedStitchedVariant ? (
-              <SectionCard title="Selected Variant">
+              <SectionCard title="Selected Style">
                 <View style={styles.variantRow}>
                   {selectedStitchedVariant.imageUrl ? (
                     <View style={styles.variantImageWrap}>
@@ -1277,7 +1277,7 @@ export default function OrderDetailScreen() {
 
                   <View style={styles.variantInfoWrap}>
                     <Text style={styles.variantTitle} numberOfLines={2}>
-                      {selectedStitchedVariant.title || "Selected variant"}
+                      {selectedStitchedVariant.title || "Selected style"}
                     </Text>
                     {!isMadeOrderStitchedOrder ? (
                       <KVRow
@@ -1318,7 +1318,7 @@ export default function OrderDetailScreen() {
 
                 {!!selectedStitchedVariant.note && (
                   <View style={styles.noteBox}>
-                    <Text style={styles.noteLabel}>Variant note</Text>
+                    <Text style={styles.noteLabel}>Style note</Text>
                     <Text style={styles.noteText}>
                       {selectedStitchedVariant.note}
                     </Text>

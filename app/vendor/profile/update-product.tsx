@@ -18,6 +18,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
 import { decode } from "base64-arraybuffer";
 import * as VideoThumbnails from "expo-video-thumbnails";
+import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 
 const PRODUCTS_TABLE = "products";
 const BUCKET_VENDOR = "vendor_images";
@@ -425,7 +426,7 @@ function readEditableStitchedVariants(
           variant?.design ??
           variant?.title ??
           variant?.label ??
-          `Variant ${variantNo}`,
+          `Style ${variantNo}`,
       ).trim();
 
       const id = String(
@@ -440,7 +441,7 @@ function readEditableStitchedVariants(
 
       return {
         id,
-        label: name || `Variant ${variantNo}`,
+        label: name.replace(/^Variant\b/i, "Style") || `Style ${variantNo}`,
         sourceKey: key,
         raw: variant,
         sizes,
@@ -593,11 +594,11 @@ function cleanNewReadyVariantDraft(
   return {
     id: `ready-variant-${Date.now()}-${variantNo}`,
     variant_no: variantNo,
-    label: `Variant ${variantNo}`,
+    label: `Style ${variantNo}`,
     name,
     display_name: name
-      ? `Variant ${variantNo}: ${name}`
-      : `Variant ${variantNo}`,
+      ? `Style ${variantNo}: ${name}`
+      : `Style ${variantNo}`,
     additional_price_pkr: safeNonNegInt(variant.additional_price_pkr),
     image_paths: cleanImagePaths,
     images: cleanImagePaths.map((path) => ({ uri: path, path })),
@@ -616,7 +617,7 @@ function cleanNewMadeOrderVariantDraft(
   return {
     id: `made-order-variant-${Date.now()}-${variantNo}`,
     variant_no: variantNo,
-    label: `Variant ${variantNo}`,
+    label: `Style ${variantNo}`,
     name,
     display_name: name,
     additional_price_pkr: safeNonNegInt(variant.additional_price_pkr),
@@ -645,9 +646,10 @@ function variantDisplayTitle(v: any, fallbackNo: number) {
   const name = String(
     v?.name ?? v?.display_name ?? v?.displayName ?? v?.title ?? v?.label ?? "",
   ).trim();
-  if (name && !/^variant\s+\d+$/i.test(name))
-    return `Variant ${no}: ${name.replace(/^Variant\s+\d+\s*:\s*/i, "")}`;
-  return `Variant ${no}`;
+  if (name && !/^(variant|style)\s+\d+$/i.test(name)) {
+    return `Style ${no}: ${name.replace(/^(Variant|Style)\s+\d+\s*:\s*/i, "")}`;
+  }
+  return `Style ${no}`;
 }
 
 function resolveVariantImageUrls(
@@ -1085,7 +1087,11 @@ export default function UpdateProductScreen() {
     setStitchedVariants(readEditableStitchedVariants(selected));
     setNewReadyVariants([]);
     setNewMadeOrderVariants([]);
-    setNewTailoringStyles([]);
+    setNewTailoringStyles(
+      tailorOn && readTailoringStylePresets(spec).length === 0
+        ? [makeEmptyTailoringStyleDraft()]
+        : [],
+    );
   }, [selected]);
 
   useEffect(() => {
@@ -1098,9 +1104,9 @@ export default function UpdateProductScreen() {
       if (tailoringCost !== 0) setTailoringCost(0);
       if (tailoringTurnaroundDays !== 0) setTailoringTurnaroundDays(0);
       setSelectedTailoringStyles(emptyTailoringSelections());
+      setNewTailoringStyles([]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tailoringEnabled]);
+  }, [tailoringCost, tailoringEnabled, tailoringTurnaroundDays]);
 
   const inventoryEditable = useMemo(() => {
     if (!selected) return false;
@@ -1218,6 +1224,23 @@ export default function UpdateProductScreen() {
     );
   }, [blouseNeckOptions.length, sleeveOptions.length, trouserOptions.length]);
 
+  const existingTailoringStylePresets = useMemo(
+    () => readTailoringStylePresets(selected?.spec),
+    [selected?.spec],
+  );
+
+  useEffect(() => {
+    if (!tailoringEnabled) return;
+    if (existingTailoringStylePresets.length || newTailoringStyles.length) {
+      return;
+    }
+    setNewTailoringStyles([makeEmptyTailoringStyleDraft()]);
+  }, [
+    tailoringEnabled,
+    existingTailoringStylePresets.length,
+    newTailoringStyles.length,
+  ]);
+
   const canSave = useMemo(() => {
     if (!vendorId) return false;
     if (!selectedId) return false;
@@ -1240,6 +1263,13 @@ export default function UpdateProductScreen() {
 
         const days = Number(tailoringTurnaroundDays ?? 0);
         if (!Number.isFinite(days) || days < 0) return false;
+
+        if (
+          existingTailoringStylePresets.length + newTailoringStyles.length <
+          1
+        ) {
+          return false;
+        }
       }
     } else {
       const n = Number(priceTotal ?? 0);
@@ -1260,10 +1290,24 @@ export default function UpdateProductScreen() {
     tailoringCost,
     tailoringTurnaroundDays,
     vendorOffersTailoring,
+    existingTailoringStylePresets.length,
+    newTailoringStyles.length,
   ]);
 
   async function saveUpdate() {
     if (saving) return;
+
+    if (
+      priceMode === "unstitched_per_meter" &&
+      tailoringEnabled &&
+      existingTailoringStylePresets.length + newTailoringStyles.length < 1
+    ) {
+      Alert.alert(
+        "Missing style cards",
+        "Please add at least one tailoring style card.",
+      );
+      return;
+    }
 
     if (!canSave) {
       Alert.alert(
@@ -1281,15 +1325,15 @@ export default function UpdateProductScreen() {
     for (const variant of newReadyVariants) {
       if (!String(variant.name ?? "").trim()) {
         Alert.alert(
-          "Missing variant name",
-          "Please enter a name for each new ready-to-wear variant.",
+          "Missing style name",
+          "Please enter a name for each new ready-to-wear style.",
         );
         return;
       }
       if (sumReadyVariantDraftQty(variant) <= 0) {
         Alert.alert(
           "Missing stock",
-          "Each new ready-to-wear variant needs stock in at least one size.",
+          "Each new ready-to-wear style needs stock in at least one size.",
         );
         return;
       }
@@ -1298,8 +1342,8 @@ export default function UpdateProductScreen() {
     for (const variant of newMadeOrderVariants) {
       if (!String(variant.name ?? "").trim()) {
         Alert.alert(
-          "Missing variant name",
-          "Please enter a name for each new made-on-order variant.",
+          "Missing style name",
+          "Please enter a name for each new made-on-order style.",
         );
         return;
       }
@@ -2018,7 +2062,7 @@ export default function UpdateProductScreen() {
                 {!Boolean(selected.made_on_order) ? (
                   <Text style={styles.inventoryAlertText}>
                     {usesVariantInventory
-                      ? `Variant Inventory: ${stitchedVariantInventoryInfo.totalQty}`
+                      ? `Style Inventory: ${stitchedVariantInventoryInfo.totalQty}`
                       : `Inventory Qty: ${Math.max(
                           0,
                           Number(selected.inventory_qty ?? 0),
@@ -2245,7 +2289,7 @@ export default function UpdateProductScreen() {
                       ? "Cost From (PKR) *"
                       : "Total Cost (PKR) *"}
                   </Text>
-                  <TextInput
+                  <FastNumberInput
                     value={String(priceTotal ?? "")}
                     onChangeText={(t) =>
                       setPriceTotal(Number(sanitizeNumber(t) || "0"))
@@ -2279,10 +2323,10 @@ export default function UpdateProductScreen() {
                   {stitchedVariants.length ? (
                     <View style={styles.variantInventoryBox}>
                       <Text style={styles.variantInventoryTitle}>
-                        Variant Size Inventory
+                        Style Size Inventory
                       </Text>
                       <Text style={styles.hint}>
-                        Update stock for each ready-to-wear variant size
+                        Update stock for each ready-to-wear style size
                       </Text>
 
                       {stitchedVariants.map((variant) => {
@@ -2305,7 +2349,7 @@ export default function UpdateProductScreen() {
                               />
                             ) : (
                               <Text style={styles.emptyInline}>
-                                No variant image found.
+                                No style image found.
                               </Text>
                             )}
 
@@ -2318,7 +2362,7 @@ export default function UpdateProductScreen() {
                                   <Text style={styles.variantSizeLabel}>
                                     {row.size}
                                   </Text>
-                                  <TextInput
+                                  <FastNumberInput
                                     value={String(row.qty ?? 0)}
                                     onChangeText={(t) =>
                                       updateStitchedVariantSizeQty(
@@ -2347,9 +2391,9 @@ export default function UpdateProductScreen() {
                   {!Boolean(selected?.made_on_order) ? (
                     <View style={styles.appendBox}>
                       <Text style={styles.appendTitle}>
-                        Add New Product Variants
+                        Add New Product Styles
                       </Text>
-                      {/* <Text style={styles.hint}>Add new variants below.</Text> */}
+                      {/* <Text style={styles.hint}>Add new styles below.</Text> */}
 
                       {newReadyVariants.map((variant, index) => (
                         <View
@@ -2358,7 +2402,7 @@ export default function UpdateProductScreen() {
                         >
                           <View style={styles.draftHeaderRow}>
                             <Text style={styles.variantCardTitle}>
-                              New Variant {stitchedVariants.length + index + 1}
+                              New Style {stitchedVariants.length + index + 1}
                             </Text>
 
                             <Pressable
@@ -2378,7 +2422,7 @@ export default function UpdateProductScreen() {
                             </Pressable>
                           </View>
 
-                          <Text style={styles.label}>Variant name *</Text>
+                          <Text style={styles.label}>Style name *</Text>
                           <TextInput
                             value={variant.name}
                             onChangeText={(t) =>
@@ -2396,7 +2440,7 @@ export default function UpdateProductScreen() {
                           <Text style={styles.label}>
                             Additional Price (PKR)
                           </Text>
-                          <TextInput
+                          <FastNumberInput
                             value={String(variant.additional_price_pkr ?? 0)}
                             onChangeText={(t) =>
                               updateNewReadyVariant(index, (prev) => ({
@@ -2414,7 +2458,7 @@ export default function UpdateProductScreen() {
                           />
 
                           <View style={styles.sectionHeaderRow}>
-                            <Text style={styles.label}>Variant Images</Text>
+                            <Text style={styles.label}>Style Images</Text>
                             <Pressable
                               onPress={() => pickNewReadyVariantImages(index)}
                               style={({ pressed }) => [
@@ -2468,7 +2512,7 @@ export default function UpdateProductScreen() {
                             </ScrollView>
                           ) : (
                             <Text style={styles.emptyInline}>
-                              No variant images selected yet.
+                              No style images selected yet.
                             </Text>
                           )}
 
@@ -2482,7 +2526,7 @@ export default function UpdateProductScreen() {
                                 <Text style={styles.variantSizeLabel}>
                                   {row.size}
                                 </Text>
-                                <TextInput
+                                <FastNumberInput
                                   value={String(row.qty ?? 0)}
                                   onChangeText={(t) =>
                                     updateNewReadyVariantSizeQty(
@@ -2516,17 +2560,17 @@ export default function UpdateProductScreen() {
                         ]}
                       >
                         <Text style={styles.addFullBtnText}>
-                          + Add New Variant
+                          + Add New Style
                         </Text>
                       </Pressable>
                     </View>
                   ) : (
                     <View style={styles.appendBox}>
                       <Text style={styles.appendTitle}>
-                        Add new made-on-order variants
+                        Add new made-on-order styles
                       </Text>
                       <Text style={styles.hint}>
-                        Already added made-on-order variants:
+                        Already added made-on-order styles:
                       </Text>
 
                       {readMadeOrderVariants(selected?.price).length ? (
@@ -2551,7 +2595,7 @@ export default function UpdateProductScreen() {
                         >
                           <View style={styles.draftHeaderRow}>
                             <Text style={styles.variantCardTitle}>
-                              New Variant{" "}
+                              New Style{" "}
                               {readMadeOrderVariants(selected?.price).length +
                                 index +
                                 1}
@@ -2574,7 +2618,7 @@ export default function UpdateProductScreen() {
                             </Pressable>
                           </View>
 
-                          <Text style={styles.label}>Variant name *</Text>
+                          <Text style={styles.label}>Style name *</Text>
                           <TextInput
                             value={variant.name}
                             onChangeText={(t) =>
@@ -2592,7 +2636,7 @@ export default function UpdateProductScreen() {
                           <Text style={styles.label}>
                             Additional Price (PKR)
                           </Text>
-                          <TextInput
+                          <FastNumberInput
                             value={String(variant.additional_price_pkr ?? 0)}
                             onChangeText={(t) =>
                               updateNewMadeOrderVariant(index, (prev) => ({
@@ -2610,7 +2654,7 @@ export default function UpdateProductScreen() {
                           />
 
                           <Text style={styles.label}>Estimated Days</Text>
-                          <TextInput
+                          <FastNumberInput
                             value={String(variant.estimated_days ?? 0)}
                             onChangeText={(t) =>
                               updateNewMadeOrderVariant(index, (prev) => ({
@@ -2628,7 +2672,7 @@ export default function UpdateProductScreen() {
                           />
 
                           <View style={styles.sectionHeaderRow}>
-                            <Text style={styles.label}>Variant Images</Text>
+                            <Text style={styles.label}>Style Images</Text>
                             <Pressable
                               onPress={() =>
                                 pickNewMadeOrderVariantImages(index)
@@ -2684,7 +2728,7 @@ export default function UpdateProductScreen() {
                             </ScrollView>
                           ) : (
                             <Text style={styles.emptyInline}>
-                              No variant images selected yet.
+                              No style images selected yet.
                             </Text>
                           )}
                         </View>
@@ -2703,7 +2747,7 @@ export default function UpdateProductScreen() {
                         ]}
                       >
                         <Text style={styles.addFullBtnText}>
-                          + Add New Made-on-order Variant
+                          + Add New Made-on-order Style
                         </Text>
                       </Pressable>
                     </View>
@@ -2717,7 +2761,7 @@ export default function UpdateProductScreen() {
               ) : (
                 <>
                   <Text style={styles.label}>Cost per Meter (PKR) *</Text>
-                  <TextInput
+                  <FastNumberInput
                     value={String(pricePerMeter ?? "")}
                     onChangeText={(t) =>
                       setPricePerMeter(Number(sanitizeNumber(t) || "0"))
@@ -2763,7 +2807,7 @@ export default function UpdateProductScreen() {
                       </Text>
 
                       <Text style={styles.label}>Dyeing Cost (PKR) *</Text>
-                      <TextInput
+                      <FastNumberInput
                         value={String(dyeingCost ?? "")}
                         onChangeText={(t) =>
                           setDyeingCost(Number(sanitizeNumber(t) || "0"))
@@ -2817,7 +2861,7 @@ export default function UpdateProductScreen() {
                     <View style={styles.loadingRow}>
                       <ActivityIndicator />
                       <Text style={styles.loadingText}>
-                        Loading tailoring options…
+                        Loading tailoring styles…
                       </Text>
                     </View>
                   ) : null}
@@ -2831,7 +2875,7 @@ export default function UpdateProductScreen() {
                   {tailoringEnabled ? (
                     <>
                       <Text style={styles.label}>Tailoring Cost (PKR) *</Text>
-                      <TextInput
+                      <FastNumberInput
                         value={String(tailoringCost ?? "")}
                         onChangeText={(t) =>
                           setTailoringCost(Number(sanitizeNumber(t) || "0"))
@@ -2846,7 +2890,7 @@ export default function UpdateProductScreen() {
                       <Text style={styles.label}>
                         Tailoring Turnaround (days)
                       </Text>
-                      <TextInput
+                      <FastNumberInput
                         value={String(tailoringTurnaroundDays ?? "")}
                         onChangeText={(t) =>
                           setTailoringTurnaroundDays(
@@ -2860,8 +2904,7 @@ export default function UpdateProductScreen() {
                         maxLength={3}
                       />
 
-                      {readTailoringStylePresets(selected?.spec)
-                        .length ? null : (
+                      {existingTailoringStylePresets.length ? null : (
                         <>
                           <Text style={styles.label}>Neck Styles</Text>
                           {blouseNeckOptions.length ? (
@@ -2927,7 +2970,7 @@ export default function UpdateProductScreen() {
 
                           {!hasAnyVendorStyleOptions ? (
                             <Text style={styles.hint}>
-                              Add tailoring style options in vendor profile
+                              Add tailoring styles in vendor profile
                               first, then return here.
                             </Text>
                           ) : null}
@@ -2943,9 +2986,9 @@ export default function UpdateProductScreen() {
                           style cards become available after Save Changes.
                         </Text>
 
-                        {readTailoringStylePresets(selected?.spec).length ? (
+                        {existingTailoringStylePresets.length ? (
                           <View style={styles.readonlyListBox}>
-                            {readTailoringStylePresets(selected?.spec).map(
+                            {existingTailoringStylePresets.map(
                               (style, index) => (
                                 <Text
                                   key={`old-style-${index}`}
@@ -2966,27 +3009,29 @@ export default function UpdateProductScreen() {
                             <View style={styles.draftHeaderRow}>
                               <Text style={styles.variantCardTitle}>
                                 New Style Card{" "}
-                                {readTailoringStylePresets(selected?.spec)
-                                  .length +
+                                {existingTailoringStylePresets.length +
                                   index +
                                   1}
                               </Text>
 
-                              <Pressable
-                                onPress={() =>
-                                  setNewTailoringStyles((prev) =>
-                                    prev.filter((_, i) => i !== index),
-                                  )
-                                }
-                                style={({ pressed }) => [
-                                  styles.discardDraftBtn,
-                                  pressed ? styles.pressed : null,
-                                ]}
-                              >
-                                <Text style={styles.discardDraftText}>
-                                  Discard
-                                </Text>
-                              </Pressable>
+                              {existingTailoringStylePresets.length > 0 ||
+                              newTailoringStyles.length > 1 ? (
+                                <Pressable
+                                  onPress={() =>
+                                    setNewTailoringStyles((prev) =>
+                                      prev.filter((_, i) => i !== index),
+                                    )
+                                  }
+                                  style={({ pressed }) => [
+                                    styles.discardDraftBtn,
+                                    pressed ? styles.pressed : null,
+                                  ]}
+                                >
+                                  <Text style={styles.discardDraftText}>
+                                    Discard
+                                  </Text>
+                                </Pressable>
+                              ) : null}
                             </View>
 
                             <Text style={styles.label}>Style title *</Text>
@@ -3022,7 +3067,7 @@ export default function UpdateProductScreen() {
                             />
 
                             <Text style={styles.label}>Extra Cost (PKR)</Text>
-                            <TextInput
+                            <FastNumberInput
                               value={String(style.extra_cost_pkr ?? 0)}
                               onChangeText={(t) =>
                                 updateNewTailoringStyle(index, (prev) => ({

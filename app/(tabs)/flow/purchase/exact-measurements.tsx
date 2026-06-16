@@ -12,6 +12,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import ExactMeasurementsModal from "./exact-measurements-modal";
 import type { ExactMeasurementSheetRow } from "./exact-measurements-sheet";
+import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 
 const STANDARD_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"] as const;
 
@@ -1127,7 +1128,7 @@ function CustomRow({
           style={styles.input}
         />
 
-        <TextInput
+        <FastNumberInput
           value={value}
           onChangeText={onValueChange}
           placeholder={`Value${unitSuffix}`}

@@ -1,11 +1,18 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Image, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
+import {
+  AddProductCard,
+  AddProductField,
+  AddProductFooter,
+  AddProductSecondaryButton,
+  AddProductScreen,
+} from "@/components/product/add-product/AddProductWizard";
 
 function safeInt(v: any) {
   const n = Number(v);
@@ -70,6 +77,7 @@ export default function Q10Videos() {
   }, [pickedVideos]);
 
   const canContinue = useMemo(() => Boolean(vendorId), [vendorId]);
+  const disabledHint = !vendorId ? "Vendor not loaded." : "";
 
   async function pickVideos() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -79,7 +87,7 @@ export default function Q10Videos() {
     }
 
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      mediaTypes: ["videos"],
       allowsMultipleSelection: true,
       quality: 1,
     });
@@ -135,46 +143,35 @@ export default function Q10Videos() {
     router.push("/vendor/profile/add-product/q11-description" as any);
   }
   return (
-    <View style={apStyles.screen}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={apStyles.screen}
-        contentContainerStyle={apStyles.content}
-      >
-        <View style={apStyles.headerRow}>
-          <Text style={apStyles.title}>Videos</Text>
-
-          <Pressable
-            onPress={() => router.back()}
-            style={({ pressed }) => [
-              apStyles.linkBtn,
-              pressed ? apStyles.pressed : null,
-            ]}
-          >
-            <Text style={apStyles.linkText}>Close</Text>
-          </Pressable>
-        </View>
-
-        <View style={apStyles.card}>
-          <Text style={apStyles.label}>Pick videos (optional)</Text>
-
-          <Pressable
-            style={({ pressed }) => [
-              apStyles.secondaryBtn,
-              pressed ? apStyles.pressed : null,
-            ]}
+    <AddProductScreen
+      title="Videos"
+      onBack={() => router.back()}
+      footer={
+        <AddProductFooter
+          onPrimaryPress={goNext}
+          primaryDisabled={!canContinue}
+          disabledHint={disabledHint}
+          secondaryLabel="Skip videos"
+          secondaryIcon="skip-next"
+          onSecondaryPress={goNext}
+        />
+      }
+    >
+      <AddProductCard>
+        <AddProductField
+          label="Pick videos (optional)"
+          style={{ marginTop: 0 }}
+        >
+          <AddProductSecondaryButton
+            label={`Pick Videos ${videoCount ? `(${videoCount})` : ""}`}
             onPress={pickVideos}
-          >
-            <Text style={apStyles.secondaryText}>
-              Pick Videos {videoCount ? `(${videoCount})` : ""}
-            </Text>
-          </Pressable>
+          />
 
           {pickedVideos.length ? (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingTop: 10, gap: 10 }}
+              contentContainerStyle={styles.videoStrip}
             >
               {pickedVideos.map((a: any, idx: number) => {
                 const uri = safeStr(a?.uri);
@@ -185,69 +182,28 @@ export default function Q10Videos() {
                 return (
                   <View
                     key={`${uri}-${idx}`}
-                    style={{
-                      width: 76,
-                      height: 76,
-                      borderRadius: 12,
-                      overflow: "hidden",
-                      borderWidth: 1,
-                      borderColor: apColors.borderSoft,
-                      backgroundColor: "#f3f4f6",
-                    }}
+                    style={styles.videoTile}
                   >
                     {tUri ? (
                       <Image
                         source={{ uri: tUri }}
-                        style={{ width: 76, height: 76 }}
+                        style={styles.videoThumb}
                       />
                     ) : (
-                      <View
-                        style={{
-                          width: 76,
-                          height: 76,
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontWeight: "900",
-                            color: "#111",
-                            opacity: 0.7,
-                          }}
-                        >
-                          Video
-                        </Text>
+                      <View style={styles.videoPlaceholder}>
+                        <Text style={styles.videoPlaceholderText}>Video</Text>
                       </View>
                     )}
 
                     <Pressable
                       onPress={() => removeVideo(uri)}
                       style={({ pressed }) => [
-                        {
-                          position: "absolute",
-                          top: 6,
-                          right: 6,
-                          width: 22,
-                          height: 22,
-                          borderRadius: 999,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          backgroundColor: "rgba(0,0,0,0.55)",
-                        },
+                        styles.removeBtn,
                         pressed ? apStyles.pressed : null,
                       ]}
                       hitSlop={10}
                     >
-                      <Text
-                        style={{
-                          color: "#fff",
-                          fontWeight: "900",
-                          fontSize: 12,
-                        }}
-                      >
-                        ✕
-                      </Text>
+                      <Text style={styles.removeText}>X</Text>
                     </Pressable>
                   </View>
                 );
@@ -256,33 +212,55 @@ export default function Q10Videos() {
           ) : (
             <Text style={apStyles.metaHint}>Pick videos or skip.</Text>
           )}
-
-          <View style={apStyles.btnStack}>
-            <Pressable
-              style={({ pressed }) => [
-                apStyles.dangerBtn,
-                pressed ? apStyles.pressed : null,
-              ]}
-              onPress={goNext}
-              disabled={!canContinue}
-            >
-              <Text style={apStyles.dangerText}>Skip</Text>
-            </Pressable>
-
-            <Pressable
-              style={({ pressed }) => [
-                apStyles.primaryBtn,
-                !canContinue ? apStyles.primaryBtnDisabled : null,
-                pressed ? apStyles.pressed : null,
-              ]}
-              onPress={goNext}
-              disabled={!canContinue}
-            >
-              <Text style={apStyles.primaryText}>Continue</Text>
-            </Pressable>
-          </View>
-        </View>
-      </ScrollView>
-    </View>
+        </AddProductField>
+      </AddProductCard>
+    </AddProductScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  videoStrip: {
+    paddingTop: 10,
+    gap: 10,
+  },
+  videoTile: {
+    width: 84,
+    height: 84,
+    borderRadius: 8,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: apColors.borderSoft,
+    backgroundColor: "#f3f4f6",
+  },
+  videoThumb: {
+    width: 84,
+    height: 84,
+  },
+  videoPlaceholder: {
+    width: 84,
+    height: 84,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  videoPlaceholderText: {
+    fontWeight: "900",
+    color: "#111",
+    opacity: 0.7,
+  },
+  removeBtn: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  removeText: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 12,
+  },
+});

@@ -1,11 +1,19 @@
 import React from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { Text, View } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+
 import { useProductDraft } from "@/components/product/ProductDraftContext";
-import { apColors, apStyles } from "@/components/product/addProductStyles";
+import { apStyles } from "@/components/product/addProductStyles";
+import {
+  AddProductPrimaryButton,
+  AddProductScreen,
+  AddProductSecondaryButton,
+} from "@/components/product/add-product/AddProductWizard";
 
 export default function Q06B1ReadyVariantChoice() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const returnTo = typeof params?.returnTo === "string" ? params.returnTo : "";
   const ctx = useProductDraft() as any;
 
   function patchDraft(patch: any) {
@@ -14,67 +22,72 @@ export default function Q06B1ReadyVariantChoice() {
     }
   }
 
-  function setSpec(patch: any) {
-    if (typeof ctx.setSpec === "function") {
-      ctx.setSpec((prev: any) => ({ ...(prev ?? {}), ...patch }));
-      return;
-    }
-
+  function yes() {
     patchDraft({
+      inventory_qty: 0,
       spec: {
         ...(ctx.draft?.spec ?? {}),
-        ...patch,
+        has_ready_variants: true,
+        variant_mode: "ready_variants",
+      },
+      price: {
+        ...(ctx.draft?.price ?? {}),
+        simple_ready_inventory: [],
       },
     });
-  }
-
-  function yes() {
-    setSpec({
-      has_ready_variants: true,
-      variant_mode: "ready_variants",
-    });
-    router.push("/vendor/profile/add-product/q06b2-piece-count" as any);
+    router.push({
+      pathname: "/vendor/profile/add-product/q06b2-piece-count" as any,
+      params: returnTo ? { returnTo } : {},
+    } as any);
   }
 
   function no() {
-    setSpec({
-      has_ready_variants: false,
-      variant_mode: "simple_ready",
+    patchDraft({
+      inventory_qty: 0,
+      spec: {
+        ...(ctx.draft?.spec ?? {}),
+        has_ready_variants: false,
+        variant_mode: "simple_ready",
+      },
+      price: {
+        ...(ctx.draft?.price ?? {}),
+        variants: [],
+      },
     });
 
-    router.push("/vendor/profile/add-product/q11-description" as any);
+    router.replace({
+      pathname:
+        "/vendor/profile/add-product/q06b1-simple-ready-inventory" as any,
+      params: returnTo ? { returnTo } : {},
+    } as any);
   }
 
   return (
-    <View style={apStyles.screen}>
-      <ScrollView contentContainerStyle={apStyles.content}>
-        <View style={apStyles.headerRow}>
-          <Text style={apStyles.title}>Ready-to-wear variants</Text>
+    <AddProductScreen
+      title="Ready-to-wear styles"
+      onBack={() => router.back()}
+      backLabel="Back"
+    >
+      <View style={apStyles.card}>
+        <Text style={apStyles.label}>Do you want to add styles?</Text>
+        <Text style={apStyles.metaHint}>
+          Add styles for this product with different colors, design
+          alterations, sizes, stock, or additional price if applicable.
+        </Text>
 
-          <Pressable onPress={() => router.back()} style={apStyles.linkBtn}>
-            <Text style={apStyles.linkText}>Back</Text>
-          </Pressable>
+        <View style={apStyles.btnStack}>
+          <AddProductPrimaryButton
+            label="Yes, add styles"
+            icon="add"
+            onPress={yes}
+          />
+          <AddProductSecondaryButton
+            label="No, continue simple product"
+            icon="arrow-forward"
+            onPress={no}
+          />
         </View>
-
-        <View style={apStyles.card}>
-          <Text style={apStyles.label}>Do you want to add variants?</Text>
-
-          <Text style={{ color: apColors.muted, lineHeight: 20 }}>
-            Add variants for this product with different colors, design
-            alterations, sizes, stock, or additional price if applicable.
-          </Text>
-
-          <Pressable style={apStyles.primaryBtn} onPress={yes}>
-            <Text style={apStyles.primaryText}>Yes, add variants</Text>
-          </Pressable>
-
-          <Pressable style={apStyles.secondaryBtn} onPress={no}>
-            <Text style={apStyles.secondaryText}>
-              No, continue simple product
-            </Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </View>
+      </View>
+    </AddProductScreen>
   );
 }

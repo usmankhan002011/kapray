@@ -305,8 +305,8 @@ export default function OrdersIndexScreen() {
         {selectedVariant.hasVariant ? (
           <View style={styles.variantBox}>
             <Text style={styles.variantTitle} numberOfLines={1}>
-              Selected Variant:{" "}
-              {selectedVariant.title || "Ready-to-wear variant"}
+              Selected Style:{" "}
+              {selectedVariant.title || "Ready-to-wear style"}
             </Text>
 
             <Text style={styles.variantMeta} numberOfLines={1}>
