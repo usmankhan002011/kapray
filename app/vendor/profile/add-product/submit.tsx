@@ -10,12 +10,15 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import * as FileSystem from "expo-file-system";
-import { decode } from "base64-arraybuffer";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { supabase } from "@/utils/supabase/client";
+import {
+  getVendorMediaPathFromPublicUrl,
+  getVendorMediaPublicUrl,
+  uploadVendorMediaFromUri,
+} from "@/utils/mediaBackendUtils";
 
 import {
   normalizeReadyVariants,
@@ -29,7 +32,6 @@ import {
   type MadeOrderVariant,
 } from "@/utils/kapray/productVariants";
 
-const BUCKET_VENDOR = "vendor_images";
 const PRODUCTS_TABLE = "products";
 
 type ProductCategory =
@@ -85,22 +87,16 @@ function normalizePresetArray(v: unknown): TailoringStylePreset[] {
 }
 
 async function uploadAssetToStorage(args: {
-  bucket: string;
   path: string;
   uri: string;
   contentType: string;
 }) {
-  const base64 = await FileSystem.readAsStringAsync(args.uri, {
-    encoding: FileSystem.EncodingType.Base64,
+  return uploadVendorMediaFromUri({
+    path: args.path,
+    uri: args.uri,
+    contentType: args.contentType,
+    upsert: true,
   });
-  const buffer = decode(base64);
-
-  const { data, error } = await supabase.storage
-    .from(args.bucket)
-    .upload(args.path, buffer, { contentType: args.contentType, upsert: true });
-
-  if (error) throw new Error(error.message);
-  return data?.path ?? null;
 }
 
 function inferCategoryFromDraft(draft: any): ProductCategory {
@@ -197,13 +193,11 @@ async function uploadTailoringPresetImages(args: {
       }
 
       if (rawPath && !rawUrl) {
-        const { data } = supabase.storage
-          .from(BUCKET_VENDOR)
-          .getPublicUrl(rawPath);
+        const publicUrl = getVendorMediaPublicUrl(rawPath);
         uploadedImages.push({
           ...img,
-          uri: data?.publicUrl ?? rawUri ?? "",
-          url: data?.publicUrl ?? "",
+          uri: publicUrl ?? rawUri ?? "",
+          url: publicUrl ?? "",
           path: rawPath,
         });
         continue;
@@ -224,7 +218,6 @@ async function uploadTailoringPresetImages(args: {
       const path = `vendors/${args.vendorId}/products/${args.productCode}/tailoring/${presetId}/${Date.now()}-${imageIndex}.${ext}`;
 
       const uploadedPath = await uploadAssetToStorage({
-        bucket: BUCKET_VENDOR,
         path,
         uri: rawUri,
         contentType: mimeType.startsWith("image/") ? mimeType : "image/jpeg",
@@ -232,14 +225,12 @@ async function uploadTailoringPresetImages(args: {
 
       if (!uploadedPath) continue;
 
-      const { data } = supabase.storage
-        .from(BUCKET_VENDOR)
-        .getPublicUrl(uploadedPath);
+      const publicUrl = getVendorMediaPublicUrl(uploadedPath);
 
       uploadedImages.push({
         ...img,
-        uri: data?.publicUrl ?? rawUri,
-        url: data?.publicUrl ?? "",
+        uri: publicUrl ?? rawUri,
+        url: publicUrl ?? "",
         path: uploadedPath,
       });
     }
@@ -295,19 +286,6 @@ function isLocalFileUri(v: string) {
   );
 }
 
-function storagePathFromPublicUrl(url: string) {
-  const clean = safeStr(url);
-  if (!clean) return "";
-
-  const marker = `/storage/v1/object/public/${BUCKET_VENDOR}/`;
-  const idx = clean.indexOf(marker);
-  if (idx >= 0) {
-    return decodeURIComponent(clean.slice(idx + marker.length));
-  }
-
-  return "";
-}
-
 function normalizeReadyVariantImageInputs(
   variant: ReadyVariantForSubmit,
 ): ReadyVariantImageInput[] {
@@ -322,7 +300,7 @@ function normalizeReadyVariantImageInputs(
       const clean = safeStr(item);
       if (!clean) continue;
 
-      const storagePath = storagePathFromPublicUrl(clean);
+      const storagePath = getVendorMediaPathFromPublicUrl(clean);
       if (storagePath) {
         out.push({ path: storagePath, url: clean });
       } else if (isLocalFileUri(clean)) {
@@ -405,7 +383,7 @@ async function uploadReadyVariantImages(args: {
         continue;
       }
 
-      const pathFromUrl = storagePathFromPublicUrl(rawUrl);
+      const pathFromUrl = getVendorMediaPathFromPublicUrl(rawUrl);
       if (pathFromUrl) {
         uploadedPaths.push(pathFromUrl);
         continue;
@@ -413,7 +391,7 @@ async function uploadReadyVariantImages(args: {
 
       if (!rawUri) continue;
 
-      const uriPathFromPublicUrl = storagePathFromPublicUrl(rawUri);
+      const uriPathFromPublicUrl = getVendorMediaPathFromPublicUrl(rawUri);
       if (uriPathFromPublicUrl) {
         uploadedPaths.push(uriPathFromPublicUrl);
         continue;
@@ -433,7 +411,6 @@ async function uploadReadyVariantImages(args: {
       const path = `vendors/${args.vendorId}/products/${args.productCode}/variants/${variantId}/${Date.now()}-${imageIndex}.${ext}`;
 
       const uploadedPath = await uploadAssetToStorage({
-        bucket: BUCKET_VENDOR,
         path,
         uri: rawUri,
         contentType: mimeType.startsWith("image/") ? mimeType : "image/jpeg",
@@ -475,7 +452,7 @@ async function uploadMadeOrderVariantImages(args: {
         continue;
       }
 
-      const pathFromUrl = storagePathFromPublicUrl(rawUrl);
+      const pathFromUrl = getVendorMediaPathFromPublicUrl(rawUrl);
       if (pathFromUrl) {
         uploadedPaths.push(pathFromUrl);
         continue;
@@ -483,7 +460,7 @@ async function uploadMadeOrderVariantImages(args: {
 
       if (!rawUri) continue;
 
-      const uriPathFromPublicUrl = storagePathFromPublicUrl(rawUri);
+      const uriPathFromPublicUrl = getVendorMediaPathFromPublicUrl(rawUri);
       if (uriPathFromPublicUrl) {
         uploadedPaths.push(uriPathFromPublicUrl);
         continue;
@@ -504,7 +481,6 @@ async function uploadMadeOrderVariantImages(args: {
       const path = `vendors/${args.vendorId}/products/${args.productCode}/made-order-variants/${variantId}/${Date.now()}-${imageIndex}.${ext}`;
 
       const uploadedPath = await uploadAssetToStorage({
-        bucket: BUCKET_VENDOR,
         path,
         uri: rawUri,
         contentType: mimeType.startsWith("image/") ? mimeType : "image/jpeg",
@@ -1015,7 +991,6 @@ export default function AddProductSubmitScreen() {
         const path = `vendors/${vendorId}/products/${finalCode}/images/${Date.now()}-${i}.${ext}`;
 
         const p = await uploadAssetToStorage({
-          bucket: BUCKET_VENDOR,
           path,
           uri,
           contentType: mimeType.startsWith("image/") ? mimeType : "image/jpeg",
@@ -1036,7 +1011,6 @@ export default function AddProductSubmitScreen() {
         const vPath = `vendors/${vendorId}/products/${finalCode}/videos/${Date.now()}-${i}.mp4`;
 
         const vp = await uploadAssetToStorage({
-          bucket: BUCKET_VENDOR,
           path: vPath,
           uri,
           contentType: mimeType.startsWith("video/") ? mimeType : "video/mp4",
@@ -1051,7 +1025,6 @@ export default function AddProductSubmitScreen() {
           if (t?.uri) {
             const tPath = `vendors/${vendorId}/products/${finalCode}/thumbs/${Date.now()}-${i}.jpg`;
             const tp = await uploadAssetToStorage({
-              bucket: BUCKET_VENDOR,
               path: tPath,
               uri: t.uri,
               contentType: "image/jpeg",

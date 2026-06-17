@@ -14,9 +14,9 @@ import {
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { useAppSelector } from "@/store/hooks";
+import { getVendorMediaPublicUrl } from "@/utils/mediaBackendUtils";
 
 const PRODUCTS_TABLE = "products";
-const BUCKET_VENDOR = "vendor_images";
 
 const PAGE_SIZE = 30;
 
@@ -70,9 +70,7 @@ function firstImagePath(media: any): string | null {
 }
 
 function publicUrlForStoragePath(path: string | null): string | null {
-  if (!path) return null;
-  const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(path);
-  return data?.publicUrl ?? null;
+  return getVendorMediaPublicUrl(path);
 }
 
 function getVariantInventorySummary(

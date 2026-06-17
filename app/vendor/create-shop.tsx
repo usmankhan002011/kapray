@@ -44,11 +44,10 @@ import {
   VendorWizardData,
   pickImages,
   pickVideos,
-  uploadToBucket,
 } from "@/utils/helpers/wizardHelpers";
+import { uploadVendorMediaFile } from "@/utils/mediaBackendUtils";
 import { supabase } from "@/utils/supabase/client";
 
-const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
 
 const EMPTY_TAILORING_OPTIONS = {
@@ -385,51 +384,46 @@ export default function CreateShopScreen() {
     const ts = Date.now();
 
     const profilePath = form.profile
-      ? await uploadToBucket(
-          BUCKET_VENDOR,
-          `vendors/${vendor_id}/profile/${ts}-${form.profile.fileName || "profile"}`,
-          form.profile,
-          "image/jpeg",
-        )
+      ? await uploadVendorMediaFile({
+          path: `vendors/${vendor_id}/profile/${ts}-${form.profile.fileName || "profile"}`,
+          file: form.profile,
+          fallbackContentType: "image/jpeg",
+        })
       : (selectedVendor?.profile_image_path ?? null);
 
     const certPath = form.govPermission
-      ? await uploadToBucket(
-          BUCKET_VENDOR,
-          `vendors/${vendor_id}/certificates/${ts}-${form.govPermission.fileName || "file"}`,
-          form.govPermission,
-          "image/jpeg",
-        )
+      ? await uploadVendorMediaFile({
+          path: `vendors/${vendor_id}/certificates/${ts}-${form.govPermission.fileName || "file"}`,
+          file: form.govPermission,
+          fallbackContentType: "image/jpeg",
+        })
       : (selectedVendor?.certificate_paths?.[0] ?? null);
 
     const bannerPath = form.banner
-      ? await uploadToBucket(
-          BUCKET_VENDOR,
-          `vendors/${vendor_id}/banner/${ts}-${form.banner.fileName || "banner"}`,
-          form.banner,
-          "image/jpeg",
-        )
+      ? await uploadVendorMediaFile({
+          path: `vendors/${vendor_id}/banner/${ts}-${form.banner.fileName || "banner"}`,
+          file: form.banner,
+          fallbackContentType: "image/jpeg",
+        })
       : (selectedVendor?.banner_path ?? null);
 
     const imagePaths: string[] = [];
     for (let i = 0; i < form.images.length; i++) {
-      const p = await uploadToBucket(
-        BUCKET_VENDOR,
-        `vendors/${vendor_id}/shop-images/${ts}-${i}-${form.images[i].fileName || "image"}`,
-        form.images[i],
-        "image/jpeg",
-      );
+      const p = await uploadVendorMediaFile({
+        path: `vendors/${vendor_id}/shop-images/${ts}-${i}-${form.images[i].fileName || "image"}`,
+        file: form.images[i],
+        fallbackContentType: "image/jpeg",
+      });
       if (p) imagePaths.push(p);
     }
 
     const videoPaths: string[] = [];
     for (let i = 0; i < form.videos.length; i++) {
-      const p = await uploadToBucket(
-        BUCKET_VENDOR,
-        `vendors/${vendor_id}/shop-videos/${ts}-${i}-${form.videos[i].fileName || "video"}`,
-        form.videos[i],
-        "video/mp4",
-      );
+      const p = await uploadVendorMediaFile({
+        path: `vendors/${vendor_id}/shop-videos/${ts}-${i}-${form.videos[i].fileName || "video"}`,
+        file: form.videos[i],
+        fallbackContentType: "video/mp4",
+      });
       if (p) videoPaths.push(p);
     }
 

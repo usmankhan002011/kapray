@@ -19,8 +19,8 @@ import { supabase } from "@/utils/supabase/client";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setSelectedVendor } from "@/store/vendorSlice";
+import { getVendorMediaPublicUrl } from "@/utils/mediaBackendUtils";
 
-const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
 const FOOTER_H = 86;
 
@@ -97,10 +97,6 @@ type ProductRow = {
 function safeText(v: any) {
   const t = String(v ?? "").trim();
   return t.length ? t : "—";
-}
-
-function isHttpUrl(v: any) {
-  return typeof v === "string" && /^https?:\/\//i.test(v);
 }
 
 function firstParam(v: unknown): string | null {
@@ -343,11 +339,7 @@ export default function ViewProductScreen() {
   }, [params]);
 
   const resolvePublicUrl = useCallback((path: string | null | undefined) => {
-    if (!path) return null;
-    if (isHttpUrl(path)) return path;
-
-    const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(path);
-    return data?.publicUrl ?? null;
+    return getVendorMediaPublicUrl(path);
   }, []);
 
   const resolveManyPublic = useCallback(

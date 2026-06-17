@@ -19,10 +19,10 @@ import {
 } from "@/utils/favourites";
 import { useAppSelector } from "@/store/hooks";
 import { supabase } from "@/utils/supabase/client";
+import { getVendorMediaPublicUrl } from "@/utils/mediaBackendUtils";
 import Wizard from "./wizard";
 
 const PRODUCTS_TABLE = "products";
-const BUCKET_VENDOR = "vendor_images";
 
 const TABLE_DRESS_TYPE = "dress_types";
 const TABLE_FABRIC_TYPES = "fabric_types";
@@ -106,9 +106,7 @@ function firstImagePath(media: any): string | null {
 }
 
 function publicUrlForStoragePath(path: string | null): string | null {
-  if (!path) return null;
-  const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(path);
-  return data?.publicUrl ?? null;
+  return getVendorMediaPublicUrl(path);
 }
 
 function safeStockQty(v: unknown) {

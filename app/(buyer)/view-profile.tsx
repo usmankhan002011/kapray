@@ -29,8 +29,8 @@ import ReviewSummaryCard from "@/components/vendor-reviews/ReviewSummaryCard";
 import ReviewList, {
   ReviewListItem,
 } from "@/components/vendor-reviews/ReviewList";
+import { getVendorMediaPublicUrl } from "@/utils/mediaBackendUtils";
 
-const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
 
 type VendorRow = {
@@ -70,10 +70,6 @@ type ReviewSummaryRow = {
 function safeText(v: any) {
   const t = String(v ?? "").trim();
   return t.length ? t : "—";
-}
-
-function isHttpUrl(v: any) {
-  return typeof v === "string" && /^https?:\/\//i.test(v);
 }
 
 function firstParam(v: unknown): string | null {
@@ -124,10 +120,7 @@ export default function BuyerViewProfileScreen() {
   const flatListRef = useRef<FlatList<string>>(null);
 
   const resolvePublicUrl = useCallback((path: string | null | undefined) => {
-    if (!path) return null;
-    if (isHttpUrl(path)) return path;
-    const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(path);
-    return data?.publicUrl ?? null;
+    return getVendorMediaPublicUrl(path);
   }, []);
 
   const resolveManyPublic = useCallback(

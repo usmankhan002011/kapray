@@ -44,8 +44,8 @@ import {
   clearCachedDyeSelection,
   getCachedDyeSelection,
 } from "@/app/vendor/profile/(product-modals)/dyeing/dye_palette_modal";
+import { getVendorMediaPublicUrl } from "@/utils/mediaBackendUtils";
 
-const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
 const FOOTER_H = 86;
 
@@ -117,10 +117,6 @@ type ProductRow = {
 function safeText(v: unknown) {
   const t = String(v ?? "").trim();
   return t.length ? t : "—";
-}
-
-function isHttpUrl(v: unknown) {
-  return typeof v === "string" && /^https?:\/\//i.test(v);
 }
 
 function firstParam(v: unknown): string | null {
@@ -623,11 +619,7 @@ export default function ViewProductScreen() {
   }, [params]);
 
   const resolvePublicUrl = useCallback((path: string | null | undefined) => {
-    if (!path) return null;
-    if (isHttpUrl(path)) return path;
-
-    const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(path);
-    return data?.publicUrl ?? null;
+    return getVendorMediaPublicUrl(path);
   }, []);
 
   const resolveManyPublic = useCallback(

@@ -18,6 +18,7 @@ import { supabase } from "@/utils/supabase/client";
 import { useAppSelector } from "@/store/hooks";
 import ExactMeasurementsModal from "../(tabs)/flow/purchase/exact-measurements-modal";
 import type { ExactMeasurementSheetRow } from "../(tabs)/flow/purchase/exact-measurements-sheet";
+import { getVendorMediaPublicUrlOrEmpty } from "@/utils/mediaBackendUtils";
 
 type Params = { id?: string; from?: string };
 
@@ -212,8 +213,7 @@ function resolvePublicUrlFromPath(pathOrUrl: string) {
   if (looksLikeUrl(s)) return s;
 
   try {
-    const { data } = supabase.storage.from("vendor_images").getPublicUrl(s);
-    return data?.publicUrl ?? "";
+    return getVendorMediaPublicUrlOrEmpty(s);
   } catch {
     return "";
   }

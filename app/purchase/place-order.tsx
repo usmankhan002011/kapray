@@ -17,8 +17,8 @@ import { supabase } from "@/utils/supabase/client";
 import { getDeliveryCost } from "@/utils/kapray/delivery";
 import ExactMeasurementsModal from "../(tabs)/flow/purchase/exact-measurements-modal";
 import type { ExactMeasurementSheetRow } from "../(tabs)/flow/purchase/exact-measurements-sheet";
+import { getVendorMediaPublicUrlOrEmpty } from "@/utils/mediaBackendUtils";
 
-const BUCKET_VENDOR = "vendor_images";
 const LAST_CHECKOUT_ADDRESS_KEY = "kapray:last_checkout_address:v1";
 
 type LastCheckoutAddress = {
@@ -287,9 +287,7 @@ function parseBoolParam(v: unknown): boolean | null {
 function resolvePublicUrl(path: string | null | undefined) {
   const p = norm(path);
   if (!p) return "";
-  if (/^https?:\/\//i.test(p)) return p;
-  const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(p);
-  return data?.publicUrl ?? "";
+  return getVendorMediaPublicUrlOrEmpty(p);
 }
 
 function cleanReadyToWearTitle(title: string, selectedSize: string) {

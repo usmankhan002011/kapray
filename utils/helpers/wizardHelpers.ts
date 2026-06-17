@@ -1,9 +1,5 @@
-import { decode } from "base64-arraybuffer";
-import * as FileSystem from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import { Alert } from "react-native";
-
-import { supabase } from "@/utils/supabase/client";
 
 export type Picked = { uri: string; mimeType?: string; fileName?: string };
 
@@ -147,32 +143,3 @@ export async function pickVideos(multiple: boolean) {
   })) as Picked[];
 }
 
-export async function uploadToBucket(
-  bucket: string,
-  path: string,
-  file: Picked,
-  fallbackContentType: string
-): Promise<string | null> {
-  try {
-    const contentType = file.mimeType || fallbackContentType;
-
-    const base64 = await FileSystem.readAsStringAsync(file.uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    const buffer = decode(base64);
-
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(path, buffer, { contentType, upsert: true });
-
-    if (error) {
-      Alert.alert("Upload failed", error.message);
-      return null;
-    }
-
-    return data?.path ?? null;
-  } catch (e: any) {
-    Alert.alert("Upload error", e?.message ?? String(e));
-    return null;
-  }
-}

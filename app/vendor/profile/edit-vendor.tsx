@@ -21,8 +21,6 @@ import { supabase } from "@/utils/supabase/client";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setSelectedVendor } from "@/store/vendorSlice";
 import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system";
-import { decode } from "base64-arraybuffer";
 import { optionStyles } from "@/components/ui/StandardFilterDisplay";
 import * as Location from "expo-location";
 import * as VideoThumbnails from "expo-video-thumbnails";
@@ -33,12 +31,16 @@ import {
   BLOUSE_SLEEVE_PATTERNS,
   TROUSER_STYLES,
 } from "@/data/kapray/tailoringOptions";
+import {
+  getVendorMediaPublicUrl,
+  uploadVendorMediaFile,
+  VendorMediaFile,
+} from "@/utils/mediaBackendUtils";
 
-const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
 const SETTINGS_ROUTE = "/vendor/profile/settings";
 
-type Picked = { uri: string; mimeType?: string; fileName?: string };
+type Picked = VendorMediaFile;
 
 type VendorTailoringOptions = {
   blouse_neck?: string[] | null;
@@ -82,10 +84,6 @@ function prettyNameFromPicked(p: Picked, fallback: string) {
   return last || fallback;
 }
 
-function isHttpUrl(v: any) {
-  return typeof v === "string" && /^https?:\/\//i.test(v);
-}
-
 function extFromUri(uri: string) {
   const clean = String(uri || "");
   const qIdx = clean.indexOf("?");
@@ -107,30 +105,18 @@ function guessContentTypeFromExt(ext: string) {
   return "application/octet-stream";
 }
 
-async function uploadToBucket(
-  bucket: string,
+async function uploadPickedVendorMedia(
   path: string,
   file: Picked,
   fallbackContentType: string
 ): Promise<string | null> {
   try {
-    const contentType = file.mimeType || fallbackContentType;
-
-    const base64 = await FileSystem.readAsStringAsync(file.uri, {
-      encoding: FileSystem.EncodingType.Base64,
+    return await uploadVendorMediaFile({
+      path,
+      file,
+      fallbackContentType,
+      upsert: false,
     });
-    const buffer = decode(base64);
-
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(path, buffer, { contentType, upsert: false });
-
-    if (error) {
-      Alert.alert("Upload failed", error.message);
-      return null;
-    }
-
-    return data?.path ?? null;
   } catch (e: any) {
     Alert.alert("Upload error", e?.message ?? String(e));
     return null;
@@ -266,11 +252,7 @@ export default function EditVendorScreen() {
   }, [router]);
 
   const resolvePublicUrl = useCallback((path: string | null | undefined) => {
-    if (!path) return null;
-    if (isHttpUrl(path)) return path;
-
-    const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(path);
-    return data?.publicUrl ?? null;
+    return getVendorMediaPublicUrl(path);
   }, []);
 
   const profileUrl = useMemo(() => resolvePublicUrl(profilePath), [resolvePublicUrl, profilePath]);
@@ -650,8 +632,7 @@ export default function EditVendorScreen() {
       const filename = `${Date.now()}_${Math.random().toString(16).slice(2)}.${ext}`;
       const storagePath = `vendors/${vendorId}/${folder}/${filename}`;
 
-      const uploadedPath = await uploadToBucket(
-        BUCKET_VENDOR,
+      const uploadedPath = await uploadPickedVendorMedia(
         storagePath,
         picked,
         isVideo ? "video/mp4" : "image/jpeg"

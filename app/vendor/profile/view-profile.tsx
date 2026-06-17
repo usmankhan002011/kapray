@@ -27,8 +27,8 @@ import { setSelectedVendor } from "@/store/vendorSlice";
 import { VideoView, useVideoPlayer } from "expo-video";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import ReviewSummaryCard from "@/components/vendor-reviews/ReviewSummaryCard";
+import { getVendorMediaPublicUrl } from "@/utils/mediaBackendUtils";
 
-const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
 const SETTINGS_ROUTE = "/vendor/profile/settings";
 
@@ -76,10 +76,6 @@ type ReviewSummaryRow = {
 function safeText(v: any) {
   const t = String(v ?? "").trim();
   return t.length ? t : "—";
-}
-
-function isHttpUrl(v: any) {
-  return typeof v === "string" && /^https?:\/\//i.test(v);
 }
 
 function joinOrDash(items?: string[] | null) {
@@ -151,11 +147,7 @@ export default function VendorProfileScreen() {
   }, [vendor]);
 
   const resolvePublicUrl = useCallback((path: string | null | undefined) => {
-    if (!path) return null;
-    if (isHttpUrl(path)) return path;
-
-    const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(path);
-    return data?.publicUrl ?? null;
+    return getVendorMediaPublicUrl(path);
   }, []);
 
   const resolveManyPublic = useCallback(

@@ -15,12 +15,13 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { useAppSelector } from "@/store/hooks";
 import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system";
-import { decode } from "base64-arraybuffer";
 import * as VideoThumbnails from "expo-video-thumbnails";
+import {
+  getVendorMediaPublicUrl,
+  uploadVendorMediaFromUri,
+} from "@/utils/mediaBackendUtils";
 
 const PRODUCTS_TABLE = "products";
-const BUCKET_VENDOR = "vendor_images";
 
 type ProductRow = {
   id: number;
@@ -130,10 +131,6 @@ function safeNumOrZero(v: any) {
   const n = Number(v);
   if (!Number.isFinite(n)) return 0;
   return n;
-}
-
-function isHttpUrl(v: any) {
-  return typeof v === "string" && /^https?:\/\//i.test(v);
 }
 
 function extFromUri(uri: string) {
@@ -814,10 +811,7 @@ export default function UpdateProductScreen() {
   const [videoThumbs, setVideoThumbs] = useState<Record<string, string>>({});
 
   const resolvePublicUrl = useCallback((path: string | null | undefined) => {
-    if (!path) return null;
-    if (isHttpUrl(path)) return path;
-    const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(path);
-    return data?.publicUrl ?? null;
+    return getVendorMediaPublicUrl(path);
   }, []);
 
   const toggleStyle = useCallback(
@@ -1742,23 +1736,17 @@ export default function UpdateProductScreen() {
     const ext = extFromUri(args.uri) || (args.kind === "image" ? "jpg" : "mp4");
     const contentType = guessContentTypeFromExt(ext);
 
-    const base64 = await FileSystem.readAsStringAsync(args.uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    const arrayBuffer = decode(base64);
-
     const folder = args.kind === "image" ? "images" : "videos";
     const filename = `${Date.now()}_${args.index}_${Math.random().toString(16).slice(2)}.${ext}`;
     const storagePath = `vendors/${args.vendorId}/products/${args.productCode}/${folder}/${filename}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from(BUCKET_VENDOR)
-      .upload(storagePath, arrayBuffer, {
-        contentType,
-        upsert: false,
-      });
+    await uploadVendorMediaFromUri({
+      path: storagePath,
+      uri: args.uri,
+      contentType,
+      upsert: false,
+    });
 
-    if (uploadError) throw new Error(uploadError.message);
     return storagePath;
   }
 

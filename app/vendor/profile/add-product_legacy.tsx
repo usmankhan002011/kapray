@@ -13,14 +13,12 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system";
-import { decode } from "base64-arraybuffer";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { supabase } from "@/utils/supabase/client";
+import { uploadVendorMediaFromUri } from "@/utils/mediaBackendUtils";
 
-const BUCKET_VENDOR = "vendor_images";
 const PRODUCTS_TABLE = "products";
 
 // Individual modal file names in /vendor/profile/(product-modals)/
@@ -66,22 +64,16 @@ function safeNumOrZero(v: any) {
 }
 
 async function uploadAssetToStorage(args: {
-  bucket: string;
   path: string;
   uri: string;
   contentType: string;
 }) {
-  const base64 = await FileSystem.readAsStringAsync(args.uri, {
-    encoding: FileSystem.EncodingType.Base64
+  return uploadVendorMediaFromUri({
+    path: args.path,
+    uri: args.uri,
+    contentType: args.contentType,
+    upsert: true,
   });
-  const buffer = decode(base64);
-
-  const { data, error } = await supabase.storage
-    .from(args.bucket)
-    .upload(args.path, buffer, { contentType: args.contentType, upsert: true });
-
-  if (error) throw new Error(error.message);
-  return data?.path ?? null;
 }
 
 // Show ALL picked values (no "+2" truncation)
@@ -616,7 +608,7 @@ export default function AddProductScreen() {
         return;
       }
 
-      // 2) Upload media to vendor_images under vendors/{vendor_id}/products/{product_code}/...
+      // 2) Upload media under vendors/{vendor_id}/products/{product_code}/...
       const imageAssets = draft.media.images ?? [];
       const videoAssets = draft.media.videos ?? [];
 
@@ -635,7 +627,6 @@ export default function AddProductScreen() {
         const path = `vendors/${vendorId}/products/${finalCode}/images/${Date.now()}-${i}.${ext}`;
 
         const p = await uploadAssetToStorage({
-          bucket: BUCKET_VENDOR,
           path,
           uri,
           contentType: mimeType.startsWith("image/") ? mimeType : "image/jpeg"
@@ -656,7 +647,6 @@ export default function AddProductScreen() {
         const vPath = `vendors/${vendorId}/products/${finalCode}/videos/${Date.now()}-${i}.mp4`;
 
         const vp = await uploadAssetToStorage({
-          bucket: BUCKET_VENDOR,
           path: vPath,
           uri,
           contentType: mimeType.startsWith("video/") ? mimeType : "video/mp4"
@@ -670,7 +660,6 @@ export default function AddProductScreen() {
           if (t?.uri) {
             const tPath = `vendors/${vendorId}/products/${finalCode}/thumbs/${Date.now()}-${i}.jpg`;
             const tp = await uploadAssetToStorage({
-              bucket: BUCKET_VENDOR,
               path: tPath,
               uri: t.uri,
               contentType: "image/jpeg"
