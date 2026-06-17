@@ -20,16 +20,16 @@ import {
 import { useAppSelector } from "@/store/hooks";
 import { supabase } from "@/utils/supabase/client";
 import { getVendorMediaPublicUrl } from "@/utils/mediaBackendUtils";
+import {
+  PRODUCTS_TABLE,
+  TABLE_DRESS_TYPE,
+  TABLE_FABRIC_TYPES,
+  TABLE_ORIGIN_CITIES,
+  TABLE_WEAR_STATES,
+  TABLE_WORK_DENSITIES,
+  TABLE_WORK_TYPES,
+} from "@/constants/constants";
 import Wizard from "./wizard";
-
-const PRODUCTS_TABLE = "products";
-
-const TABLE_DRESS_TYPE = "dress_types";
-const TABLE_FABRIC_TYPES = "fabric_types";
-const TABLE_WORK_TYPES = "work_types";
-const TABLE_WORK_DENSITIES = "work_densities";
-const TABLE_ORIGIN_CITIES = "origin_cities";
-const TABLE_WEAR_STATES = "wear_states";
 
 const PAGE_SIZE = 30;
 

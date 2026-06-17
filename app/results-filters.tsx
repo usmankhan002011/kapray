@@ -3,12 +3,13 @@ import { BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { supabase } from "@/utils/supabase/client";
-
-const TABLE_FABRIC_TYPES = "fabric_types";
-const TABLE_WORK_TYPES = "work_types";
-const TABLE_WORK_DENSITIES = "work_densities";
-const TABLE_ORIGIN_CITIES = "origin_cities";
-const TABLE_WEAR_STATES = "wear_states";
+import {
+  TABLE_FABRIC_TYPES,
+  TABLE_ORIGIN_CITIES,
+  TABLE_WEAR_STATES,
+  TABLE_WORK_DENSITIES,
+  TABLE_WORK_TYPES,
+} from "@/constants/constants";
 
 type NameRow = { id: any; name: string };
 

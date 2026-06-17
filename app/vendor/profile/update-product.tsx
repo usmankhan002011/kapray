@@ -20,8 +20,7 @@ import {
   getVendorMediaPublicUrl,
   uploadVendorMediaFromUri,
 } from "@/utils/mediaBackendUtils";
-
-const PRODUCTS_TABLE = "products";
+import { PRODUCTS_TABLE } from "@/constants/constants";
 
 type ProductRow = {
   id: number;

@@ -13,8 +13,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearCostRange, setCostRange } from "@/store/filtersSlice";
 import StandardFilterDisplay from "@/components/ui/StandardFilterDisplay";
 import { supabase } from "@/utils/supabase/client";
-
-const TABLE_PRICE_BUCKETS = "price_buckets";
+import { TABLE_PRICE_BUCKETS } from "@/constants/constants";
 
 function formatPKR(n: number) {
   return `PKR ${Math.round(n).toLocaleString()}`;

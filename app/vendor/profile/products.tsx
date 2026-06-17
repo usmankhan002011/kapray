@@ -15,8 +15,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { useAppSelector } from "@/store/hooks";
 import { getVendorMediaPublicUrl } from "@/utils/mediaBackendUtils";
-
-const PRODUCTS_TABLE = "products";
+import { PRODUCTS_TABLE } from "@/constants/constants";
 
 const PAGE_SIZE = 30;
 

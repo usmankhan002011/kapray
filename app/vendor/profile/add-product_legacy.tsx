@@ -18,8 +18,7 @@ import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { supabase } from "@/utils/supabase/client";
 import { uploadVendorMediaFromUri } from "@/utils/mediaBackendUtils";
-
-const PRODUCTS_TABLE = "products";
+import { PRODUCTS_TABLE } from "@/constants/constants";
 
 // Individual modal file names in /vendor/profile/(product-modals)/
 const MODALS = [

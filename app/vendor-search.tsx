@@ -14,8 +14,7 @@ import { useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setVendorIds } from "@/store/filtersSlice"; // <-- adjust import path if needed
-
-const VENDOR_TABLE = "vendor";
+import { VENDOR_TABLE } from "@/constants/constants";
 
 type VendorRow = {
   id: number;

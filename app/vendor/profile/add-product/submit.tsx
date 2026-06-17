@@ -19,6 +19,7 @@ import {
   getVendorMediaPublicUrl,
   uploadVendorMediaFromUri,
 } from "@/utils/mediaBackendUtils";
+import { PRODUCTS_TABLE } from "@/constants/constants";
 
 import {
   normalizeReadyVariants,
@@ -31,8 +32,6 @@ import {
   type ReadyVariantImage,
   type MadeOrderVariant,
 } from "@/utils/kapray/productVariants";
-
-const PRODUCTS_TABLE = "products";
 
 type ProductCategory =
   | "unstitched_plain"
