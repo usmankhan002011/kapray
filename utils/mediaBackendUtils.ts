@@ -4,6 +4,8 @@ import * as FileSystem from "expo-file-system";
 import { supabase } from "@/utils/supabase/client";
 
 export const VENDOR_MEDIA_BUCKET = "vendor_images";
+export const VENDOR_MEDIA_PUBLIC_BASE_URL = "https://media.ankukdevelopers.com";
+export const VENDOR_MEDIA_PUBLIC_PATH_PREFIX = "kapray";
 
 export type VendorMediaFile = {
   uri: string;
@@ -15,6 +17,20 @@ function isHttpUrl(value: string) {
   return /^https?:\/\//i.test(value);
 }
 
+function stripVendorMediaPathPrefix(path: string) {
+  const clean = String(path ?? "").trim().replace(/^\/+/, "");
+  const prefix = `${VENDOR_MEDIA_PUBLIC_PATH_PREFIX}/`;
+
+  return clean.startsWith(prefix) ? clean.slice(prefix.length) : clean;
+}
+
+function getVendorMediaPublicPath(path: string) {
+  const clean = String(path ?? "").trim().replace(/^\/+/, "");
+  const prefix = `${VENDOR_MEDIA_PUBLIC_PATH_PREFIX}/`;
+
+  return clean.startsWith(prefix) ? clean : `${prefix}${clean}`;
+}
+
 export function getVendorMediaPublicUrl(
   pathOrUrl: string | null | undefined,
 ): string | null {
@@ -22,11 +38,7 @@ export function getVendorMediaPublicUrl(
   if (!clean) return null;
   if (isHttpUrl(clean)) return clean;
 
-  const { data } = supabase.storage
-    .from(VENDOR_MEDIA_BUCKET)
-    .getPublicUrl(clean);
-
-  return data?.publicUrl ?? null;
+  return `${VENDOR_MEDIA_PUBLIC_BASE_URL}/${getVendorMediaPublicPath(clean)}`;
 }
 
 export function getVendorMediaPublicUrlOrEmpty(
@@ -38,7 +50,13 @@ export function getVendorMediaPublicUrlOrEmpty(
 export function getVendorMediaPathFromPublicUrl(urlOrPath: string) {
   const clean = String(urlOrPath ?? "").trim();
   if (!clean) return "";
-  if (!isHttpUrl(clean)) return clean.replace(/^\/+/, "");
+  if (!isHttpUrl(clean)) return stripVendorMediaPathPrefix(clean);
+
+  const cloudflarePrefix = `${VENDOR_MEDIA_PUBLIC_BASE_URL}/`;
+  if (clean.startsWith(cloudflarePrefix)) {
+    const path = clean.slice(cloudflarePrefix.length).split(/[?#]/)[0];
+    return stripVendorMediaPathPrefix(decodeURIComponent(path));
+  }
 
   const marker = `/storage/v1/object/public/${VENDOR_MEDIA_BUCKET}/`;
   const idx = clean.indexOf(marker);

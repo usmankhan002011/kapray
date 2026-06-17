@@ -26,6 +26,8 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 
+/storage-migration
+
 # macOS
 .DS_Store
 *.pem
