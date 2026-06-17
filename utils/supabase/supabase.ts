@@ -39,45 +39,30 @@ export type Database = {
   }
   public: {
     Tables: {
-      consumer: {
+      dress_types: {
         Row: {
-          address: string | null
+          code: string
           created_at: string
-          id: number
-          name: string | null
+          id: string
+          is_active: boolean
+          name: string
+          sort_order: number
         }
         Insert: {
-          address?: string | null
+          code: string
           created_at?: string
-          id?: number
-          name?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          sort_order?: number
         }
         Update: {
-          address?: string | null
+          code?: string
           created_at?: string
-          id?: number
-          name?: string | null
-        }
-        Relationships: []
-      }
-      dress_type: {
-        Row: {
-          created_at: string
-          icon: string
-          id: number
-          name: string
-        }
-        Insert: {
-          created_at?: string
-          icon: string
-          id?: number
-          name: string
-        }
-        Update: {
-          created_at?: string
-          icon?: string
-          id?: number
+          id?: string
+          is_active?: boolean
           name?: string
+          sort_order?: number
         }
         Relationships: []
       }
@@ -118,21 +103,25 @@ export type Database = {
           buyer_mobile: string
           buyer_name: string
           city: string
+          country: string
           courier_name: string | null
           created_at: string
           currency: string
           delivery_address: string
           delivery_pkr: number | null
+          destination_type: string
           discount_pkr: number | null
           exact_measurements: Json
+          export_region: string | null
           id: number
           media_snapshot: Json
           notes: string | null
           order_no: string | null
           payment_ref: string | null
+          postal_code: string | null
           price_snapshot: Json
           product_code_snapshot: string
-          product_id: number
+          product_id: number | null
           selected_size: string | null
           size_mode: string
           spec_snapshot: Json
@@ -150,21 +139,25 @@ export type Database = {
           buyer_mobile: string
           buyer_name: string
           city: string
+          country?: string
           courier_name?: string | null
           created_at?: string
           currency?: string
           delivery_address: string
           delivery_pkr?: number | null
+          destination_type?: string
           discount_pkr?: number | null
           exact_measurements?: Json
+          export_region?: string | null
           id?: number
           media_snapshot?: Json
           notes?: string | null
           order_no?: string | null
           payment_ref?: string | null
+          postal_code?: string | null
           price_snapshot?: Json
           product_code_snapshot: string
-          product_id: number
+          product_id?: number | null
           selected_size?: string | null
           size_mode?: string
           spec_snapshot?: Json
@@ -182,21 +175,25 @@ export type Database = {
           buyer_mobile?: string
           buyer_name?: string
           city?: string
+          country?: string
           courier_name?: string | null
           created_at?: string
           currency?: string
           delivery_address?: string
           delivery_pkr?: number | null
+          destination_type?: string
           discount_pkr?: number | null
           exact_measurements?: Json
+          export_region?: string | null
           id?: number
           media_snapshot?: Json
           notes?: string | null
           order_no?: string | null
           payment_ref?: string | null
+          postal_code?: string | null
           price_snapshot?: Json
           product_code_snapshot?: string
-          product_id?: number
+          product_id?: number | null
           selected_size?: string | null
           size_mode?: string
           spec_snapshot?: Json
@@ -221,20 +218,6 @@ export type Database = {
             columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "vendor"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "orders_vendor_id_fkey"
-            columns: ["vendor_id"]
-            isOneToOne: false
-            referencedRelation: "vendor_with_image_path"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "orders_vendor_id_fkey"
-            columns: ["vendor_id"]
-            isOneToOne: false
-            referencedRelation: "vendor_with_media_paths"
             referencedColumns: ["id"]
           },
         ]
@@ -320,94 +303,6 @@ export type Database = {
         }
         Relationships: []
       }
-      product: {
-        Row: {
-          created_at: string
-          description: string | null
-          dress_type: number | null
-          id: number
-          price: number | null
-          title: string | null
-          vendor: number
-        }
-        Insert: {
-          created_at?: string
-          description?: string | null
-          dress_type?: number | null
-          id?: number
-          price?: number | null
-          title?: string | null
-          vendor: number
-        }
-        Update: {
-          created_at?: string
-          description?: string | null
-          dress_type?: number | null
-          id?: number
-          price?: number | null
-          title?: string | null
-          vendor?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "product_vendor_fkey"
-            columns: ["vendor"]
-            isOneToOne: false
-            referencedRelation: "vendor"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_vendor_fkey"
-            columns: ["vendor"]
-            isOneToOne: false
-            referencedRelation: "vendor_with_image_path"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_vendor_fkey"
-            columns: ["vendor"]
-            isOneToOne: false
-            referencedRelation: "vendor_with_media_paths"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      product_photos: {
-        Row: {
-          created_at: string
-          id: number
-          photo: string | null
-          product: number | null
-        }
-        Insert: {
-          created_at?: string
-          id?: number
-          photo?: string | null
-          product?: number | null
-        }
-        Update: {
-          created_at?: string
-          id?: number
-          photo?: string | null
-          product?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "product_photos_product_fkey"
-            columns: ["product"]
-            isOneToOne: false
-            referencedRelation: "product"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_photos_product_fkey"
-            columns: ["product"]
-            isOneToOne: false
-            referencedRelation: "product_with_photos"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       products: {
         Row: {
           created_at: string
@@ -462,64 +357,40 @@ export type Database = {
             referencedRelation: "vendor"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "products_vendor_id_fkey"
-            columns: ["vendor_id"]
-            isOneToOne: false
-            referencedRelation: "vendor_with_image_path"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "products_vendor_id_fkey"
-            columns: ["vendor_id"]
-            isOneToOne: false
-            referencedRelation: "vendor_with_media_paths"
-            referencedColumns: ["id"]
-          },
         ]
       }
-      sale: {
+      storage_delete_queue: {
         Row: {
-          buyer: number | null
+          bucket_id: string
           created_at: string
+          error: string | null
           id: number
-          product: number | null
+          object_path: string
+          processed_at: string | null
+          source_id: number | null
+          source_table: string | null
         }
         Insert: {
-          buyer?: number | null
+          bucket_id: string
           created_at?: string
+          error?: string | null
           id?: number
-          product?: number | null
+          object_path: string
+          processed_at?: string | null
+          source_id?: number | null
+          source_table?: string | null
         }
         Update: {
-          buyer?: number | null
+          bucket_id?: string
           created_at?: string
+          error?: string | null
           id?: number
-          product?: number | null
+          object_path?: string
+          processed_at?: string | null
+          source_id?: number | null
+          source_table?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "sale_buyer_fkey"
-            columns: ["buyer"]
-            isOneToOne: false
-            referencedRelation: "consumer"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sale_product_fkey"
-            columns: ["product"]
-            isOneToOne: false
-            referencedRelation: "product"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sale_product_fkey"
-            columns: ["product"]
-            isOneToOne: false
-            referencedRelation: "product_with_photos"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       vendor: {
         Row: {
@@ -529,6 +400,8 @@ export type Database = {
           certificate_paths: string[] | null
           created_at: string
           email: string | null
+          export_regions: Json
+          exports_enabled: boolean
           id: number
           image: string | null
           landline: string | null
@@ -543,6 +416,7 @@ export type Database = {
           shop_name: string | null
           shop_video_paths: string[] | null
           status: string | null
+          tailoring_options: Json
         }
         Insert: {
           address?: string | null
@@ -551,6 +425,8 @@ export type Database = {
           certificate_paths?: string[] | null
           created_at?: string
           email?: string | null
+          export_regions?: Json
+          exports_enabled?: boolean
           id?: number
           image?: string | null
           landline?: string | null
@@ -565,6 +441,7 @@ export type Database = {
           shop_name?: string | null
           shop_video_paths?: string[] | null
           status?: string | null
+          tailoring_options?: Json
         }
         Update: {
           address?: string | null
@@ -573,6 +450,8 @@ export type Database = {
           certificate_paths?: string[] | null
           created_at?: string
           email?: string | null
+          export_regions?: Json
+          exports_enabled?: boolean
           id?: number
           image?: string | null
           landline?: string | null
@@ -587,26 +466,79 @@ export type Database = {
           shop_name?: string | null
           shop_video_paths?: string[] | null
           status?: string | null
+          tailoring_options?: Json
         }
         Relationships: []
       }
-      vendor_product_counters: {
+      vendor_reviews: {
         Row: {
-          last_seq: number
+          buyer_user_id: string
+          comment: string | null
+          created_at: string
+          id: number
+          is_hidden: boolean
+          is_public: boolean
+          is_verified_purchase: boolean
+          order_id: number
+          rating: number
           updated_at: string
           vendor_id: number
+          vendor_reply: string | null
+          vendor_reply_at: string | null
         }
         Insert: {
-          last_seq?: number
+          buyer_user_id: string
+          comment?: string | null
+          created_at?: string
+          id?: number
+          is_hidden?: boolean
+          is_public?: boolean
+          is_verified_purchase?: boolean
+          order_id: number
+          rating: number
           updated_at?: string
           vendor_id: number
+          vendor_reply?: string | null
+          vendor_reply_at?: string | null
         }
         Update: {
-          last_seq?: number
+          buyer_user_id?: string
+          comment?: string | null
+          created_at?: string
+          id?: number
+          is_hidden?: boolean
+          is_public?: boolean
+          is_verified_purchase?: boolean
+          order_id?: number
+          rating?: number
           updated_at?: string
           vendor_id?: number
+          vendor_reply?: string | null
+          vendor_reply_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "vendor_reviews_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_reviews_order_vendor_match_fkey"
+            columns: ["order_id", "vendor_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id", "vendor_id"]
+          },
+          {
+            foreignKeyName: "vendor_reviews_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendor"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       wear_states: {
         Row: {
@@ -673,146 +605,92 @@ export type Database = {
       }
     }
     Views: {
-      dress_type_with_icon_path: {
+      vendor_review_summary: {
         Row: {
-          created_at: string | null
-          icon: string | null
-          icon_path: string | null
-          id: number | null
-          name: string | null
-        }
-        Relationships: []
-      }
-      product_photos_with_path: {
-        Row: {
-          created_at: string | null
-          id: number | null
-          object_path: string | null
-          photo: string | null
-          product: number | null
+          average_rating: number | null
+          rating_1_count: number | null
+          rating_2_count: number | null
+          rating_3_count: number | null
+          rating_4_count: number | null
+          rating_5_count: number | null
+          review_count: number | null
+          vendor_id: number | null
         }
         Relationships: [
           {
-            foreignKeyName: "product_photos_product_fkey"
-            columns: ["product"]
-            isOneToOne: false
-            referencedRelation: "product"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_photos_product_fkey"
-            columns: ["product"]
-            isOneToOne: false
-            referencedRelation: "product_with_photos"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      product_with_photos: {
-        Row: {
-          created_at: string | null
-          description: string | null
-          dress_type: number | null
-          id: number | null
-          photos: string[] | null
-          price: number | null
-          title: string | null
-          vendor: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "product_vendor_fkey"
-            columns: ["vendor"]
+            foreignKeyName: "vendor_reviews_vendor_id_fkey"
+            columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "vendor"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "product_vendor_fkey"
-            columns: ["vendor"]
-            isOneToOne: false
-            referencedRelation: "vendor_with_image_path"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_vendor_fkey"
-            columns: ["vendor"]
-            isOneToOne: false
-            referencedRelation: "vendor_with_media_paths"
-            referencedColumns: ["id"]
-          },
         ]
-      }
-      vendor_with_image_path: {
-        Row: {
-          created_at: string | null
-          id: number | null
-          image: string | null
-          location: string | null
-          name: string | null
-          object_path: string | null
-        }
-        Relationships: []
-      }
-      vendor_with_media_paths: {
-        Row: {
-          address: string | null
-          banner_path: string | null
-          certificate_paths: string[] | null
-          created_at: string | null
-          email: string | null
-          id: number | null
-          landline: string | null
-          location: string | null
-          location_url: string | null
-          mobile: string | null
-          name: string | null
-          profile_image_path: string | null
-          shop_image_paths: string[] | null
-          shop_name: string | null
-          shop_video_paths: string[] | null
-          status: string | null
-        }
-        Insert: {
-          address?: string | null
-          banner_path?: string | null
-          certificate_paths?: string[] | null
-          created_at?: string | null
-          email?: string | null
-          id?: number | null
-          landline?: string | null
-          location?: string | null
-          location_url?: string | null
-          mobile?: string | null
-          name?: string | null
-          profile_image_path?: string | null
-          shop_image_paths?: string[] | null
-          shop_name?: string | null
-          shop_video_paths?: string[] | null
-          status?: string | null
-        }
-        Update: {
-          address?: string | null
-          banner_path?: string | null
-          certificate_paths?: string[] | null
-          created_at?: string | null
-          email?: string | null
-          id?: number | null
-          landline?: string | null
-          location?: string | null
-          location_url?: string | null
-          mobile?: string | null
-          name?: string | null
-          profile_image_path?: string | null
-          shop_image_paths?: string[] | null
-          shop_name?: string | null
-          shop_video_paths?: string[] | null
-          status?: string | null
-        }
-        Relationships: []
       }
     }
     Functions: {
+      create_order_atomic_single_unit:
+        | {
+            Args: {
+              p_buyer_auth_user_id: string
+              p_buyer_email: string
+              p_buyer_mobile: string
+              p_buyer_name: string
+              p_city: string
+              p_currency: string
+              p_delivery_address: string
+              p_delivery_pkr: number
+              p_discount_pkr: number
+              p_exact_measurements: Json
+              p_media_snapshot: Json
+              p_notes: string
+              p_price_snapshot: Json
+              p_product_code_snapshot: string
+              p_product_id: number
+              p_selected_size: string
+              p_size_mode: string
+              p_spec_snapshot: Json
+              p_subtotal_pkr: number
+              p_title_snapshot: string
+              p_total_pkr: number
+            }
+            Returns: {
+              message: string
+              ok: boolean
+              order_id: number
+            }[]
+          }
+        | {
+            Args: {
+              p_buyer_auth_user_id: string
+              p_buyer_email: string
+              p_buyer_mobile: string
+              p_buyer_name: string
+              p_city: string
+              p_currency: string
+              p_delivery_address: string
+              p_delivery_pkr: number
+              p_discount_pkr: number
+              p_exact_measurements: Json
+              p_media_snapshot: Json
+              p_notes: string
+              p_price_snapshot: Json
+              p_product_code_snapshot: string
+              p_product_id: number
+              p_selected_size: string
+              p_selected_variant_id?: string
+              p_selected_variant_size?: string
+              p_size_mode: string
+              p_spec_snapshot: Json
+              p_subtotal_pkr: number
+              p_title_snapshot: string
+              p_total_pkr: number
+            }
+            Returns: {
+              message: string
+              ok: boolean
+              order_id: number
+            }[]
+          }
       next_vendor_product_seq: {
         Args: { p_vendor_id: number }
         Returns: number
