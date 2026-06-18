@@ -11,6 +11,7 @@ import {
   AddProductChoice,
   AddProductField,
   AddProductFooter,
+  type MaterialIconName,
   AddProductScreen,
 } from "@/components/product/add-product/AddProductWizard";
 
@@ -293,12 +294,15 @@ export default function Q02Category() {
   function choiceButton(
     choice: CategoryChoice,
     label: string,
+    icon: MaterialIconName,
     disabled = false,
   ) {
     return (
       <AddProductChoice
         key={choice}
         title={label}
+        icon={icon}
+        showCheckIcon
         selected={categoryChoice === choice}
         onPress={() => applyChoice(choice)}
         disabled={fromReview || disabled}
@@ -343,6 +347,8 @@ export default function Q02Category() {
           <View style={apStyles.segmentRow}>
             <AddProductChoice
               title="Unstitched"
+              icon="texture"
+              showCheckIcon
               selected={mainCategory === "unstitched"}
               onPress={() => selectMainCategory("unstitched")}
               disabled={fromReview}
@@ -361,14 +367,17 @@ export default function Q02Category() {
                     {choiceButton(
                       "unstitched_plain",
                       "Unstitched (Plain)",
+                      "straighten",
                     )}
                     {choiceButton(
                       "unstitched_dyeing",
                       "Unstitched + Dyeing",
+                      "palette",
                     )}
                     {choiceButton(
                       "unstitched_dyeing_tailoring",
                       "Unstitched + Dyeing + Tailoring",
+                      "content-cut",
                       vendorOffersTailoring !== true,
                     )}
                   </View>
@@ -378,6 +387,8 @@ export default function Q02Category() {
 
             <AddProductChoice
               title="Stitched"
+              icon="checkroom"
+              showCheckIcon
               selected={mainCategory === "stitched"}
               onPress={() => selectMainCategory("stitched")}
               disabled={fromReview}
@@ -394,10 +405,12 @@ export default function Q02Category() {
                     {choiceButton(
                       "stitched_ready",
                       "Ready to wear",
+                      "shopping-bag",
                     )}
                     {choiceButton(
                       "stitched_made_on_order",
                       "Made on order",
+                      "design-services",
                     )}
                   </View>
                 </AddProductField>

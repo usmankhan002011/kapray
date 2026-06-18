@@ -554,3 +554,39 @@ C:\DEV\kapray\kapray\app\vendor\profile\add-product\q05a-stitched-total-cost.tsx
 C:\DEV\kapray\kapray\app\vendor\profile\add-product\review.tsx
 C:\DEV\kapray\kapray\app\vendor\profile\add-product\submit.tsx
 C:\DEV\kapray\kapray\components\product\view-product\ViewProduct.screen.tsx
+
+---
+
+Windows file association / npx launcher issue.
+
+Run Expo like this instead:
+
+                                                                                  npx.cmd expo start
+
+If that works, your npx command is being opened by Windows as an app link.
+
+Also test:
+
+                                                                                    where npx
+                                                                                    where node
+                                                                                    where npm
+
+You should see something like:
+
+C:\Program Files\nodejs\npx.cmd
+C:\Program Files\nodejs\node.exe
+C:\Program Files\nodejs\npm.cmd
+
+If where npx shows only npx or something strange, use this command permanently:
+
+                                                                              npx.cmd expo start --clear
+
+For dev build:
+
+                                                                        npx.cmd expo start --dev-client --clear
+
+If still bad, run:
+
+npm.cmd exec expo start -- --clear
+
+This bypasses broken npx.

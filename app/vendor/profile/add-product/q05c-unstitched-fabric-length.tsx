@@ -1,14 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
+import React, { useMemo, useRef, useState } from "react";
+import { Alert, StyleSheet, Text, type TextInput, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
-import { apColors, apStyles } from "@/components/product/addProductStyles";
-import FastNumberInput from "@/components/product/add-product/FastNumberInput";
+import { apColors } from "@/components/product/addProductStyles";
 import {
   AddProductCard,
   AddProductField,
   AddProductFooter,
+  AddProductInput,
   AddProductScreen,
 } from "@/components/product/add-product/AddProductWizard";
 
@@ -187,28 +187,6 @@ export default function Q05CUnstitchedFabricLength() {
     draft.spec = { ...(draft?.spec ?? {}), ...patch };
   }
 
-  const autoMap = useMemo(() => buildComputedSizeLengthMap(sLengthText), [sLengthText]);
-
-  useEffect(() => {
-    setSizeTexts((prev) => {
-      const next = { ...prev };
-
-      SIZE_KEYS.forEach((size) => {
-        if (size === "S") {
-          next.S = sLengthText;
-          return;
-        }
-
-        if (!overriddenSizes[size]) {
-          const autoValue = autoMap[size];
-          next[size] = Number.isFinite(Number(autoValue)) ? String(autoValue) : "";
-        }
-      });
-
-      return next;
-    });
-  }, [autoMap, overriddenSizes, sLengthText]);
-
   const finalSizeLengthMap = useMemo(() => {
     return toNumberMap({
       ...sizeTexts,
@@ -380,21 +358,19 @@ export default function Q05CUnstitchedFabricLength() {
                     ) : null}
                   </View>
 
-                  <FastNumberInput
+                  <AddProductInput
                     ref={isS ? inputRef : undefined}
                     value={isS ? sLengthText : sizeTexts[size]}
                     onChangeText={(v) => onChangeSize(size, v)}
+                    sanitizeText={sanitizeNumber}
                     editable={!isXS}
                     placeholder="e.g., 2.5"
-                    placeholderTextColor={apColors.muted}
                     style={[
-                      apStyles.input,
                       {
                         minHeight: isS ? 46 : 40,
                         paddingVertical: 8,
                         backgroundColor: isXS ? "#FFFFFF" : "#FFFFFF",
                         fontSize: isS ? 16 : 14,
-                        fontWeight: isS ? "800" : "500",
                       },
                     ]}
                     keyboardType="decimal-pad"

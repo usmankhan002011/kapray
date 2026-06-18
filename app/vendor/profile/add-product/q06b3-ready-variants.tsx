@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -18,6 +17,7 @@ import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 import { READY_STANDARD_SIZES } from "@/data/kapray/productPieces";
 import {
   AddProductFooter,
+  AddProductInput,
   AddProductScreen,
 } from "@/components/product/add-product/AddProductWizard";
 
@@ -342,7 +342,7 @@ const ReadyVariantCard = memo(function ReadyVariantCard({
       <Text style={[apStyles.label, { marginTop: 12 }]}>
         Color / design name *
       </Text>
-      <TextInput
+      <AddProductInput
         value={variant.name}
         onChangeText={updateName}
         placeholder="e.g., Black, Ivory Gold, Design A"

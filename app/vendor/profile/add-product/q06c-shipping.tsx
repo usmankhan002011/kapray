@@ -1,10 +1,9 @@
 import React, { useMemo, useRef, useState } from "react";
-import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, StyleSheet, Text, type TextInput, View } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apStyles, apColors } from "@/components/product/addProductStyles";
-import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 import { getDeliveryCost } from "@/utils/kapray/delivery";
 import { EXPORT_REGIONS } from "@/data/kapray/exportRegions";
 import {
@@ -12,10 +11,17 @@ import {
   AddProductChip,
   AddProductField,
   AddProductFooter,
+  AddProductInput,
   AddProductScreen,
+  AddProductSecondaryButton,
 } from "@/components/product/add-product/AddProductWizard";
 
 type DimensionUnit = "cm" | "in";
+type ProductCategory =
+  | "unstitched_plain"
+  | "unstitched_dyeing"
+  | "unstitched_dyeing_tailoring"
+  | "stitched_ready";
 
 const CM_PER_INCH = 2.54;
 
@@ -30,6 +36,35 @@ function safeInt(v: any) {
   const n = Number(v);
   if (!Number.isFinite(n)) return null;
   return Math.trunc(n);
+}
+
+function safeStr(v: any) {
+  return String(v ?? "").trim();
+}
+
+function inferCategoryFromDraft(draft: any): ProductCategory {
+  const spec = draft?.spec ?? {};
+  const price = draft?.price ?? {};
+  const fromSpec = safeStr((spec as any)?.product_category ?? "");
+
+  if (
+    fromSpec === "unstitched_plain" ||
+    fromSpec === "unstitched_dyeing" ||
+    fromSpec === "unstitched_dyeing_tailoring" ||
+    fromSpec === "stitched_ready"
+  ) {
+    return fromSpec as ProductCategory;
+  }
+
+  const mode = safeStr(price?.mode ?? "");
+  if (mode === "stitched_total") return "stitched_ready";
+
+  const dye = Boolean(spec?.dyeing_enabled);
+  const tail = Boolean(spec?.tailoring_enabled);
+
+  if (tail) return "unstitched_dyeing_tailoring";
+  if (dye) return "unstitched_dyeing";
+  return "unstitched_plain";
 }
 
 function initialPositiveNumberText(v: any) {
@@ -87,6 +122,10 @@ export default function Q06CShipping() {
   const returnTo = typeof params?.returnTo === "string" ? params.returnTo : "";
 
   const weightRef = useRef<TextInput>(null);
+  const lengthRef = useRef<TextInput>(null);
+  const widthRef = useRef<TextInput>(null);
+  const heightRef = useRef<TextInput>(null);
+  const previewCalculatedRef = useRef(false);
 
   const vendorIdRaw =
     useAppSelector((s: any) => s?.vendorSlice?.vendor?.id ?? null) ??
@@ -96,6 +135,9 @@ export default function Q06CShipping() {
 
   const ctx = useProductDraft() as any;
   const { draft } = ctx;
+  const category = inferCategoryFromDraft(draft);
+  const isFabricByMeter =
+    category === "unstitched_plain" || category === "unstitched_dyeing";
 
   function patchSpec(patch: any) {
     if (typeof ctx.setSpec === "function") {
@@ -114,53 +156,72 @@ export default function Q06CShipping() {
     draft.spec = { ...(draft?.spec ?? {}), ...patch };
   }
 
-  const [weight, setWeight] = useState<string>(
-    initialPositiveNumberText(draft?.spec?.weight_kg),
+  const initialWeightText = useMemo(
+    () =>
+      initialPositiveNumberText(
+        isFabricByMeter
+          ? draft?.spec?.weight_per_meter_kg ?? draft?.spec?.weight_kg
+          : draft?.spec?.weight_kg,
+      ),
+    [
+      draft?.spec?.weight_kg,
+      draft?.spec?.weight_per_meter_kg,
+      isFabricByMeter,
+    ],
   );
-  const [dimensionUnit, setDimensionUnit] = useState<DimensionUnit>(() =>
-    getInitialDimensionUnit(draft?.spec),
+  const initialDimensionUnit = useMemo(
+    () => getInitialDimensionUnit(draft?.spec),
+    [draft?.spec],
   );
-  const [length, setLength] = useState<string>(
-    initialDimensionText(draft?.spec, "length", dimensionUnit),
+  const initialLengthText = useMemo(
+    () => initialDimensionText(draft?.spec, "length", initialDimensionUnit),
+    [draft?.spec, initialDimensionUnit],
   );
-  const [width, setWidth] = useState<string>(
-    initialDimensionText(draft?.spec, "width", dimensionUnit),
+  const initialWidthText = useMemo(
+    () => initialDimensionText(draft?.spec, "width", initialDimensionUnit),
+    [draft?.spec, initialDimensionUnit],
   );
-  const [height, setHeight] = useState<string>(
-    initialDimensionText(draft?.spec, "height", dimensionUnit),
+  const initialHeightText = useMemo(
+    () => initialDimensionText(draft?.spec, "height", initialDimensionUnit),
+    [draft?.spec, initialDimensionUnit],
   );
+
+  const weightTextRef = useRef(initialWeightText);
+  const lengthTextRef = useRef(initialLengthText);
+  const widthTextRef = useRef(initialWidthText);
+  const heightTextRef = useRef(initialHeightText);
+
+  const [weight, setWeight] = useState<string>(initialWeightText);
+  const [dimensionUnit, setDimensionUnit] =
+    useState<DimensionUnit>(initialDimensionUnit);
+  const [length, setLength] = useState<string>(initialLengthText);
+  const [width, setWidth] = useState<string>(initialWidthText);
+  const [height, setHeight] = useState<string>(initialHeightText);
+  const [hasCalculatedPreview, setHasCalculatedPreview] = useState(false);
 
   const canContinue = useMemo(() => {
-    if (!vendorId) return false;
+    return Boolean(vendorId);
+  }, [vendorId]);
+  const weightLabel = isFabricByMeter ? "Weight per meter (kg)" : "Weight (kg)";
+  const disabledHint = !vendorId ? "Vendor not loaded." : "";
 
-    const w = positiveNumberFromText(weight);
-    const l = positiveNumberFromText(length);
-    const wi = positiveNumberFromText(width);
-    const h = positiveNumberFromText(height);
+  function syncPreviewState() {
+    const nextWeight = weightTextRef.current;
+    const nextLength = lengthTextRef.current;
+    const nextWidth = widthTextRef.current;
+    const nextHeight = heightTextRef.current;
 
-    return (
-      Number.isFinite(w) &&
-      w > 0 &&
-      Number.isFinite(l) &&
-      l > 0 &&
-      Number.isFinite(wi) &&
-      wi > 0 &&
-      Number.isFinite(h) &&
-      h > 0
-    );
-  }, [vendorId, weight, length, width, height]);
-  const dimensionUnitLabel = dimensionUnit === "in" ? "inches" : "cm";
-  const disabledHint = !vendorId
-    ? "Vendor not loaded."
-    : positiveNumberFromText(weight) <= 0
-      ? "Enter package weight in kg."
-      : positiveNumberFromText(length) <= 0
-        ? `Enter package length in ${dimensionUnitLabel}.`
-        : positiveNumberFromText(width) <= 0
-          ? `Enter package width in ${dimensionUnitLabel}.`
-          : positiveNumberFromText(height) <= 0
-            ? `Enter package height in ${dimensionUnitLabel}.`
-            : "";
+    setWeight((prev) => (prev === nextWeight ? prev : nextWeight));
+    setLength((prev) => (prev === nextLength ? prev : nextLength));
+    setWidth((prev) => (prev === nextWidth ? prev : nextWidth));
+    setHeight((prev) => (prev === nextHeight ? prev : nextHeight));
+  }
+
+  function markPreviewDirty() {
+    if (!previewCalculatedRef.current) return;
+    previewCalculatedRef.current = false;
+    setHasCalculatedPreview(false);
+  }
 
   const shippingPreview = useMemo(() => {
     const actualWeightKg = positiveNumberFromText(weight);
@@ -302,29 +363,50 @@ export default function Q06CShipping() {
   function onChangeDimensionUnit(nextUnit: DimensionUnit) {
     if (nextUnit === dimensionUnit) return;
 
-    setLength((prev) => convertDimensionText(prev, dimensionUnit, nextUnit));
-    setWidth((prev) => convertDimensionText(prev, dimensionUnit, nextUnit));
-    setHeight((prev) => convertDimensionText(prev, dimensionUnit, nextUnit));
+    const nextLength = convertDimensionText(
+      lengthTextRef.current,
+      dimensionUnit,
+      nextUnit,
+    );
+    const nextWidth = convertDimensionText(
+      widthTextRef.current,
+      dimensionUnit,
+      nextUnit,
+    );
+    const nextHeight = convertDimensionText(
+      heightTextRef.current,
+      dimensionUnit,
+      nextUnit,
+    );
+
+    lengthTextRef.current = nextLength;
+    widthTextRef.current = nextWidth;
+    heightTextRef.current = nextHeight;
+
+    setLength(nextLength);
+    setWidth(nextWidth);
+    setHeight(nextHeight);
     setDimensionUnit(nextUnit);
+    markPreviewDirty();
   }
 
-  function onContinue() {
+  function readValidShippingValues() {
     if (!vendorId) {
       Alert.alert("Vendor not loaded", "Please ensure vendorSlice has vendor.id.");
-      return;
+      return null;
     }
 
-    const w = positiveNumberFromText(weight);
-    const lengthInput = positiveNumberFromText(length);
-    const widthInput = positiveNumberFromText(width);
-    const heightInput = positiveNumberFromText(height);
-    const l = dimensionToCm(length, dimensionUnit);
-    const wi = dimensionToCm(width, dimensionUnit);
-    const h = dimensionToCm(height, dimensionUnit);
+    const w = positiveNumberFromText(weightTextRef.current);
+    const lengthInput = positiveNumberFromText(lengthTextRef.current);
+    const widthInput = positiveNumberFromText(widthTextRef.current);
+    const heightInput = positiveNumberFromText(heightTextRef.current);
+    const l = dimensionToCm(lengthTextRef.current, dimensionUnit);
+    const wi = dimensionToCm(widthTextRef.current, dimensionUnit);
+    const h = dimensionToCm(heightTextRef.current, dimensionUnit);
 
     if (!Number.isFinite(w) || w <= 0) {
       Alert.alert("Invalid weight", "Enter valid weight in kg.");
-      return;
+      return null;
     }
 
     if (
@@ -336,11 +418,31 @@ export default function Q06CShipping() {
       h <= 0
     ) {
       Alert.alert("Invalid dimensions", "Enter valid package dimensions.");
-      return;
+      return null;
     }
+
+    return { h, heightInput, l, lengthInput, w, wi, widthInput };
+  }
+
+  function onCalculate() {
+    const values = readValidShippingValues();
+    if (!values) return;
+
+    syncPreviewState();
+    previewCalculatedRef.current = true;
+    setHasCalculatedPreview(true);
+  }
+
+  function onContinue() {
+    const values = readValidShippingValues();
+    if (!values) return;
+
+    const { h, heightInput, l, lengthInput, w, wi, widthInput } = values;
 
     patchSpec({
       weight_kg: w,
+      weight_per_meter_kg: isFabricByMeter ? w : null,
+      shipping_weight_mode: isFabricByMeter ? "per_meter" : "per_order",
       package_dimension_unit: dimensionUnit,
       package_in:
         dimensionUnit === "in"
@@ -395,14 +497,14 @@ export default function Q06CShipping() {
       }
     >
       <AddProductCard>
-        <AddProductField label="Weight (kg)" required style={{ marginTop: 0 }}>
-          <FastNumberInput
+        <AddProductField label={weightLabel} required style={{ marginTop: 0 }}>
+          <AddProductInput
             ref={weightRef}
-            value={weight}
-            onChangeText={setWeight}
+            defaultValue={weight}
+            onChangeText={markPreviewDirty}
             placeholder="e.g., 1.2"
-            placeholderTextColor={apColors.muted}
-            style={apStyles.input}
+            textValueRef={weightTextRef}
+            sanitizeText={sanitizeNumber}
             keyboardType="decimal-pad"
             maxLength={6}
             returnKeyType="next"
@@ -426,12 +528,14 @@ export default function Q06CShipping() {
           <View style={styles.dimensionRow}>
             <View style={styles.dimensionField}>
               <Text style={apStyles.label}>Length</Text>
-              <FastNumberInput
-                value={length}
-                onChangeText={setLength}
+              <AddProductInput
+                key={`length-${dimensionUnit}`}
+                ref={lengthRef}
+                defaultValue={length}
+                onChangeText={markPreviewDirty}
                 placeholder="L"
-                placeholderTextColor={apColors.muted}
-                style={apStyles.input}
+                textValueRef={lengthTextRef}
+                sanitizeText={sanitizeNumber}
                 keyboardType="decimal-pad"
                 returnKeyType="next"
               />
@@ -439,12 +543,14 @@ export default function Q06CShipping() {
 
             <View style={styles.dimensionField}>
               <Text style={apStyles.label}>Width</Text>
-              <FastNumberInput
-                value={width}
-                onChangeText={setWidth}
+              <AddProductInput
+                key={`width-${dimensionUnit}`}
+                ref={widthRef}
+                defaultValue={width}
+                onChangeText={markPreviewDirty}
                 placeholder="W"
-                placeholderTextColor={apColors.muted}
-                style={apStyles.input}
+                textValueRef={widthTextRef}
+                sanitizeText={sanitizeNumber}
                 keyboardType="decimal-pad"
                 returnKeyType="next"
               />
@@ -452,12 +558,14 @@ export default function Q06CShipping() {
 
             <View style={styles.dimensionField}>
               <Text style={apStyles.label}>Height</Text>
-              <FastNumberInput
-                value={height}
-                onChangeText={setHeight}
+              <AddProductInput
+                key={`height-${dimensionUnit}`}
+                ref={heightRef}
+                defaultValue={height}
+                onChangeText={markPreviewDirty}
                 placeholder="H"
-                placeholderTextColor={apColors.muted}
-                style={apStyles.input}
+                textValueRef={heightTextRef}
+                sanitizeText={sanitizeNumber}
                 keyboardType="decimal-pad"
                 returnKeyType="done"
               />
@@ -465,6 +573,13 @@ export default function Q06CShipping() {
           </View>
         </AddProductField>
 
+        <AddProductSecondaryButton
+          label="Calculate"
+          onPress={onCalculate}
+          style={{ marginTop: 12 }}
+        />
+
+        {hasCalculatedPreview ? (
           <View style={styles.preview}>
             <Text style={styles.previewText}>
               Used for courier calculation (actual vs volumetric).
@@ -472,7 +587,8 @@ export default function Q06CShipping() {
 
             {!!shippingPreview.actualWeightKg && (
               <Text style={styles.previewText}>
-                Actual Weight: {shippingPreview.actualWeightKg.toFixed(2)} kg
+                {isFabricByMeter ? "Weight per Meter" : "Actual Weight"}:{" "}
+                {shippingPreview.actualWeightKg.toFixed(2)} kg
               </Text>
             )}
 
@@ -553,6 +669,7 @@ export default function Q06CShipping() {
               </Text>
             ))}
           </View>
+        ) : null}
       </AddProductCard>
     </AddProductScreen>
   );

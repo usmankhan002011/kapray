@@ -1,14 +1,13 @@
-import React, { useMemo, useRef, useState } from "react";
-import { Alert, TextInput } from "react-native";
+import React, { useMemo, useRef } from "react";
+import { Alert, type TextInput } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
-import { apColors, apStyles } from "@/components/product/addProductStyles";
-import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 import {
   AddProductCard,
   AddProductField,
   AddProductFooter,
+  AddProductInput,
   AddProductScreen,
 } from "@/components/product/add-product/AddProductWizard";
 
@@ -33,6 +32,10 @@ function safeInt(v: any) {
 
 function safeStr(v: any) {
   return String(v ?? "").trim();
+}
+
+function roundMeter(n: number) {
+  return Math.round(n * 100) / 100;
 }
 
 function inferCategoryFromDraft(draft: any): ProductCategory {
@@ -76,30 +79,21 @@ export default function Q04Inventory() {
 
   const madeOnOrder = Boolean((draft?.spec as any)?.made_on_order ?? false);
   const category = inferCategoryFromDraft(draft);
+  const isUnstitched = category !== "stitched_ready";
 
-  const [qtyText, setQtyText] = useState<string>(() => {
+  const initialQtyText = useMemo(() => {
     if (madeOnOrder) return "0";
     const existingQty = Number(draft?.inventory_qty);
     return Number.isFinite(existingQty) && existingQty > 0
-      ? String(Math.trunc(existingQty))
+      ? String(roundMeter(existingQty))
       : "";
-  });
+  }, [draft?.inventory_qty, madeOnOrder]);
+  const qtyTextRef = useRef(initialQtyText);
 
   const canContinue = useMemo(() => {
-    if (!vendorId) return false;
-    if (madeOnOrder) return true;
-
-    const cleanedQty = sanitizeNumber(qtyText);
-    if (!cleanedQty) return false;
-
-    const q = Number(cleanedQty);
-    return Number.isFinite(q) && q >= 0;
-  }, [vendorId, madeOnOrder, qtyText]);
-  const disabledHint = !vendorId
-    ? "Vendor not loaded."
-    : !canContinue
-      ? "Enter inventory quantity, 0 or more."
-      : "";
+    return Boolean(vendorId);
+  }, [vendorId]);
+  const disabledHint = !vendorId ? "Vendor not loaded." : "";
 
   useFocusEffect(
     React.useCallback(() => {
@@ -116,6 +110,20 @@ export default function Q04Inventory() {
     return "/vendor/profile/add-product/q05b-unstitched-cost-per-meter";
   }
 
+  function patchSpec(patch: any) {
+    if (typeof ctx.setSpec === "function") {
+      ctx.setSpec((prev: any) => ({ ...(prev ?? {}), ...patch }));
+      return;
+    }
+
+    if (typeof ctx.setDraft === "function") {
+      ctx.setDraft((prev: any) => ({
+        ...prev,
+        spec: { ...(prev?.spec ?? {}), ...patch },
+      }));
+    }
+  }
+
   function onContinue() {
     if (!vendorId) {
       Alert.alert("Vendor not loaded", "Please ensure vendorSlice has vendor.id.");
@@ -123,13 +131,25 @@ export default function Q04Inventory() {
     }
 
     if (!madeOnOrder) {
-      const cleanedQty = sanitizeNumber(qtyText);
+      const cleanedQty = sanitizeNumber(qtyTextRef.current);
       const q = Number(cleanedQty);
-      if (!Number.isFinite(q) || q < 0) {
-        Alert.alert("Invalid quantity", "Please enter a valid inventory quantity (0 or more).");
+      if (!cleanedQty || !Number.isFinite(q) || q < 0) {
+        Alert.alert(
+          "Invalid quantity",
+          isUnstitched
+            ? "Please enter valid available fabric length in meters."
+            : "Please enter a valid inventory quantity (0 or more).",
+        );
         return;
       }
-      setInventoryQty?.(Math.trunc(q));
+      const nextQty = isUnstitched ? roundMeter(q) : Math.trunc(q);
+      setInventoryQty?.(nextQty);
+      if (isUnstitched) {
+        patchSpec({
+          inventory_unit: "m",
+          inventory_length_m: nextQty,
+        });
+      }
     } else {
       setInventoryQty?.(0);
     }
@@ -156,23 +176,29 @@ export default function Q04Inventory() {
     >
       <AddProductCard>
         <AddProductField
-          label="Inventory quantity"
+          label={
+            isUnstitched
+              ? "Available fabric length (meters)"
+              : "Inventory quantity"
+          }
           required
           hint={
             madeOnOrder
               ? "Made on order. Inventory will be set as 0."
-              : "Enter how many pieces are available."
+              : isUnstitched
+                ? "Enter total fabric available in meters."
+                : "Enter how many pieces are available."
           }
           style={{ marginTop: 0 }}
         >
-          <FastNumberInput
+          <AddProductInput
             ref={inputRef}
-            value={madeOnOrder ? "0" : qtyText}
-            onChangeText={setQtyText}
+            defaultValue={madeOnOrder ? "0" : initialQtyText}
             placeholder="e.g., 10"
-            placeholderTextColor={apColors.muted}
-            style={[apStyles.input, madeOnOrder ? { opacity: 0.55 } : null]}
-            keyboardType="number-pad"
+            style={madeOnOrder ? { opacity: 0.55 } : null}
+            textValueRef={qtyTextRef}
+            sanitizeText={sanitizeNumber}
+            keyboardType={isUnstitched ? "decimal-pad" : "number-pad"}
             maxLength={10}
             editable={!madeOnOrder}
             returnKeyType="done"

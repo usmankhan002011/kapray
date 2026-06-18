@@ -16,6 +16,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { useAppSelector } from "@/store/hooks";
+import DyePaletteReferenceButton from "@/components/product/DyePaletteReferenceButton";
 import ExactMeasurementsModal from "../(tabs)/flow/purchase/exact-measurements-modal";
 import type { ExactMeasurementSheetRow } from "../(tabs)/flow/purchase/exact-measurements-sheet";
 
@@ -64,6 +65,14 @@ type OrderRow = {
   } | null;
 };
 
+type DyeSplit = {
+  length_m: number;
+  dye_shade_id: string;
+  dye_hex: string;
+  dye_label: string;
+  dyeing_cost_pkr: number | null;
+};
+
 function money(currency: string, v: any) {
   if (v == null || v === "") return `${currency} —`;
   const n = typeof v === "number" ? v : Number(v);
@@ -78,6 +87,13 @@ function safeText(v: any) {
 
 function norm(v: unknown) {
   return (v == null ? "" : String(v)).trim().toLowerCase();
+}
+
+const EMPTY_TEXT = safeText("");
+
+function cleanValue(v: any) {
+  const t = String(v ?? "").trim();
+  return t && t !== EMPTY_TEXT ? t : "";
 }
 
 function boolish(v: any): boolean {
@@ -95,6 +111,20 @@ function numOrNull(v: any): number | null {
   const n = Number(v);
   if (!Number.isFinite(n)) return null;
   return n;
+}
+
+function normalizeDyeSplits(v: any): DyeSplit[] {
+  const rows = Array.isArray(v) ? v : [];
+
+  return rows
+    .map((row) => ({
+      length_m: numOrNull(row?.length_m) ?? 0,
+      dye_shade_id: cleanValue(row?.dye_shade_id),
+      dye_hex: cleanValue(row?.dye_hex),
+      dye_label: cleanValue(row?.dye_label),
+      dyeing_cost_pkr: numOrNull(row?.dyeing_cost_pkr),
+    }))
+    .filter((row) => row.length_m > 0 && (row.dye_hex || row.dye_shade_id));
 }
 
 function isUnstitchedFromSpec(spec: any): boolean {
@@ -882,14 +912,20 @@ export default function OrderDetailScreen() {
     return hex !== "—" ? hex : "";
   }, [order, spec]);
 
+  const dyeSplits = useMemo(() => {
+    if (!order) return [];
+    return normalizeDyeSplits(spec?.dyeing_splits);
+  }, [order, spec]);
+
   const dyeSelected = useMemo(() => {
     if (!order) return false;
     return (
       boolish(spec?.dyeing_selected) ||
+      dyeSplits.length > 0 ||
       !!dyeHex ||
       safeText(spec?.dye_label ?? "") !== "—"
     );
-  }, [order, spec, dyeHex]);
+  }, [order, spec, dyeHex, dyeSplits]);
 
   const dyeCostPkr = useMemo(() => {
     if (!order) return null;
@@ -1380,7 +1416,17 @@ export default function OrderDetailScreen() {
                 {dyeSelected ? (
                   <View style={styles.customBlock}>
                     <View style={styles.kvRow}>
-                      <Text style={styles.kvLabel}>Dyeing color</Text>
+                      <View style={styles.kvLabelWithIcon}>
+                        <Text style={[styles.kvLabel, styles.kvLabelWithIconText]}>
+                          {dyeSplits.length ? "Dye portions" : "Dyeing color"}
+                        </Text>
+                        <DyePaletteReferenceButton
+                          dyeSplits={dyeSplits}
+                          dyeShadeId={cleanValue(spec?.dye_shade_id)}
+                          dyeHex={dyeHex}
+                          dyeLabel={cleanValue(spec?.dye_label)}
+                        />
+                      </View>
                       <View style={styles.colorPreviewRow}>
                         {!!dyeHex && (
                           <View
@@ -1397,6 +1443,25 @@ export default function OrderDetailScreen() {
                         </Text>
                       </View>
                     </View>
+                    {dyeSplits.map((row, index) => (
+                      <View
+                        key={`${row.dye_shade_id}-${index}`}
+                        style={styles.dyeSplitSummaryRow}
+                      >
+                        {!!row.dye_hex && (
+                          <View
+                            style={[
+                              styles.dyeSwatchSmall,
+                              { backgroundColor: row.dye_hex },
+                            ]}
+                          />
+                        )}
+                        <Text style={styles.dyeSplitSummaryText}>
+                          {row.length_m} m
+                          {row.dye_label ? ` - Code ${row.dye_label}` : ""}
+                        </Text>
+                      </View>
+                    ))}
                   </View>
                 ) : null}
 
@@ -2002,6 +2067,18 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
+  kvLabelWithIcon: {
+    flex: 0.9,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  kvLabelWithIconText: {
+    flex: 1,
+  },
+
   kvValue: {
     flex: 1.1,
     fontSize: 13,
@@ -2058,6 +2135,28 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#CBD5E1",
+  },
+
+  dyeSwatchSmall: {
+    width: 22,
+    height: 22,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+
+  dyeSplitSummaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  dyeSplitSummaryText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.text,
+    fontWeight: "700",
   },
 
   variantRow: {

@@ -125,7 +125,7 @@ export function ProductDraftProvider({
   }, []);
 
   const setInventoryQty = useCallback((qty: number) => {
-    const safe = Number.isFinite(qty) ? Math.max(0, Math.floor(qty)) : 0;
+    const safe = Number.isFinite(qty) ? Math.max(0, qty) : 0;
     _setDraft((prev) => ({ ...prev, inventory_qty: safe }));
   }, []);
 

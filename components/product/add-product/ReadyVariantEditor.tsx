@@ -5,7 +5,6 @@ import {
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
@@ -18,6 +17,7 @@ import {
   ReadyVariantSize,
 } from "@/utils/kapray/productVariants";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
+import { AddProductInput } from "@/components/product/add-product/AddProductWizard";
 import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 
 type Props = {
@@ -167,7 +167,7 @@ export default function ReadyVariantEditor({
       </View>
 
       <Text style={apStyles.label}>Color / design name *</Text>
-      <TextInput
+      <AddProductInput
         value={variant.name}
         onChangeText={updateName}
         placeholder="e.g., Black, Ivory Gold, Design A"

@@ -53,6 +53,11 @@ function safeInt(v: any) {
   return Math.trunc(n);
 }
 
+function positiveNumber(v: unknown) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 function safeText(v: any) {
   const t = String(v ?? "").trim();
   return t.length ? t : "—";
@@ -146,21 +151,126 @@ function getVariantInventorySummary(
   };
 }
 
-function isStitchedReadyProduct(item: ProductRow) {
-  const category = String(item?.product_category ?? "").trim();
-  const price = item?.price ?? {};
-  const spec = item?.spec ?? {};
-
+function isProductCategory(v: unknown): v is ProductCategory {
   return (
-    category === "stitched_ready" ||
-    String(price?.mode ?? "") === "stitched_total" ||
-    String(price?.mode ?? "") === "stitched_ready" ||
-    String(spec?.product_category ?? "") === "stitched_ready"
+    v === "unstitched_plain" ||
+    v === "unstitched_dyeing" ||
+    v === "unstitched_dyeing_tailoring" ||
+    v === "stitched_ready"
   );
 }
 
+function getProductCategory(item: ProductRow): ProductCategory | null {
+  const fromSpec = String(item?.spec?.product_category ?? "").trim();
+  const fromDb = String(item?.product_category ?? "").trim();
+  const exactCategories = [fromSpec, fromDb].filter(isProductCategory);
+  const spec = item?.spec ?? {};
+  const price = item?.price ?? {};
+  const priceMode = String(price?.mode ?? "").trim();
+  const isUnstitched =
+    exactCategories.some(
+      (category) =>
+        category === "unstitched_plain" ||
+        category === "unstitched_dyeing" ||
+        category === "unstitched_dyeing_tailoring",
+    ) ||
+    fromDb === "unstitched" ||
+    priceMode.includes("unstitched");
+
+  if (isUnstitched) {
+    if (
+      exactCategories.includes("unstitched_dyeing_tailoring") ||
+      isTruthyFlag(spec?.tailoring_enabled) ||
+      isTruthyFlag(spec?.tailoring_selected)
+    ) {
+      return "unstitched_dyeing_tailoring";
+    }
+
+    if (
+      exactCategories.includes("unstitched_dyeing") ||
+      isTruthyFlag(spec?.dyeing_enabled) ||
+      isTruthyFlag(spec?.dyeing_selected) ||
+      positiveNumber(price?.dyeing_cost_pkr) > 0 ||
+      positiveNumber(spec?.dyeing_cost_pkr) > 0
+    ) {
+      return "unstitched_dyeing";
+    }
+
+    return "unstitched_plain";
+  }
+
+  if (
+    exactCategories.includes("stitched_ready") ||
+    priceMode === "stitched_total" ||
+    priceMode === "stitched_ready"
+  ) {
+    return "stitched_ready";
+  }
+
+  return null;
+}
+
+function isTruthyFlag(v: unknown) {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v !== 0;
+  if (typeof v === "string") {
+    const s = v.trim().toLowerCase();
+    return s === "true" || s === "1" || s === "yes" || s === "y";
+  }
+  return false;
+}
+
+function isMadeOnOrderProduct(item: ProductRow) {
+  return (
+    isTruthyFlag(item?.made_on_order) ||
+    isTruthyFlag(item?.spec?.made_on_order)
+  );
+}
+
+function isStitchedReadyProduct(item: ProductRow) {
+  return getProductCategory(item) === "stitched_ready";
+}
+
+function isUnstitchedProduct(item: ProductRow) {
+  const category = getProductCategory(item);
+
+  if (
+    category === "unstitched_plain" ||
+    category === "unstitched_dyeing" ||
+    category === "unstitched_dyeing_tailoring"
+  ) {
+    return true;
+  }
+
+  const rawCategory = String(item?.product_category ?? "").trim();
+  if (rawCategory === "unstitched") return true;
+
+  const priceMode = String(item?.price?.mode ?? "").trim();
+  return priceMode.includes("unstitched");
+}
+
+function productCategoryCardLabel(item: ProductRow) {
+  const category = getProductCategory(item);
+
+  if (category === "stitched_ready") {
+    return isMadeOnOrderProduct(item) ? "Made-on-order" : "Ready-to-wear";
+  }
+
+  if (category === "unstitched_dyeing_tailoring") {
+    return "Unstitched + dyeing + tailoring";
+  }
+
+  if (category === "unstitched_dyeing") return "Unstitched + dyeing";
+
+  if (category === "unstitched_plain" || isUnstitchedProduct(item)) {
+    return "Unstitched plain fabric";
+  }
+
+  return isMadeOnOrderProduct(item) ? "Made-on-order" : "Product";
+}
+
 function getStockSummaryText(item: ProductRow) {
-  if (item?.made_on_order) return "Made on order";
+  if (isMadeOnOrderProduct(item)) return "Made on order";
 
   if (isStitchedReadyProduct(item)) {
     const info = getVariantInventorySummary(item);
@@ -172,11 +282,12 @@ function getStockSummaryText(item: ProductRow) {
     return `Variant stock: ${info.totalQty} total • ${info.availableSizes} ${sizeWord} • ${info.variantCount} ${variantWord}`;
   }
 
-  return `Qty: ${Math.max(0, Number(item?.inventory_qty ?? 0))}`;
+  const qty = Math.max(0, Number(item?.inventory_qty ?? 0));
+  return isUnstitchedProduct(item) ? `Fabric: ${qty} m` : `Qty: ${qty}`;
 }
 
 function isOutOfStock(item: ProductRow) {
-  if (item?.made_on_order) return false;
+  if (isMadeOnOrderProduct(item)) return false;
 
   if (isStitchedReadyProduct(item)) {
     return !getVariantInventorySummary(item).hasStock;
@@ -450,6 +561,7 @@ export default function VendorProductsScreen() {
   function renderItem({ item }: { item: ProductRow }) {
     const code = safeText(item.product_code);
     const title = safeText(item.title);
+    const categoryText = productCategoryCardLabel(item);
     const stockText = getStockSummaryText(item);
     const outOfStock = isOutOfStock(item);
 
@@ -478,6 +590,9 @@ export default function VendorProductsScreen() {
               {title}
             </Text>
 
+            <Text style={styles.stockText} numberOfLines={2}>
+              {categoryText}
+            </Text>
             <Text style={styles.stockText}>{stockText}</Text>
 
             {outOfStock ? (

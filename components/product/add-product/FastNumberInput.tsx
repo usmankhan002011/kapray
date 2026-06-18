@@ -1,11 +1,9 @@
-import React, {
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-  useState,
-} from "react";
-import { TextInput, type TextInputProps } from "react-native";
+import React, { forwardRef } from "react";
+import { type TextInput } from "react-native";
+import {
+  AppTextInput,
+  type AppTextInputProps,
+} from "@/components/ui/AppTextInput";
 
 function sanitizeNumberText(input: string) {
   const cleaned = input.replace(/[^\d.]/g, "");
@@ -14,7 +12,10 @@ function sanitizeNumberText(input: string) {
   return `${parts[0]}.${parts.slice(1).join("")}`;
 }
 
-type Props = Omit<TextInputProps, "value" | "onChangeText"> & {
+type Props = Omit<
+  AppTextInputProps,
+  "commitDelayMs" | "commitMode" | "onChangeText" | "sanitizeText"
+> & {
   value: string | number | null | undefined;
   onChangeText: (text: string) => void;
   sanitize?: (text: string) => string;
@@ -27,60 +28,19 @@ const FastNumberInput = forwardRef<TextInput, Props>(function FastNumberInput(
     onChangeText,
     sanitize = sanitizeNumberText,
     commitDelayMs = 90,
-    onBlur,
-    onSubmitEditing,
     ...props
   },
   ref,
 ) {
-  const inputRef = useRef<TextInput>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [text, setText] = useState(value == null ? "" : String(value));
-
-  useImperativeHandle(ref, () => inputRef.current as TextInput);
-
-  useEffect(() => {
-    const next = value == null ? "" : String(value);
-    setText((prev) => (prev === next ? prev : next));
-  }, [value]);
-
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, []);
-
-  function commit(next: string) {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    onChangeText(next);
-  }
-
-  function scheduleCommit(next: string) {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      onChangeText(next);
-      timerRef.current = null;
-    }, commitDelayMs);
-  }
-
   return (
-    <TextInput
+    <AppTextInput
       {...props}
-      ref={inputRef}
-      value={text}
-      onChangeText={(raw) => {
-        const next = sanitize(raw);
-        setText(next);
-        scheduleCommit(next);
-      }}
-      onBlur={(event) => {
-        commit(text);
-        onBlur?.(event);
-      }}
-      onSubmitEditing={(event) => {
-        commit(text);
-        onSubmitEditing?.(event);
-      }}
+      ref={ref}
+      commitDelayMs={commitDelayMs}
+      commitMode="debounce"
+      onChangeText={onChangeText}
+      sanitizeText={sanitize}
+      value={value == null ? "" : String(value)}
     />
   );
 });

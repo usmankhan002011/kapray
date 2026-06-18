@@ -1,5 +1,11 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { ComponentProps, ReactNode, useEffect, useState } from "react";
+import {
+  ComponentProps,
+  forwardRef,
+  ReactNode,
+  useEffect,
+  useState,
+} from "react";
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -8,14 +14,22 @@ import {
   ScrollView,
   StyleProp,
   Text,
-  TextStyle,
+  type TextInput,
+  type TextStyle,
   View,
   ViewStyle,
 } from "react-native";
 import { usePathname } from "expo-router";
 
 import { useProductDraft } from "@/components/product/ProductDraftContext";
-import { apColors, apStyles } from "@/components/product/addProductStyles";
+import {
+  apColors,
+  apStyles,
+} from "@/components/product/addProductStyles";
+import {
+  AppTextInput,
+  type AppTextInputProps,
+} from "@/components/ui/AppTextInput";
 
 export type MaterialIconName = ComponentProps<typeof MaterialIcons>["name"];
 
@@ -372,6 +386,28 @@ export function AddProductField({
     </View>
   );
 }
+
+type AddProductInputProps = AppTextInputProps;
+
+export const AddProductInput = forwardRef<TextInput, AddProductInputProps>(
+  function AddProductInput(
+    {
+      placeholderTextColor = apColors.muted,
+      style,
+      ...props
+    },
+    ref,
+  ) {
+    return (
+      <AppTextInput
+        {...props}
+        ref={ref}
+        placeholderTextColor={placeholderTextColor}
+        style={[apStyles.input, style]}
+      />
+    );
+  },
+);
 
 export function AddProductNotice({
   title,

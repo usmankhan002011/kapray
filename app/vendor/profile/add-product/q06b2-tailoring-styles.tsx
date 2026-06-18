@@ -7,7 +7,6 @@ import {
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -20,6 +19,7 @@ import { apColors, apStyles } from "@/components/product/addProductStyles";
 import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 import {
   AddProductFooter,
+  AddProductInput,
   AddProductNotice,
   AddProductScreen,
 } from "@/components/product/add-product/AddProductWizard";
@@ -619,7 +619,7 @@ const TailoringPresetCard = memo(function TailoringPresetCard({
       </View>
 
       <Text style={[apStyles.label, { marginTop: 12 }]}>Style title *</Text>
-      <TextInput
+      <AddProductInput
         value={preset.title}
         onChangeText={(t) =>
           updatePreset(preset.id, (prev) => ({ ...prev, title: t }))
@@ -631,7 +631,7 @@ const TailoringPresetCard = memo(function TailoringPresetCard({
       />
 
       <Text style={apStyles.label}>Style note</Text>
-      <TextInput
+      <AddProductInput
         value={preset.note ?? ""}
         onChangeText={(t) =>
           updatePreset(preset.id, (prev) => ({ ...prev, note: t }))

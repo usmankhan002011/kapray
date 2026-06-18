@@ -471,6 +471,8 @@ export default function AddProductReviewScreen() {
   const needsDyeing =
     cat === "unstitched_dyeing" || cat === "unstitched_dyeing_tailoring";
   const needsTailoring = cat === "unstitched_dyeing_tailoring";
+  const isFabricByMeter =
+    cat === "unstitched_plain" || cat === "unstitched_dyeing";
 
   const hasReadyVariants =
     isStitched &&
@@ -540,7 +542,12 @@ export default function AddProductReviewScreen() {
     | SizeLengthMap
     | undefined;
 
-  const weightKg = safeNum((draft.spec as any)?.weight_kg);
+  const weightKg = safeNum(
+    isFabricByMeter
+      ? (draft.spec as any)?.weight_per_meter_kg ??
+          (draft.spec as any)?.weight_kg
+      : (draft.spec as any)?.weight_kg,
+  );
   const packageCm = (draft.spec as any)?.package_cm ?? {};
   const packageDimensions = formatPackageCm(packageCm, draft.spec);
 
@@ -641,7 +648,13 @@ export default function AddProductReviewScreen() {
     const parts: string[] = [];
 
     if (needsDyeing) {
-      parts.push(`Dyeing: ${dyeingCost > 0 ? `${dyeingCost} PKR` : "Not set"}`);
+      parts.push(
+        `Dyeing: ${
+          dyeingCost > 0
+            ? `${dyeingCost} PKR${cat === "unstitched_dyeing" ? " / meter" : ""}`
+            : "Not set"
+        }`,
+      );
     } else {
       parts.push("No dyeing");
     }
@@ -777,7 +790,9 @@ export default function AddProductReviewScreen() {
             ]}
           >
             <Text style={styles.rowTitle}>
-              Inventory Quantity *
+              {isUnstitched
+                ? "Available fabric length (meters) *"
+                : "Inventory Quantity *"}
               {hasReadyVariants
                 ? " (from styles)"
                 : isSimpleReady
@@ -787,7 +802,11 @@ export default function AddProductReviewScreen() {
                     : ""}
             </Text>
             <Text style={styles.rowValue}>
-              {Number.isFinite(inventoryQty) ? String(inventoryQty) : "0"}
+              {Number.isFinite(inventoryQty)
+                ? isUnstitched
+                  ? `${inventoryQty} m`
+                  : String(inventoryQty)
+                : "0"}
             </Text>
           </Pressable>
         ) : null}
@@ -998,22 +1017,24 @@ export default function AddProductReviewScreen() {
               </Text>
             </Pressable>
 
-            <Pressable
-              onPress={() =>
-                goEdit(
-                  "/vendor/profile/add-product/q05c-unstitched-fabric-length",
-                )
-              }
-              style={({ pressed }) => [
-                styles.rowBtn,
-                pressed ? styles.pressed : null,
-              ]}
-            >
-              <Text style={styles.rowTitle}>Fabric length by size</Text>
-              <Text style={styles.rowValue}>
-                {formatSizeLengthMap(sizeLengthMap)}
-              </Text>
-            </Pressable>
+            {isUnstitched ? (
+              <Pressable
+                onPress={() =>
+                  goEdit(
+                    "/vendor/profile/add-product/q05c-unstitched-fabric-length",
+                  )
+                }
+                style={({ pressed }) => [
+                  styles.rowBtn,
+                  pressed ? styles.pressed : null,
+                ]}
+              >
+                <Text style={styles.rowTitle}>Fabric length by size</Text>
+                <Text style={styles.rowValue}>
+                  {formatSizeLengthMap(sizeLengthMap)}
+                </Text>
+              </Pressable>
+            ) : null}
 
             <Pressable
               onPress={() =>
@@ -1097,7 +1118,9 @@ export default function AddProductReviewScreen() {
             pressed ? styles.pressed : null,
           ]}
         >
-          <Text style={styles.rowTitle}>Weight (kg)</Text>
+          <Text style={styles.rowTitle}>
+            {isFabricByMeter ? "Weight per meter (kg)" : "Weight (kg)"}
+          </Text>
           <Text style={styles.rowValue}>
             {weightKg > 0 ? String(weightKg) : "Not set"}
           </Text>

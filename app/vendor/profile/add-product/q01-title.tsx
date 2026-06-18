@@ -1,19 +1,18 @@
-import React, { useMemo, useRef } from "react";
+import React, { useRef } from "react";
 import {
   Alert,
-  Text,
-  TextInput,
+  type TextInput,
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
-import { apColors, apStyles } from "@/components/product/addProductStyles";
 import { useAutoFocus } from "@/components/product/useAutoFocus";
 import {
   AddProductCard,
   AddProductField,
   AddProductFooter,
+  AddProductInput,
   AddProductScreen,
 } from "@/components/product/add-product/AddProductWizard";
 
@@ -37,19 +36,22 @@ export default function Q01Title() {
   const vendorId = safeInt(vendorIdRaw);
 
   const { draft, setTitle } = useProductDraft() as any;
-  const title = String(draft?.title ?? "");
-
-  const canContinue = useMemo(() => {
-    if (!vendorId) return false;
-    return Boolean(title.trim());
-  }, [vendorId, title]);
-  const disabledHint = !vendorId
-    ? "Vendor not loaded."
-    : !title.trim()
-      ? "Enter a product title."
-      : "";
+  const initialTitle = String(draft?.title ?? "");
+  const titleTextRef = useRef(initialTitle);
+  const disabledHint = !vendorId ? "Vendor not loaded." : "";
 
   useAutoFocus(inputRef);
+
+  function saveTitle() {
+    const nextTitle = String(titleTextRef.current ?? "").trim();
+    if (!nextTitle) {
+      Alert.alert("Title required", "Please enter a product title.");
+      return null;
+    }
+
+    setTitle?.(nextTitle);
+    return nextTitle;
+  }
 
   function onContinue() {
     if (!vendorId) {
@@ -57,10 +59,7 @@ export default function Q01Title() {
       return;
     }
 
-    if (!title.trim()) {
-      Alert.alert("Title required", "Please enter a product title.");
-      return;
-    }
+    if (!saveTitle()) return;
 
     if (returnTo) {
       router.replace(returnTo as any);
@@ -85,7 +84,7 @@ export default function Q01Title() {
       footer={
         <AddProductFooter
           onPrimaryPress={onContinue}
-          primaryDisabled={!canContinue}
+          primaryDisabled={!vendorId}
           disabledHint={disabledHint}
         />
       }
@@ -97,22 +96,21 @@ export default function Q01Title() {
           hint="Use the name buyers will see on product cards and search results."
           style={{ marginTop: 0 }}
         >
-          <TextInput
+          <AddProductInput
             ref={inputRef}
-            value={title}
-            onChangeText={(t) => setTitle?.(t)}
+            defaultValue={initialTitle}
+            textValueRef={titleTextRef}
             placeholder="e.g., Bridal heavy embroidered lehenga"
-            placeholderTextColor={apColors.muted}
-            style={apStyles.input}
+            autoCorrect={false}
+            spellCheck={false}
             maxLength={80}
             returnKeyType="next"
-            onSubmitEditing={() => {
-              if (canContinue) onContinue();
+            onBlur={() => {
+              const nextTitle = String(titleTextRef.current ?? "").trim();
+              if (nextTitle) setTitle?.(nextTitle);
             }}
+            onSubmitEditing={onContinue}
           />
-          <Text style={[apStyles.helperText, { textAlign: "right" }]}>
-            {title.length}/80
-          </Text>
         </AddProductField>
       </AddProductCard>
     </AddProductScreen>

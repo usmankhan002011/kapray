@@ -7,11 +7,11 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
+import { AddProductInput } from "@/components/product/add-product/AddProductWizard";
 import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 import {
   buildMadeOrderVariantDisplayName,
@@ -220,7 +220,7 @@ export default function MadeOrderVariantEditor({
 
       <View style={styles.fieldBlock}>
         <Text style={apStyles.label}>COLOR / DESIGN NAME *</Text>
-        <TextInput
+        <AddProductInput
           value={name}
           onChangeText={(text) => patch({ name: text })}
           placeholder="e.g., Black, Ivory Gold, Maroon Design"

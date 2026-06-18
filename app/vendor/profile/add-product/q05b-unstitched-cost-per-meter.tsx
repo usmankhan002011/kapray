@@ -1,14 +1,13 @@
-import React, { useMemo, useRef, useState } from "react";
-import { Alert, TextInput } from "react-native";
+import React, { useMemo, useRef } from "react";
+import { Alert, type TextInput } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
-import { apColors, apStyles } from "@/components/product/addProductStyles";
-import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 import {
   AddProductCard,
   AddProductField,
   AddProductFooter,
+  AddProductInput,
   AddProductScreen,
 } from "@/components/product/add-product/AddProductWizard";
 
@@ -40,18 +39,16 @@ export default function Q05BUnstitchedCostPerMeter() {
   const ctx = useProductDraft() as any;
   const { draft, setPricePerMeter, setPriceMode } = ctx;
 
-  const [text, setText] = useState<string>(String(draft?.price?.cost_pkr_per_meter ?? ""));
+  const initialText = useMemo(() => {
+    const existing = draft?.price?.cost_pkr_per_meter;
+    return existing == null ? "" : String(existing);
+  }, [draft?.price?.cost_pkr_per_meter]);
+  const textRef = useRef(initialText);
 
   const canContinue = useMemo(() => {
-    if (!vendorId) return false;
-    const n = Number(sanitizeNumber(text));
-    return Number.isFinite(n) && n > 0;
-  }, [vendorId, text]);
-  const disabledHint = !vendorId
-    ? "Vendor not loaded."
-    : !canContinue
-      ? "Enter the fabric cost per meter."
-      : "";
+    return Boolean(vendorId);
+  }, [vendorId]);
+  const disabledHint = !vendorId ? "Vendor not loaded." : "";
 
   useFocusEffect(
     React.useCallback(() => {
@@ -76,8 +73,9 @@ export default function Q05BUnstitchedCostPerMeter() {
       return;
     }
 
-    const n = Number(sanitizeNumber(text) || "0");
-    if (!Number.isFinite(n) || n <= 0) {
+    const cleaned = sanitizeNumber(textRef.current);
+    const n = Number(cleaned);
+    if (!cleaned || !Number.isFinite(n) || n <= 0) {
       Alert.alert("Invalid cost", "Please enter a valid cost per meter (PKR).");
       return;
     }
@@ -107,13 +105,12 @@ export default function Q05BUnstitchedCostPerMeter() {
     >
       <AddProductCard>
         <AddProductField label="Cost per meter (PKR)" required style={{ marginTop: 0 }}>
-          <FastNumberInput
+          <AddProductInput
             ref={inputRef}
-            value={text}
-            onChangeText={setText}
+            defaultValue={initialText}
             placeholder="e.g., 1800"
-            placeholderTextColor={apColors.muted}
-            style={apStyles.input}
+            textValueRef={textRef}
+            sanitizeText={sanitizeNumber}
             keyboardType="decimal-pad"
             maxLength={12}
             returnKeyType="done"

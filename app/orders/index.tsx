@@ -36,6 +36,13 @@ type OrderRow = {
   currency: string;
 };
 
+type DyeSplit = {
+  length_m: number;
+  dye_shade_id: string;
+  dye_hex: string;
+  dye_label: string;
+};
+
 function norm(v: unknown) {
   return (v == null ? "" : String(v)).trim().toLowerCase();
 }
@@ -72,6 +79,19 @@ function numOrNull(v: any): number | null {
   const n = Number(v);
   if (!Number.isFinite(n)) return null;
   return n;
+}
+
+function normalizeDyeSplits(v: any): DyeSplit[] {
+  const rows = Array.isArray(v) ? v : [];
+
+  return rows
+    .map((row) => ({
+      length_m: numOrNull(row?.length_m) ?? 0,
+      dye_shade_id: cleanText(row?.dye_shade_id),
+      dye_hex: cleanText(row?.dye_hex),
+      dye_label: cleanText(row?.dye_label),
+    }))
+    .filter((row) => row.length_m > 0 && (row.dye_hex || row.dye_shade_id));
 }
 
 function getSelectedVariant(spec: any) {
@@ -195,6 +215,10 @@ export default function OrdersIndexScreen() {
       const selectedVariant = getSelectedVariant(spec);
 
       const dyeHex = safeText(spec?.dye_hex ?? spec?.dyeing_hex ?? "");
+      const dyeSplits = normalizeDyeSplits(spec?.dyeing_splits);
+      const dyeSplitText = dyeSplits
+        .map((row) => `${row.length_m}m ${row.dye_label}`)
+        .join(" ");
       const tailoringEnabled = safeText(
         spec?.tailoring_enabled ?? spec?.tailoring_selected ?? "",
       );
@@ -220,6 +244,7 @@ export default function OrdersIndexScreen() {
         r.title_snapshot,
         productCategory,
         dyeHex,
+        dyeSplitText,
         tailoringEnabled,
         tailoringDays,
         tailoringCost,
@@ -250,6 +275,14 @@ export default function OrdersIndexScreen() {
     const selectedVariant = getSelectedVariant(spec);
 
     const dyeHex = safeText(spec?.dye_hex ?? spec?.dyeing_hex ?? "");
+    const dyeSplits = normalizeDyeSplits(spec?.dyeing_splits);
+    const dyeSplitText = dyeSplits
+      .map(
+        (row) =>
+          `${row.length_m}m${row.dye_label ? ` Code ${row.dye_label}` : ""}`,
+      )
+      .join(", ");
+    const hasDyeSplit = dyeSplits.length > 0;
     const hasDye = dyeHex && dyeHex !== "—";
 
     const dressCat = humanizeCat(
@@ -339,12 +372,26 @@ export default function OrdersIndexScreen() {
           </Text>
         ) : null}
 
-        {hasDye ? (
+        {hasDye || hasDyeSplit ? (
           <View style={styles.dyeRow}>
             <Text style={styles.small} numberOfLines={1}>
-              Dyeing
+              Dyeing{dyeSplitText ? `: ${dyeSplitText}` : ""}
             </Text>
-            <View style={[styles.dyeSwatch, { backgroundColor: dyeHex }]} />
+            <View style={styles.dyeSwatchStack}>
+              {hasDyeSplit ? (
+                dyeSplits.slice(0, 4).map((row, index) => (
+                  <View
+                    key={`${row.dye_shade_id}-${index}`}
+                    style={[
+                      styles.dyeSwatch,
+                      { backgroundColor: row.dye_hex || stylesVars.white },
+                    ]}
+                  />
+                ))
+              ) : (
+                <View style={[styles.dyeSwatch, { backgroundColor: dyeHex }]} />
+              )}
+            </View>
           </View>
         ) : null}
 
@@ -695,6 +742,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+
+  dyeSwatchStack: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
 
   dyeSwatch: {

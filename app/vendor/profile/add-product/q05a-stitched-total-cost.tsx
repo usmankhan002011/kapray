@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import {
   Alert,
   Text,
-  TextInput,
+  type TextInput,
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";

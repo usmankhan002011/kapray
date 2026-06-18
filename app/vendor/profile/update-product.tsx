@@ -23,6 +23,12 @@ import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 const PRODUCTS_TABLE = "products";
 const BUCKET_VENDOR = "vendor_images";
 
+type ProductCategory =
+  | "unstitched_plain"
+  | "unstitched_dyeing"
+  | "unstitched_dyeing_tailoring"
+  | "stitched_ready";
+
 type ProductRow = {
   id: number;
   vendor_id: number;
@@ -30,6 +36,7 @@ type ProductRow = {
   title: string | null;
   inventory_qty: number | null;
   made_on_order?: boolean | null;
+  product_category?: ProductCategory | string | null;
   spec: any;
   price: any;
   media: any;
@@ -131,6 +138,108 @@ function safeNumOrZero(v: any) {
   const n = Number(v);
   if (!Number.isFinite(n)) return 0;
   return n;
+}
+
+function roundMeter(n: number) {
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 100) / 100;
+}
+
+function isProductCategory(v: unknown): v is ProductCategory {
+  return (
+    v === "unstitched_plain" ||
+    v === "unstitched_dyeing" ||
+    v === "unstitched_dyeing_tailoring" ||
+    v === "stitched_ready"
+  );
+}
+
+function isTruthyFlag(v: unknown) {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v !== 0;
+  if (typeof v === "string") {
+    const s = v.trim().toLowerCase();
+    return s === "true" || s === "1" || s === "yes" || s === "y";
+  }
+  return false;
+}
+
+function positiveNumber(v: unknown) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function resolveProductCategory(product: ProductRow | null): ProductCategory | null {
+  if (!product) return null;
+
+  const spec = safeJson(product.spec);
+  const price = safeJson(product.price);
+  const fromSpec = String(spec?.product_category ?? "").trim();
+  const fromDb = String(product?.product_category ?? "").trim();
+  const exactCategories = [fromSpec, fromDb].filter(isProductCategory);
+  const priceMode = String(price?.mode ?? "").trim();
+  const isUnstitched =
+    exactCategories.some(
+      (category) =>
+        category === "unstitched_plain" ||
+        category === "unstitched_dyeing" ||
+        category === "unstitched_dyeing_tailoring",
+    ) ||
+    fromDb === "unstitched" ||
+    priceMode.includes("unstitched");
+
+  if (isUnstitched) {
+    if (
+      exactCategories.includes("unstitched_dyeing_tailoring") ||
+      isTruthyFlag(spec?.tailoring_enabled) ||
+      isTruthyFlag(spec?.tailoring_selected)
+    ) {
+      return "unstitched_dyeing_tailoring";
+    }
+
+    if (
+      exactCategories.includes("unstitched_dyeing") ||
+      isTruthyFlag(spec?.dyeing_enabled) ||
+      isTruthyFlag(spec?.dyeing_selected) ||
+      positiveNumber(price?.dyeing_cost_pkr) > 0 ||
+      positiveNumber(spec?.dyeing_cost_pkr) > 0
+    ) {
+      return "unstitched_dyeing";
+    }
+
+    return "unstitched_plain";
+  }
+
+  if (
+    exactCategories.includes("stitched_ready") ||
+    priceMode === "stitched_total" ||
+    priceMode === "stitched_ready"
+  ) {
+    return "stitched_ready";
+  }
+
+  return null;
+}
+
+function editedCategoryFromState(
+  priceMode: "stitched_total" | "unstitched_per_meter",
+  dyeingEnabled: boolean,
+  tailoringEnabled: boolean,
+): ProductCategory {
+  if (priceMode === "stitched_total") return "stitched_ready";
+  if (tailoringEnabled) return "unstitched_dyeing_tailoring";
+  if (dyeingEnabled) return "unstitched_dyeing";
+  return "unstitched_plain";
+}
+
+function categoryLabel(category: ProductCategory | null) {
+  if (category === "unstitched_dyeing_tailoring") {
+    return "Unstitched + dyeing + tailoring";
+  }
+  if (category === "unstitched_dyeing") return "Unstitched + dyeing";
+  if (category === "unstitched_plain") return "Unstitched plain fabric";
+  if (category === "stitched_ready") return "Stitched";
+  return "Product";
 }
 
 function isHttpUrl(v: any) {
@@ -771,6 +880,7 @@ export default function UpdateProductScreen() {
   const [title, setTitle] = useState("");
   const [moreDescription, setMoreDescription] = useState("");
   const [inventoryQty, setInventoryQty] = useState<number>(0);
+  const [inventoryQtyText, setInventoryQtyText] = useState("");
 
   const [priceMode, setPriceMode] = useState<
     "stitched_total" | "unstitched_per_meter"
@@ -958,7 +1068,7 @@ export default function UpdateProductScreen() {
       const { data, error } = await supabase
         .from(PRODUCTS_TABLE)
         .select(
-          "id, vendor_id, product_code, title, inventory_qty, made_on_order, spec, price, media, created_at, updated_at",
+          "id, vendor_id, product_code, title, inventory_qty, made_on_order, product_category, spec, price, media, created_at, updated_at",
         )
         .eq("vendor_id", vendorId)
         .order("created_at", { ascending: false });
@@ -1042,15 +1152,28 @@ export default function UpdateProductScreen() {
       safeText(safeJson(selected.spec)?.more_description ?? ""),
     );
 
-    const isMadeOnOrder = Boolean(selected.made_on_order);
-    setInventoryQty(isMadeOnOrder ? 0 : safeNumOrZero(selected.inventory_qty));
-
     const price = safeJson(selected.price);
     const spec = safeJson(selected.spec);
-
     const modeRaw = String(price?.mode ?? "").trim();
     const mode: "stitched_total" | "unstitched_per_meter" =
       modeRaw === "stitched_total" ? "stitched_total" : "unstitched_per_meter";
+    const isMadeOnOrder = Boolean(selected.made_on_order);
+    const nextInventoryQty = isMadeOnOrder
+      ? 0
+      : safeNumOrZero(selected.inventory_qty ?? spec?.inventory_length_m ?? 0);
+
+    setInventoryQty(nextInventoryQty);
+    setInventoryQtyText(
+      isMadeOnOrder
+        ? "0"
+        : nextInventoryQty > 0
+          ? String(
+              mode === "unstitched_per_meter"
+                ? roundMeter(nextInventoryQty)
+                : Math.trunc(nextInventoryQty),
+            )
+          : "",
+    );
 
     setPriceMode(mode);
     setPriceTotal(safeNumOrZero(price?.cost_pkr_total));
@@ -1202,6 +1325,16 @@ export default function UpdateProductScreen() {
   }, [JSON.stringify(videoUrls)]);
 
   const isUnstitched = priceMode === "unstitched_per_meter";
+
+  const currentProductCategory = useMemo(
+    () => resolveProductCategory(selected),
+    [selected],
+  );
+
+  const editedProductCategory = useMemo(
+    () => editedCategoryFromState(priceMode, dyeingEnabled, tailoringEnabled),
+    [dyeingEnabled, priceMode, tailoringEnabled],
+  );
 
   const blouseNeckOptions = useMemo(
     () => normalizeStringList(vendorTailoringOptions?.blouse_neck),
@@ -1406,10 +1539,20 @@ export default function UpdateProductScreen() {
       };
 
       nextSpec.more_description = String(moreDescription ?? "").trim();
+      const nextProductCategory = editedCategoryFromState(
+        priceMode,
+        dyeingEnabled,
+        tailoringEnabled,
+      );
+      nextSpec.product_category = nextProductCategory;
 
       if (priceMode === "unstitched_per_meter") {
         nextSpec.dyeing_enabled = Boolean(dyeingEnabled);
         nextSpec.dyeing_cost_pkr = dyeingEnabled ? Number(dyeingCost ?? 0) : 0;
+        nextSpec.dyeing_pricing_unit =
+          nextProductCategory === "unstitched_dyeing"
+            ? "per_meter"
+            : "per_order";
 
         nextSpec.tailoring_enabled = Boolean(tailoringEnabled);
         nextSpec.tailoring_cost_pkr = tailoringEnabled
@@ -1425,6 +1568,11 @@ export default function UpdateProductScreen() {
             selectedTailoringStyles,
           );
         }
+
+        nextSpec.fabric_purchase_mode =
+          nextProductCategory === "unstitched_dyeing_tailoring"
+            ? "dress_length"
+            : "by_meter";
       } else {
         nextSpec.dyeing_enabled = false;
         nextSpec.dyeing_cost_pkr = 0;
@@ -1617,6 +1765,7 @@ export default function UpdateProductScreen() {
 
       const updatePayload: any = {
         title: title.trim(),
+        product_category: nextProductCategory,
         price: nextPrice,
         spec: nextSpec,
         updated_at: new Date().toISOString(),
@@ -1635,7 +1784,23 @@ export default function UpdateProductScreen() {
             0,
           );
       } else if (inventoryEditable) {
-        updatePayload.inventory_qty = Number(inventoryQty ?? 0);
+        const parsedInventoryInput = Number(
+          sanitizeNumber(inventoryQtyText) || "0",
+        );
+        const inventoryInputNumber = Number.isFinite(parsedInventoryInput)
+          ? parsedInventoryInput
+          : 0;
+        const nextInventoryQty =
+          priceMode === "unstitched_per_meter"
+            ? roundMeter(Math.max(0, inventoryInputNumber))
+            : Math.max(0, Math.trunc(inventoryInputNumber));
+
+        updatePayload.inventory_qty = nextInventoryQty;
+
+        if (priceMode === "unstitched_per_meter") {
+          nextSpec.inventory_unit = "m";
+          nextSpec.inventory_length_m = nextInventoryQty;
+        }
       }
 
       const { data, error } = await supabase
@@ -1644,7 +1809,7 @@ export default function UpdateProductScreen() {
         .eq("id", selectedId)
         .eq("vendor_id", vendorId)
         .select(
-          "id, vendor_id, product_code, title, inventory_qty, made_on_order, spec, price, media, created_at, updated_at",
+          "id, vendor_id, product_code, title, inventory_qty, made_on_order, product_category, spec, price, media, created_at, updated_at",
         )
         .single();
 
@@ -1688,7 +1853,7 @@ export default function UpdateProductScreen() {
         .eq("id", selectedId)
         .eq("vendor_id", vendorId)
         .select(
-          "id, vendor_id, product_code, title, inventory_qty, made_on_order, spec, price, media, created_at, updated_at",
+          "id, vendor_id, product_code, title, inventory_qty, made_on_order, product_category, spec, price, media, created_at, updated_at",
         )
         .single();
 
@@ -1992,7 +2157,7 @@ export default function UpdateProductScreen() {
         .eq("id", selectedId)
         .eq("vendor_id", vendorId)
         .select(
-          "id, vendor_id, product_code, title, inventory_qty, made_on_order, spec, price, media, created_at, updated_at",
+          "id, vendor_id, product_code, title, inventory_qty, made_on_order, product_category, spec, price, media, created_at, updated_at",
         )
         .single();
 
@@ -2063,7 +2228,11 @@ export default function UpdateProductScreen() {
                   <Text style={styles.inventoryAlertText}>
                     {usesVariantInventory
                       ? `Style Inventory: ${stitchedVariantInventoryInfo.totalQty}`
-                      : `Inventory Qty: ${Math.max(
+                      : isUnstitched
+                        ? `Fabric stock: ${roundMeter(
+                            Math.max(0, Number(selected.inventory_qty ?? 0)),
+                          )} m`
+                        : `Inventory Qty: ${Math.max(
                           0,
                           Number(selected.inventory_qty ?? 0),
                         )}`}
@@ -2275,12 +2444,60 @@ export default function UpdateProductScreen() {
               <View style={styles.readonlyField}>
                 <Text style={styles.readonlyValue}>
                   {priceMode === "unstitched_per_meter"
-                    ? "Unstitched (PKR/meter)"
+                    ? categoryLabel(editedProductCategory)
                     : Boolean(selected?.made_on_order)
                       ? "Stitched / Made on order"
                       : "Stitched / Ready-to-wear"}
                 </Text>
+                {currentProductCategory &&
+                currentProductCategory !== editedProductCategory ? (
+                  <Text style={styles.hint}>
+                    Current saved category:{" "}
+                    {categoryLabel(currentProductCategory)}
+                  </Text>
+                ) : null}
               </View>
+
+              {!Boolean(selected?.made_on_order) && !usesVariantInventory ? (
+                <>
+                  <Text
+                    style={
+                      isUnstitched ? styles.inventoryLabel : styles.label
+                    }
+                  >
+                    {isUnstitched
+                      ? "Available fabric length (meters) *"
+                      : "Inventory quantity *"}
+                  </Text>
+                  <TextInput
+                    value={inventoryQtyText}
+                    onChangeText={(t) => {
+                      const nextText = sanitizeNumber(t);
+                      const raw = Number(nextText || "0");
+                      const next = Number.isFinite(raw) ? raw : 0;
+                      setInventoryQtyText(nextText);
+                      setInventoryQty(
+                        isUnstitched
+                          ? roundMeter(Math.max(0, next))
+                          : Math.max(0, Math.trunc(next)),
+                      );
+                    }}
+                    placeholder={isUnstitched ? "e.g., 20" : "e.g., 5"}
+                    placeholderTextColor={stylesVars.placeholder}
+                    style={[
+                      styles.input,
+                      isUnstitched ? styles.inventoryInput : null,
+                    ]}
+                    keyboardType={isUnstitched ? "decimal-pad" : "number-pad"}
+                    maxLength={10}
+                  />
+                  <Text style={styles.hint}>
+                    {isUnstitched
+                      ? "Enter total fabric currently available in meters."
+                      : "Enter available pieces."}
+                  </Text>
+                </>
+              ) : null}
 
               {priceMode === "stitched_total" ? (
                 <>
@@ -2781,6 +2998,13 @@ export default function UpdateProductScreen() {
                     <Pressable
                       onPress={() => {
                         if (!isUnstitched) return;
+                        if (dyeingEnabled && tailoringEnabled) {
+                          Alert.alert(
+                            "Dyeing is required",
+                            "Turn off stitching before turning off dyeing.",
+                          );
+                          return;
+                        }
                         setDyeingEnabled((v) => !v);
                       }}
                       style={({ pressed }) => [
@@ -2836,7 +3060,11 @@ export default function UpdateProductScreen() {
                           );
                           return;
                         }
-                        setTailoringEnabled((v) => !v);
+                        setTailoringEnabled((v) => {
+                          const next = !v;
+                          if (next) setDyeingEnabled(true);
+                          return next;
+                        });
                       }}
                       style={({ pressed }) => [
                         styles.inlineTogglePill,

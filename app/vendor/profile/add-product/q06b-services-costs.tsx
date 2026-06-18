@@ -1,13 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Text,
+  type TextInput,
+  View,
+} from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { supabase } from "@/utils/supabase/client";
-import { apColors, apStyles } from "@/components/product/addProductStyles";
-import FastNumberInput from "@/components/product/add-product/FastNumberInput";
+import { apStyles } from "@/components/product/addProductStyles";
 import {
+  AddProductInput,
   AddProductCard,
   AddProductField,
   AddProductFooter,
@@ -72,6 +78,7 @@ export default function Q06BServicesCosts() {
 
   const dyeingRef = useRef<TextInput>(null);
   const tailoringRef = useRef<TextInput>(null);
+  const turnaroundRef = useRef<TextInput>(null);
 
   const vendorIdRaw =
     useAppSelector((s: any) => s?.vendorSlice?.vendor?.id ?? null) ??
@@ -86,34 +93,39 @@ export default function Q06BServicesCosts() {
     category === "unstitched_dyeing" ||
     category === "unstitched_dyeing_tailoring";
   const needsTailoring = category === "unstitched_dyeing_tailoring";
+  const dyeingIsPerMeter = category === "unstitched_dyeing";
 
   const [vendorOffersTailoring, setVendorOffersTailoring] = useState<
     boolean | null
   >(needsTailoring ? null : false);
   const [vendorLoading, setVendorLoading] = useState(false);
 
-  const [dyeingCost, setDyeingCost] = useState(() => {
+  const initialDyeingCost = useMemo(() => {
     const fromPrice = safeNumOrZero(
       (draft?.price as any)?.dyeing_cost_pkr ?? 0,
     );
     if (fromPrice > 0) return String(fromPrice);
     const fromSpec = safeNumOrZero((draft?.spec as any)?.dyeing_cost_pkr ?? 0);
     return fromSpec > 0 ? String(fromSpec) : "";
-  });
+  }, [draft?.price, draft?.spec]);
 
-  const [tailoringCost, setTailoringCost] = useState(() => {
+  const initialTailoringCost = useMemo(() => {
     const fromPrice = safeNumOrZero(
       (draft?.price as any)?.tailoring_cost_pkr ?? 0,
     );
     return fromPrice > 0 ? String(fromPrice) : "";
-  });
+  }, [draft?.price]);
 
-  const [turnaroundDays, setTurnaroundDays] = useState(() => {
+  const initialTurnaroundDays = useMemo(() => {
     const fromSpec = safeNumOrZero(
       (draft?.spec as any)?.tailoring_turnaround_days ?? 0,
     );
     return fromSpec > 0 ? String(fromSpec) : "";
-  });
+  }, [draft?.spec]);
+
+  const dyeingCostRef = useRef(initialDyeingCost);
+  const tailoringCostRef = useRef(initialTailoringCost);
+  const turnaroundDaysRef = useRef(initialTurnaroundDays);
 
   function patchSpec(patch: any) {
     if (typeof ctx.setSpec === "function") {
@@ -221,52 +233,17 @@ export default function Q06BServicesCosts() {
 
   const canContinue = useMemo(() => {
     if (!vendorId) return false;
-
-    if (needsDyeing) {
-      const d = Number(dyeingCost);
-      if (!Number.isFinite(d) || d <= 0) return false;
-    }
-
-    if (needsTailoring) {
-      if (vendorOffersTailoring !== true) return false;
-
-      const t = Number(tailoringCost);
-      if (!Number.isFinite(t) || t <= 0) return false;
-
-      const days = turnaroundDays === "" ? 0 : Number(turnaroundDays);
-      if (!Number.isFinite(days) || days < 0) return false;
-    }
-
+    if (needsTailoring) return vendorOffersTailoring === true;
     return true;
-  }, [
-    vendorId,
-    needsDyeing,
-    dyeingCost,
-    needsTailoring,
-    vendorOffersTailoring,
-    tailoringCost,
-    turnaroundDays,
-  ]);
+  }, [vendorId, needsTailoring, vendorOffersTailoring]);
 
   const disabledHint = !vendorId
     ? "Vendor not loaded."
-    : needsDyeing &&
-        (!Number.isFinite(Number(dyeingCost)) || Number(dyeingCost) <= 0)
-      ? "Enter a valid dyeing cost."
-      : needsTailoring && vendorOffersTailoring === null
+    : needsTailoring && vendorOffersTailoring === null
         ? "Loading vendor tailoring settings."
         : needsTailoring && vendorOffersTailoring === false
           ? "Enable tailoring in your vendor profile first."
-          : needsTailoring &&
-              (!Number.isFinite(Number(tailoringCost)) ||
-                Number(tailoringCost) <= 0)
-            ? "Enter a valid tailoring cost."
-            : needsTailoring &&
-                turnaroundDays !== "" &&
-                (!Number.isFinite(Number(turnaroundDays)) ||
-                  Number(turnaroundDays) < 0)
-              ? "Enter valid turnaround days."
-              : "";
+          : "";
 
   function closeScreen() {
     if (returnTo) {
@@ -294,7 +271,7 @@ export default function Q06BServicesCosts() {
     }
 
     if (needsDyeing) {
-      const d = Number(sanitizeNumber(dyeingCost) || "0");
+      const d = Number(sanitizeNumber(dyeingCostRef.current) || "0");
       if (!Number.isFinite(d) || d <= 0) {
         Alert.alert(
           "Invalid dyeing cost",
@@ -303,11 +280,14 @@ export default function Q06BServicesCosts() {
         return;
       }
       patchPrice({ dyeing_cost_pkr: d });
-      patchSpec({ dyeing_cost_pkr: d });
+      patchSpec({
+        dyeing_cost_pkr: d,
+        dyeing_pricing_unit: dyeingIsPerMeter ? "per_meter" : "per_order",
+      });
     }
 
     if (needsTailoring) {
-      const t = Number(sanitizeNumber(tailoringCost) || "0");
+      const t = Number(sanitizeNumber(tailoringCostRef.current) || "0");
       if (!Number.isFinite(t) || t <= 0) {
         Alert.alert(
           "Invalid tailoring cost",
@@ -316,10 +296,8 @@ export default function Q06BServicesCosts() {
         return;
       }
 
-      const days =
-        turnaroundDays === ""
-          ? 0
-          : Number(sanitizeNumber(turnaroundDays) || "0");
+      const turnaroundText = sanitizeNumber(turnaroundDaysRef.current);
+      const days = turnaroundText === "" ? 0 : Number(turnaroundText || "0");
       if (!Number.isFinite(days) || days < 0) {
         Alert.alert("Invalid turnaround", "Turnaround days must be 0 or more.");
         return;
@@ -382,17 +360,20 @@ export default function Q06BServicesCosts() {
 
         {needsDyeing ? (
           <AddProductField
-            label="Dyeing cost (PKR)"
+            label={
+              dyeingIsPerMeter
+                ? "Dyeing cost per meter (PKR)"
+                : "Dyeing cost (PKR)"
+            }
             required
             style={{ marginTop: 0 }}
           >
-            <FastNumberInput
+            <AddProductInput
               ref={dyeingRef}
-              value={dyeingCost}
-              onChangeText={setDyeingCost}
+              defaultValue={initialDyeingCost}
+              textValueRef={dyeingCostRef}
+              sanitizeText={sanitizeNumber}
               placeholder="e.g., 800"
-              placeholderTextColor={apColors.muted}
-              style={apStyles.input}
               keyboardType="decimal-pad"
               maxLength={12}
               returnKeyType={needsTailoring ? "next" : "done"}
@@ -421,26 +402,26 @@ export default function Q06BServicesCosts() {
                 marginTop: needsDyeing || vendorOffersTailoring === false ? 14 : 0,
               }}
             >
-              <FastNumberInput
+              <AddProductInput
                 ref={tailoringRef}
-                value={tailoringCost}
-                onChangeText={setTailoringCost}
+                defaultValue={initialTailoringCost}
+                textValueRef={tailoringCostRef}
+                sanitizeText={sanitizeNumber}
                 placeholder="e.g., 2500"
-                placeholderTextColor={apColors.muted}
-                style={apStyles.input}
                 keyboardType="decimal-pad"
                 maxLength={12}
                 returnKeyType="next"
+                onSubmitEditing={() => turnaroundRef.current?.focus()}
               />
             </AddProductField>
 
             <AddProductField label="Tailoring turnaround (days)">
-              <FastNumberInput
-                value={turnaroundDays}
-                onChangeText={setTurnaroundDays}
+              <AddProductInput
+                ref={turnaroundRef}
+                defaultValue={initialTurnaroundDays}
+                textValueRef={turnaroundDaysRef}
+                sanitizeText={sanitizeNumber}
                 placeholder="e.g., 12"
-                placeholderTextColor={apColors.muted}
-                style={apStyles.input}
                 keyboardType="number-pad"
                 maxLength={3}
                 returnKeyType="done"

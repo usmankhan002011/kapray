@@ -1,4 +1,5 @@
-import { Platform, StyleSheet } from "react-native";
+import { Platform, StyleSheet, type TextStyle } from "react-native";
+import { appInputTextStyle } from "@/components/ui/AppTextInput";
 
 export const apFontFamily = Platform.select({
   ios: "System",
@@ -37,6 +38,11 @@ export const apColors = {
 export const apSpacing = {
   pagePad: 16,
   blockGap: 12
+};
+
+export const apInputTextStyle: TextStyle = {
+  ...appInputTextStyle,
+  textAlignVertical: "center"
 };
 
 export const apStyles = StyleSheet.create({
@@ -162,7 +168,7 @@ export const apStyles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    fontFamily: apFontFamily,
+    ...apInputTextStyle,
     color: apColors.text,
     backgroundColor: apColors.white
   },

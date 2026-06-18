@@ -87,6 +87,10 @@ function safeNumOrZero(v: any) {
   return n;
 }
 
+function roundMeter(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
 function normalizePresetArray(v: unknown): TailoringStylePreset[] {
   return Array.isArray(v) ? (v as TailoringStylePreset[]) : [];
 }
@@ -597,6 +601,10 @@ export default function AddProductSubmitScreen() {
     productCategory === "unstitched_dyeing_tailoring";
   const needsTailoring = productCategory === "unstitched_dyeing_tailoring";
   const isUnstitched = productCategory !== "stitched_ready";
+  const requiresSizeLengthMap = isUnstitched;
+  const isFabricByMeter =
+    productCategory === "unstitched_plain" ||
+    productCategory === "unstitched_dyeing";
 
   const hasReadyVariants =
     productCategory === "stitched_ready" &&
@@ -645,7 +653,13 @@ export default function AddProductSubmitScreen() {
   );
 
   const sizeLengthMap = (draft.spec as any)?.size_length_m ?? {};
-  const weightKg = safeNumOrZero((draft.spec as any)?.weight_kg ?? 0);
+  const weightKg = safeNumOrZero(
+    isFabricByMeter
+      ? (draft.spec as any)?.weight_per_meter_kg ??
+          (draft.spec as any)?.weight_kg ??
+          0
+      : (draft.spec as any)?.weight_kg ?? 0,
+  );
   const packageCm = (draft.spec as any)?.package_cm ?? {};
 
   const includesTrouser = Boolean(
@@ -688,7 +702,7 @@ export default function AddProductSubmitScreen() {
       const n = Number((draft.price as any)?.cost_pkr_per_meter ?? 0);
       if (!Number.isFinite(n) || n <= 0) return false;
 
-      if (!hasValidSizeLengthMap(sizeLengthMap)) return false;
+      if (requiresSizeLengthMap && !hasValidSizeLengthMap(sizeLengthMap)) return false;
 
       if (needsDyeing) {
         const d = Number(dyeingCostPkr ?? 0);
@@ -746,6 +760,7 @@ export default function AddProductSubmitScreen() {
     needsDyeing,
     dyeingCostPkr,
     needsTailoring,
+    requiresSizeLengthMap,
     vendorOffersTailoring,
     tailoringCostPkr,
     tailoringTurnaroundDays,
@@ -818,10 +833,10 @@ export default function AddProductSubmitScreen() {
         return;
       }
 
-      if (!hasValidSizeLengthMap(sizeLengthMap)) {
+      if (requiresSizeLengthMap && !hasValidSizeLengthMap(sizeLengthMap)) {
         Alert.alert(
           "Missing size lengths",
-          "For unstitched products, please enter fabric length in meters for at least one size.",
+          "For unstitched products, please enter fabric length in meters by size.",
         );
         return;
       }
@@ -972,7 +987,9 @@ export default function AddProductSubmitScreen() {
         made_on_order: Boolean(madeOnOrder),
 
         inventory_qty: Number.isFinite(inventoryQty)
-          ? Math.trunc(inventoryQty)
+          ? isUnstitched
+            ? roundMeter(inventoryQty)
+            : Math.trunc(inventoryQty)
           : 0,
 
         spec: {
@@ -986,6 +1003,8 @@ export default function AddProductSubmitScreen() {
             : safeStr((draft.spec as any)?.variant_mode ?? ""),
 
           dyeing_enabled: unstitchedDyeingEnabled,
+          dyeing_pricing_unit:
+            finalCategory === "unstitched_dyeing" ? "per_meter" : "per_order",
           tailoring_enabled: unstitchedTailoringEnabled,
           tailoring_turnaround_days: unstitchedTailoringTurnaround,
 
@@ -997,6 +1016,16 @@ export default function AddProductSubmitScreen() {
             : [],
 
           weight_kg: Number(weightKg),
+          weight_per_meter_kg:
+            finalCategory === "unstitched_plain" ||
+            finalCategory === "unstitched_dyeing"
+              ? Number(weightKg)
+              : null,
+          shipping_weight_mode:
+            finalCategory === "unstitched_plain" ||
+            finalCategory === "unstitched_dyeing"
+              ? "per_meter"
+              : "per_order",
           package_cm: {
             length: Number(packageCm?.length ?? 0),
             width: Number(packageCm?.width ?? 0),
@@ -1004,7 +1033,17 @@ export default function AddProductSubmitScreen() {
           },
           ...(isUnstitched
             ? {
-                size_length_m: sizeLengthMap,
+                inventory_unit: "m",
+                inventory_length_m: Number.isFinite(inventoryQty)
+                  ? roundMeter(inventoryQty)
+                  : 0,
+                fabric_purchase_mode:
+                  finalCategory === "unstitched_dyeing_tailoring"
+                    ? "dress_length"
+                    : "by_meter",
+                ...(requiresSizeLengthMap
+                  ? { size_length_m: sizeLengthMap }
+                  : {}),
               }
             : {}),
         },
@@ -1026,6 +1065,8 @@ export default function AddProductSubmitScreen() {
           made_order_variants: [],
 
           dyeing_cost_pkr: unstitchedDyeingCost,
+          dyeing_pricing_unit:
+            finalCategory === "unstitched_dyeing" ? "per_meter" : "per_order",
           tailoring_cost_pkr: unstitchedTailoringCost,
         },
 
@@ -1174,7 +1215,9 @@ export default function AddProductSubmitScreen() {
           spec: finalSpec,
           price: finalPrice,
           inventory_qty: Number.isFinite(inventoryQty)
-            ? Math.trunc(inventoryQty)
+            ? isUnstitched
+              ? roundMeter(inventoryQty)
+              : Math.trunc(inventoryQty)
             : 0,
           updated_at: new Date().toISOString(),
         })

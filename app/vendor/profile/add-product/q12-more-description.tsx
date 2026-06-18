@@ -4,7 +4,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
+  type TextInput,
   View,
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
@@ -15,6 +15,7 @@ import {
   AddProductCard,
   AddProductField,
   AddProductFooter,
+  AddProductInput,
   AddProductSecondaryButton,
   AddProductScreen,
 } from "@/components/product/add-product/AddProductWizard";
@@ -315,7 +316,7 @@ export default function Q12MoreDescription() {
             More description (optional)
           </Text>
 
-          <TextInput
+          <AddProductInput
             ref={inputRef}
             value={text}
             onChangeText={onChangeText}
