@@ -58,6 +58,13 @@ function positiveNumber(v: unknown) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
+function formatStockQty(n: number) {
+  if (!Number.isFinite(n) || n <= 0) return "0";
+  return String(Math.round(n * 100) / 100)
+    .replace(/(\.\d*?)0+$/, "$1")
+    .replace(/\.$/, "");
+}
+
 function safeText(v: any) {
   const t = String(v ?? "").trim();
   return t.length ? t : "—";
@@ -284,6 +291,27 @@ function getStockSummaryText(item: ProductRow) {
 
   const qty = Math.max(0, Number(item?.inventory_qty ?? 0));
   return isUnstitchedProduct(item) ? `Fabric: ${qty} m` : `Qty: ${qty}`;
+}
+
+function formatStockCardText(text: string) {
+  const fabricMatch = /^Fabric:\s*([0-9.]+)\s*m$/i.exec(text);
+  if (fabricMatch) {
+    return `Stock: ${formatStockQty(Number(fabricMatch[1]))} m`;
+  }
+
+  const qtyMatch = /^Qty:\s*([0-9.]+)$/i.exec(text);
+  if (qtyMatch) {
+    return `Stock: ${formatStockQty(Number(qtyMatch[1]))}`;
+  }
+
+  const variantMatch = /^Variant stock:\s*(\d+)\s+total\b.*?\s(\d+)\s+(size|sizes)\b/i.exec(
+    text,
+  );
+  if (variantMatch) {
+    return `Stock: ${variantMatch[1]} / ${variantMatch[2]} ${variantMatch[3]}`;
+  }
+
+  return text;
 }
 
 function isOutOfStock(item: ProductRow) {
@@ -562,7 +590,7 @@ export default function VendorProductsScreen() {
     const code = safeText(item.product_code);
     const title = safeText(item.title);
     const categoryText = productCategoryCardLabel(item);
-    const stockText = getStockSummaryText(item);
+    const stockText = formatStockCardText(getStockSummaryText(item));
     const outOfStock = isOutOfStock(item);
 
     return (

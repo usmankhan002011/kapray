@@ -3,7 +3,7 @@
 -- 1 order = 1 product unit.
 -- made_on_order products do not reduce stock.
 -- stitched_ready products with selected variant + size reduce that exact variant-size qty.
--- unstitched products reduce products.inventory_qty by selected fabric meters.
+-- unstitched products reduce products.inventory_qty by selected fabric meters, preserving decimals.
 -- all other stock-managed products reduce products.inventory_qty by 1.
 -- Product row is locked with FOR UPDATE to prevent overselling under simultaneous buyers.
 
@@ -234,7 +234,7 @@ begin
       end if;
 
       update public.products
-      set inventory_qty = inventory_qty - v_stock_deduction
+      set inventory_qty = greatest(0, round(inventory_qty - v_stock_deduction, 2))
       where id = p_product_id;
     end if;
   end if;

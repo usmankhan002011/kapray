@@ -48,6 +48,8 @@ import {
 const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
 const FOOTER_H = 86;
+const FABRIC_STOCK_EPSILON_M = 0.05;
+const UNSTITCHED_SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
 
 // persist buyer choices across dye modal round-trips
 const BUYER_TAILORING_CHOICE_CACHE = new Map<string, boolean>();
@@ -194,6 +196,30 @@ function safePositiveNumber(v: unknown) {
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) return 0;
   return n;
+}
+
+function formatStockQty(n: number) {
+  if (!Number.isFinite(n) || n <= 0) return "0";
+  return String(Math.round(n * 100) / 100)
+    .replace(/(\.\d*?)0+$/, "$1")
+    .replace(/\.$/, "");
+}
+
+function getSmallestMappedFabricLengthM(sizeMap: Record<string, unknown>) {
+  const lengths = UNSTITCHED_SIZE_ORDER.map((size) =>
+    safePositiveNumber(sizeMap?.[size]),
+  ).filter((n) => n > 0);
+
+  return lengths.length ? Math.min(...lengths) : 0;
+}
+
+function hasEnoughFabricForSmallestSize(
+  availableM: number,
+  sizeMap: Record<string, unknown>,
+) {
+  const smallestM = getSmallestMappedFabricLengthM(sizeMap);
+  if (smallestM <= 0) return availableM > 0;
+  return availableM + FABRIC_STOCK_EPSILON_M >= smallestM;
 }
 
 function isProductCategory(v: unknown): v is ProductCategory {
@@ -1142,7 +1168,7 @@ export default function ViewProductScreen() {
     if (!product) return "—";
 
     if (isStitchedReady && selectedStitchedVariant?.stockQty != null) {
-      return String(selectedStitchedVariant.stockQty);
+      return `Qty ${selectedStitchedVariant.stockQty}`;
     }
 
     if (isStitchedReady && !selectedStitchedVariant) {
@@ -1160,7 +1186,9 @@ export default function ViewProductScreen() {
     const stockIsFabric = productCategory
       ? productCategory !== "stitched_ready"
       : !isStitchedReady;
-    return stockIsFabric ? `${n} m` : String(n);
+    return stockIsFabric
+      ? `Fabric ${formatStockQty(n)} m`
+      : `Qty ${formatStockQty(n)}`;
   }, [
     isMadeOnOrder,
     isStitchedReady,
@@ -1184,8 +1212,22 @@ export default function ViewProductScreen() {
     const n = Number(raw);
     if (!Number.isFinite(n)) return false;
 
+    if (productCategory === "unstitched_dyeing_tailoring") {
+      const map = ((product as any)?.spec?.size_length_m ?? {}) as Record<
+        string,
+        unknown
+      >;
+      return !hasEnoughFabricForSmallestSize(n, map);
+    }
+
     return n <= 0;
-  }, [isMadeOnOrder, isStitchedReady, product, selectedStitchedVariant]);
+  }, [
+    isMadeOnOrder,
+    isStitchedReady,
+    product,
+    productCategory,
+    selectedStitchedVariant,
+  ]);
 
   const moreDescriptionText = useMemo(() => {
     const spec = (product as any)?.spec ?? {};
@@ -1866,6 +1908,12 @@ export default function ViewProductScreen() {
     const s = compactLineValue(inventoryText);
     if (!s) return null;
     if (s === "Made on order") return s;
+    if (s.startsWith("Fabric ")) {
+      return `In Stock Fabric: ${s.replace(/^Fabric\s+/, "")}`;
+    }
+    if (s.startsWith("Qty ")) {
+      return `In Stock Qty: ${s.replace(/^Qty\s+/, "")}`;
+    }
     return `In Stock: ${s}`;
   }, [inventoryText]);
 

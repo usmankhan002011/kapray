@@ -32,6 +32,8 @@ const TABLE_ORIGIN_CITIES = "origin_cities";
 const TABLE_WEAR_STATES = "wear_states";
 
 const PAGE_SIZE = 30;
+const FABRIC_STOCK_EPSILON_M = 0.05;
+const UNSTITCHED_SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
 
 type ProductCategory =
   | "unstitched_plain"
@@ -114,12 +116,38 @@ function publicUrlForStoragePath(path: string | null): string | null {
 function safeStockQty(v: unknown) {
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) return 0;
-  return Math.trunc(n);
+  return n;
 }
 
 function positiveNumber(v: unknown) {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function formatStockQty(n: number) {
+  if (!Number.isFinite(n) || n <= 0) return "0";
+  return String(Math.round(n * 100) / 100)
+    .replace(/(\.\d*?)0+$/, "$1")
+    .replace(/\.$/, "");
+}
+
+function getSmallestMappedFabricLengthM(product: ProductRow) {
+  const sizeMap = (product?.spec?.size_length_m ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const lengths = UNSTITCHED_SIZE_ORDER.map((size) =>
+    positiveNumber(sizeMap?.[size]),
+  ).filter((n) => n > 0);
+
+  return lengths.length ? Math.min(...lengths) : 0;
+}
+
+function hasEnoughFabricForSmallestSize(product: ProductRow) {
+  const availableM = positiveNumber(product?.inventory_qty);
+  const smallestM = getSmallestMappedFabricLengthM(product);
+  if (smallestM <= 0) return availableM > 0;
+  return availableM + FABRIC_STOCK_EPSILON_M >= smallestM;
 }
 
 function getRawReadyVariants(product: any): any[] {
@@ -358,7 +386,11 @@ function productHasBuyerVisibleStock(product: ProductRow) {
     return getStitchedInventorySummary(product).hasStock;
   }
 
-  return safeStockQty(product?.inventory_qty) > 0;
+  if (getProductCategory(product) === "unstitched_dyeing_tailoring") {
+    return hasEnoughFabricForSmallestSize(product);
+  }
+
+  return positiveNumber(product?.inventory_qty) > 0;
 }
 function stockBadgeText(product: ProductRow) {
   if (isMadeOnOrderProduct(product)) return "Made on order";
@@ -371,12 +403,20 @@ function stockBadgeText(product: ProductRow) {
     const sizeText =
       info.availableSizes === 1 ? "1 size" : `${info.availableSizes} sizes`;
 
-    return `Qty: ${info.totalQty} • ${sizeText} available`;
+    return `Stock: ${info.totalQty} / ${sizeText}`;
   }
 
-  const qty = safeStockQty(product?.inventory_qty);
+  const qty = positiveNumber(product?.inventory_qty);
   if (qty <= 0) return "Out of stock";
-  return isUnstitchedProduct(product) ? `Fabric: ${qty} m` : `Qty: ${qty}`;
+  if (
+    getProductCategory(product) === "unstitched_dyeing_tailoring" &&
+    !hasEnoughFabricForSmallestSize(product)
+  ) {
+    return "Out of stock";
+  }
+  return isUnstitchedProduct(product)
+    ? `Stock: ${formatStockQty(qty)} m`
+    : `Stock: ${formatStockQty(qty)}`;
 }
 
 function productCategoryCardLabel(product: ProductRow) {

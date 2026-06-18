@@ -35,6 +35,8 @@ type CleanDyeSplit = {
 };
 
 const DYE_SPLIT_TOLERANCE_M = 0.01;
+const FABRIC_STOCK_EPSILON_M = 0.05;
+const UNSTITCHED_SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
 
 const stylesVars = {
   bg: "#F8FAFC",
@@ -160,6 +162,12 @@ function getFabricLengthFromSize(
 ) {
   if (!size) return 0;
   return safePositiveNumber(sizeMap?.[size]);
+}
+
+function hasEnoughFabricForLength(availableM: number, requiredM: number) {
+  if (requiredM <= 0) return false;
+  if (availableM <= 0) return false;
+  return availableM + FABRIC_STOCK_EPSILON_M >= requiredM;
 }
 
 export default function SizeScreen() {
@@ -558,20 +566,37 @@ export default function SizeScreen() {
     [params.size_length_m],
   );
 
-  const availableUnstitchedSizes = useMemo(() => {
-    const order = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
-    return order.filter(
-      (size) => getFabricLengthFromSize(size, sizeLengthMap) > 0,
-    );
+  const mappedUnstitchedSizeRows = useMemo(() => {
+    return UNSTITCHED_SIZE_ORDER.map((size) => ({
+      size,
+      lengthM: getFabricLengthFromSize(size, sizeLengthMap),
+    })).filter((row) => row.lengthM > 0);
   }, [sizeLengthMap]);
+
+  const availableUnstitchedSizes = useMemo(
+    () => mappedUnstitchedSizeRows.map((row) => row.size),
+    [mappedUnstitchedSizeRows],
+  );
+
+  const selectableUnstitchedSizes = useMemo(
+    () =>
+      mappedUnstitchedSizeRows
+        .filter((row) =>
+          hasEnoughFabricForLength(availableFabricM, row.lengthM),
+        )
+        .map((row) => row.size),
+    [availableFabricM, mappedUnstitchedSizeRows],
+  );
+
+  const hasAnySelectableUnstitchedSize = selectableUnstitchedSizes.length > 0;
 
   const sizeGuideRows = useMemo(
     () =>
-      availableUnstitchedSizes.map((size) => ({
-        size,
-        lengthM: getFabricLengthFromSize(size, sizeLengthMap),
+      mappedUnstitchedSizeRows.map((row) => ({
+        size: row.size,
+        lengthM: row.lengthM,
       })),
-    [availableUnstitchedSizes, sizeLengthMap],
+    [mappedUnstitchedSizeRows],
   );
 
   const unit = useMemo<Unit>(() => {
@@ -763,6 +788,13 @@ export default function SizeScreen() {
     const fabricLengthM = isUnstitched
       ? getFabricLengthFromSize(size, sizeLengthMap)
       : 0;
+    if (
+      isUnstitched &&
+      !hasEnoughFabricForLength(availableFabricM, fabricLengthM)
+    ) {
+      return;
+    }
+
     const fabricCostPkr = isUnstitched ? pricePerMeterPkr * fabricLengthM : 0;
     const encodedSize = encodeURIComponent(size);
 
@@ -1001,14 +1033,16 @@ export default function SizeScreen() {
                   </Text>
                 ) : availableUnstitchedSizes.length ? (
                   <Text style={styles.summaryText}>
-                    Available mapped sizes:{" "}
+                    Available sizes:{" "}
                     <Text style={styles.summaryStrong}>
-                      {availableUnstitchedSizes.join(", ")}
+                      {selectableUnstitchedSizes.length
+                        ? selectableUnstitchedSizes.join(", ")
+                        : "Not available"}
                     </Text>
                   </Text>
                 ) : (
                   <Text style={styles.summaryText}>
-                    Available mapped sizes:{" "}
+                    Available sizes:{" "}
                     <Text style={styles.summaryStrong}>Not available</Text>
                   </Text>
                 )}
@@ -1263,15 +1297,26 @@ export default function SizeScreen() {
             {(isUnstitched ? availableUnstitchedSizes : STANDARD_SIZES).map(
               (s) => {
                 const isOn = selectedStandardSize === s;
+                const disabled =
+                  isUnstitched && !selectableUnstitchedSizes.includes(s);
 
                 return (
                   <Pressable
                     key={s}
                     onPress={() => onSelectStandard(s)}
-                    style={[styles.sizePill, isOn ? styles.sizePillOn : null]}
+                    disabled={disabled}
+                    style={[
+                      styles.sizePill,
+                      isOn ? styles.sizePillOn : null,
+                      disabled ? styles.sizePillDisabled : null,
+                    ]}
                   >
                     <Text
-                      style={[styles.sizeText, isOn ? styles.sizeTextOn : null]}
+                      style={[
+                        styles.sizeText,
+                        isOn ? styles.sizeTextOn : null,
+                        disabled ? styles.sizeTextDisabled : null,
+                      ]}
                     >
                       {s}
                     </Text>
@@ -1284,6 +1329,14 @@ export default function SizeScreen() {
           {isUnstitched && !availableUnstitchedSizes.length ? (
             <Text style={styles.validation}>
               Size-length map is missing for this unstitched product.
+            </Text>
+          ) : null}
+
+          {isUnstitched &&
+          availableUnstitchedSizes.length > 0 &&
+          !hasAnySelectableUnstitchedSize ? (
+            <Text style={styles.validation}>
+              Available fabric is below the smallest offered size.
             </Text>
           ) : null}
 
@@ -1636,6 +1689,12 @@ const styles = StyleSheet.create({
     backgroundColor: stylesVars.blue,
   },
 
+  sizePillDisabled: {
+    borderColor: stylesVars.border,
+    backgroundColor: "#F1F5F9",
+    opacity: 0.55,
+  },
+
   sizeText: {
     fontSize: 12,
     fontWeight: "700",
@@ -1644,6 +1703,10 @@ const styles = StyleSheet.create({
 
   sizeTextOn: {
     color: stylesVars.white,
+  },
+
+  sizeTextDisabled: {
+    color: stylesVars.mutedText,
   },
 
   costCard: {
