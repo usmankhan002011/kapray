@@ -7,11 +7,15 @@ import { apStyles, apColors } from "@/components/product/addProductStyles";
 import { getDeliveryCost } from "@/utils/kapray/delivery";
 import { EXPORT_REGIONS } from "@/data/kapray/exportRegions";
 import {
+  INLAND_COURIER_SLABS,
+  INTERNATIONAL_COURIER_SLABS,
+} from "@/data/kapray/courierSlabs";
+import {
   AddProductCard,
   AddProductChip,
   AddProductField,
-  AddProductFooter,
   AddProductInput,
+  AddProductPrimaryButton,
   AddProductScreen,
   AddProductSecondaryButton,
 } from "@/components/product/add-product/AddProductWizard";
@@ -24,6 +28,7 @@ type ProductCategory =
   | "stitched_ready";
 
 const CM_PER_INCH = 2.54;
+const EXPORT_REFERENCE_SLABS = INTERNATIONAL_COURIER_SLABS.UK;
 
 function sanitizeNumber(input: string) {
   const cleaned = input.replace(/[^\d.]/g, "");
@@ -114,6 +119,39 @@ function convertDimensionText(text: string, from: DimensionUnit, to: DimensionUn
   const n = positiveNumberFromText(text);
   if (n <= 0) return "";
   return formatDimensionNumber(from === "in" ? n * CM_PER_INCH : n / CM_PER_INCH);
+}
+
+function formatKg(n: number) {
+  return String(n).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+}
+
+function buildSlabGuidance(
+  label: string,
+  slabs: Array<{ upToKg: number }>,
+  weightKg: number,
+) {
+  if (!Number.isFinite(weightKg) || weightKg <= 0 || !slabs.length) return "";
+
+  const currentIndex = slabs.findIndex((slab) => weightKg <= slab.upToKg);
+  const weightText = formatKg(weightKg);
+
+  if (currentIndex < 0) {
+    const last = slabs[slabs.length - 1];
+    const lastLimit = formatKg(last.upToKg);
+    return `${label}: ${weightText} kg is above ${lastLimit} kg, so overweight charges apply. Bring chargeable weight to ${lastLimit} kg or below.`;
+  }
+
+  const current = slabs[currentIndex];
+  const previous = currentIndex > 0 ? slabs[currentIndex - 1] : null;
+  const next = slabs[currentIndex + 1] ?? null;
+  const currentLimit = formatKg(current.upToKg);
+
+  if (previous) {
+    const previousLimit = formatKg(previous.upToKg);
+    return `${label}: ${weightText} kg will be charged as ${currentLimit} kg. Bring chargeable weight to ${previousLimit} kg or below for the lower slab.`;
+  }
+
+  return `${label}: ${weightText} kg will be charged as ${currentLimit} kg${next ? `. Above ${currentLimit} kg moves to ${formatKg(next.upToKg)} kg slab` : ""}.`;
 }
 
 export default function Q06CShipping() {
@@ -277,22 +315,46 @@ export default function Q06CShipping() {
           : null,
     }));
 
+    const slabGuidance =
+      roundedChargeableWeightKg > 0
+        ? [
+            buildSlabGuidance(
+              "Within Pakistan",
+              INLAND_COURIER_SLABS,
+              roundedChargeableWeightKg,
+            ),
+            buildSlabGuidance(
+              "Export",
+              EXPORT_REFERENCE_SLABS,
+              roundedChargeableWeightKg,
+            ),
+          ].filter(Boolean)
+        : [];
+
     const volumetricRatio =
       safeActualWeightKg > 0 ? dimensionalWeightKg / safeActualWeightKg : 0;
+    const dimensionalExceedsActual =
+      safeActualWeightKg > 0 && dimensionalWeightKg > safeActualWeightKg;
 
     const efficiencyLevel =
-      volumetricRatio >= 4 ? "red" : volumetricRatio >= 1.5 ? "yellow" : "green";
+      dimensionalExceedsActual
+        ? "red"
+        : volumetricRatio >= 1.5
+          ? "yellow"
+          : "green";
 
     const efficiencyLabel =
       efficiencyLevel === "red"
-        ? "Poor packaging efficiency"
+        ? "Dimensional weight higher"
         : efficiencyLevel === "yellow"
           ? "Average packaging efficiency"
           : "Good packaging efficiency";
 
     const warningText =
-      efficiencyLevel === "red"
-        ? "Volumetric weight is dominating strongly. Courier cost may be much higher than physical weight suggests."
+      dimensionalExceedsActual
+        ? "Review package size. Dimensional weight may push the parcel into the next slab and increase courier cost."
+        : efficiencyLevel === "red"
+          ? "Volumetric weight is dominating strongly. Courier cost may be much higher than physical weight suggests."
         : efficiencyLevel === "yellow"
           ? "Volumetric weight is affecting courier cost. Tighter packaging may reduce charges."
           : "";
@@ -333,7 +395,9 @@ export default function Q06CShipping() {
       roundedChargeableWeightKg,
       inlandAmountPkr,
       exportAmounts,
+      slabGuidance,
       volumetricRatio,
+      dimensionalExceedsActual,
       efficiencyLevel,
       efficiencyLabel,
       warningText,
@@ -437,6 +501,14 @@ export default function Q06CShipping() {
     const values = readValidShippingValues();
     if (!values) return;
 
+    if (!previewCalculatedRef.current || !hasCalculatedPreview) {
+      Alert.alert(
+        "Calculate shipping first",
+        "Press Calculate to review the actual, dimensional, and chargeable weight before continuing.",
+      );
+      return;
+    }
+
     const { h, heightInput, l, lengthInput, w, wi, widthInput } = values;
 
     patchSpec({
@@ -488,13 +560,6 @@ export default function Q06CShipping() {
     <AddProductScreen
       title="Shipping details"
       onBack={closeScreen}
-      footer={
-        <AddProductFooter
-          onPrimaryPress={onContinue}
-          primaryDisabled={!canContinue}
-          disabledHint={disabledHint}
-        />
-      }
     >
       <AddProductCard>
         <AddProductField label={weightLabel} required style={{ marginTop: 0 }}>
@@ -511,7 +576,18 @@ export default function Q06CShipping() {
           />
         </AddProductField>
 
-        <AddProductField label="Package dimensions">
+        <AddProductField
+          label={
+            isFabricByMeter
+              ? "Package dimensions per meter"
+              : "Package dimensions"
+          }
+          hint={
+            isFabricByMeter
+              ? "Enter 1m packed size. Keep dimensional weight low; checkout multiplies by meters."
+              : undefined
+          }
+        >
           <View style={styles.unitRow}>
             <AddProductChip
               label="cm"
@@ -582,12 +658,12 @@ export default function Q06CShipping() {
         {hasCalculatedPreview ? (
           <View style={styles.preview}>
             <Text style={styles.previewText}>
-              Used for courier calculation (actual vs volumetric).
+              Courier uses higher of actual and dimensional weight.
             </Text>
 
             {!!shippingPreview.actualWeightKg && (
               <Text style={styles.previewText}>
-                {isFabricByMeter ? "Weight per Meter" : "Actual Weight"}:{" "}
+                {isFabricByMeter ? "Weight per meter" : "Actual Weight"}:{" "}
                 {shippingPreview.actualWeightKg.toFixed(2)} kg
               </Text>
             )}
@@ -602,16 +678,45 @@ export default function Q06CShipping() {
               )}
 
             {!!shippingPreview.dimensionalWeightKg && (
-              <Text style={styles.previewMetricText}>
-                Dimensional Weight: {shippingPreview.dimensionalWeightKg.toFixed(2)} kg
+              <Text
+                style={[
+                  styles.previewMetricText,
+                  shippingPreview.dimensionalExceedsActual
+                    ? styles.previewDangerText
+                    : null,
+                ]}
+              >
+                {isFabricByMeter
+                  ? "Dimensional Weight per meter"
+                  : "Dimensional Weight"}
+                : {shippingPreview.dimensionalWeightKg.toFixed(2)} kg
               </Text>
             )}
 
             {!!shippingPreview.roundedChargeableWeightKg && (
               <Text style={styles.previewStrongText}>
-                Chargeable Weight: {shippingPreview.roundedChargeableWeightKg.toFixed(1)} kg
+                {isFabricByMeter
+                  ? "Chargeable Weight per meter"
+                  : "Chargeable Weight"}
+                : {shippingPreview.roundedChargeableWeightKg.toFixed(1)} kg
               </Text>
             )}
+
+            {shippingPreview.slabGuidance.length ? (
+              <View style={styles.slabGuideBox}>
+                <Text style={styles.slabGuideTitle}>Slab guidance</Text>
+                {shippingPreview.slabGuidance.map((item) => (
+                  <Text key={item} style={styles.slabGuideText}>
+                    {item}
+                  </Text>
+                ))}
+                {isFabricByMeter ? (
+                  <Text style={styles.slabGuideNote}>
+                    Final order weight scales with meters purchased.
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
 
             {!!shippingPreview.roundedChargeableWeightKg && (
               <View
@@ -652,7 +757,9 @@ export default function Q06CShipping() {
 
             {!!shippingPreview.inlandAmountPkr && (
               <Text style={styles.previewAmountText}>
-                Within Pakistan Estimated Courier (avg distance): PKR {shippingPreview.inlandAmountPkr}
+                Within Pakistan Estimated Courier
+                {isFabricByMeter ? " per meter" : " (avg distance)"}: PKR{" "}
+                {shippingPreview.inlandAmountPkr}
               </Text>
             )}
 
@@ -669,6 +776,23 @@ export default function Q06CShipping() {
               </Text>
             ))}
           </View>
+        ) : null}
+
+        <AddProductPrimaryButton
+          label="Continue"
+          onPress={onContinue}
+          disabled={!canContinue}
+          style={styles.continueButton}
+        />
+        {disabledHint ? (
+          <Text
+            style={[
+              apStyles.footerHint,
+              !canContinue ? apStyles.footerHintWarn : null,
+            ]}
+          >
+            {disabledHint}
+          </Text>
         ) : null}
       </AddProductCard>
     </AddProductScreen>
@@ -693,9 +817,9 @@ const styles = StyleSheet.create({
     marginTop: 12,
     padding: 10,
     borderWidth: 1,
-    borderColor: apColors.border,
+    borderColor: "#BBF7D0",
     borderRadius: 8,
-    backgroundColor: apColors.blueSoft,
+    backgroundColor: apColors.successSoft,
     gap: 4,
   },
   previewText: {
@@ -710,11 +834,42 @@ const styles = StyleSheet.create({
     color: apColors.text,
     fontWeight: "700",
   },
+  previewDangerText: {
+    color: "#B91C1C",
+  },
   previewStrongText: {
     fontSize: 13,
     lineHeight: 17,
     color: apColors.text,
     fontWeight: "800",
+  },
+  slabGuideBox: {
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+    backgroundColor: "#F0FDF4",
+    gap: 3,
+  },
+  slabGuideTitle: {
+    fontSize: 10,
+    lineHeight: 14,
+    color: apColors.success,
+    fontWeight: "800",
+  },
+  slabGuideText: {
+    fontSize: 10,
+    lineHeight: 14,
+    color: apColors.text,
+    fontWeight: "600",
+  },
+  slabGuideNote: {
+    fontSize: 10,
+    lineHeight: 14,
+    color: apColors.success,
+    fontWeight: "700",
   },
   previewAmountText: {
     marginTop: 2,
@@ -747,5 +902,8 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 14,
     fontWeight: "600",
+  },
+  continueButton: {
+    marginTop: 12,
   },
 });

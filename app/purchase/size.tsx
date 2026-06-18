@@ -94,6 +94,35 @@ function roundMeter(n: number) {
   return Math.round(n * 100) / 100;
 }
 
+function roundCm(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
+function normalizePackageCm(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const length = safePositiveNumber(row.length);
+  const width = safePositiveNumber(row.width);
+  const height = safePositiveNumber(row.height);
+  if (!(length > 0 && width > 0 && height > 0)) return null;
+  return { length, width, height };
+}
+
+function encodePackageCmForMeterPurchase(value: unknown, meterLength: number) {
+  const packageCm = normalizePackageCm(
+    safeJsonDecode<Record<string, unknown> | null>(value, null),
+  );
+  if (!packageCm || !(meterLength > 0)) return norm(value);
+
+  return encodeURIComponent(
+    JSON.stringify({
+      length: roundCm(packageCm.length),
+      width: roundCm(packageCm.width),
+      height: roundCm(packageCm.height * meterLength),
+    }),
+  );
+}
+
 function getShadeColumnIndex(id: string) {
   const match = /^shade_(\d+)_\d+$/i.exec(id);
   return match ? Number(match[1]) : 0;
@@ -499,6 +528,11 @@ export default function SizeScreen() {
     [selectedMeterLength, weightPerMeterKg],
   );
 
+  const selectedMeterPackageCmParam = useMemo(
+    () => encodePackageCmForMeterPurchase(params.package_cm, selectedMeterLength),
+    [params.package_cm, selectedMeterLength],
+  );
+
   const canContinueMeter =
     selectedMeterLength > 0 &&
     pricePerMeterPkr > 0 &&
@@ -815,6 +849,7 @@ export default function SizeScreen() {
           : "",
       weight_per_meter_kg:
         weightPerMeterKg > 0 ? String(weightPerMeterKg) : "",
+      package_cm: selectedMeterPackageCmParam,
 
       m1: "",
       m2: "",
