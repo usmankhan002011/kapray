@@ -54,11 +54,14 @@ export default function VendorReviewSummary({ form, jumpToStep }: Props) {
       </Pressable>
 
       <Pressable style={styles.card} onPress={() => jumpToStep(6)}>
-        <Text style={styles.title}>Tailoring and export services</Text>
+        <Text style={styles.title}>Services</Text>
 
         <Text style={styles.value}>
-          Tailoring:{" "}
-          {form.offersTailoring ? "Yes, tailoring available" : "No tailoring service"}
+          Dyeing: {form.offersDyeing ? "Yes" : "No"}
+        </Text>
+
+        <Text style={styles.value}>
+          Tailoring: {form.offersTailoring ? "Yes" : "No"}
         </Text>
 
         <Text style={styles.value}>

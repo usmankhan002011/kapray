@@ -536,6 +536,7 @@ export type Database = {
           location_url: string | null
           mobile: string | null
           name: string
+          offers_dyeing: boolean
           offers_tailoring: boolean
           owner_user_id: string | null
           profile_image_path: string | null
@@ -558,6 +559,7 @@ export type Database = {
           location_url?: string | null
           mobile?: string | null
           name: string
+          offers_dyeing?: boolean
           offers_tailoring?: boolean
           owner_user_id?: string | null
           profile_image_path?: string | null
@@ -580,6 +582,7 @@ export type Database = {
           location_url?: string | null
           mobile?: string | null
           name?: string
+          offers_dyeing?: boolean
           offers_tailoring?: boolean
           owner_user_id?: string | null
           profile_image_path?: string | null

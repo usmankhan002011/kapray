@@ -15,6 +15,7 @@ export type VendorWizardData = {
   shopName: string;
   address: string;
   locationUrl: string;
+  offersDyeing: boolean;
   offersTailoring: boolean;
 
   exportsEnabled: boolean;
@@ -82,8 +83,8 @@ export const STEPS: StepConfig[] = [
   },
   {
     id: "tailoring",
-    title: "Tailoring and export services",
-    subtitle: "Set tailoring capability, styles, and export regions.",
+    title: "Services",
+    subtitle: "Do you offer",
   },
   {
     id: "media",

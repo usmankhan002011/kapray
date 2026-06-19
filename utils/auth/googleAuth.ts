@@ -98,6 +98,7 @@ export async function handleGoogleLogin(
           mobile: null,
           owner_user_id: user.id,
           auth_user_id: user.id,
+          offers_dyeing: false,
           offers_tailoring: false,
           exports_enabled: false,
           export_regions: [],

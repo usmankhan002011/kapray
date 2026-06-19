@@ -1,7 +1,11 @@
 // File: components/Wizard/WizardScraffold.tsx
 
-import React from "react";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import React, { useEffect, useState } from "react";
 import {
+  Dimensions,
+  Keyboard,
+  Platform,
   Pressable,
   SafeAreaView,
   StyleSheet,
@@ -9,6 +13,13 @@ import {
   View,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+  apSpacing,
+} from "@/components/product/addProductStyles";
 
 interface WizardScaffoldProps {
   title: string;
@@ -36,41 +47,91 @@ export default function WizardScaffold({
   children,
 }: WizardScaffoldProps) {
   const progress = ((stepIndex + 1) / totalSteps) * 100;
+  const [keyboardInset, setKeyboardInset] = useState(0);
+
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSub = Keyboard.addListener(showEvent, (event) => {
+      const windowHeight = Dimensions.get("window").height;
+      const screenY = Number(event.endCoordinates?.screenY ?? 0);
+      const fallbackHeight = Number(event.endCoordinates?.height ?? 0);
+      const overlap = screenY > 0 ? Math.max(0, windowHeight - screenY) : 0;
+      const nextInset = Math.max(overlap, fallbackHeight);
+
+      setKeyboardInset(nextInset);
+    });
+
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardInset(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   return (
     <SafeAreaView style={styles.root}>
-      <KeyboardAwareScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="none"
-        enableOnAndroid
-        extraScrollHeight={10}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.header}>
-          <View style={styles.headerTopRow}>
-            <Pressable onPress={onBack} style={styles.backButton}>
-              <Text style={styles.backButtonText}>{backLabel}</Text>
-            </Pressable>
+      <View style={styles.keyboardRoot}>
+        <KeyboardAwareScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          enableOnAndroid
+          extraScrollHeight={12}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.header}>
+            <View style={styles.headerTopRow}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={onBack}
+                style={({ pressed }) => [
+                  styles.backButton,
+                  pressed ? styles.pressed : null,
+                ]}
+              >
+                <MaterialIcons
+                  name="arrow-back"
+                  size={18}
+                  color={apColors.text}
+                />
+                <Text style={styles.backButtonText}>{backLabel}</Text>
+              </Pressable>
 
-            <Text style={styles.stepText}>
-              Step {stepIndex + 1} of {totalSteps}
-            </Text>
+              <Text style={styles.stepText}>
+                Step {stepIndex + 1} of {totalSteps}
+              </Text>
+            </View>
+
+            <Text style={styles.title}>{title}</Text>
+
+            {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${progress}%` }]} />
+            </View>
           </View>
 
-          <Text style={styles.title}>{title}</Text>
+          <View style={styles.content}>{children}</View>
+        </KeyboardAwareScrollView>
 
-          {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
-
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${progress}%` }]} />
-          </View>
-        </View>
-
-        <View style={styles.content}>{children}</View>
-
-        <View style={styles.footer}>
+        <View
+          style={[
+            styles.footer,
+            keyboardInset > 0
+              ? { paddingBottom: keyboardInset + 28 }
+              : null,
+          ]}
+        >
           <Pressable
+            accessibilityRole="button"
             onPress={onNext}
             disabled={nextDisabled}
             style={({ pressed }) => [
@@ -79,10 +140,17 @@ export default function WizardScaffold({
               pressed && !nextDisabled && styles.pressed,
             ]}
           >
-            <Text style={styles.nextButtonText}>{nextLabel}</Text>
+            <View style={styles.buttonContent}>
+              <Text style={styles.nextButtonText}>{nextLabel}</Text>
+              <MaterialIcons
+                name="arrow-forward"
+                size={18}
+                color={apColors.white}
+              />
+            </View>
           </Pressable>
         </View>
-      </KeyboardAwareScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -90,17 +158,26 @@ export default function WizardScaffold({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#F6F8FC",
+    backgroundColor: apColors.bg,
   },
 
   scrollContent: {
     flexGrow: 1,
+    paddingBottom: 12,
+  },
+
+  scroll: {
+    flex: 1,
+  },
+
+  keyboardRoot: {
+    flex: 1,
   },
 
   header: {
-    paddingHorizontal: 24,
-    paddingTop: 28,
-    paddingBottom: 10,
+    paddingHorizontal: apSpacing.pagePad,
+    paddingTop: apSpacing.pagePad,
+    paddingBottom: 8,
   },
 
   headerTopRow: {
@@ -110,87 +187,100 @@ const styles = StyleSheet.create({
   },
 
   backButton: {
-    paddingHorizontal: 14,
+    minHeight: 40,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "#FFFFFF",
+    borderRadius: apRadii.control,
+    backgroundColor: apColors.card,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: apColors.border,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
 
   backButtonText: {
-    color: "#0F172A",
+    color: apColors.text,
     fontSize: 13,
     fontWeight: "700",
+    fontFamily: apFontFamily,
   },
 
   stepText: {
-    color: "#64748B",
+    color: apColors.muted,
     fontSize: 12,
     fontWeight: "600",
+    fontFamily: apFontFamily,
   },
 
   title: {
     marginTop: 16,
-    fontSize: 32,
-    lineHeight: 36,
+    fontSize: 24,
+    lineHeight: 30,
     fontWeight: "800",
-    color: "#0F172A",
+    color: apColors.text,
+    fontFamily: apFontFamily,
   },
 
   subtitle: {
     marginTop: 8,
-    fontSize: 15,
-    lineHeight: 22,
-    color: "#64748B",
+    fontSize: 14,
+    lineHeight: 20,
+    color: apColors.muted,
     fontWeight: "500",
+    fontFamily: apFontFamily,
   },
 
   progressTrack: {
-    marginTop: 18,
+    marginTop: 16,
     width: "100%",
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: "#E5E7EB",
+    height: 6,
+    borderRadius: apRadii.pill,
+    backgroundColor: apColors.border,
     overflow: "hidden",
   },
 
   progressFill: {
     height: "100%",
-    backgroundColor: "#2563EB",
+    backgroundColor: apColors.blue,
   },
 
   content: {
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 32,
+    paddingHorizontal: apSpacing.pagePad,
+    paddingTop: 16,
+    paddingBottom: 28,
     flexGrow: 1,
   },
 
   footer: {
-    paddingHorizontal: 24,
+    paddingHorizontal: apSpacing.pagePad,
+    paddingTop: 10,
     paddingBottom: 22,
+    borderTopWidth: 1,
+    borderTopColor: apColors.border,
+    backgroundColor: "rgba(248,250,252,0.98)",
   },
 
   nextButton: {
-    height: 56,
-    borderRadius: 14,
-    backgroundColor: "#2563EB",
+    minHeight: 52,
+    borderRadius: apRadii.control,
+    backgroundColor: apColors.blue,
     alignItems: "center",
     justifyContent: "center",
+  },
 
-    shadowColor: "#2563EB",
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-
-    elevation: 3,
+  buttonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
   },
 
   nextButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
+    color: apColors.white,
+    fontSize: 15,
     fontWeight: "700",
+    fontFamily: apFontFamily,
   },
 
   nextButtonDisabled: {

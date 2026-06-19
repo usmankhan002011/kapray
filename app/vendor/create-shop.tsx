@@ -1,6 +1,7 @@
 // File: app/vendor/create-shop.tsx
 
 import * as Location from "expo-location";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
 import { VideoView, useVideoPlayer } from "expo-video";
 import * as VideoThumbnails from "expo-video-thumbnails";
@@ -71,6 +72,7 @@ const initialForm: VendorWizardData = {
   shopName: "",
   address: "",
   locationUrl: "",
+  offersDyeing: false,
   offersTailoring: false,
   exportsEnabled: false,
   exportRegions: [],
@@ -326,6 +328,7 @@ export default function CreateShopScreen() {
           shop_name: form.shopName.trim(),
           address: form.address.trim(),
           location_url: form.locationUrl.trim() || null,
+          offers_dyeing: Boolean(form.offersDyeing),
           offers_tailoring: Boolean(form.offersTailoring),
           exports_enabled: Boolean(form.exportsEnabled),
           export_regions: normalizedExportRegions,
@@ -359,6 +362,7 @@ export default function CreateShopScreen() {
           shop_name: form.shopName.trim(),
           address: form.address.trim(),
           location_url: form.locationUrl.trim() || null,
+          offers_dyeing: Boolean(form.offersDyeing),
           offers_tailoring: Boolean(form.offersTailoring),
           exports_enabled: Boolean(form.exportsEnabled),
           export_regions: normalizedExportRegions,
@@ -449,6 +453,7 @@ export default function CreateShopScreen() {
         shop_video_paths: videoPaths.length
           ? videoPaths
           : (selectedVendor?.shop_video_paths ?? null),
+        offers_dyeing: Boolean(form.offersDyeing),
         offers_tailoring: Boolean(form.offersTailoring),
         exports_enabled: Boolean(form.exportsEnabled),
         export_regions: normalizedExportRegions,
@@ -487,6 +492,7 @@ export default function CreateShopScreen() {
         shop_video_paths: videoPaths.length
           ? videoPaths
           : (selectedVendor?.shop_video_paths ?? null),
+        offers_dyeing: Boolean(form.offersDyeing),
         offers_tailoring: Boolean(form.offersTailoring),
         exports_enabled: Boolean(form.exportsEnabled),
         export_regions: normalizedExportRegions,
@@ -655,67 +661,87 @@ export default function CreateShopScreen() {
     switch (currentStep.id) {
       case "owner":
         return (
-          <GradientInputCard
-            ref={ownerRef}
-            placeholder="Enter owner name"
-            value={form.ownerName}
-            onChangeText={(v) => updateForm("ownerName", v)}
-            autoCapitalize="words"
-            returnKeyType="next"
-            onSubmitEditing={goNext}
-          />
+          <View>
+            <View style={styles.previewCard}>
+              <GradientInputCard
+                ref={ownerRef}
+                placeholder="Enter owner name"
+                value={form.ownerName}
+                onChangeText={(v) => updateForm("ownerName", v)}
+                autoCapitalize="words"
+                returnKeyType="next"
+                onSubmitEditing={goNext}
+              />
+            </View>
+          </View>
         );
 
       case "email":
         return (
-          <GradientInputCard
-            ref={emailRef}
-            placeholder="Enter email"
-            value={form.email}
-            onChangeText={(v) => updateForm("email", v)}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="next"
-            onSubmitEditing={goNext}
-          />
+          <View>
+            <View style={styles.previewCard}>
+              <GradientInputCard
+                ref={emailRef}
+                placeholder="Enter email"
+                value={form.email}
+                onChangeText={(v) => updateForm("email", v)}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="next"
+                onSubmitEditing={goNext}
+              />
+            </View>
+          </View>
         );
 
       case "mobile":
         return (
-          <GradientInputCard
-            ref={mobileRef}
-            placeholder="Enter mobile number"
-            value={form.mobile}
-            onChangeText={(v) => updateForm("mobile", v)}
-            keyboardType="phone-pad"
-            returnKeyType="next"
-            onSubmitEditing={goNext}
-          />
+          <View>
+            <View style={styles.previewCard}>
+              <GradientInputCard
+                ref={mobileRef}
+                placeholder="Enter mobile number"
+                value={form.mobile}
+                onChangeText={(v) => updateForm("mobile", v)}
+                keyboardType="phone-pad"
+                returnKeyType="next"
+                onSubmitEditing={goNext}
+              />
+            </View>
+          </View>
         );
 
       case "shop":
         return (
-          <GradientInputCard
-            ref={shopRef}
-            placeholder="Enter shop name"
-            value={form.shopName}
-            onChangeText={(v) => updateForm("shopName", v)}
-            autoCapitalize="words"
-            returnKeyType="next"
-            onSubmitEditing={goNext}
-          />
+          <View>
+            <View style={styles.previewCard}>
+              <GradientInputCard
+                ref={shopRef}
+                placeholder="Enter shop name"
+                value={form.shopName}
+                onChangeText={(v) => updateForm("shopName", v)}
+                autoCapitalize="words"
+                returnKeyType="next"
+                onSubmitEditing={goNext}
+              />
+            </View>
+          </View>
         );
 
       case "address":
         return (
-          <GradientInputCard
-            ref={addressRef}
-            placeholder="Enter full address"
-            value={form.address}
-            onChangeText={(v) => updateForm("address", v)}
-            multiline
-          />
+          <View>
+            <View style={styles.previewCard}>
+              <GradientInputCard
+                ref={addressRef}
+                placeholder="Enter full address"
+                value={form.address}
+                onChangeText={(v) => updateForm("address", v)}
+                multiline
+              />
+            </View>
+          </View>
         );
 
       case "location":
@@ -748,9 +774,18 @@ export default function CreateShopScreen() {
                   pressed && !locLoading ? styles.pressed : null,
                 ]}
               >
-                <Text style={styles.secondaryActionButtonText}>
-                  {locLoading ? "Getting location..." : "Use current location"}
-                </Text>
+                <View style={styles.secondaryActionContent}>
+                  <MaterialIcons
+                    name="my-location"
+                    size={18}
+                    color="#2563EB"
+                  />
+                  <Text style={styles.secondaryActionButtonText}>
+                    {locLoading
+                      ? "Getting location..."
+                      : "Use current location"}
+                  </Text>
+                </View>
               </Pressable>
             </View>
 
@@ -769,9 +804,67 @@ export default function CreateShopScreen() {
         return (
           <View>
             <View style={styles.previewCard}>
-              <Text style={styles.previewLabel}>
-                Does this shop offer tailoring?
-              </Text>
+              <Text style={styles.previewLabel}>Dyeing?</Text>
+
+              <View style={styles.choiceGrid}>
+                <Pressable
+                  onPress={() => updateForm("offersDyeing", true)}
+                  style={({ pressed }) => [
+                    styles.choiceCard,
+                    styles.choiceCardDyeing,
+                    form.offersDyeing && styles.choiceCardDyeingActive,
+                    pressed && styles.choiceCardPressed,
+                  ]}
+                >
+                  <View style={styles.choiceCardHeader}>
+                    <MaterialIcons
+                      name={form.offersDyeing ? "check-circle" : "circle"}
+                      size={18}
+                      color={form.offersDyeing ? "#FFFFFF" : "#3B82F6"}
+                    />
+                    <Text
+                      style={[
+                        styles.choiceCardTitle,
+                        styles.choiceCardTitleDyeing,
+                        form.offersDyeing && styles.choiceCardTitleActive,
+                      ]}
+                    >
+                      Yes
+                    </Text>
+                  </View>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => updateForm("offersDyeing", false)}
+                  style={({ pressed }) => [
+                    styles.choiceCard,
+                    styles.choiceCardDyeing,
+                    !form.offersDyeing && styles.choiceCardDyeingActive,
+                    pressed && styles.choiceCardPressed,
+                  ]}
+                >
+                  <View style={styles.choiceCardHeader}>
+                    <MaterialIcons
+                      name={!form.offersDyeing ? "check-circle" : "circle"}
+                      size={18}
+                      color={!form.offersDyeing ? "#FFFFFF" : "#3B82F6"}
+                    />
+                    <Text
+                      style={[
+                        styles.choiceCardTitle,
+                        styles.choiceCardTitleDyeing,
+                        !form.offersDyeing && styles.choiceCardTitleActive,
+                      ]}
+                    >
+                      No
+                    </Text>
+                  </View>
+                </Pressable>
+              </View>
+            </View>
+
+            <View style={styles.previewCard}>
+              <Text style={styles.previewLabel}>Tailoring?</Text>
 
               <View style={styles.choiceGrid}>
                 <Pressable
@@ -784,27 +877,27 @@ export default function CreateShopScreen() {
                   }
                   style={({ pressed }) => [
                     styles.choiceCard,
-                    form.offersTailoring && styles.choiceCardActive,
+                    styles.choiceCardYes,
+                    form.offersTailoring && styles.choiceCardYesActive,
                     pressed && styles.choiceCardPressed,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.choiceCardTitle,
-                      form.offersTailoring && styles.choiceCardTitleActive,
-                    ]}
-                  >
-                    Yes
-                  </Text>
-                  <Text
-                    style={[
-                      styles.choiceCardSubtitle,
-                      form.offersTailoring && styles.choiceCardSubtitleActive,
-                    ]}
-                  >
-                    This shop offers tailoring services for their unstitched
-                    products
-                  </Text>
+                  <View style={styles.choiceCardHeader}>
+                    <MaterialIcons
+                      name={form.offersTailoring ? "check-circle" : "circle"}
+                      size={18}
+                      color={form.offersTailoring ? "#FFFFFF" : "#2563EB"}
+                    />
+                    <Text
+                      style={[
+                        styles.choiceCardTitle,
+                        styles.choiceCardTitleYes,
+                        form.offersTailoring && styles.choiceCardTitleActive,
+                      ]}
+                    >
+                      Yes
+                    </Text>
+                  </View>
                 </Pressable>
 
                 <Pressable
@@ -817,58 +910,60 @@ export default function CreateShopScreen() {
                   }
                   style={({ pressed }) => [
                     styles.choiceCard,
-                    !form.offersTailoring && styles.choiceCardActive,
+                    styles.choiceCardYes,
+                    !form.offersTailoring && styles.choiceCardYesActive,
                     pressed && styles.choiceCardPressed,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.choiceCardTitle,
-                      !form.offersTailoring && styles.choiceCardTitleActive,
-                    ]}
-                  >
-                    No
-                  </Text>
-                  <Text
-                    style={[
-                      styles.choiceCardSubtitle,
-                      !form.offersTailoring && styles.choiceCardSubtitleActive,
-                    ]}
-                  >
-                    The shop only sells unstitched or ready-made items
-                  </Text>
+                  <View style={styles.choiceCardHeader}>
+                    <MaterialIcons
+                      name={!form.offersTailoring ? "check-circle" : "circle"}
+                      size={18}
+                      color={!form.offersTailoring ? "#FFFFFF" : "#2563EB"}
+                    />
+                    <Text
+                      style={[
+                        styles.choiceCardTitle,
+                        styles.choiceCardTitleYes,
+                        !form.offersTailoring && styles.choiceCardTitleActive,
+                      ]}
+                    >
+                      No
+                    </Text>
+                  </View>
                 </Pressable>
               </View>
             </View>
 
             <View style={styles.previewCard}>
-              <Text style={styles.previewLabel}>Do you export?</Text>
+              <Text style={styles.previewLabel}>Export?</Text>
 
               <View style={styles.choiceGrid}>
                 <Pressable
                   onPress={() => updateForm("exportsEnabled", true)}
                   style={({ pressed }) => [
                     styles.choiceCard,
-                    form.exportsEnabled && styles.choiceCardActive,
+                    styles.choiceCardExport,
+                    form.exportsEnabled && styles.choiceCardExportActive,
                     pressed && styles.choiceCardPressed,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.choiceCardTitle,
-                      form.exportsEnabled && styles.choiceCardTitleActive,
-                    ]}
-                  >
-                    Yes
-                  </Text>
-                  <Text
-                    style={[
-                      styles.choiceCardSubtitle,
-                      form.exportsEnabled && styles.choiceCardSubtitleActive,
-                    ]}
-                  >
-                    This shop exports internationally
-                  </Text>
+                  <View style={styles.choiceCardHeader}>
+                    <MaterialIcons
+                      name={form.exportsEnabled ? "check-circle" : "circle"}
+                      size={18}
+                      color={form.exportsEnabled ? "#FFFFFF" : "#1D4ED8"}
+                    />
+                    <Text
+                      style={[
+                        styles.choiceCardTitle,
+                        styles.choiceCardTitleExport,
+                        form.exportsEnabled && styles.choiceCardTitleActive,
+                      ]}
+                    >
+                      Yes
+                    </Text>
+                  </View>
                 </Pressable>
 
                 <Pressable
@@ -878,26 +973,27 @@ export default function CreateShopScreen() {
                   }}
                   style={({ pressed }) => [
                     styles.choiceCard,
-                    !form.exportsEnabled && styles.choiceCardActive,
+                    styles.choiceCardExport,
+                    !form.exportsEnabled && styles.choiceCardExportActive,
                     pressed && styles.choiceCardPressed,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.choiceCardTitle,
-                      !form.exportsEnabled && styles.choiceCardTitleActive,
-                    ]}
-                  >
-                    No
-                  </Text>
-                  <Text
-                    style={[
-                      styles.choiceCardSubtitle,
-                      !form.exportsEnabled && styles.choiceCardSubtitleActive,
-                    ]}
-                  >
-                    This shop only delivers locally
-                  </Text>
+                  <View style={styles.choiceCardHeader}>
+                    <MaterialIcons
+                      name={!form.exportsEnabled ? "check-circle" : "circle"}
+                      size={18}
+                      color={!form.exportsEnabled ? "#FFFFFF" : "#1D4ED8"}
+                    />
+                    <Text
+                      style={[
+                        styles.choiceCardTitle,
+                        styles.choiceCardTitleExport,
+                        !form.exportsEnabled && styles.choiceCardTitleActive,
+                      ]}
+                    >
+                      No
+                    </Text>
+                  </View>
                 </Pressable>
               </View>
 
@@ -1237,46 +1333,80 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
   },
+  secondaryActionContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
   choiceGrid: {
     flexDirection: "row",
-    gap: 10,
+    gap: 6,
+    padding: 4,
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
   choiceCard: {
     flex: 1,
-    minHeight: 140,
-    borderRadius: 999,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    backgroundColor: "#EEF4FF",
+    minHeight: 48,
+    borderRadius: 9,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: "#D7E3FF",
+    borderColor: "transparent",
     justifyContent: "center",
   },
-  choiceCardActive: {
+  choiceCardYes: {
+    backgroundColor: "#EEF4FF",
+    borderColor: "#D7E3FF",
+  },
+  choiceCardYesActive: {
     backgroundColor: "#2563EB",
     borderColor: "#2563EB",
+  },
+  choiceCardDyeing: {
+    backgroundColor: "#F3F7FF",
+    borderColor: "#DCE8FF",
+  },
+  choiceCardDyeingActive: {
+    backgroundColor: "#3B82F6",
+    borderColor: "#3B82F6",
+  },
+  choiceCardExport: {
+    backgroundColor: "#EAF1FF",
+    borderColor: "#C7D8FF",
+  },
+  choiceCardExportActive: {
+    backgroundColor: "#1D4ED8",
+    borderColor: "#1D4ED8",
+  },
+  choiceCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
   },
   choiceCardPressed: {
     opacity: 0.82,
   },
   choiceCardTitle: {
-    fontSize: 12,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: "800",
     color: "#2563EB",
-    marginBottom: 4,
-    textAlign: "center",
+  },
+  choiceCardTitleYes: {
+    color: "#2563EB",
+  },
+  choiceCardTitleDyeing: {
+    color: "#3B82F6",
+  },
+  choiceCardTitleExport: {
+    color: "#1D4ED8",
   },
   choiceCardTitleActive: {
-    color: "#FFFFFF",
-  },
-  choiceCardSubtitle: {
-    fontSize: 10,
-    lineHeight: 14,
-    color: "#2563EB",
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  choiceCardSubtitleActive: {
     color: "#FFFFFF",
   },
   optionGroupTitle: {
