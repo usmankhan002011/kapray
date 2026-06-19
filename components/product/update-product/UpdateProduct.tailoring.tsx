@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import FastNumberInput from "@/components/product/add-product/FastNumberInput";
@@ -5,6 +6,7 @@ import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 import { SelectionPill } from "./UpdateProduct.components";
 import {
   normalizeStringList,
+  safeText,
   type NewTailoringStyleDraft,
   type ProductTailoringSelections,
 } from "./UpdateProduct.helpers";
@@ -26,6 +28,18 @@ type TailoringBaseOptionSelectorsProps = {
   onToggleStyle: (group: ProductTailoringSelectionGroup, value: string) => void;
 };
 
+type ExistingTailoringStyleListProps = {
+  stylesList: Array<{ title?: unknown }>;
+};
+
+type AddTailoringStyleButtonProps = {
+  onPress: () => void;
+};
+
+type TailoringStyleCardsBoxProps = {
+  children: ReactNode;
+};
+
 type TailoringStyleDraftCardProps = {
   style: NewTailoringStyleDraft;
   index: number;
@@ -45,6 +59,56 @@ type TailoringStyleDraftCardProps = {
   ) => void;
   onPickImages: (index: number) => void;
 };
+
+export function ExistingTailoringStyleList({
+  stylesList,
+}: ExistingTailoringStyleListProps) {
+  if (!stylesList.length) return null;
+
+  return (
+    <View style={styles.readonlyListBox}>
+      {stylesList.map((style, index) => (
+        <Text key={`old-style-${index}`} style={styles.readonlyValue}>
+          {index + 1}. {safeText(style?.title)}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+export function AddTailoringStyleButton({
+  onPress,
+}: AddTailoringStyleButtonProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.addFullBtn,
+        pressed ? styles.pressed : null,
+      ]}
+    >
+      <Text style={styles.addFullBtnText}>
+        + Add New Tailoring Style Card
+      </Text>
+    </Pressable>
+  );
+}
+
+export function TailoringStyleCardsBox({
+  children,
+}: TailoringStyleCardsBoxProps) {
+  return (
+    <View style={styles.appendBox}>
+      <Text style={styles.appendTitle}>Add new tailoring style cards</Text>
+      <Text style={styles.hint}>
+        Existing tailoring style cards remain active. New style cards become
+        available after Save Changes.
+      </Text>
+
+      {children}
+    </View>
+  );
+}
 
 export function TailoringBaseOptionSelectors({
   blouseNeckOptions,

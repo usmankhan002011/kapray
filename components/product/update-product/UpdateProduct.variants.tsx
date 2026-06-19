@@ -3,6 +3,7 @@ import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-nativ
 import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 import {
   resolveVariantImageUrls,
+  variantDisplayTitle,
   type EditableReadyVariant,
   type NewMadeOrderVariantDraft,
   type NewReadyVariantDraft,
@@ -13,6 +14,18 @@ type StitchedVariantInventorySectionProps = {
   variants: EditableReadyVariant[];
   resolvePublicUrl: (path: string | null | undefined) => string | null;
   onSizeQtyChange: (variantId: string, size: string, value: string) => void;
+};
+
+type ExistingMadeOrderVariantListProps = {
+  variants: any[];
+};
+
+type AddReadyVariantButtonProps = {
+  onPress: () => void;
+};
+
+type AddMadeOrderVariantButtonProps = {
+  onPress: () => void;
 };
 
 type ReadyVariantDraftCardProps = {
@@ -38,6 +51,54 @@ type MadeOrderVariantDraftCardProps = {
   onPickImages: (index: number) => void;
   onRemoveImage: (index: number, imageIndex: number) => void;
 };
+
+export function ExistingMadeOrderVariantList({
+  variants,
+}: ExistingMadeOrderVariantListProps) {
+  if (!variants.length) return null;
+
+  return (
+    <View style={styles.readonlyListBox}>
+      {variants.map((variant, index) => (
+        <Text key={`old-made-${index}`} style={styles.readonlyValue}>
+          {variantDisplayTitle(variant, index + 1)}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
+export function AddReadyVariantButton({ onPress }: AddReadyVariantButtonProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.addFullBtn,
+        pressed ? styles.pressed : null,
+      ]}
+    >
+      <Text style={styles.addFullBtnText}>+ Add New Style</Text>
+    </Pressable>
+  );
+}
+
+export function AddMadeOrderVariantButton({
+  onPress,
+}: AddMadeOrderVariantButtonProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.addFullBtn,
+        pressed ? styles.pressed : null,
+      ]}
+    >
+      <Text style={styles.addFullBtnText}>
+        + Add New Made-on-order Style
+      </Text>
+    </Pressable>
+  );
+}
 
 export function StitchedVariantInventorySection({
   variants,

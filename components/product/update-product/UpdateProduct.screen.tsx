@@ -32,10 +32,16 @@ import {
 import { MediaSection } from "./UpdateProduct.media";
 import { styles, stylesVars } from "./UpdateProduct.styles";
 import {
+  AddTailoringStyleButton,
+  ExistingTailoringStyleList,
   TailoringBaseOptionSelectors,
+  TailoringStyleCardsBox,
   TailoringStyleDraftCard,
 } from "./UpdateProduct.tailoring";
 import {
+  AddMadeOrderVariantButton,
+  AddReadyVariantButton,
+  ExistingMadeOrderVariantList,
   MadeOrderVariantDraftCard,
   ReadyVariantDraftCard,
   StitchedVariantInventorySection,
@@ -70,7 +76,6 @@ import {
   safeText,
   sanitizeNumber,
   sumReadyVariantDraftQty,
-  variantDisplayTitle,
   writeEditableStitchedVariantsToJson,
   writeProductTailoringSelections,
 } from "./UpdateProduct.helpers";
@@ -1567,22 +1572,14 @@ export default function UpdateProductScreen() {
                           onSizeQtyChange={updateNewReadyVariantSizeQty}
                         />
                       ))}
-                      <Pressable
+                      <AddReadyVariantButton
                         onPress={() =>
                           setNewReadyVariants((prev) => [
                             ...prev,
                             makeEmptyReadyVariantDraft(),
                           ])
                         }
-                        style={({ pressed }) => [
-                          styles.addFullBtn,
-                          pressed ? styles.pressed : null,
-                        ]}
-                      >
-                        <Text style={styles.addFullBtnText}>
-                          + Add New Style
-                        </Text>
-                      </Pressable>
+                      />
                     </View>
                   ) : (
                     <View style={styles.appendBox}>
@@ -1593,20 +1590,9 @@ export default function UpdateProductScreen() {
                         Already added made-on-order styles:
                       </Text>
 
-                      {readMadeOrderVariants(selected?.price).length ? (
-                        <View style={styles.readonlyListBox}>
-                          {readMadeOrderVariants(selected?.price).map(
-                            (variant, index) => (
-                              <Text
-                                key={`old-made-${index}`}
-                                style={styles.readonlyValue}
-                              >
-                                {variantDisplayTitle(variant, index + 1)}
-                              </Text>
-                            ),
-                          )}
-                        </View>
-                      ) : null}
+                      <ExistingMadeOrderVariantList
+                        variants={readMadeOrderVariants(selected?.price)}
+                      />
 
                       {newMadeOrderVariants.map((variant, index) => (
                         <MadeOrderVariantDraftCard
@@ -1654,22 +1640,14 @@ export default function UpdateProductScreen() {
                           }
                         />
                       ))}
-                      <Pressable
+                      <AddMadeOrderVariantButton
                         onPress={() =>
                           setNewMadeOrderVariants((prev) => [
                             ...prev,
                             makeEmptyMadeOrderVariantDraft(),
                           ])
                         }
-                        style={({ pressed }) => [
-                          styles.addFullBtn,
-                          pressed ? styles.pressed : null,
-                        ]}
-                      >
-                        <Text style={styles.addFullBtnText}>
-                          + Add New Made-on-order Style
-                        </Text>
-                      </Pressable>
+                      />
                     </View>
                   )}
 
@@ -1846,29 +1824,10 @@ export default function UpdateProductScreen() {
                         />
                       )}
 
-                      <View style={styles.appendBox}>
-                        <Text style={styles.appendTitle}>
-                          Add new tailoring style cards
-                        </Text>
-                        <Text style={styles.hint}>
-                          Existing tailoring style cards remain active. New
-                          style cards become available after Save Changes.
-                        </Text>
-
-                        {existingTailoringStylePresets.length ? (
-                          <View style={styles.readonlyListBox}>
-                            {existingTailoringStylePresets.map(
-                              (style, index) => (
-                                <Text
-                                  key={`old-style-${index}`}
-                                  style={styles.readonlyValue}
-                                >
-                                  {index + 1}. {safeText(style?.title)}
-                                </Text>
-                              ),
-                            )}
-                          </View>
-                        ) : null}
+                      <TailoringStyleCardsBox>
+                        <ExistingTailoringStyleList
+                          stylesList={existingTailoringStylePresets}
+                        />
 
                         {newTailoringStyles.map((style, index) => (
                           <TailoringStyleDraftCard
@@ -1911,23 +1870,15 @@ export default function UpdateProductScreen() {
                             onPickImages={pickNewTailoringStyleImages}
                           />
                         ))}
-                        <Pressable
+                        <AddTailoringStyleButton
                           onPress={() =>
                             setNewTailoringStyles((prev) => [
                               ...prev,
                               makeEmptyTailoringStyleDraft(),
                             ])
                           }
-                          style={({ pressed }) => [
-                            styles.addFullBtn,
-                            pressed ? styles.pressed : null,
-                          ]}
-                        >
-                          <Text style={styles.addFullBtnText}>
-                            + Add New Tailoring Style Card
-                          </Text>
-                        </Pressable>
-                      </View>
+                        />
+                      </TailoringStyleCardsBox>
                     </>
                   ) : null}
                 </>
