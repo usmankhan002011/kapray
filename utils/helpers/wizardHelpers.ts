@@ -88,13 +88,13 @@ export const STEPS: StepConfig[] = [
   },
   {
     id: "media",
-    title: "Add photos and videos",
-    subtitle: "Upload profile, shop banner, images, and videos.",
+    title: "Media",
+    subtitle: "Photos and videos.",
   },
   {
     id: "review",
-    title: "Review and submit",
-    subtitle: "Check everything once before creating the vendor.",
+    title: "Review",
+    subtitle: "Submit vendor.",
   },
 ];
 
