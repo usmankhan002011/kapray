@@ -1,13 +1,17 @@
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import type { ComponentProps, ReactNode } from "react";
 import {
   Image,
   Pressable,
+  type StyleProp,
   Text,
   View,
+  type ViewStyle,
 } from "react-native";
 
 import { roundMeter, safeText } from "./UpdateProduct.helpers";
 import type { ProductRow } from "./UpdateProduct.helpers";
-import { styles } from "./UpdateProduct.styles";
+import { styles, stylesVars } from "./UpdateProduct.styles";
 
 type ProductPreviewSectionProps = {
   selected: ProductRow | null;
@@ -38,6 +42,179 @@ type UpdateProductBottomBarProps = {
   onSave: () => void;
 };
 
+type UpdateProductIconName = ComponentProps<typeof MaterialIcons>["name"];
+
+type UpdateProductActionButtonProps = {
+  label: string;
+  icon?: UpdateProductIconName;
+  onPress: () => void;
+  disabled?: boolean;
+  variant?: "primary" | "secondary" | "danger" | "ghost";
+  size?: "small" | "medium";
+  style?: StyleProp<ViewStyle>;
+};
+
+type UpdateProductSectionCardProps = {
+  title: string;
+  subtitle?: string;
+  badge?: string;
+  actions?: ReactNode;
+  children: ReactNode;
+  tight?: boolean;
+};
+
+type UpdateProductNoticeProps = {
+  title?: string;
+  children: ReactNode;
+  tone?: "info" | "warning" | "danger" | "success";
+};
+
+type UpdateProductEmptyStateProps = {
+  title: string;
+  message?: string;
+  action?: ReactNode;
+};
+
+function actionIconColor(
+  variant: NonNullable<UpdateProductActionButtonProps["variant"]>,
+) {
+  if (variant === "primary") return stylesVars.white;
+  if (variant === "danger") return stylesVars.danger;
+  if (variant === "ghost") return stylesVars.text;
+  return stylesVars.blue;
+}
+
+function actionTextStyle(
+  variant: NonNullable<UpdateProductActionButtonProps["variant"]>,
+) {
+  if (variant === "primary") return styles.actionTextPrimary;
+  if (variant === "danger") return styles.actionTextDanger;
+  if (variant === "ghost") return styles.actionTextGhost;
+  return styles.actionTextSecondary;
+}
+
+function actionVariantStyle(
+  variant: NonNullable<UpdateProductActionButtonProps["variant"]>,
+) {
+  if (variant === "primary") return styles.actionButtonPrimary;
+  if (variant === "danger") return styles.actionButtonDanger;
+  if (variant === "ghost") return styles.actionButtonGhost;
+  return styles.actionButtonSecondary;
+}
+
+export function UpdateProductActionButton({
+  label,
+  icon,
+  onPress,
+  disabled,
+  variant = "secondary",
+  size = "small",
+  style,
+}: UpdateProductActionButtonProps) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        size === "small" ? styles.actionButtonSmall : styles.actionButtonMedium,
+        actionVariantStyle(variant),
+        disabled ? styles.actionButtonDisabled : null,
+        style,
+        pressed ? styles.pressed : null,
+      ]}
+    >
+      <View style={styles.actionButtonContent}>
+        {icon ? (
+          <MaterialIcons
+            name={icon}
+            size={size === "small" ? 17 : 18}
+            color={actionIconColor(variant)}
+          />
+        ) : null}
+        <Text style={actionTextStyle(variant)}>{label}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+export function UpdateProductSectionCard({
+  title,
+  subtitle,
+  badge,
+  actions,
+  children,
+  tight,
+}: UpdateProductSectionCardProps) {
+  return (
+    <View style={[styles.card, tight ? styles.cardTight : null]}>
+      <View style={styles.sectionHeaderRow}>
+        <View style={styles.sectionHeaderText}>
+          <Text style={styles.sectionTitle}>{title}</Text>
+          {subtitle ? (
+            <Text style={styles.sectionSubtitle}>{subtitle}</Text>
+          ) : null}
+        </View>
+
+        {badge ? (
+          <View style={styles.statusPill}>
+            <Text
+              adjustsFontSizeToFit
+              minimumFontScale={0.82}
+              numberOfLines={1}
+              style={styles.statusPillText}
+            >
+              {badge}
+            </Text>
+          </View>
+        ) : null}
+
+        {actions}
+      </View>
+
+      {children}
+    </View>
+  );
+}
+
+export function UpdateProductNotice({
+  title,
+  children,
+  tone = "info",
+}: UpdateProductNoticeProps) {
+  return (
+    <View
+      style={[
+        styles.notice,
+        tone === "warning" ? styles.noticeWarning : null,
+        tone === "danger" ? styles.noticeDanger : null,
+        tone === "success" ? styles.noticeSuccess : null,
+      ]}
+    >
+      {title ? <Text style={styles.noticeTitle}>{title}</Text> : null}
+      {typeof children === "string" ? (
+        <Text style={styles.noticeText}>{children}</Text>
+      ) : (
+        children
+      )}
+    </View>
+  );
+}
+
+export function UpdateProductEmptyState({
+  title,
+  message,
+  action,
+}: UpdateProductEmptyStateProps) {
+  return (
+    <View style={styles.emptyStateBox}>
+      <Text style={styles.emptyStateTitle}>{title}</Text>
+      {message ? <Text style={styles.emptyStateText}>{message}</Text> : null}
+      {action}
+    </View>
+  );
+}
 
 export function UpdateProductHeader({
   hasVendor,
@@ -48,21 +225,18 @@ export function UpdateProductHeader({
       <View style={styles.headerRow}>
         <Text style={styles.title}>Update Product</Text>
 
-        <Pressable
+        <UpdateProductActionButton
+          label="Close"
+          icon="close"
           onPress={onClose}
-          style={({ pressed }) => [
-            styles.linkBtn,
-            pressed ? styles.pressed : null,
-          ]}
-        >
-          <Text style={styles.linkText}>Close</Text>
-        </Pressable>
+          variant="secondary"
+        />
       </View>
 
       {!hasVendor ? (
-        <Text style={styles.warn}>
+        <UpdateProductNotice title="Vendor not loaded" tone="warning">
           Vendor not loaded. Please ensure vendorSlice has vendor.id (bigint).
-        </Text>
+        </UpdateProductNotice>
       ) : null}
     </>
   );
@@ -87,7 +261,10 @@ export function UpdateProductBottomBar({
         onPress={onCancel}
         disabled={saving}
       >
-        <Text style={styles.cancelText}>Cancel</Text>
+        <View style={styles.actionButtonContent}>
+          <MaterialIcons name="close" size={18} color={stylesVars.text} />
+          <Text style={styles.cancelText}>Cancel</Text>
+        </View>
       </Pressable>
 
       <Pressable
@@ -99,9 +276,16 @@ export function UpdateProductBottomBar({
         onPress={onSave}
         disabled={!canSave || saving}
       >
-        <Text style={styles.saveText}>
-          {saving ? "Saving…" : "Save Changes"}
-        </Text>
+        <View style={styles.actionButtonContent}>
+          <MaterialIcons
+            name={saving ? "hourglass-empty" : "check"}
+            size={18}
+            color={stylesVars.white}
+          />
+          <Text style={styles.saveText}>
+            {saving ? "Saving..." : "Save Changes"}
+          </Text>
+        </View>
       </Pressable>
     </View>
   );
@@ -117,29 +301,30 @@ export function ProductPreviewSection({
 }: ProductPreviewSectionProps) {
   if (!selected) {
     return (
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>No product selected</Text>
-        <Text style={styles.empty}>
-          Open this screen from Products → Edit so the product can load
-          directly.
-        </Text>
-        <Pressable
-          onPress={onBack}
-          style={({ pressed }) => [
-            styles.smallBtn,
-            pressed ? styles.pressed : null,
-          ]}
-        >
-          <Text style={styles.smallBtnText}>Back to Products</Text>
-        </Pressable>
-      </View>
+      <UpdateProductSectionCard title="No product selected">
+        <UpdateProductEmptyState
+          title="Open an item from Products"
+          message="Open this screen from Products > Edit so the product can load directly."
+          action={
+            <UpdateProductActionButton
+              label="Back to Products"
+              icon="arrow-back"
+              onPress={onBack}
+              variant="secondary"
+              style={{ alignSelf: "flex-start" }}
+            />
+          }
+        />
+      </UpdateProductSectionCard>
     );
   }
 
   return (
-    <View style={styles.card}>
-      <Text style={styles.sectionTitle}>Product Preview</Text>
-
+    <UpdateProductSectionCard
+      title="Product Preview"
+      subtitle="Quick check before editing details below."
+      badge={Boolean(selected.made_on_order) ? "Made on order" : "Ready stock"}
+    >
       <View style={styles.previewBox}>
         {previewImageUrl ? (
           <Image source={{ uri: previewImageUrl }} style={styles.previewImage} />
@@ -167,14 +352,14 @@ export function ProductPreviewSection({
                       Math.max(0, Number(selected.inventory_qty ?? 0)),
                     )} m`
                   : `Inventory Qty: ${Math.max(
-                    0,
-                    Number(selected.inventory_qty ?? 0),
-                  )}`}
+                      0,
+                      Number(selected.inventory_qty ?? 0),
+                    )}`}
             </Text>
           ) : null}
         </View>
       </View>
-    </View>
+    </UpdateProductSectionCard>
   );
 }
 

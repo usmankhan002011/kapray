@@ -1,6 +1,7 @@
 import { Text, TextInput, View } from "react-native";
 
 import FastNumberInput from "@/components/product/add-product/FastNumberInput";
+import { UpdateProductNotice } from "./UpdateProduct.components";
 import { categoryLabel } from "./UpdateProduct.helpers";
 import type { ProductCategory } from "./UpdateProduct.helpers";
 import { styles, stylesVars } from "./UpdateProduct.styles";
@@ -122,26 +123,8 @@ export function StitchedPricingFields({
 
 export function OutOfStockNotice() {
   return (
-    <View
-      style={{
-        marginTop: 10,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: "#FCA5A5",
-        backgroundColor: "#FEE2E2",
-        padding: 12,
-      }}
-    >
-      <Text
-        style={{
-          color: "#B91C1C",
-          fontWeight: "800",
-          fontSize: 13,
-          lineHeight: 18,
-        }}
-      >
-        Out of stock — update inventory to make this product visible again
-      </Text>
-    </View>
+    <UpdateProductNotice title="Out of stock" tone="danger">
+      Update inventory to make this product visible again.
+    </UpdateProductNotice>
   );
 }

@@ -14,6 +14,12 @@ export const stylesVars = {
   danger: "#B91C1C",
   dangerSoft: "#FEE2E2",
   dangerBorder: "#FCA5A5",
+  warning: "#B45309",
+  warningSoft: "#FFF7ED",
+  warningBorder: "#FED7AA",
+  success: "#166534",
+  successSoft: "#F0FDF4",
+  successBorder: "#BBF7D0",
   overlayDark: "rgba(0,0,0,0.58)",
   white: "#FFFFFF",
   black: "#000000",
@@ -64,11 +70,15 @@ export const styles = StyleSheet.create({
 
   card: {
     marginTop: 14,
-    borderRadius: 18,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
     padding: 18,
+  },
+
+  cardTight: {
+    padding: 14,
   },
 
   sectionHeaderRow: {
@@ -78,12 +88,187 @@ export const styles = StyleSheet.create({
     gap: 10,
   },
 
+  sectionHeaderText: {
+    flex: 1,
+    minWidth: 0,
+  },
+
   sectionTitle: {
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "800",
     color: stylesVars.text,
     marginBottom: 2,
-    flex: 1,
+  },
+
+  sectionSubtitle: {
+    marginTop: 4,
+    color: stylesVars.subText,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+  },
+
+  statusPill: {
+    minHeight: 30,
+    maxWidth: 150,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: stylesVars.blueSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  statusPillText: {
+    color: stylesVars.blue,
+    fontSize: 11,
+    fontWeight: "800",
+  },
+
+  actionButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+
+  actionButtonSmall: {
+    minHeight: 36,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+
+  actionButtonMedium: {
+    minHeight: 44,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+
+  actionButtonPrimary: {
+    backgroundColor: stylesVars.blue,
+    borderWidth: 1,
+    borderColor: stylesVars.blue,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  actionButtonSecondary: {
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  actionButtonDanger: {
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: stylesVars.dangerBorder,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  actionButtonGhost: {
+    backgroundColor: stylesVars.white,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  actionButtonDisabled: {
+    opacity: 0.55,
+  },
+
+  actionTextPrimary: {
+    color: stylesVars.white,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  actionTextSecondary: {
+    color: stylesVars.blue,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  actionTextDanger: {
+    color: stylesVars.danger,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  actionTextGhost: {
+    color: stylesVars.text,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  notice: {
+    marginTop: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: stylesVars.blueSoft,
+    padding: 12,
+  },
+
+  noticeWarning: {
+    borderColor: stylesVars.warningBorder,
+    backgroundColor: stylesVars.warningSoft,
+  },
+
+  noticeDanger: {
+    borderColor: stylesVars.dangerBorder,
+    backgroundColor: "#FEF2F2",
+  },
+
+  noticeSuccess: {
+    borderColor: stylesVars.successBorder,
+    backgroundColor: stylesVars.successSoft,
+  },
+
+  noticeTitle: {
+    color: stylesVars.text,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "800",
+  },
+
+  noticeText: {
+    marginTop: 4,
+    color: stylesVars.subText,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+  },
+
+  emptyStateBox: {
+    marginTop: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: stylesVars.borderSoft,
+    backgroundColor: "#F8FAFC",
+    padding: 14,
+    gap: 8,
+  },
+
+  emptyStateTitle: {
+    color: stylesVars.text,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+
+  emptyStateText: {
+    color: stylesVars.mutedText,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
   },
 
   selectedBox: {

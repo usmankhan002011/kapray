@@ -94,7 +94,7 @@ export function safeInt(v: any) {
 
 export function safeText(v: any) {
   const t = String(v ?? "").trim();
-  return t.length ? t : "—";
+  return t.length ? t : "-";
 }
 
 export function sanitizeNumber(input: string) {

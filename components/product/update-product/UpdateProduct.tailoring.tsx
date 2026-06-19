@@ -1,9 +1,14 @@
 import type { ReactNode } from "react";
-import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Image, ScrollView, Text, TextInput, View } from "react-native";
 
 import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 
 import { SelectionPill } from "./UpdateProduct.components";
+import {
+  UpdateProductActionButton,
+  UpdateProductEmptyState,
+  UpdateProductNotice,
+} from "./UpdateProduct.components";
 import {
   normalizeStringList,
   safeText,
@@ -60,6 +65,15 @@ type TailoringStyleDraftCardProps = {
   onPickImages: (index: number) => void;
 };
 
+function OptionEmptyState({ title }: { title: string }) {
+  return (
+    <UpdateProductEmptyState
+      title={title}
+      message="Add options in the vendor tailoring profile, then return here."
+    />
+  );
+}
+
 export function ExistingTailoringStyleList({
   stylesList,
 }: ExistingTailoringStyleListProps) {
@@ -67,6 +81,7 @@ export function ExistingTailoringStyleList({
 
   return (
     <View style={styles.readonlyListBox}>
+      <Text style={styles.appendTitle}>Saved tailoring style cards</Text>
       {stylesList.map((style, index) => (
         <Text key={`old-style-${index}`} style={styles.readonlyValue}>
           {index + 1}. {safeText(style?.title)}
@@ -80,17 +95,13 @@ export function AddTailoringStyleButton({
   onPress,
 }: AddTailoringStyleButtonProps) {
   return (
-    <Pressable
+    <UpdateProductActionButton
+      label="Add Tailoring Style Card"
+      icon="add"
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.addFullBtn,
-        pressed ? styles.pressed : null,
-      ]}
-    >
-      <Text style={styles.addFullBtnText}>
-        + Add New Tailoring Style Card
-      </Text>
-    </Pressable>
+      size="medium"
+      style={styles.addFullBtn}
+    />
   );
 }
 
@@ -99,10 +110,9 @@ export function TailoringStyleCardsBox({
 }: TailoringStyleCardsBoxProps) {
   return (
     <View style={styles.appendBox}>
-      <Text style={styles.appendTitle}>Add new tailoring style cards</Text>
+      <Text style={styles.appendTitle}>Tailoring style cards</Text>
       <Text style={styles.hint}>
-        Existing tailoring style cards remain active. New style cards become
-        available after Save Changes.
+        Saved cards stay active. New cards become available after Save Changes.
       </Text>
 
       {children}
@@ -133,9 +143,7 @@ export function TailoringBaseOptionSelectors({
           ))}
         </View>
       ) : (
-        <Text style={styles.emptyInline}>
-          No neck styles found in vendor profile.
-        </Text>
+        <OptionEmptyState title="No neck styles found" />
       )}
 
       <Text style={styles.label}>Sleeve Styles</Text>
@@ -151,9 +159,7 @@ export function TailoringBaseOptionSelectors({
           ))}
         </View>
       ) : (
-        <Text style={styles.emptyInline}>
-          No sleeve styles found in vendor profile.
-        </Text>
+        <OptionEmptyState title="No sleeve styles found" />
       )}
 
       <Text style={styles.label}>Trouser Styles</Text>
@@ -169,15 +175,13 @@ export function TailoringBaseOptionSelectors({
           ))}
         </View>
       ) : (
-        <Text style={styles.emptyInline}>
-          No trouser styles found in vendor profile.
-        </Text>
+        <OptionEmptyState title="No trouser styles found" />
       )}
 
       {!hasAnyVendorStyleOptions ? (
-        <Text style={styles.hint}>
-          Add tailoring styles in vendor profile first, then return here.
-        </Text>
+        <UpdateProductNotice title="Tailoring options missing" tone="warning">
+          Add tailoring styles in the vendor profile first, then return here.
+        </UpdateProductNotice>
       ) : null}
     </>
   );
@@ -203,20 +207,22 @@ export function TailoringStyleDraftCard({
   return (
     <View style={styles.appendCard}>
       <View style={styles.draftHeaderRow}>
-        <Text style={styles.variantCardTitle}>
-          New Style Card {existingStyleCount + index + 1}
-        </Text>
+        <View style={styles.sectionHeaderText}>
+          <Text style={styles.variantCardTitle}>
+            New Tailoring Card {existingStyleCount + index + 1}
+          </Text>
+          <Text style={styles.emptyInline}>
+            Attach buyer-facing copy, options, and references.
+          </Text>
+        </View>
 
         {canDiscard ? (
-          <Pressable
+          <UpdateProductActionButton
+            label="Discard"
+            icon="delete-outline"
             onPress={() => onDiscard(index)}
-            style={({ pressed }) => [
-              styles.discardDraftBtn,
-              pressed ? styles.pressed : null,
-            ]}
-          >
-            <Text style={styles.discardDraftText}>Discard</Text>
-          </Pressable>
+            variant="danger"
+          />
         ) : null}
       </View>
 
@@ -266,9 +272,7 @@ export function TailoringStyleDraftCard({
           ))}
         </View>
       ) : (
-        <Text style={styles.emptyInline}>
-          No neck styles found in vendor profile.
-        </Text>
+        <OptionEmptyState title="No neck styles found" />
       )}
 
       <Text style={styles.label}>Sleeve Options for this Style</Text>
@@ -284,9 +288,7 @@ export function TailoringStyleDraftCard({
           ))}
         </View>
       ) : (
-        <Text style={styles.emptyInline}>
-          No sleeve styles found in vendor profile.
-        </Text>
+        <OptionEmptyState title="No sleeve styles found" />
       )}
 
       <Text style={styles.label}>Trouser Options for this Style</Text>
@@ -304,22 +306,16 @@ export function TailoringStyleDraftCard({
           ))}
         </View>
       ) : (
-        <Text style={styles.emptyInline}>
-          No trouser styles found in vendor profile.
-        </Text>
+        <OptionEmptyState title="No trouser styles found" />
       )}
 
       <View style={styles.sectionHeaderRow}>
         <Text style={styles.label}>Reference Images *</Text>
-        <Pressable
+        <UpdateProductActionButton
+          label="Images"
+          icon="add-photo-alternate"
           onPress={() => onPickImages(index)}
-          style={({ pressed }) => [
-            styles.smallBtn,
-            pressed ? styles.pressed : null,
-          ]}
-        >
-          <Text style={styles.smallBtnText}>+ Add Images</Text>
-        </Pressable>
+        />
       </View>
 
       {style.images.length ? (
@@ -333,7 +329,10 @@ export function TailoringStyleDraftCard({
           </View>
         </ScrollView>
       ) : (
-        <Text style={styles.emptyInline}>No images selected yet.</Text>
+        <UpdateProductEmptyState
+          title="No reference images selected"
+          message="Add at least one image before saving this tailoring card."
+        />
       )}
     </View>
   );

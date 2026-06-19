@@ -1,6 +1,19 @@
-import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
 import FastNumberInput from "@/components/product/add-product/FastNumberInput";
+import {
+  UpdateProductActionButton,
+  UpdateProductEmptyState,
+  UpdateProductNotice,
+} from "./UpdateProduct.components";
 import {
   resolveVariantImageUrls,
   variantDisplayTitle,
@@ -55,10 +68,18 @@ type MadeOrderVariantDraftCardProps = {
 export function ExistingMadeOrderVariantList({
   variants,
 }: ExistingMadeOrderVariantListProps) {
-  if (!variants.length) return null;
+  if (!variants.length) {
+    return (
+      <UpdateProductEmptyState
+        title="No saved made-on-order styles"
+        message="Add a style below; it will become available after Save Changes."
+      />
+    );
+  }
 
   return (
     <View style={styles.readonlyListBox}>
+      <Text style={styles.appendTitle}>Saved styles</Text>
       {variants.map((variant, index) => (
         <Text key={`old-made-${index}`} style={styles.readonlyValue}>
           {variantDisplayTitle(variant, index + 1)}
@@ -70,15 +91,13 @@ export function ExistingMadeOrderVariantList({
 
 export function AddReadyVariantButton({ onPress }: AddReadyVariantButtonProps) {
   return (
-    <Pressable
+    <UpdateProductActionButton
+      label="Add New Style"
+      icon="add"
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.addFullBtn,
-        pressed ? styles.pressed : null,
-      ]}
-    >
-      <Text style={styles.addFullBtnText}>+ Add New Style</Text>
-    </Pressable>
+      size="medium"
+      style={styles.addFullBtn}
+    />
   );
 }
 
@@ -86,17 +105,13 @@ export function AddMadeOrderVariantButton({
   onPress,
 }: AddMadeOrderVariantButtonProps) {
   return (
-    <Pressable
+    <UpdateProductActionButton
+      label="Add Made-on-order Style"
+      icon="add"
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.addFullBtn,
-        pressed ? styles.pressed : null,
-      ]}
-    >
-      <Text style={styles.addFullBtnText}>
-        + Add New Made-on-order Style
-      </Text>
-    </Pressable>
+      size="medium"
+      style={styles.addFullBtn}
+    />
   );
 }
 
@@ -107,12 +122,27 @@ export function StitchedVariantInventorySection({
 }: StitchedVariantInventorySectionProps) {
   if (!variants.length) return null;
 
+  const totalQty = variants.reduce(
+    (sum, variant) =>
+      sum +
+      variant.sizes.reduce((sizeSum, row) => sizeSum + Number(row.qty || 0), 0),
+    0,
+  );
+
   return (
     <View style={styles.variantInventoryBox}>
-      <Text style={styles.variantInventoryTitle}>Style Size Inventory</Text>
-      <Text style={styles.hint}>
-        Update stock for each ready-to-wear style size
+      <Text style={styles.variantInventoryTitle}>
+        Ready-to-wear style inventory
       </Text>
+      <Text style={styles.hint}>
+        Update saved style stock by size. Changes apply when you save.
+      </Text>
+
+      {totalQty <= 0 ? (
+        <UpdateProductNotice title="All saved style stock is 0" tone="warning">
+          Add quantity to at least one size to show available ready stock.
+        </UpdateProductNotice>
+      ) : null}
 
       {variants.map((variant) => {
         const variantImageUrls = resolveVariantImageUrls(
@@ -176,19 +206,21 @@ export function ReadyVariantDraftCard({
   return (
     <View style={styles.appendCard}>
       <View style={styles.draftHeaderRow}>
-        <Text style={styles.variantCardTitle}>
-          New Style {existingVariantCount + index + 1}
-        </Text>
+        <View style={styles.sectionHeaderText}>
+          <Text style={styles.variantCardTitle}>
+            New Ready Style {existingVariantCount + index + 1}
+          </Text>
+          <Text style={styles.emptyInline}>
+            Queued addition, saved after Save Changes.
+          </Text>
+        </View>
 
-        <Pressable
+        <UpdateProductActionButton
+          label="Discard"
+          icon="delete-outline"
           onPress={() => onDiscard(index)}
-          style={({ pressed }) => [
-            styles.discardDraftBtn,
-            pressed ? styles.pressed : null,
-          ]}
-        >
-          <Text style={styles.discardDraftText}>Discard</Text>
-        </Pressable>
+          variant="danger"
+        />
       </View>
 
       <Text style={styles.label}>Style name *</Text>
@@ -214,15 +246,11 @@ export function ReadyVariantDraftCard({
 
       <View style={styles.sectionHeaderRow}>
         <Text style={styles.label}>Style Images</Text>
-        <Pressable
+        <UpdateProductActionButton
+          label="Images"
+          icon="add-photo-alternate"
           onPress={() => onPickImages(index)}
-          style={({ pressed }) => [
-            styles.smallBtn,
-            pressed ? styles.pressed : null,
-          ]}
-        >
-          <Text style={styles.smallBtnText}>+ Add Images</Text>
-        </Pressable>
+        />
       </View>
 
       {(variant.images ?? []).length ? (
@@ -232,20 +260,29 @@ export function ReadyVariantDraftCard({
               <View key={`${img.uri}-${imgIndex}`} style={styles.thumbWrap}>
                 <Image source={{ uri: img.uri }} style={styles.thumb} />
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove style image"
                   onPress={() => onRemoveImage(index, imgIndex)}
                   style={({ pressed }) => [
                     styles.thumbX,
                     pressed ? styles.pressed : null,
                   ]}
                 >
-                  <Text style={styles.thumbXText}>✕</Text>
+                  <MaterialIcons
+                    name="close"
+                    size={16}
+                    color={stylesVars.danger}
+                  />
                 </Pressable>
               </View>
             ))}
           </View>
         </ScrollView>
       ) : (
-        <Text style={styles.emptyInline}>No style images selected yet.</Text>
+        <UpdateProductEmptyState
+          title="No style images selected"
+          message="Add at least one image before saving this new ready style."
+        />
       )}
 
       <Text style={styles.label}>Stock by size *</Text>
@@ -286,19 +323,21 @@ export function MadeOrderVariantDraftCard({
   return (
     <View style={styles.appendCard}>
       <View style={styles.draftHeaderRow}>
-        <Text style={styles.variantCardTitle}>
-          New Style {existingVariantCount + index + 1}
-        </Text>
+        <View style={styles.sectionHeaderText}>
+          <Text style={styles.variantCardTitle}>
+            New Made-on-order Style {existingVariantCount + index + 1}
+          </Text>
+          <Text style={styles.emptyInline}>
+            Queued addition, saved after Save Changes.
+          </Text>
+        </View>
 
-        <Pressable
+        <UpdateProductActionButton
+          label="Discard"
+          icon="delete-outline"
           onPress={() => onDiscard(index)}
-          style={({ pressed }) => [
-            styles.discardDraftBtn,
-            pressed ? styles.pressed : null,
-          ]}
-        >
-          <Text style={styles.discardDraftText}>Discard</Text>
-        </Pressable>
+          variant="danger"
+        />
       </View>
 
       <Text style={styles.label}>Style name *</Text>
@@ -335,15 +374,11 @@ export function MadeOrderVariantDraftCard({
 
       <View style={styles.sectionHeaderRow}>
         <Text style={styles.label}>Style Images</Text>
-        <Pressable
+        <UpdateProductActionButton
+          label="Images"
+          icon="add-photo-alternate"
           onPress={() => onPickImages(index)}
-          style={({ pressed }) => [
-            styles.smallBtn,
-            pressed ? styles.pressed : null,
-          ]}
-        >
-          <Text style={styles.smallBtnText}>+ Add Images</Text>
-        </Pressable>
+        />
       </View>
 
       {(variant.images ?? []).length ? (
@@ -353,20 +388,29 @@ export function MadeOrderVariantDraftCard({
               <View key={`${img.uri}-${imgIndex}`} style={styles.thumbWrap}>
                 <Image source={{ uri: img.uri }} style={styles.thumb} />
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove style image"
                   onPress={() => onRemoveImage(index, imgIndex)}
                   style={({ pressed }) => [
                     styles.thumbX,
                     pressed ? styles.pressed : null,
                   ]}
                 >
-                  <Text style={styles.thumbXText}>{"\u2715"}</Text>
+                  <MaterialIcons
+                    name="close"
+                    size={16}
+                    color={stylesVars.danger}
+                  />
                 </Pressable>
               </View>
             ))}
           </View>
         </ScrollView>
       ) : (
-        <Text style={styles.emptyInline}>No style images selected yet.</Text>
+        <UpdateProductEmptyState
+          title="No style images selected"
+          message="Add at least one image before saving this made-on-order style."
+        />
       )}
     </View>
   );

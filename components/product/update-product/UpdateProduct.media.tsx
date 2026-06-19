@@ -1,3 +1,4 @@
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import {
   ActivityIndicator,
   Image,
@@ -9,6 +10,11 @@ import {
 } from "react-native";
 
 import type { ProductRow } from "./UpdateProduct.helpers";
+import {
+  UpdateProductActionButton,
+  UpdateProductEmptyState,
+  UpdateProductSectionCard,
+} from "./UpdateProduct.components";
 import { styles, stylesVars } from "./UpdateProduct.styles";
 
 type MediaSectionProps = {
@@ -41,47 +47,40 @@ export function MediaSection({
   onRemoveVideo,
 }: MediaSectionProps) {
   return (
-    <View style={styles.card}>
-      <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionTitle}>Media</Text>
-
-        {selected ? (
+    <UpdateProductSectionCard
+      title="Media"
+      subtitle="Images, videos, and extra buyer-facing detail."
+      actions={
+        selected ? (
           <View style={styles.mediaActionRow}>
-            <Pressable
+            <UpdateProductActionButton
+              label="Image"
+              icon="add-photo-alternate"
               onPress={onAddImage}
               disabled={savingMedia}
-              style={({ pressed }) => [
-                styles.smallBtn,
-                savingMedia ? styles.smallBtnDisabled : null,
-                pressed ? styles.pressed : null,
-              ]}
-            >
-              <Text style={styles.smallBtnText}>+ Add Image</Text>
-            </Pressable>
+            />
 
-            <Pressable
+            <UpdateProductActionButton
+              label="Video"
+              icon="video-library"
               onPress={onAddVideo}
               disabled={savingMedia}
-              style={({ pressed }) => [
-                styles.smallBtn,
-                savingMedia ? styles.smallBtnDisabled : null,
-                pressed ? styles.pressed : null,
-              ]}
-            >
-              <Text style={styles.smallBtnText}>+ Add Video</Text>
-            </Pressable>
+            />
           </View>
-        ) : null}
-      </View>
-
+        ) : null
+      }
+    >
       {!selected ? (
-        <Text style={styles.empty}>Select a product above to edit media.</Text>
+        <UpdateProductEmptyState
+          title="No media loaded"
+          message="Select a product above to edit images, videos, and descriptions."
+        />
       ) : (
         <>
           {savingMedia ? (
             <View style={styles.loadingRow}>
               <ActivityIndicator />
-              <Text style={styles.loadingText}>Updating media…</Text>
+              <Text style={styles.loadingText}>Updating media...</Text>
             </View>
           ) : null}
 
@@ -93,21 +92,31 @@ export function MediaSection({
                   <View key={`${u}-${idx}`} style={styles.thumbWrap}>
                     <Image source={{ uri: u }} style={styles.thumb} />
                     <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Remove image"
                       onPress={() => onRemoveImage(idx)}
                       disabled={savingMedia}
                       style={({ pressed }) => [
                         styles.thumbX,
+                        savingMedia ? styles.actionButtonDisabled : null,
                         pressed ? styles.pressed : null,
                       ]}
                     >
-                      <Text style={styles.thumbXText}>✕</Text>
+                      <MaterialIcons
+                        name="close"
+                        size={16}
+                        color={stylesVars.danger}
+                      />
                     </Pressable>
                   </View>
                 ))}
               </View>
             </ScrollView>
           ) : (
-            <Text style={styles.emptyInline}>—</Text>
+            <UpdateProductEmptyState
+              title="No images yet"
+              message="Add product photos so buyers can inspect the outfit."
+            />
           )}
 
           <Text style={[styles.metaSmall, { marginTop: 12 }]}>Videos</Text>
@@ -133,18 +142,25 @@ export function MediaSection({
                       )}
 
                       <View style={styles.playBadge}>
-                        <Text style={styles.playBadgeText}>▶</Text>
+                        <Text style={styles.playBadgeText}>{">"}</Text>
                       </View>
 
                       <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Remove video"
                         onPress={() => onRemoveVideo(idx)}
                         disabled={savingMedia}
                         style={({ pressed }) => [
                           styles.thumbX,
+                          savingMedia ? styles.actionButtonDisabled : null,
                           pressed ? styles.pressed : null,
                         ]}
                       >
-                        <Text style={styles.thumbXText}>✕</Text>
+                        <MaterialIcons
+                          name="close"
+                          size={16}
+                          color={stylesVars.danger}
+                        />
                       </Pressable>
                     </View>
                   );
@@ -152,7 +168,10 @@ export function MediaSection({
               </View>
             </ScrollView>
           ) : (
-            <Text style={styles.emptyInline}>—</Text>
+            <UpdateProductEmptyState
+              title="No videos yet"
+              message="Optional videos can show movement, fabric weight, or detailing."
+            />
           )}
 
           <Text style={styles.label}>More Description</Text>
@@ -168,6 +187,6 @@ export function MediaSection({
           />
         </>
       )}
-    </View>
+    </UpdateProductSectionCard>
   );
 }

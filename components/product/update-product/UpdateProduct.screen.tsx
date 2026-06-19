@@ -21,7 +21,10 @@ import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 import {
   ProductPreviewSection,
   UpdateProductBottomBar,
+  UpdateProductEmptyState,
   UpdateProductHeader,
+  UpdateProductNotice,
+  UpdateProductSectionCard,
 } from "./UpdateProduct.components";
 import {
   DressTypeField,
@@ -49,6 +52,7 @@ import {
 import {
   cleanNewMadeOrderVariantDraft,
   cleanNewReadyVariantDraft,
+  categoryLabel,
   clearProductTailoringSelections,
   editedCategoryFromState,
   emptyTailoringSelections,
@@ -1454,11 +1458,21 @@ export default function UpdateProductScreen() {
           onRemoveVideo={confirmRemoveVideo}
         />
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Basic Details</Text>
+        <UpdateProductSectionCard
+          title="Basic Details"
+          subtitle={
+            selected
+              ? "Edit product details, pricing, inventory, and service options."
+              : "Select a product to edit title, pricing, media, and services."
+          }
+          badge={selected ? categoryLabel(editedProductCategory) : undefined}
+        >
 
           {!selected ? (
-            <Text style={styles.empty}>Select a product above to edit.</Text>
+            <UpdateProductEmptyState
+              title="Select a product above"
+              message="Open this screen from Products > Edit so the saved product loads here."
+            />
           ) : (
             <>
               <Text style={styles.label}>Title *</Text>
@@ -1531,9 +1545,19 @@ export default function UpdateProductScreen() {
                   {!Boolean(selected?.made_on_order) ? (
                     <View style={styles.appendBox}>
                       <Text style={styles.appendTitle}>
-                        Add New Product Styles
+                        Ready-to-wear styles
                       </Text>
-                      {/* <Text style={styles.hint}>Add new styles below.</Text> */}
+                      <Text style={styles.hint}>
+                        Saved ready styles stay active. New styles below are
+                        added after Save Changes.
+                      </Text>
+
+                      {newReadyVariants.length ? null : (
+                        <UpdateProductEmptyState
+                          title="No new ready styles queued"
+                          message="Use Add New Style when this product has another ready-to-wear design."
+                        />
+                      )}
 
                       {newReadyVariants.map((variant, index) => (
                         <ReadyVariantDraftCard
@@ -1584,15 +1608,23 @@ export default function UpdateProductScreen() {
                   ) : (
                     <View style={styles.appendBox}>
                       <Text style={styles.appendTitle}>
-                        Add new made-on-order styles
+                        Made-on-order styles
                       </Text>
                       <Text style={styles.hint}>
-                        Already added made-on-order styles:
+                        Saved made-on-order styles stay active. New styles below
+                        are added after Save Changes.
                       </Text>
 
                       <ExistingMadeOrderVariantList
                         variants={readMadeOrderVariants(selected?.price)}
                       />
+
+                      {newMadeOrderVariants.length ? null : (
+                        <UpdateProductEmptyState
+                          title="No new made-on-order styles queued"
+                          message="Use Add Made-on-order Style when buyers can request another design."
+                        />
+                      )}
 
                       {newMadeOrderVariants.map((variant, index) => (
                         <MadeOrderVariantDraftCard
@@ -1770,15 +1802,15 @@ export default function UpdateProductScreen() {
                     <View style={styles.loadingRow}>
                       <ActivityIndicator />
                       <Text style={styles.loadingText}>
-                        Loading tailoring styles…
+                        Loading tailoring styles...
                       </Text>
                     </View>
                   ) : null}
 
                   {!vendorLoading && !vendorOffersTailoring ? (
-                    <Text style={styles.hint}>
+                    <UpdateProductNotice title="Tailoring unavailable" tone="warning">
                       Vendor profile currently does not offer tailoring.
-                    </Text>
+                    </UpdateProductNotice>
                   ) : null}
 
                   {tailoringEnabled ? (
@@ -1885,12 +1917,12 @@ export default function UpdateProductScreen() {
               )}
             </>
           )}
-        </View>
+        </UpdateProductSectionCard>
 
         {!vendorId ? (
-          <Text style={styles.warn}>
+          <UpdateProductNotice title="Vendor not loaded" tone="warning">
             Vendor not loaded. Please ensure vendorSlice has vendor.id (bigint).
-          </Text>
+          </UpdateProductNotice>
         ) : null}
       </ScrollView>
 
