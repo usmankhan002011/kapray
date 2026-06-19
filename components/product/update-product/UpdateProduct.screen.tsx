@@ -32,7 +32,12 @@ import {
 } from "./UpdateProduct.basic";
 import { MediaSection } from "./UpdateProduct.media";
 import { styles, stylesVars } from "./UpdateProduct.styles";
-import { StitchedVariantInventorySection } from "./UpdateProduct.variants";
+import { TailoringStyleDraftCard } from "./UpdateProduct.tailoring";
+import {
+  MadeOrderVariantDraftCard,
+  ReadyVariantDraftCard,
+  StitchedVariantInventorySection,
+} from "./UpdateProduct.variants";
 import {
   cleanNewMadeOrderVariantDraft,
   cleanNewReadyVariantDraft,
@@ -1524,157 +1529,42 @@ export default function UpdateProductScreen() {
                       {/* <Text style={styles.hint}>Add new styles below.</Text> */}
 
                       {newReadyVariants.map((variant, index) => (
-                        <View
+                        <ReadyVariantDraftCard
                           key={`new-ready-${index}`}
-                          style={styles.appendCard}
-                        >
-                          <View style={styles.draftHeaderRow}>
-                            <Text style={styles.variantCardTitle}>
-                              New Style {stitchedVariants.length + index + 1}
-                            </Text>
-
-                            <Pressable
-                              onPress={() =>
-                                setNewReadyVariants((prev) =>
-                                  prev.filter((_, i) => i !== index),
-                                )
-                              }
-                              style={({ pressed }) => [
-                                styles.discardDraftBtn,
-                                pressed ? styles.pressed : null,
-                              ]}
-                            >
-                              <Text style={styles.discardDraftText}>
-                                Discard
-                              </Text>
-                            </Pressable>
-                          </View>
-
-                          <Text style={styles.label}>Style name *</Text>
-                          <TextInput
-                            value={variant.name}
-                            onChangeText={(t) =>
-                              updateNewReadyVariant(index, (prev) => ({
-                                ...prev,
-                                name: t,
-                              }))
-                            }
-                            placeholder="e.g., Black embroidered"
-                            placeholderTextColor={stylesVars.placeholder}
-                            style={styles.input}
-                            maxLength={80}
-                          />
-
-                          <Text style={styles.label}>
-                            Additional Price (PKR)
-                          </Text>
-                          <FastNumberInput
-                            value={String(variant.additional_price_pkr ?? 0)}
-                            onChangeText={(t) =>
-                              updateNewReadyVariant(index, (prev) => ({
-                                ...prev,
-                                additional_price_pkr: Number(
-                                  sanitizeNumber(t) || "0",
-                                ),
-                              }))
-                            }
-                            placeholder="0"
-                            placeholderTextColor={stylesVars.placeholder}
-                            style={styles.input}
-                            keyboardType="number-pad"
-                            maxLength={8}
-                          />
-
-                          <View style={styles.sectionHeaderRow}>
-                            <Text style={styles.label}>Style Images</Text>
-                            <Pressable
-                              onPress={() => pickNewReadyVariantImages(index)}
-                              style={({ pressed }) => [
-                                styles.smallBtn,
-                                pressed ? styles.pressed : null,
-                              ]}
-                            >
-                              <Text style={styles.smallBtnText}>
-                                + Add Images
-                              </Text>
-                            </Pressable>
-                          </View>
-
-                          {(variant.images ?? []).length ? (
-                            <ScrollView
-                              horizontal
-                              showsHorizontalScrollIndicator={false}
-                            >
-                              <View style={styles.thumbRow}>
-                                {(variant.images ?? []).map((img, imgIndex) => (
-                                  <View
-                                    key={`${img.uri}-${imgIndex}`}
-                                    style={styles.thumbWrap}
-                                  >
-                                    <Image
-                                      source={{ uri: img.uri }}
-                                      style={styles.thumb}
-                                    />
-                                    <Pressable
-                                      onPress={() =>
-                                        updateNewReadyVariant(
-                                          index,
-                                          (prev) => ({
-                                            ...prev,
-                                            images: (prev.images ?? []).filter(
-                                              (_, i) => i !== imgIndex,
-                                            ),
-                                          }),
-                                        )
-                                      }
-                                      style={({ pressed }) => [
-                                        styles.thumbX,
-                                        pressed ? styles.pressed : null,
-                                      ]}
-                                    >
-                                      <Text style={styles.thumbXText}>✕</Text>
-                                    </Pressable>
-                                  </View>
-                                ))}
-                              </View>
-                            </ScrollView>
-                          ) : (
-                            <Text style={styles.emptyInline}>
-                              No style images selected yet.
-                            </Text>
-                          )}
-
-                          <Text style={styles.label}>Stock by size *</Text>
-                          <View style={styles.variantSizeGrid}>
-                            {variant.sizes.map((row) => (
-                              <View
-                                key={`new-ready-${index}-${row.size}`}
-                                style={styles.variantSizeCell}
-                              >
-                                <Text style={styles.variantSizeLabel}>
-                                  {row.size}
-                                </Text>
-                                <FastNumberInput
-                                  value={String(row.qty ?? 0)}
-                                  onChangeText={(t) =>
-                                    updateNewReadyVariantSizeQty(
-                                      index,
-                                      row.size,
-                                      t,
-                                    )
-                                  }
-                                  placeholder="0"
-                                  placeholderTextColor={stylesVars.placeholder}
-                                  style={styles.variantQtyInput}
-                                  keyboardType="number-pad"
-                                  maxLength={6}
-                                />
-                              </View>
-                            ))}
-                          </View>
-                        </View>
+                          variant={variant}
+                          index={index}
+                          existingVariantCount={stitchedVariants.length}
+                          onDiscard={(variantIndex) =>
+                            setNewReadyVariants((prev) =>
+                              prev.filter((_, i) => i !== variantIndex),
+                            )
+                          }
+                          onNameChange={(variantIndex, value) =>
+                            updateNewReadyVariant(variantIndex, (prev) => ({
+                              ...prev,
+                              name: value,
+                            }))
+                          }
+                          onAdditionalPriceChangeText={(variantIndex, value) =>
+                            updateNewReadyVariant(variantIndex, (prev) => ({
+                              ...prev,
+                              additional_price_pkr: Number(
+                                sanitizeNumber(value) || "0",
+                              ),
+                            }))
+                          }
+                          onPickImages={pickNewReadyVariantImages}
+                          onRemoveImage={(variantIndex, imageIndex) =>
+                            updateNewReadyVariant(variantIndex, (prev) => ({
+                              ...prev,
+                              images: (prev.images ?? []).filter(
+                                (_, i) => i !== imageIndex,
+                              ),
+                            }))
+                          }
+                          onSizeQtyChange={updateNewReadyVariantSizeQty}
+                        />
                       ))}
-
                       <Pressable
                         onPress={() =>
                           setNewReadyVariants((prev) => [
@@ -1717,151 +1607,51 @@ export default function UpdateProductScreen() {
                       ) : null}
 
                       {newMadeOrderVariants.map((variant, index) => (
-                        <View
+                        <MadeOrderVariantDraftCard
                           key={`new-made-${index}`}
-                          style={styles.appendCard}
-                        >
-                          <View style={styles.draftHeaderRow}>
-                            <Text style={styles.variantCardTitle}>
-                              New Style{" "}
-                              {readMadeOrderVariants(selected?.price).length +
-                                index +
-                                1}
-                            </Text>
-
-                            <Pressable
-                              onPress={() =>
-                                setNewMadeOrderVariants((prev) =>
-                                  prev.filter((_, i) => i !== index),
-                                )
-                              }
-                              style={({ pressed }) => [
-                                styles.discardDraftBtn,
-                                pressed ? styles.pressed : null,
-                              ]}
-                            >
-                              <Text style={styles.discardDraftText}>
-                                Discard
-                              </Text>
-                            </Pressable>
-                          </View>
-
-                          <Text style={styles.label}>Style name *</Text>
-                          <TextInput
-                            value={variant.name}
-                            onChangeText={(t) =>
-                              updateNewMadeOrderVariant(index, (prev) => ({
-                                ...prev,
-                                name: t,
-                              }))
-                            }
-                            placeholder="e.g., Maroon bridal style"
-                            placeholderTextColor={stylesVars.placeholder}
-                            style={styles.input}
-                            maxLength={80}
-                          />
-
-                          <Text style={styles.label}>
-                            Additional Price (PKR)
-                          </Text>
-                          <FastNumberInput
-                            value={String(variant.additional_price_pkr ?? 0)}
-                            onChangeText={(t) =>
-                              updateNewMadeOrderVariant(index, (prev) => ({
-                                ...prev,
-                                additional_price_pkr: Number(
-                                  sanitizeNumber(t) || "0",
-                                ),
-                              }))
-                            }
-                            placeholder="0"
-                            placeholderTextColor={stylesVars.placeholder}
-                            style={styles.input}
-                            keyboardType="number-pad"
-                            maxLength={8}
-                          />
-
-                          <Text style={styles.label}>Estimated Days</Text>
-                          <FastNumberInput
-                            value={String(variant.estimated_days ?? 0)}
-                            onChangeText={(t) =>
-                              updateNewMadeOrderVariant(index, (prev) => ({
-                                ...prev,
-                                estimated_days: Number(
-                                  sanitizeNumber(t) || "0",
-                                ),
-                              }))
-                            }
-                            placeholder="e.g., 7"
-                            placeholderTextColor={stylesVars.placeholder}
-                            style={styles.input}
-                            keyboardType="number-pad"
-                            maxLength={3}
-                          />
-
-                          <View style={styles.sectionHeaderRow}>
-                            <Text style={styles.label}>Style Images</Text>
-                            <Pressable
-                              onPress={() =>
-                                pickNewMadeOrderVariantImages(index)
-                              }
-                              style={({ pressed }) => [
-                                styles.smallBtn,
-                                pressed ? styles.pressed : null,
-                              ]}
-                            >
-                              <Text style={styles.smallBtnText}>
-                                + Add Images
-                              </Text>
-                            </Pressable>
-                          </View>
-
-                          {(variant.images ?? []).length ? (
-                            <ScrollView
-                              horizontal
-                              showsHorizontalScrollIndicator={false}
-                            >
-                              <View style={styles.thumbRow}>
-                                {(variant.images ?? []).map((img, imgIndex) => (
-                                  <View
-                                    key={`${img.uri}-${imgIndex}`}
-                                    style={styles.thumbWrap}
-                                  >
-                                    <Image
-                                      source={{ uri: img.uri }}
-                                      style={styles.thumb}
-                                    />
-                                    <Pressable
-                                      onPress={() =>
-                                        updateNewMadeOrderVariant(
-                                          index,
-                                          (prev) => ({
-                                            ...prev,
-                                            images: (prev.images ?? []).filter(
-                                              (_, i) => i !== imgIndex,
-                                            ),
-                                          }),
-                                        )
-                                      }
-                                      style={({ pressed }) => [
-                                        styles.thumbX,
-                                        pressed ? styles.pressed : null,
-                                      ]}
-                                    >
-                                      <Text style={styles.thumbXText}>✕</Text>
-                                    </Pressable>
-                                  </View>
-                                ))}
-                              </View>
-                            </ScrollView>
-                          ) : (
-                            <Text style={styles.emptyInline}>
-                              No style images selected yet.
-                            </Text>
-                          )}
-                        </View>
+                          variant={variant}
+                          index={index}
+                          existingVariantCount={
+                            readMadeOrderVariants(selected?.price).length
+                          }
+                          onDiscard={(variantIndex) =>
+                            setNewMadeOrderVariants((prev) =>
+                              prev.filter((_, i) => i !== variantIndex),
+                            )
+                          }
+                          onNameChange={(variantIndex, value) =>
+                            updateNewMadeOrderVariant(variantIndex, (prev) => ({
+                              ...prev,
+                              name: value,
+                            }))
+                          }
+                          onAdditionalPriceChangeText={(variantIndex, value) =>
+                            updateNewMadeOrderVariant(variantIndex, (prev) => ({
+                              ...prev,
+                              additional_price_pkr: Number(
+                                sanitizeNumber(value) || "0",
+                              ),
+                            }))
+                          }
+                          onEstimatedDaysChangeText={(variantIndex, value) =>
+                            updateNewMadeOrderVariant(variantIndex, (prev) => ({
+                              ...prev,
+                              estimated_days: Number(
+                                sanitizeNumber(value) || "0",
+                              ),
+                            }))
+                          }
+                          onPickImages={pickNewMadeOrderVariantImages}
+                          onRemoveImage={(variantIndex, imageIndex) =>
+                            updateNewMadeOrderVariant(variantIndex, (prev) => ({
+                              ...prev,
+                              images: (prev.images ?? []).filter(
+                                (_, i) => i !== imageIndex,
+                              ),
+                            }))
+                          }
+                        />
                       ))}
-
                       <Pressable
                         onPress={() =>
                           setNewMadeOrderVariants((prev) => [
@@ -2141,218 +1931,46 @@ export default function UpdateProductScreen() {
                         ) : null}
 
                         {newTailoringStyles.map((style, index) => (
-                          <View
+                          <TailoringStyleDraftCard
                             key={`new-tailoring-style-${index}`}
-                            style={styles.appendCard}
-                          >
-                            <View style={styles.draftHeaderRow}>
-                              <Text style={styles.variantCardTitle}>
-                                New Style Card{" "}
-                                {existingTailoringStylePresets.length +
-                                  index +
-                                  1}
-                              </Text>
-
-                              {existingTailoringStylePresets.length > 0 ||
-                              newTailoringStyles.length > 1 ? (
-                                <Pressable
-                                  onPress={() =>
-                                    setNewTailoringStyles((prev) =>
-                                      prev.filter((_, i) => i !== index),
-                                    )
-                                  }
-                                  style={({ pressed }) => [
-                                    styles.discardDraftBtn,
-                                    pressed ? styles.pressed : null,
-                                  ]}
-                                >
-                                  <Text style={styles.discardDraftText}>
-                                    Discard
-                                  </Text>
-                                </Pressable>
-                              ) : null}
-                            </View>
-
-                            <Text style={styles.label}>Style title *</Text>
-                            <TextInput
-                              value={style.title}
-                              onChangeText={(t) =>
-                                updateNewTailoringStyle(index, (prev) => ({
-                                  ...prev,
-                                  title: t,
-                                }))
-                              }
-                              placeholder="e.g., Boat neck blouse with cigarette trouser"
-                              placeholderTextColor={stylesVars.placeholder}
-                              style={styles.input}
-                              maxLength={100}
-                            />
-
-                            <Text style={styles.label}>Note</Text>
-                            <TextInput
-                              value={style.note}
-                              onChangeText={(t) =>
-                                updateNewTailoringStyle(index, (prev) => ({
-                                  ...prev,
-                                  note: t,
-                                }))
-                              }
-                              placeholder="Short buyer-facing note"
-                              placeholderTextColor={stylesVars.placeholder}
-                              style={[styles.input, styles.textAreaSmall]}
-                              multiline
-                              textAlignVertical="top"
-                              maxLength={300}
-                            />
-
-                            <Text style={styles.label}>Extra Cost (PKR)</Text>
-                            <FastNumberInput
-                              value={String(style.extra_cost_pkr ?? 0)}
-                              onChangeText={(t) =>
-                                updateNewTailoringStyle(index, (prev) => ({
-                                  ...prev,
-                                  extra_cost_pkr: Number(
-                                    sanitizeNumber(t) || "0",
-                                  ),
-                                }))
-                              }
-                              placeholder="0"
-                              placeholderTextColor={stylesVars.placeholder}
-                              style={styles.input}
-                              keyboardType="number-pad"
-                              maxLength={8}
-                            />
-
-                            <Text style={styles.label}>
-                              Neck Options for this Style
-                            </Text>
-                            {blouseNeckOptions.length ? (
-                              <View style={styles.optionWrap}>
-                                {blouseNeckOptions.map((item) => (
-                                  <SelectionPill
-                                    key={`new-style-${index}-neck-${item}`}
-                                    label={item}
-                                    selected={normalizeStringList(
-                                      style.neck_styles,
-                                    ).includes(item)}
-                                    onPress={() =>
-                                      toggleNewTailoringStyleOption(
-                                        index,
-                                        "neck_styles",
-                                        item,
-                                      )
-                                    }
-                                  />
-                                ))}
-                              </View>
-                            ) : (
-                              <Text style={styles.emptyInline}>
-                                No neck styles found in vendor profile.
-                              </Text>
-                            )}
-
-                            <Text style={styles.label}>
-                              Sleeve Options for this Style
-                            </Text>
-                            {sleeveOptions.length ? (
-                              <View style={styles.optionWrap}>
-                                {sleeveOptions.map((item) => (
-                                  <SelectionPill
-                                    key={`new-style-${index}-sleeve-${item}`}
-                                    label={item}
-                                    selected={normalizeStringList(
-                                      style.sleeve_styles,
-                                    ).includes(item)}
-                                    onPress={() =>
-                                      toggleNewTailoringStyleOption(
-                                        index,
-                                        "sleeve_styles",
-                                        item,
-                                      )
-                                    }
-                                  />
-                                ))}
-                              </View>
-                            ) : (
-                              <Text style={styles.emptyInline}>
-                                No sleeve styles found in vendor profile.
-                              </Text>
-                            )}
-
-                            <Text style={styles.label}>
-                              Trouser Options for this Style
-                            </Text>
-                            {trouserOptions.length ? (
-                              <View style={styles.optionWrap}>
-                                {trouserOptions.map((item) => (
-                                  <SelectionPill
-                                    key={`new-style-${index}-trouser-${item}`}
-                                    label={item}
-                                    selected={normalizeStringList(
-                                      style.trouser_styles,
-                                    ).includes(item)}
-                                    onPress={() =>
-                                      toggleNewTailoringStyleOption(
-                                        index,
-                                        "trouser_styles",
-                                        item,
-                                      )
-                                    }
-                                  />
-                                ))}
-                              </View>
-                            ) : (
-                              <Text style={styles.emptyInline}>
-                                No trouser styles found in vendor profile.
-                              </Text>
-                            )}
-
-                            <View style={styles.sectionHeaderRow}>
-                              <Text style={styles.label}>
-                                Reference Images *
-                              </Text>
-                              <Pressable
-                                onPress={() =>
-                                  pickNewTailoringStyleImages(index)
-                                }
-                                style={({ pressed }) => [
-                                  styles.smallBtn,
-                                  pressed ? styles.pressed : null,
-                                ]}
-                              >
-                                <Text style={styles.smallBtnText}>
-                                  + Add Images
-                                </Text>
-                              </Pressable>
-                            </View>
-
-                            {style.images.length ? (
-                              <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                              >
-                                <View style={styles.thumbRow}>
-                                  {style.images.map((img, imgIndex) => (
-                                    <View
-                                      key={`${img.uri}-${imgIndex}`}
-                                      style={styles.thumbWrap}
-                                    >
-                                      <Image
-                                        source={{ uri: img.uri }}
-                                        style={styles.thumb}
-                                      />
-                                    </View>
-                                  ))}
-                                </View>
-                              </ScrollView>
-                            ) : (
-                              <Text style={styles.emptyInline}>
-                                No images selected yet.
-                              </Text>
-                            )}
-                          </View>
+                            style={style}
+                            index={index}
+                            existingStyleCount={
+                              existingTailoringStylePresets.length
+                            }
+                            newStyleCount={newTailoringStyles.length}
+                            blouseNeckOptions={blouseNeckOptions}
+                            sleeveOptions={sleeveOptions}
+                            trouserOptions={trouserOptions}
+                            onDiscard={(styleIndex) =>
+                              setNewTailoringStyles((prev) =>
+                                prev.filter((_, i) => i !== styleIndex),
+                              )
+                            }
+                            onTitleChange={(styleIndex, value) =>
+                              updateNewTailoringStyle(styleIndex, (prev) => ({
+                                ...prev,
+                                title: value,
+                              }))
+                            }
+                            onNoteChange={(styleIndex, value) =>
+                              updateNewTailoringStyle(styleIndex, (prev) => ({
+                                ...prev,
+                                note: value,
+                              }))
+                            }
+                            onExtraCostChangeText={(styleIndex, value) =>
+                              updateNewTailoringStyle(styleIndex, (prev) => ({
+                                ...prev,
+                                extra_cost_pkr: Number(
+                                  sanitizeNumber(value) || "0",
+                                ),
+                              }))
+                            }
+                            onToggleOption={toggleNewTailoringStyleOption}
+                            onPickImages={pickNewTailoringStyleImages}
+                          />
                         ))}
-
                         <Pressable
                           onPress={() =>
                             setNewTailoringStyles((prev) => [
