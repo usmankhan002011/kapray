@@ -20,7 +20,6 @@ import * as VideoThumbnails from "expo-video-thumbnails";
 import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 import {
   ProductPreviewSection,
-  SelectionPill,
   UpdateProductBottomBar,
   UpdateProductHeader,
 } from "./UpdateProduct.components";
@@ -32,7 +31,10 @@ import {
 } from "./UpdateProduct.basic";
 import { MediaSection } from "./UpdateProduct.media";
 import { styles, stylesVars } from "./UpdateProduct.styles";
-import { TailoringStyleDraftCard } from "./UpdateProduct.tailoring";
+import {
+  TailoringBaseOptionSelectors,
+  TailoringStyleDraftCard,
+} from "./UpdateProduct.tailoring";
 import {
   MadeOrderVariantDraftCard,
   ReadyVariantDraftCard,
@@ -1834,76 +1836,14 @@ export default function UpdateProductScreen() {
                       />
 
                       {existingTailoringStylePresets.length ? null : (
-                        <>
-                          <Text style={styles.label}>Neck Styles</Text>
-                          {blouseNeckOptions.length ? (
-                            <View style={styles.optionWrap}>
-                              {blouseNeckOptions.map((item) => (
-                                <SelectionPill
-                                  key={`neck-${item}`}
-                                  label={item}
-                                  selected={selectedTailoringStyles.blouse_neck.includes(
-                                    item,
-                                  )}
-                                  onPress={() =>
-                                    toggleStyle("blouse_neck", item)
-                                  }
-                                />
-                              ))}
-                            </View>
-                          ) : (
-                            <Text style={styles.emptyInline}>
-                              No neck styles found in vendor profile.
-                            </Text>
-                          )}
-
-                          <Text style={styles.label}>Sleeve Styles</Text>
-                          {sleeveOptions.length ? (
-                            <View style={styles.optionWrap}>
-                              {sleeveOptions.map((item) => (
-                                <SelectionPill
-                                  key={`sleeve-${item}`}
-                                  label={item}
-                                  selected={selectedTailoringStyles.sleeves.includes(
-                                    item,
-                                  )}
-                                  onPress={() => toggleStyle("sleeves", item)}
-                                />
-                              ))}
-                            </View>
-                          ) : (
-                            <Text style={styles.emptyInline}>
-                              No sleeve styles found in vendor profile.
-                            </Text>
-                          )}
-
-                          <Text style={styles.label}>Trouser Styles</Text>
-                          {trouserOptions.length ? (
-                            <View style={styles.optionWrap}>
-                              {trouserOptions.map((item) => (
-                                <SelectionPill
-                                  key={`trouser-${item}`}
-                                  label={item}
-                                  selected={selectedTailoringStyles.trouser.includes(
-                                    item,
-                                  )}
-                                  onPress={() => toggleStyle("trouser", item)}
-                                />
-                              ))}
-                            </View>
-                          ) : (
-                            <Text style={styles.emptyInline}>
-                              No trouser styles found in vendor profile.
-                            </Text>
-                          )}
-
-                          {!hasAnyVendorStyleOptions ? (
-                            <Text style={styles.hint}>
-                              Add tailoring styles in vendor profile
-                              first, then return here.
-                            </Text>
-                          ) : null}
-                        </>
+                        <TailoringBaseOptionSelectors
+                          blouseNeckOptions={blouseNeckOptions}
+                          sleeveOptions={sleeveOptions}
+                          trouserOptions={trouserOptions}
+                          selectedTailoringStyles={selectedTailoringStyles}
+                          hasAnyVendorStyleOptions={hasAnyVendorStyleOptions}
+                          onToggleStyle={toggleStyle}
+                        />
                       )}
 
                       <View style={styles.appendBox}>

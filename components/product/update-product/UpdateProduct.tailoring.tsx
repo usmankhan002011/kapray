@@ -6,13 +6,25 @@ import { SelectionPill } from "./UpdateProduct.components";
 import {
   normalizeStringList,
   type NewTailoringStyleDraft,
+  type ProductTailoringSelections,
 } from "./UpdateProduct.helpers";
 import { styles, stylesVars } from "./UpdateProduct.styles";
+
+type ProductTailoringSelectionGroup = keyof ProductTailoringSelections;
 
 type TailoringStyleOptionField =
   | "neck_styles"
   | "sleeve_styles"
   | "trouser_styles";
+
+type TailoringBaseOptionSelectorsProps = {
+  blouseNeckOptions: string[];
+  sleeveOptions: string[];
+  trouserOptions: string[];
+  selectedTailoringStyles: ProductTailoringSelections;
+  hasAnyVendorStyleOptions: boolean;
+  onToggleStyle: (group: ProductTailoringSelectionGroup, value: string) => void;
+};
 
 type TailoringStyleDraftCardProps = {
   style: NewTailoringStyleDraft;
@@ -33,6 +45,79 @@ type TailoringStyleDraftCardProps = {
   ) => void;
   onPickImages: (index: number) => void;
 };
+
+export function TailoringBaseOptionSelectors({
+  blouseNeckOptions,
+  sleeveOptions,
+  trouserOptions,
+  selectedTailoringStyles,
+  hasAnyVendorStyleOptions,
+  onToggleStyle,
+}: TailoringBaseOptionSelectorsProps) {
+  return (
+    <>
+      <Text style={styles.label}>Neck Styles</Text>
+      {blouseNeckOptions.length ? (
+        <View style={styles.optionWrap}>
+          {blouseNeckOptions.map((item) => (
+            <SelectionPill
+              key={`neck-${item}`}
+              label={item}
+              selected={selectedTailoringStyles.blouse_neck.includes(item)}
+              onPress={() => onToggleStyle("blouse_neck", item)}
+            />
+          ))}
+        </View>
+      ) : (
+        <Text style={styles.emptyInline}>
+          No neck styles found in vendor profile.
+        </Text>
+      )}
+
+      <Text style={styles.label}>Sleeve Styles</Text>
+      {sleeveOptions.length ? (
+        <View style={styles.optionWrap}>
+          {sleeveOptions.map((item) => (
+            <SelectionPill
+              key={`sleeve-${item}`}
+              label={item}
+              selected={selectedTailoringStyles.sleeves.includes(item)}
+              onPress={() => onToggleStyle("sleeves", item)}
+            />
+          ))}
+        </View>
+      ) : (
+        <Text style={styles.emptyInline}>
+          No sleeve styles found in vendor profile.
+        </Text>
+      )}
+
+      <Text style={styles.label}>Trouser Styles</Text>
+      {trouserOptions.length ? (
+        <View style={styles.optionWrap}>
+          {trouserOptions.map((item) => (
+            <SelectionPill
+              key={`trouser-${item}`}
+              label={item}
+              selected={selectedTailoringStyles.trouser.includes(item)}
+              onPress={() => onToggleStyle("trouser", item)}
+            />
+          ))}
+        </View>
+      ) : (
+        <Text style={styles.emptyInline}>
+          No trouser styles found in vendor profile.
+        </Text>
+      )}
+
+      {!hasAnyVendorStyleOptions ? (
+        <Text style={styles.hint}>
+          Add tailoring styles in vendor profile first, then return here.
+        </Text>
+      ) : null}
+    </>
+  );
+}
 
 export function TailoringStyleDraftCard({
   style,
