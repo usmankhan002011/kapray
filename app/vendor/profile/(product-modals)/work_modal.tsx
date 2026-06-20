@@ -1,8 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { FlatList, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  FlatList,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { getWorkTypes, WorkTypeItem } from "@/utils/supabase/workType";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
+import { apColors, apStyles } from "@/components/product/addProductStyles";
+import { getWorkTypes, WorkTypeItem } from "@/utils/supabase/workType";
 
 const WORK_LOCAL_IMAGES: Record<string, any> = {
   designer: require("@/assets/work-images/designer.jpg"),
@@ -12,7 +20,7 @@ const WORK_LOCAL_IMAGES: Record<string, any> = {
   mirror: require("@/assets/work-images/mirror.jpg"),
   sequin: require("@/assets/work-images/sequin.jpg"),
   stone: require("@/assets/work-images/stone.jpg"),
-  thread: require("@/assets/work-images/thread.jpg")
+  thread: require("@/assets/work-images/thread.jpg"),
 };
 
 const ALLOWED_PARENT_CODES = new Set([
@@ -23,7 +31,7 @@ const ALLOWED_PARENT_CODES = new Set([
   "gotta",
   "mirror",
   "machine",
-  "designer"
+  "designer",
 ]);
 
 const GRID_GAP = 8;
@@ -51,7 +59,7 @@ function getParentSelectionCount(draft: any, parentCode: string) {
 
 function getParentSubtitle(draft: any, parentCode: string) {
   const count = getParentSelectionCount(draft, parentCode);
-  if (count <= 0) return "None selected";
+  if (count <= 0) return "None";
   if (count === 1) return "1 selected";
   return `${count} selected`;
 }
@@ -67,7 +75,9 @@ export default function ProductWorkModal() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const selected = Array.isArray(draft?.spec?.workTypeIds) ? draft.spec.workTypeIds : [];
+  const selected = Array.isArray(draft?.spec?.workTypeIds)
+    ? draft.spec.workTypeIds
+    : [];
   const selectedSet = useMemo(() => new Set(selected), [selected]);
 
   useEffect(() => {
@@ -79,7 +89,7 @@ export default function ProductWorkModal() {
       .then((res) => {
         if (!alive) return;
         const cleaned = (res ?? []).filter((item) =>
-          ALLOWED_PARENT_CODES.has(safeStr(item.code).toLowerCase())
+          ALLOWED_PARENT_CODES.has(safeStr(item.code).toLowerCase()),
         );
         setItems(cleaned);
       })
@@ -112,14 +122,15 @@ export default function ProductWorkModal() {
 
     const encodedReturnTo = encodeURIComponent(mainModalPath);
     const encodedParentId = encodeURIComponent(String(item.id));
-    const encodedParentCode = encodeURIComponent(String(item.code ?? "").toLowerCase());
+    const encodedParentCode = encodeURIComponent(
+      String(item.code ?? "").toLowerCase(),
+    );
     const encodedParentName = encodeURIComponent(String(item.name ?? ""));
 
     router.push(
-      `/vendor/profile/(product-modals)/work-subtypes_modal?parentId=${encodedParentId}&parentCode=${encodedParentCode}&parentName=${encodedParentName}&returnTo=${encodedReturnTo}` as any
+      `/vendor/profile/(product-modals)/work-subtypes_modal?parentId=${encodedParentId}&parentCode=${encodedParentCode}&parentName=${encodedParentName}&returnTo=${encodedReturnTo}` as any,
     );
   }
-
 
   function onClear() {
     (draft.spec as any).workTypeNames = [];
@@ -128,45 +139,25 @@ export default function ProductWorkModal() {
     setWorkTypeIds([]);
   }
 
-  function onDone() {
-    close();
-  }
-
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Pressable
-          onPress={close}
-          style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
-        >
-          <Text style={styles.headerBtnText}>Close</Text>
-        </Pressable>
-
         <Text style={styles.headerTitle}>Work</Text>
 
         <Pressable
-          onPress={onDone}
-          style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
+          onPress={close}
+          style={({ pressed }) => [
+            apStyles.linkBtn,
+            styles.closeButton,
+            pressed ? apStyles.pressed : null,
+          ]}
         >
-          <Text style={styles.headerBtnText}>Done</Text>
+          <Text style={apStyles.linkText}>Close</Text>
         </Pressable>
       </View>
 
-      <View style={styles.subHeader}>
-        <Text style={styles.subText}>
-          Select a work type, then choose one or more sub work types.
-        </Text>
-
-        <Pressable
-          onPress={onClear}
-          style={({ pressed }) => [styles.clearBtn, pressed && styles.pressed]}
-        >
-          <Text style={styles.clearBtnText}>Clear</Text>
-        </Pressable>
-      </View>
-
-      {loading ? <Text style={styles.infoText}>Loading...</Text> : null}
-      {err ? <Text style={styles.infoText}>{err}</Text> : null}
+      {loading ? <Text style={styles.infoText}>Loading work...</Text> : null}
+      {err ? <Text style={styles.errorText}>{err}</Text> : null}
 
       <FlatList
         data={items}
@@ -184,60 +175,85 @@ export default function ProductWorkModal() {
           return (
             <Pressable
               key={String(item.id)}
-              style={[styles.card, isOn ? styles.cardSelected : null]}
+              style={({ pressed }) => [
+                styles.card,
+                isOn ? styles.cardSelected : null,
+                pressed ? apStyles.pressed : null,
+              ]}
               onPress={() => openSubTypes(item)}
             >
               <View style={styles.imageWrap}>
                 {localImg ? (
-                  <Image source={localImg} style={styles.image} resizeMode="cover" />
+                  <Image
+                    source={localImg}
+                    style={styles.image}
+                    resizeMode="cover"
+                  />
                 ) : (
                   <View style={styles.noImage}>
-                    <Text style={styles.noImageText}>No Image</Text>
+                    <Text style={styles.noImageText}>No image</Text>
                   </View>
                 )}
               </View>
 
               <Text style={styles.label} numberOfLines={1}>
-                {item.name} {isOn ? "✓" : ""}
+                {item.name}
               </Text>
 
-              <Text style={styles.subSelectionText} numberOfLines={1}>
+              <Text
+                style={[styles.subSelectionText, isOn ? styles.subTextOn : null]}
+                numberOfLines={1}
+              >
                 {subLabel}
               </Text>
+
+              {isOn ? (
+                <View style={styles.selectedBadge}>
+                  <Text style={styles.selectedText}>Selected</Text>
+                </View>
+              ) : null}
             </Pressable>
           );
         }}
       />
+
+      <View style={styles.footer}>
+        <View>
+          <Text style={styles.footerLabel}>Selected</Text>
+          <Text style={styles.footerValue}>{selected.length}</Text>
+        </View>
+
+        <View style={styles.footerActions}>
+          <Pressable
+            onPress={onClear}
+            style={({ pressed }) => [
+              styles.clearBtn,
+              pressed ? apStyles.pressed : null,
+            ]}
+          >
+            <Text style={styles.clearBtnText}>Clear</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={close}
+            style={({ pressed }) => [
+              styles.doneBtn,
+              pressed ? apStyles.pressed : null,
+            ]}
+          >
+            <Text style={styles.doneText}>Done</Text>
+          </Pressable>
+        </View>
+      </View>
     </View>
   );
 }
 
-const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
-  placeholder: "#94A3B8",
-  danger: "#B91C1C",
-  dangerSoft: "#FEE2E2",
-  dangerBorder: "#FCA5A5",
-  overlayDark: "rgba(0,0,0,0.58)",
-  overlaySoft: "rgba(255,255,255,0.14)",
-  white: "#FFFFFF",
-  black: "#000000"
-};
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: stylesVars.bg
+    backgroundColor: apColors.bg,
   },
-
   header: {
     paddingHorizontal: 14,
     paddingTop: 14,
@@ -245,148 +261,167 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12
+    gap: 12,
   },
-
   headerTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: stylesVars.text
+    color: apColors.text,
   },
-
-  headerBtn: {
-    minHeight: 40,
+  closeButton: {
+    minHeight: 38,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: stylesVars.blueSoft,
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
-    alignItems: "center",
-    justifyContent: "center"
   },
-
-  headerBtnText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: stylesVars.blue
-  },
-
-  subHeader: {
-    paddingHorizontal: 14,
-    paddingBottom: 6,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10
-  },
-
-  subText: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
-    color: stylesVars.mutedText,
-    fontWeight: "500"
-  },
-
-  clearBtn: {
-    minHeight: 40,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-
-  clearBtnText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: stylesVars.text
-  },
-
   infoText: {
     fontSize: 13,
     lineHeight: 18,
-    color: stylesVars.mutedText,
+    color: apColors.muted,
     fontWeight: "500",
-    marginBottom: 6,
-    paddingHorizontal: 14
+    paddingHorizontal: 14,
+    paddingBottom: 6,
   },
-
+  errorText: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: apColors.danger,
+    fontWeight: "600",
+    paddingHorizontal: 14,
+    paddingBottom: 6,
+  },
   listContent: {
     paddingHorizontal: H_PADDING,
-    paddingBottom: 12,
-    paddingTop: 2
+    paddingBottom: 106,
+    paddingTop: 2,
   },
-
   columnWrap: {
     gap: GRID_GAP,
-    marginBottom: GRID_GAP
+    marginBottom: GRID_GAP,
   },
-
   card: {
     flex: 1,
     borderWidth: 1,
-    borderColor: stylesVars.border,
-    borderRadius: 18,
+    borderColor: apColors.border,
+    borderRadius: 8,
     padding: 8,
-    backgroundColor: stylesVars.cardBg
+    backgroundColor: apColors.white,
+    position: "relative",
   },
-
   cardSelected: {
-    borderColor: stylesVars.blue,
-    borderWidth: 2,
-    backgroundColor: stylesVars.blueSoft
+    borderColor: apColors.blue,
+    backgroundColor: apColors.blueSoft,
   },
-
   imageWrap: {
     width: "100%",
     height: 96,
-    borderRadius: 12,
+    borderRadius: 7,
     overflow: "hidden",
     backgroundColor: "#F1F5F9",
-    marginBottom: 8
+    marginBottom: 8,
   },
-
   image: {
     width: "100%",
-    height: 96
+    height: 96,
   },
-
   noImage: {
     width: "100%",
     height: 96,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
-
   noImageText: {
-    color: stylesVars.mutedText,
+    color: apColors.muted,
     fontSize: 12,
-    fontWeight: "600"
+    fontWeight: "600",
   },
-
   label: {
     fontSize: 13,
     lineHeight: 18,
-    color: stylesVars.text,
+    color: apColors.text,
     textAlign: "center",
-    fontWeight: "700"
+    fontWeight: "700",
   },
-
   subSelectionText: {
     marginTop: 4,
     fontSize: 12,
     lineHeight: 16,
-    color: stylesVars.mutedText,
+    color: apColors.muted,
     textAlign: "center",
-    fontWeight: "500"
+    fontWeight: "600",
   },
-
-  pressed: {
-    opacity: 0.82
-  }
+  subTextOn: {
+    color: apColors.blue,
+  },
+  selectedBadge: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: apColors.blue,
+  },
+  selectedText: {
+    color: apColors.white,
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  footer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopWidth: 1,
+    borderTopColor: apColors.border,
+    backgroundColor: "rgba(248,250,252,0.98)",
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  footerLabel: {
+    color: apColors.muted,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  footerValue: {
+    color: apColors.text,
+    fontSize: 22,
+    fontWeight: "900",
+  },
+  footerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  clearBtn: {
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: apColors.border,
+    backgroundColor: apColors.white,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  clearBtnText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: apColors.text,
+  },
+  doneBtn: {
+    minHeight: 44,
+    paddingHorizontal: 22,
+    borderRadius: 8,
+    backgroundColor: apColors.blue,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  doneText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: apColors.white,
+  },
 });

@@ -14,7 +14,6 @@ import {
 
 const MODALS = [
   "fabric_modal",
-  "color_modal",
   "work_modal",
   "work-density_modal",
   "origin-city_modal",
@@ -81,28 +80,6 @@ export default function Q11Description() {
     return list.length ? `${list.length} selected` : "Any";
   }
 
-  function colorSummary() {
-    const names = (draft?.spec as any)?.colorShadeNames as any[] | undefined;
-    if (Array.isArray(names) && names.length) return formatPicked(names, "Any");
-
-    const list = (draft?.spec?.colorShadeIds ?? []) as any[];
-    if (!list.length) return "Any";
-
-    const map: Record<string, string> = {
-      red: "Red",
-      green: "Green",
-      yellow: "Yellow",
-      blue: "Blue",
-      golden: "Golden",
-      silver: "Silver",
-      white: "White",
-      black: "Black",
-    };
-
-    const mapped = list.map((id) => map[String(id)] ?? String(id));
-    return formatPicked(mapped, "Any");
-  }
-
   function workSummary() {
     const subNames = (draft?.spec as any)?.workSubTypeNames as
       | any[]
@@ -134,17 +111,27 @@ export default function Q11Description() {
 
   function wearStateSummary() {
     const names = (draft?.spec as any)?.wearStateNames as any[] | undefined;
-    if (Array.isArray(names) && names.length) return formatPicked(names, "Any");
+    if (Array.isArray(names) && names.length) return formatPicked(names, "None");
     const list = (draft?.spec?.wearStateIds ?? []) as any[];
-    return list.length ? `${list.length} selected` : "Any";
+    return list.length ? `${list.length} selected` : "None";
   }
 
   const fabricValue = fabricSummary();
-  const colorValue = colorSummary();
   const workValue = workSummary();
   const densityValue = densitySummary();
   const originValue = originSummary();
   const wearValue = wearStateSummary();
+  const detailItems: Array<{
+    label: string;
+    value: string;
+    modal: ModalName;
+  }> = [
+    { label: "Fabric", value: fabricValue, modal: "fabric_modal" },
+    { label: "Work", value: workValue, modal: "work_modal" },
+    { label: "Density", value: densityValue, modal: "work-density_modal" },
+    { label: "Origin", value: originValue, modal: "origin-city_modal" },
+    { label: "Includes", value: wearValue, modal: "wear-state_modal" },
+  ];
 
   const canContinue = useMemo(() => Boolean(vendorId), [vendorId]);
   const disabledHint = !vendorId ? "Vendor not loaded." : "";
@@ -177,58 +164,46 @@ export default function Q11Description() {
     >
       <AddProductCard>
         <AddProductField
-          label="Build Product Description"
+          label="Details"
           style={{ marginTop: 0 }}
         >
-        <View style={styles.btnRow}>
-          <Pressable
-            style={({ pressed }) => [styles.pickBtn, pressed ? apStyles.pressed : null]}
-            onPress={() => goPickModal("fabric_modal")}
-          >
-            <Text style={styles.pickTitle}>Fabric</Text>
-            <Text style={styles.pickValue}>{fabricValue}</Text>
-          </Pressable>
+          <View style={styles.list}>
+            {detailItems.map((item) => {
+              const selected = item.value !== "Any";
 
-          <Pressable
-            style={({ pressed }) => [styles.pickBtn, pressed ? apStyles.pressed : null]}
-            onPress={() => goPickModal("color_modal")}
-          >
-            <Text style={styles.pickTitle}>Color</Text>
-            <Text style={styles.pickValue}>{colorValue}</Text>
-          </Pressable>
+              return (
+                <Pressable
+                  key={item.modal}
+                  style={({ pressed }) => [
+                    styles.pickRow,
+                    selected ? styles.pickRowOn : null,
+                    pressed ? apStyles.pressed : null,
+                  ]}
+                  onPress={() => goPickModal(item.modal)}
+                >
+                  <View style={styles.pickTextBlock}>
+                    <Text
+                      numberOfLines={1}
+                      style={styles.pickTitle}
+                    >
+                      {item.label}
+                    </Text>
+                    <Text
+                      numberOfLines={2}
+                      style={[
+                        styles.pickValue,
+                        selected ? styles.pickValueOn : null,
+                      ]}
+                    >
+                      {item.value}
+                    </Text>
+                  </View>
 
-          <Pressable
-            style={({ pressed }) => [styles.pickBtn, pressed ? apStyles.pressed : null]}
-            onPress={() => goPickModal("work_modal")}
-          >
-            <Text style={styles.pickTitle}>Work</Text>
-            <Text style={styles.pickValue}>{workValue}</Text>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [styles.pickBtn, pressed ? apStyles.pressed : null]}
-            onPress={() => goPickModal("work-density_modal")}
-          >
-            <Text style={styles.pickTitle}>Density</Text>
-            <Text style={styles.pickValue}>{densityValue}</Text>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [styles.pickBtn, pressed ? apStyles.pressed : null]}
-            onPress={() => goPickModal("origin-city_modal")}
-          >
-            <Text style={styles.pickTitle}>Origin</Text>
-            <Text style={styles.pickValue}>{originValue}</Text>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [styles.pickBtn, pressed ? apStyles.pressed : null]}
-            onPress={() => goPickModal("wear-state_modal")}
-          >
-            <Text style={styles.pickTitle}>Wear State</Text>
-            <Text style={styles.pickValue}>{wearValue}</Text>
-          </Pressable>
-        </View>
+                  <Text style={styles.pickAction}>Edit</Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </AddProductField>
       </AddProductCard>
     </AddProductScreen>
@@ -236,31 +211,55 @@ export default function Q11Description() {
 }
 
 const styles = StyleSheet.create({
-  btnRow: {
+  list: {
     marginTop: 12,
     gap: 10,
   },
 
-  pickBtn: {
+  pickRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    backgroundColor: apColors.blueSoft,
+    backgroundColor: apColors.white,
     borderWidth: 1,
+    borderColor: apColors.border,
+  },
+
+  pickRowOn: {
+    backgroundColor: "#F8FAFF",
     borderColor: "#D7E3FF",
   },
 
+  pickTextBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+
   pickTitle: {
-    color: apColors.blue,
-    fontWeight: "700",
-    fontSize: 14,
+    color: apColors.text,
+    fontWeight: "800",
+    fontSize: 13,
   },
 
   pickValue: {
     marginTop: 4,
-    color: apColors.subText,
+    color: apColors.muted,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "500",
+  },
+
+  pickValueOn: {
+    color: apColors.subText,
+  },
+
+  pickAction: {
+    color: apColors.blue,
+    fontSize: 12,
+    fontWeight: "800",
   },
 });

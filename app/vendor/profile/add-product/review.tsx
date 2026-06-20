@@ -637,9 +637,9 @@ export default function AddProductReviewScreen() {
 
   function wearStateSummary() {
     const names = (draft.spec as any)?.wearStateNames as any[] | undefined;
-    if (Array.isArray(names) && names.length) return formatPicked(names, "Any");
+    if (Array.isArray(names) && names.length) return formatPicked(names, "None");
     const list = (draft.spec.wearStateIds ?? []) as any[];
-    return list.length ? `${list.length} selected` : "Any";
+    return list.length ? `${list.length} selected` : "None";
   }
 
   function serviceSummary() {
@@ -1244,7 +1244,7 @@ export default function AddProductReviewScreen() {
             pressed ? styles.pressed : null,
           ]}
         >
-          <Text style={styles.rowTitle}>Wear State</Text>
+          <Text style={styles.rowTitle}>Includes</Text>
           <Text style={styles.rowValue}>{wearValue}</Text>
         </Pressable>
 

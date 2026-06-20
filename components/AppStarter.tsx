@@ -3,7 +3,7 @@ import {
   DefaultTheme,
   ThemeProvider,
 } from "@react-navigation/native";
-import { Href, router, useSegments } from "expo-router";
+import { Href, router, useRootNavigationState, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -31,9 +31,11 @@ function getRoleFromSession(session: Session | null): AppRole {
 export default function AppStarter() {
   const dispatch = useAppDispatch();
   const colorScheme = useColorScheme();
+  const rootNavigationState = useRootNavigationState();
   const segments = useSegments();
 
   const [bootstrapped, setBootstrapped] = useState(false);
+  const [pendingRole, setPendingRole] = useState<AppRole | undefined>();
 
   const didBootstrapRef = useRef(false);
   const lastHandledSessionRef = useRef<string | null>(null);
@@ -161,12 +163,12 @@ export default function AppStarter() {
       lastHandledSessionRef.current = session?.access_token ?? null;
 
       const { role } = await hydrateFromSession(session);
-      navigateForRole(role);
+      setPendingRole(role);
     } catch (error) {
       console.warn("App bootstrap error:", error);
       dispatch(clearBuyer());
       dispatch(clearSelectedVendor());
-      navigateForRole(null);
+      setPendingRole(null);
     } finally {
       setBootstrapped(true);
       await SplashScreen.hideAsync();
@@ -191,14 +193,22 @@ export default function AppStarter() {
         lastHandledSessionRef.current = sessionKey;
 
         const { role } = await hydrateFromSession(session);
-        navigateForRole(role);
+        setPendingRole(role);
       },
     );
 
     return () => {
       listener.subscription.unsubscribe();
     };
-  }, [bootstrapped, hydrateFromSession, navigateForRole]);
+  }, [bootstrapped, hydrateFromSession]);
+
+  useEffect(() => {
+    if (!bootstrapped || !rootNavigationState?.key) return;
+    if (pendingRole === undefined) return;
+
+    navigateForRole(pendingRole);
+    setPendingRole(undefined);
+  }, [bootstrapped, navigateForRole, pendingRole, rootNavigationState?.key]);
 
   if (!bootstrapped) return null;
 

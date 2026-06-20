@@ -171,7 +171,7 @@ export default function Q12MoreDescription() {
       }, 100);
 
       return () => clearTimeout(timer);
-  }, [appendManyRaw, appendOne, returnTo]),
+    }, [appendManyRaw, appendOne, returnTo]),
   );
 
   function onChangeText(next: string) {
@@ -261,59 +261,63 @@ export default function Q12MoreDescription() {
       }
     >
       <AddProductCard>
-        <AddProductField label="Build Description" style={{ marginTop: 0 }}>
+        <View style={styles.builderTop}>
+          <Text style={apStyles.label}>Builder</Text>
           <AddProductSecondaryButton
-            label="Open Builder"
+            label="Open"
             onPress={openBuilder}
+            style={styles.openBuilderButton}
           />
+        </View>
 
-          {selectedSentences.length ? (
-            <View style={styles.builderBlock}>
-              <View style={styles.builderHeader}>
-                <Text style={apStyles.metaHint}>
-                  Tap ✕ to remove a builder sentence.
-                </Text>
+        {selectedSentences.length ? (
+          <View style={styles.builderBlock}>
+            <View style={styles.builderHeader}>
+              <Text style={styles.builderCount}>
+                {selectedSentences.length} added
+              </Text>
+
+              <Pressable
+                onPress={clearAllBuilder}
+                style={({ pressed }) => [
+                  styles.clearButton,
+                  pressed ? apStyles.pressed : null,
+                ]}
+              >
+                <Text style={styles.clearText}>Clear</Text>
+              </Pressable>
+            </View>
+
+            {selectedSentences.map((sentence) => (
+              <View
+                key={sentence}
+                style={styles.sentenceRow}
+              >
+                <Text style={styles.sentenceText}>{sentence}</Text>
 
                 <Pressable
-                  onPress={clearAllBuilder}
+                  onPress={() => removeSentence(sentence)}
                   style={({ pressed }) => [
-                    apStyles.linkBtn,
+                    styles.removeSentenceBtn,
                     pressed ? apStyles.pressed : null,
                   ]}
+                  hitSlop={8}
                 >
-                  <Text style={apStyles.linkText}>Clear builder list</Text>
+                  <Text style={styles.removeSentenceText}>X</Text>
                 </Pressable>
               </View>
+            ))}
+          </View>
+        ) : null}
 
-              {selectedSentences.map((sentence) => (
-                <View
-                  key={sentence}
-                  style={styles.sentenceRow}
-                >
-                  <Pressable
-                    onPress={() => removeSentence(sentence)}
-                    style={styles.removeSentenceBtn}
-                  >
-                    <Text style={styles.removeSentenceText}>✕</Text>
-                  </Pressable>
-
-                  <Text style={styles.sentenceText}>{sentence}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
-
-          <Text style={[apStyles.label, { marginTop: 20 }]}>
-            More description (optional)
-          </Text>
-
+        <AddProductField label="Details" style={styles.detailsField}>
           <AddProductInput
             ref={inputRef}
             value={text}
             onChangeText={onChangeText}
-            placeholder="Write additional details…"
+            placeholder="Optional details"
             placeholderTextColor={apColors.muted}
-            style={[apStyles.input, { minHeight: 120, marginTop: 10 }]}
+            style={[apStyles.input, styles.descriptionInput]}
             multiline
             textAlignVertical="top"
             maxLength={800}
@@ -325,31 +329,83 @@ export default function Q12MoreDescription() {
 }
 
 const styles = StyleSheet.create({
+  builderTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  openBuilderButton: {
+    minHeight: 40,
+    marginTop: 0,
+    paddingHorizontal: 16,
+  },
   builderBlock: {
-    marginTop: 6,
+    marginTop: 14,
   },
   builderHeader: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
-    marginTop: 10,
+    marginBottom: 2,
+  },
+  builderCount: {
+    color: apColors.muted,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  clearButton: {
+    minHeight: 34,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    justifyContent: "center",
+    backgroundColor: apColors.blueSoft,
+  },
+  clearText: {
+    color: apColors.blue,
+    fontSize: 12,
+    fontWeight: "800",
   },
   sentenceRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     marginTop: 12,
-    padding: 10,
-    backgroundColor: "#FFF5F5",
+    paddingVertical: 10,
+    paddingLeft: 12,
+    paddingRight: 10,
     borderRadius: 8,
-  },
-  removeSentenceBtn: {
-    marginRight: 8,
-  },
-  removeSentenceText: {
-    color: apColors.danger,
-    fontWeight: "bold",
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: "#F8FAFF",
   },
   sentenceText: {
     flex: 1,
+    color: apColors.text,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+  },
+  removeSentenceBtn: {
+    marginLeft: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: apColors.white,
+  },
+  removeSentenceText: {
+    color: apColors.danger,
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  detailsField: {
+    marginTop: 18,
+  },
+  descriptionInput: {
+    minHeight: 132,
+    marginTop: 10,
+    lineHeight: 20,
   },
 });
