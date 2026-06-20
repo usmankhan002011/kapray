@@ -1,10 +1,17 @@
-import React, { memo, useEffect, useMemo, useState } from "react";
+import React, {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Alert,
-  FlatList,
   Image,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -16,8 +23,8 @@ import { apColors, apStyles } from "@/components/product/addProductStyles";
 import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 import { READY_STANDARD_SIZES } from "@/data/kapray/productPieces";
 import {
-  AddProductFooter,
   AddProductInput,
+  AddProductPrimaryButton,
   AddProductScreen,
 } from "@/components/product/add-product/AddProductWizard";
 
@@ -37,6 +44,15 @@ type ReadyVariant = {
   sizes: ReadyVariantSize[];
 };
 
+const READY_SIZE_ROWS = READY_STANDARD_SIZES.reduce<string[][]>(
+  (rows, size, index) => {
+    if (index % 2 === 0) rows.push([size]);
+    else rows[rows.length - 1].push(size);
+    return rows;
+  },
+  [],
+);
+
 function safeStr(v: any) {
   return String(v ?? "").trim();
 }
@@ -49,6 +65,10 @@ function safeInt(v: any) {
 
 function sanitizeIntText(v: string) {
   return String(v ?? "").replace(/[^\d]/g, "");
+}
+
+function sizeKey(size: string) {
+  return safeStr(size).toLowerCase();
 }
 
 function normalizeStringArray(v: unknown): string[] {
@@ -219,27 +239,6 @@ function validateReadyVariants(variants: ReadyVariant[]) {
   return "";
 }
 
-function toggleSizeInVariant(
-  variant: ReadyVariant,
-  size: string,
-  onChange: (next: ReadyVariant) => void,
-) {
-  const exists = (variant.sizes || []).some((s) => s.size === size);
-
-  if (exists) {
-    onChange({
-      ...variant,
-      sizes: (variant.sizes || []).filter((s) => s.size !== size),
-    });
-    return;
-  }
-
-  onChange({
-    ...variant,
-    sizes: [...(variant.sizes || []), { size, qty: 0 }],
-  });
-}
-
 const ReadyVariantCard = memo(function ReadyVariantCard({
   variant,
   idx,
@@ -282,11 +281,20 @@ const ReadyVariantCard = memo(function ReadyVariantCard({
 
   function updateQty(size: string, qtyText: string) {
     const qty = safeInt(sanitizeIntText(qtyText));
+    const key = sizeKey(size);
     updateVariant(variant.id, (prev) => ({
       ...prev,
-      sizes: (prev.sizes || []).map((row: ReadyVariantSize) =>
-        row.size === size ? { ...row, qty } : row,
-      ),
+      sizes:
+        qty > 0
+          ? [
+              ...(prev.sizes || []).filter(
+                (row: ReadyVariantSize) => sizeKey(row.size) !== key,
+              ),
+              { size, qty },
+            ]
+          : (prev.sizes || []).filter(
+              (row: ReadyVariantSize) => sizeKey(row.size) !== key,
+            ),
     }));
   }
 
@@ -296,62 +304,32 @@ const ReadyVariantCard = memo(function ReadyVariantCard({
   );
 
   return (
-    <View
-      style={{
-        marginTop: 14,
-        padding: 12,
-        borderRadius: 14,
-        backgroundColor: "#FFFFFF",
-        borderWidth: 1,
-        borderColor: "#D7E3FF",
-      }}
-    >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-        }}
-      >
-        <Text style={{ fontSize: 13, fontWeight: "700", color: apColors.text }}>
-          Style {idx + 1}
-        </Text>
+    <View style={styles.variantCard}>
+      <View style={styles.variantHeader}>
+        <Text style={styles.variantTitle}>Style {idx + 1}</Text>
 
         <Pressable
           onPress={() => removeVariant(variant.id)}
           style={({ pressed }) => [
-            {
-              minHeight: 30,
-              paddingVertical: 6,
-              paddingHorizontal: 10,
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: "#F2C5C5",
-              backgroundColor: "#FFF4F4",
-            },
+            styles.removeButton,
             pressed ? apStyles.pressed : null,
           ]}
         >
-          <Text style={{ fontSize: 11, fontWeight: "700", color: "#B42318" }}>
-            Remove
-          </Text>
+          <Text style={styles.removeText}>Remove</Text>
         </Pressable>
       </View>
 
-      <Text style={[apStyles.label, { marginTop: 12 }]}>
-        Color / design name *
-      </Text>
+      <Text style={[apStyles.label, styles.fieldLabel]}>Color/design *</Text>
       <AddProductInput
         value={variant.name}
         onChangeText={updateName}
-        placeholder="e.g., Black, Ivory Gold, Design A"
+        placeholder="Black / Ivory Gold"
         placeholderTextColor={apColors.muted}
         style={apStyles.input}
         maxLength={80}
       />
 
-      <Text style={apStyles.label}>Additional price, if any (PKR)</Text>
+      <Text style={apStyles.label}>Extra price (PKR)</Text>
       <FastNumberInput
         value={String(
           Math.max(0, Number(variant.additional_price_pkr ?? 0) || 0),
@@ -364,172 +342,129 @@ const ReadyVariantCard = memo(function ReadyVariantCard({
         maxLength={12}
       />
 
-      <Text style={apStyles.metaHint}>
-        Final price: Rs {finalPrice.toLocaleString()} · Total stock: {totalQty}
-      </Text>
+      <View style={styles.imagePanel}>
+        <View style={styles.imageHeader}>
+          <Text style={apStyles.label}>Images *</Text>
+          <Pressable
+            onPress={() => pickVariantImages(variant.id)}
+            style={({ pressed }) => [
+              styles.imageButton,
+              pressed ? apStyles.pressed : null,
+            ]}
+          >
+            <Text style={styles.imageButtonText}>
+              Add {images.length ? `(${images.length})` : ""}
+            </Text>
+          </Pressable>
+        </View>
 
-      <Text style={apStyles.label}>Style images *</Text>
+        {images.length ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.imageRow}
+          >
+            {images.map((uri, imgIdx) => {
+              if (!uri) return null;
+              const isPrimary = imgIdx === 0;
 
-      <Pressable
-        onPress={() => pickVariantImages(variant.id)}
-        style={({ pressed }) => [
-          apStyles.primaryBtn,
-          { marginTop: 8 },
-          pressed ? apStyles.pressed : null,
-        ]}
-      >
-        <Text style={apStyles.primaryText}>
-          Pick Style Images {images.length ? `(${images.length})` : ""}
-        </Text>
-      </Pressable>
+              return (
+                <View
+                  key={`${variant.id}-${uri}-${imgIdx}`}
+                  style={styles.thumbWrap}
+                >
+                  <Image source={{ uri }} style={styles.thumbImage} />
 
-      {images.length ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingTop: 10, gap: 10 }}
-        >
-          {images.map((uri, imgIdx) => {
-            if (!uri) return null;
-            const isPrimary = imgIdx === 0;
-
-            return (
-              <View
-                key={`${variant.id}-${uri}-${imgIdx}`}
-                style={{
-                  width: 76,
-                  height: 76,
-                  borderRadius: 12,
-                  overflow: "hidden",
-                  borderWidth: 1,
-                  borderColor: apColors.borderSoft,
-                  backgroundColor: "#f3f4f6",
-                }}
-              >
-                <Image source={{ uri }} style={{ width: 76, height: 76 }} />
-
-                {isPrimary ? (
-                  <View
-                    style={{
-                      position: "absolute",
-                      left: 6,
-                      bottom: 6,
-                      paddingHorizontal: 8,
-                      paddingVertical: 4,
-                      borderRadius: 10,
-                      backgroundColor: "rgba(11,47,107,0.88)",
-                    }}
-                  >
-                    <Text
-                      style={{ color: "#fff", fontWeight: "900", fontSize: 10 }}
+                  {isPrimary ? (
+                    <View style={styles.bannerBadge}>
+                      <Text style={styles.bannerText}>Banner</Text>
+                    </View>
+                  ) : (
+                    <Pressable
+                      onPress={() =>
+                        makeVariantPrimaryImage(variant.id, imgIdx)
+                      }
+                      style={({ pressed }) => [
+                        styles.bannerButton,
+                        pressed ? apStyles.pressed : null,
+                      ]}
+                      hitSlop={10}
                     >
-                      Banner
-                    </Text>
-                  </View>
-                ) : (
+                      <Text style={styles.bannerText}>Banner</Text>
+                    </Pressable>
+                  )}
+
                   <Pressable
-                    onPress={() => makeVariantPrimaryImage(variant.id, imgIdx)}
+                    onPress={() => removeVariantImage(variant.id, uri)}
                     style={({ pressed }) => [
-                      {
-                        position: "absolute",
-                        left: 6,
-                        bottom: 6,
-                        paddingHorizontal: 8,
-                        paddingVertical: 4,
-                        borderRadius: 10,
-                        backgroundColor: "rgba(0,0,0,0.55)",
-                      },
+                      styles.removeImageButton,
                       pressed ? apStyles.pressed : null,
                     ]}
                     hitSlop={10}
                   >
-                    <Text
-                      style={{ color: "#fff", fontWeight: "900", fontSize: 10 }}
-                    >
-                      Make Banner
-                    </Text>
+                    <Text style={styles.removeImageText}>X</Text>
                   </Pressable>
-                )}
-
-                <Pressable
-                  onPress={() => removeVariantImage(variant.id, uri)}
-                  style={({ pressed }) => [
-                    {
-                      position: "absolute",
-                      top: 6,
-                      right: 6,
-                      width: 22,
-                      height: 22,
-                      borderRadius: 999,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: "rgba(0,0,0,0.55)",
-                    },
-                    pressed ? apStyles.pressed : null,
-                  ]}
-                  hitSlop={10}
-                >
-                  <Text
-                    style={{ color: "#fff", fontWeight: "900", fontSize: 12 }}
-                  >
-                    X
-                  </Text>
-                </Pressable>
-              </View>
-            );
-          })}
-        </ScrollView>
-      ) : (
-        <Text style={[apStyles.metaHint, { marginTop: 8 }]}>
-          No style images selected yet.
-        </Text>
-      )}
-
-      <Text style={apStyles.label}>Available sizes and quantity *</Text>
-
-      {READY_STANDARD_SIZES.map((size) => {
-        const selected = (variant.sizes || []).find((s) => s.size === size);
-
-        return (
-          <View
-            key={`${variant.id}-${size}`}
-            style={{ gap: 8, marginBottom: 8 }}
-          >
-            <Pressable
-              onPress={() =>
-                updateVariant(variant.id, (prev) => {
-                  let next = prev;
-                  toggleSizeInVariant(prev, size, (changed) => {
-                    next = changed;
-                  });
-                  return next;
-                })
-              }
-              style={({ pressed }) => [
-                apStyles.secondaryBtn,
-                selected ? { borderColor: apColors.blue } : null,
-                pressed ? apStyles.pressed : null,
-              ]}
-            >
-              <Text style={apStyles.secondaryText}>
-                {selected ? "Selected - " : ""}
-                {size}
-              </Text>
-            </Pressable>
-
-            {selected ? (
-              <FastNumberInput
-                value={String(selected.qty || "")}
-                onChangeText={(t) => updateQty(size, t)}
-                placeholder={`Qty for ${size}`}
-                placeholderTextColor={apColors.muted}
-                style={apStyles.input}
-                keyboardType="number-pad"
-              />
-            ) : null}
+                </View>
+              );
+            })}
+          </ScrollView>
+        ) : (
+          <View style={styles.emptyImageBox}>
+            <Text style={styles.emptyImageText}>No images</Text>
           </View>
-        );
-      })}
+        )}
+      </View>
+
+      <Text style={[apStyles.label, styles.fieldLabel]}>Sizes *</Text>
+
+      <View style={styles.inventoryTable}>
+        {READY_SIZE_ROWS.map((row) => (
+          <View key={`${variant.id}-${row.join("-")}`} style={styles.inventoryRow}>
+            {row.map((size) => {
+              const selected = (variant.sizes || []).find(
+                (s) => sizeKey(s.size) === sizeKey(size),
+              );
+
+              return (
+                <View key={`${variant.id}-${size}`} style={styles.inventoryPair}>
+                  <View
+                    style={[
+                      styles.inventorySize,
+                      selected ? styles.inventorySizeOn : null,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.inventorySizeText,
+                        selected ? styles.inventorySizeTextOn : null,
+                      ]}
+                    >
+                      {size}
+                    </Text>
+                  </View>
+
+                  <FastNumberInput
+                    value={String(selected?.qty || "")}
+                    onChangeText={(t) => updateQty(size, t)}
+                    placeholder="Qty"
+                    placeholderTextColor={apColors.muted}
+                    style={[apStyles.input, styles.inventoryInput]}
+                    keyboardType="number-pad"
+                    maxLength={5}
+                    selectTextOnFocus
+                    showSoftInputOnFocus
+                  />
+                </View>
+              );
+            })}
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.metaRow}>
+        <Text style={styles.metaPill}>Rs {finalPrice.toLocaleString()}</Text>
+        <Text style={styles.metaPill}>Stock {totalQty}</Text>
+      </View>
     </View>
   );
 });
@@ -541,6 +476,9 @@ export default function Q06B3ReadyVariants() {
 
   const ctx = useProductDraft() as any;
   const { draft } = ctx;
+  const ctxRef = useRef(ctx);
+  const draftRef = useRef(draft);
+  const variantsRef = useRef<ReadyVariant[]>([]);
 
   const basePrice = Number(draft?.price?.cost_pkr_total || 0);
 
@@ -551,53 +489,72 @@ export default function Q06B3ReadyVariants() {
 
   const totalQty = useMemo(() => sumReadyVariantQty(variants), [variants]);
 
-  function patchPrice(patch: any) {
-    if (typeof ctx.setPrice === "function") {
-      ctx.setPrice((prev: any) => ({ ...(prev ?? {}), ...patch }));
-      return;
-    }
+  useEffect(() => {
+    ctxRef.current = ctx;
+    draftRef.current = draft;
+  }, [ctx, draft]);
 
-    if (typeof ctx.setDraft === "function") {
-      ctx.setDraft((prev: any) => ({
-        ...prev,
-        price: { ...(prev?.price ?? {}), ...patch },
+  useEffect(() => {
+    variantsRef.current = variants;
+  }, [variants]);
+
+  const syncVariantsToDraft = useCallback((nextVariants: ReadyVariant[]) => {
+    const cleaned = cleanReadyVariants(nextVariants);
+    const inventoryQty = sumReadyVariantQty(cleaned);
+    const currentCtx = ctxRef.current;
+    const currentDraft = draftRef.current;
+
+    if (typeof currentCtx.setDraft === "function") {
+      currentCtx.setDraft((prev: any) => ({
+        ...(prev ?? {}),
+        inventory_qty: inventoryQty,
+        price: {
+          ...(prev?.price ?? {}),
+          mode: "stitched_total",
+          variants: cleaned,
+        },
       }));
-      return;
+      return cleaned;
     }
 
-    draft.price = { ...(draft?.price ?? {}), ...patch };
-  }
-
-  function patchDraft(patch: any) {
-    if (typeof ctx.setDraft === "function") {
-      ctx.setDraft((prev: any) => ({ ...(prev ?? {}), ...patch }));
-      return;
+    if (typeof currentCtx.setPrice === "function") {
+      currentCtx.setPrice((prev: any) => ({
+        ...(prev ?? {}),
+        mode: "stitched_total",
+        variants: cleaned,
+      }));
     }
 
-    Object.assign(draft, patch);
-  }
+    currentDraft.price = {
+      ...(currentDraft?.price ?? {}),
+      mode: "stitched_total",
+      variants: cleaned,
+    };
+    currentDraft.inventory_qty = inventoryQty;
+    return cleaned;
+  }, []);
 
-  function updateVariant(
+  const updateVariant = useCallback((
     variantId: string,
     updater: (prev: ReadyVariant) => ReadyVariant,
-  ) {
+  ) => {
     setVariants((prev) =>
       prev.map((v) => (v.id === variantId ? updater(v) : v)),
     );
-  }
+  }, []);
 
-  function removeVariant(variantId: string) {
+  const removeVariant = useCallback((variantId: string) => {
     setVariants((prev) => {
       const next = prev.filter((v) => v.id !== variantId);
       return cleanReadyVariants(next.length ? next : [createEmptyVariant(1)]);
     });
-  }
+  }, []);
 
-  function addVariant() {
+  const addVariant = useCallback(() => {
     setVariants((prev) => [...prev, createEmptyVariant(prev.length + 1)]);
-  }
+  }, []);
 
-  async function pickVariantImages(variantId: string) {
+  const pickVariantImages = useCallback(async (variantId: string) => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!perm.granted) {
@@ -630,18 +587,18 @@ export default function Q06B3ReadyVariants() {
         image_paths: next,
       };
     });
-  }
+  }, [updateVariant]);
 
-  function removeVariantImage(variantId: string, path: string) {
+  const removeVariantImage = useCallback((variantId: string, path: string) => {
     updateVariant(variantId, (prev) => ({
       ...prev,
       image_paths: normalizeStringArray(prev.image_paths).filter(
         (x) => x !== path,
       ),
     }));
-  }
+  }, [updateVariant]);
 
-  function makeVariantPrimaryImage(variantId: string, index: number) {
+  const makeVariantPrimaryImage = useCallback((variantId: string, index: number) => {
     updateVariant(variantId, (prev) => {
       const imagePaths = [...normalizeStringArray(prev.image_paths)];
       if (index <= 0 || index >= imagePaths.length) return prev;
@@ -649,21 +606,21 @@ export default function Q06B3ReadyVariants() {
       imagePaths.unshift(selected);
       return { ...prev, image_paths: imagePaths };
     });
-  }
+  }, [updateVariant]);
 
   useEffect(() => {
-    const cleaned = cleanReadyVariants(variants);
-    patchPrice({
-      mode: "stitched_total",
-      variants: cleaned,
-    });
-    patchDraft({ inventory_qty: sumReadyVariantQty(cleaned) });
-  }, [variants]);
+    const timer = setTimeout(() => {
+      syncVariantsToDraft(variants);
+    }, 500);
 
-  const disabledHint = useMemo(() => {
-    return validateReadyVariants(cleanReadyVariants(variants)) || "";
-  }, [variants]);
-  const canContinue = !disabledHint;
+    return () => clearTimeout(timer);
+  }, [syncVariantsToDraft, variants]);
+
+  useEffect(() => {
+    return () => {
+      syncVariantsToDraft(variantsRef.current);
+    };
+  }, [syncVariantsToDraft]);
 
   function closeScreen() {
     if (returnTo) {
@@ -682,12 +639,7 @@ export default function Q06B3ReadyVariants() {
       return;
     }
 
-    patchPrice({
-      mode: "stitched_total",
-      variants: cleaned,
-    });
-
-    patchDraft({ inventory_qty: sumReadyVariantQty(cleaned) });
+    syncVariantsToDraft(cleaned);
 
     if (returnTo) {
       router.replace(returnTo as any);
@@ -701,118 +653,359 @@ export default function Q06B3ReadyVariants() {
     <AddProductScreen
       title="Ready Styles"
       onBack={closeScreen}
-      footer={
-        <AddProductFooter
-          onPrimaryPress={onContinue}
-          primaryDisabled={!canContinue}
-          disabledHint={disabledHint}
-        />
-      }
+      contentStyle={styles.screenContent}
     >
-
-        <View style={apStyles.card}>
-          <View
-            style={{
-              marginTop: 4,
-              marginBottom: 12,
-              padding: 12,
-              borderRadius: 14,
-              backgroundColor: apColors.blueSoft,
-              borderWidth: 1,
-              borderColor: "#D7E3FF",
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 13,
-                fontWeight: "700",
-                color: apColors.text,
-                marginBottom: 4,
-              }}
-            >
-              Ready-to-wear style cards
+      <View style={styles.contentBlock}>
+        <View style={styles.summaryPanel}>
+          <Text style={styles.summaryTitle}>Multiple styles</Text>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryPill}>
+              From Rs {basePrice.toLocaleString()}
             </Text>
-            <Text style={apStyles.metaHint}>
-              Add one card for each color/design. Each card may have its own
-              images, extra price, and size-wise stock.
-            </Text>
-            <Text style={[apStyles.metaHint, { marginTop: 8 }]}>
-              Main product price will show: From Rs {basePrice.toLocaleString()}
-            </Text>
-            <Text style={[apStyles.metaHint, { marginTop: 4 }]}>
-              Total stock from styles: {totalQty}
-            </Text>
-
-            {!variants.length ? (
-              <>
-                <View style={{ marginTop: 14 }}>
-                  <Pressable
-                    onPress={addVariant}
-                    style={({ pressed }) => [
-                      apStyles.primaryBtn,
-                      pressed ? apStyles.pressed : null,
-                    ]}
-                  >
-                    <Text style={apStyles.primaryText}>Add Style</Text>
-                  </Pressable>
-                </View>
-
-                <Text style={[apStyles.metaHint, { marginTop: 12 }]}>
-                  No style cards added yet.
-                </Text>
-              </>
-            ) : (
-              <>
-                <FlatList
-                  data={variants}
-                  keyExtractor={(item: ReadyVariant) => item.id}
-                  scrollEnabled={false}
-                  removeClippedSubviews
-                  initialNumToRender={4}
-                  windowSize={5}
-                  renderItem={({
-                    item,
-                    index,
-                  }: {
-                    item: ReadyVariant;
-                    index: number;
-                  }) => (
-                    <ReadyVariantCard
-                      variant={item}
-                      idx={index}
-                      basePrice={basePrice}
-                      updateVariant={updateVariant}
-                      removeVariant={removeVariant}
-                      pickVariantImages={pickVariantImages}
-                      makeVariantPrimaryImage={makeVariantPrimaryImage}
-                      removeVariantImage={removeVariantImage}
-                    />
-                  )}
-                />
-
-                <View style={{ marginTop: 14 }}>
-                  <Text style={[apStyles.metaHint, { marginBottom: 6 }]}>
-                    {variants.length}{" "}
-                    {variants.length === 1 ? "style" : "styles"} added
-                  </Text>
-
-                  <Pressable
-                    onPress={addVariant}
-                    style={({ pressed }) => [
-                      apStyles.secondaryBtn,
-                      pressed ? apStyles.pressed : null,
-                    ]}
-                  >
-                    <Text style={apStyles.secondaryText}>
-                      Add More Styles
-                    </Text>
-                  </Pressable>
-                </View>
-              </>
-            )}
           </View>
-
         </View>
+
+        {!variants.length ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>No styles</Text>
+            <Pressable
+              onPress={addVariant}
+              style={({ pressed }) => [
+                apStyles.primaryBtn,
+                styles.compactButton,
+                pressed ? apStyles.pressed : null,
+              ]}
+            >
+              <Text style={apStyles.primaryText}>Add style</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <>
+            {variants.map((item, index) => (
+              <ReadyVariantCard
+                key={item.id}
+                variant={item}
+                idx={index}
+                basePrice={basePrice}
+                updateVariant={updateVariant}
+                removeVariant={removeVariant}
+                pickVariantImages={pickVariantImages}
+                makeVariantPrimaryImage={makeVariantPrimaryImage}
+                removeVariantImage={removeVariantImage}
+              />
+            ))}
+
+            <Pressable
+              onPress={addVariant}
+              style={({ pressed }) => [
+                apStyles.secondaryBtn,
+                styles.addMoreButton,
+                pressed ? apStyles.pressed : null,
+              ]}
+            >
+              <Text style={apStyles.secondaryText}>Add more styles</Text>
+            </Pressable>
+          </>
+        )}
+
+        <View style={styles.actionPanel}>
+          <View style={styles.totalFooter}>
+            <Text style={styles.totalLabel}>Styles</Text>
+            <Text style={styles.totalValue}>{variants.length}</Text>
+          </View>
+          <View style={styles.totalFooter}>
+            <Text style={styles.totalLabel}>Total stock</Text>
+            <Text style={styles.totalValue}>{totalQty}</Text>
+          </View>
+          <AddProductPrimaryButton label="Continue" onPress={onContinue} />
+        </View>
+      </View>
     </AddProductScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  screenContent: {
+    paddingBottom: 150,
+  },
+  contentBlock: {
+    marginTop: 14,
+    marginBottom: 12,
+  },
+  summaryPanel: {
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: apColors.white,
+  },
+  summaryTitle: {
+    color: apColors.text,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  summaryRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 8,
+  },
+  summaryPill: {
+    minHeight: 30,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: apColors.white,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    color: apColors.blue,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  variantCard: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: apColors.white,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+  },
+  variantHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  variantTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: apColors.text,
+  },
+  removeButton: {
+    minHeight: 30,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#F2C5C5",
+    backgroundColor: "#FFF4F4",
+  },
+  removeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: apColors.danger,
+  },
+  fieldLabel: {
+    marginTop: 12,
+  },
+  metaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 10,
+  },
+  metaPill: {
+    minHeight: 28,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: apColors.white,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    color: apColors.blue,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  imagePanel: {
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: "#BFD3FF",
+    backgroundColor: "#F8FBFF",
+  },
+  imageHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  imageButton: {
+    minHeight: 34,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: apColors.blue,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  imageButtonText: {
+    color: apColors.white,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  imageRow: {
+    paddingTop: 10,
+    gap: 10,
+  },
+  thumbWrap: {
+    width: 78,
+    height: 78,
+    borderRadius: 8,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: apColors.borderSoft,
+    backgroundColor: "#F1F5F9",
+  },
+  thumbImage: {
+    width: "100%",
+    height: "100%",
+  },
+  bannerBadge: {
+    position: "absolute",
+    left: 6,
+    bottom: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(15,23,42,0.82)",
+  },
+  bannerButton: {
+    position: "absolute",
+    left: 6,
+    bottom: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(37,99,235,0.88)",
+  },
+  bannerText: {
+    color: apColors.white,
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  removeImageButton: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15,23,42,0.72)",
+  },
+  removeImageText: {
+    color: apColors.white,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  emptyImageBox: {
+    marginTop: 10,
+    minHeight: 48,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: apColors.white,
+    borderWidth: 1,
+    borderColor: apColors.border,
+  },
+  emptyImageText: {
+    color: apColors.muted,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  inventoryTable: {
+    marginTop: 10,
+    gap: 8,
+  },
+  inventoryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  inventoryPair: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  inventorySize: {
+    width: 43,
+    minHeight: 38,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: apColors.border,
+    backgroundColor: apColors.white,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  inventorySizeOn: {
+    borderColor: apColors.blue,
+    backgroundColor: apColors.white,
+  },
+  inventorySizeText: {
+    color: apColors.text,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  inventorySizeTextOn: {
+    color: apColors.blue,
+  },
+  inventoryInput: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 38,
+    marginTop: 0,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    textAlign: "center",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  totalFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  totalLabel: {
+    color: apColors.muted,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  totalValue: {
+    color: apColors.text,
+    fontSize: 22,
+    fontWeight: "900",
+  },
+  actionPanel: {
+    marginTop: 14,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: apColors.white,
+  },
+  emptyState: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: apColors.border,
+    backgroundColor: apColors.white,
+  },
+  emptyStateText: {
+    color: apColors.muted,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  compactButton: {
+    marginTop: 10,
+  },
+  addMoreButton: {
+    marginTop: 12,
+  },
+});

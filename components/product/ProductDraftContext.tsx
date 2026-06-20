@@ -72,36 +72,40 @@ type ProductDraftContextValue = {
       | ((prev: ImagePicker.ImagePickerAsset[]) => ImagePicker.ImagePickerAsset[])
   ) => void;
 
-  setDraft: (next: ProductDraft) => void;
+  setDraft: (
+    next: ProductDraft | ((prev: ProductDraft) => ProductDraft)
+  ) => void;
 
   resetDraft: () => void;
 };
 
-const DEFAULT_DRAFT: ProductDraft = {
-  title: "",
-  inventory_qty: 0,
-  spec: {
-    dressTypeIds: [],
-    fabricTypeIds: [],
-    colorShadeIds: [],
-    workTypeIds: [],
-    workDensityIds: [],
-    originCityIds: [],
-    wearStateIds: []
-  },
-  price: {
-    currency: "PKR",
-    mode: "stitched_total",
-    cost_pkr_per_meter: null,
-    cost_pkr_total: null,
-    available_sizes: [],
-    simple_ready_inventory: []
-  },
-  media: {
-    images: [],
-    videos: []
-  }
-};
+function createDefaultDraft(): ProductDraft {
+  return {
+    title: "",
+    inventory_qty: 0,
+    spec: {
+      dressTypeIds: [],
+      fabricTypeIds: [],
+      colorShadeIds: [],
+      workTypeIds: [],
+      workDensityIds: [],
+      originCityIds: [],
+      wearStateIds: []
+    },
+    price: {
+      currency: "PKR",
+      mode: "stitched_total",
+      cost_pkr_per_meter: null,
+      cost_pkr_total: null,
+      available_sizes: [],
+      simple_ready_inventory: []
+    },
+    media: {
+      images: [],
+      videos: []
+    }
+  };
+}
 
 const ProductDraftContext = createContext<ProductDraftContextValue | null>(null);
 
@@ -110,14 +114,17 @@ export function ProductDraftProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const [draft, _setDraft] = useState<ProductDraft>(DEFAULT_DRAFT);
+  const [draft, _setDraft] = useState<ProductDraft>(() => createDefaultDraft());
 
-  const setDraft = useCallback((next: ProductDraft) => {
-    _setDraft(next);
-  }, []);
+  const setDraft = useCallback(
+    (next: ProductDraft | ((prev: ProductDraft) => ProductDraft)) => {
+      _setDraft(next);
+    },
+    []
+  );
 
   const resetDraft = useCallback(() => {
-    _setDraft(DEFAULT_DRAFT);
+    _setDraft(createDefaultDraft());
   }, []);
 
   const setTitle = useCallback((title: string) => {

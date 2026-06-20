@@ -14,6 +14,7 @@ import {
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { useAppSelector } from "@/store/hooks";
+import { useProductDraft } from "@/components/product/ProductDraftContext";
 
 const PRODUCTS_TABLE = "products";
 const BUCKET_VENDOR = "vendor_images";
@@ -488,6 +489,7 @@ function applyVendorProductSearch(query: any, searchText: string) {
 export default function VendorProductsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { resetDraft } = useProductDraft();
 
   const vendorIdRaw =
     useAppSelector((s: any) => s?.vendorSlice?.vendor?.id ?? null) ??
@@ -676,6 +678,11 @@ export default function VendorProductsScreen() {
     } as any);
   }
 
+  function startNewProduct() {
+    resetDraft();
+    router.push("/vendor/profile/add-product");
+  }
+
   function renderItem({ item }: { item: ProductRow }) {
     const code = safeText(item.product_code);
     const title = safeText(item.title);
@@ -762,7 +769,7 @@ export default function VendorProductsScreen() {
                 styles.primaryBtn,
                 pressed ? styles.pressed : null,
               ]}
-              onPress={() => router.push("/vendor/profile/add-product")}
+              onPress={startNewProduct}
             >
               <Text style={styles.primaryText}>Add New Product</Text>
             </Pressable>
