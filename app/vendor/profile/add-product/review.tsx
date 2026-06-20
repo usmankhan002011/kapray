@@ -25,7 +25,12 @@ import {
   AddProductFooter,
   AddProductScreen,
 } from "@/components/product/add-product/AddProductWizard";
-import { apFontFamily, apRadii } from "@/components/product/addProductStyles";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+  apSpacing,
+} from "@/components/product/addProductStyles";
 
 type ProductCategory =
   | "unstitched_plain"
@@ -186,7 +191,7 @@ function formatSizeLengthMap(sizeLengthMap: SizeLengthMap | undefined | null) {
     })
     .filter(Boolean);
 
-  return parts.length ? parts.join(" • ") : "Not set";
+  return parts.length ? parts.join(" / ") : "Not set";
 }
 
 function formatDimension(n: number) {
@@ -204,7 +209,7 @@ function formatPackageCm(pkg: any, spec?: any) {
 
   if (length <= 0 || width <= 0 || height <= 0) return "Not set";
 
-  const cmText = `${formatDimension(length)} × ${formatDimension(width)} × ${formatDimension(height)} cm`;
+  const cmText = `${formatDimension(length)} x ${formatDimension(width)} x ${formatDimension(height)} cm`;
   const packageIn = spec?.package_in ?? {};
   const inLength = safeNum(packageIn?.length);
   const inWidth = safeNum(packageIn?.width);
@@ -216,7 +221,7 @@ function formatPackageCm(pkg: any, spec?: any) {
     inWidth > 0 &&
     inHeight > 0
   ) {
-    return `${formatDimension(inLength)} × ${formatDimension(inWidth)} × ${formatDimension(inHeight)} in (${cmText})`;
+    return `${formatDimension(inLength)} x ${formatDimension(inWidth)} x ${formatDimension(inHeight)} in (${cmText})`;
   }
 
   return cmText;
@@ -273,7 +278,7 @@ function summarizePreset(
 
   parts.push(`Custom note: ${preset?.allow_custom_note ? "Yes" : "No"}`);
 
-  return parts.join(" • ");
+  return parts.join(" / ");
 }
 
 function normalizeReadyVariants(v: any): ReadyVariant[] {
@@ -374,7 +379,7 @@ function summarizeReadyVariant(variant: ReadyVariant, basePrice: number) {
     note,
   ]
     .filter(Boolean)
-    .join(" • ");
+    .join(" / ");
 }
 
 function normalizeMadeOrderVariantImagePaths(
@@ -445,7 +450,7 @@ function summarizeMadeOrderVariant(
     note,
   ]
     .filter(Boolean)
-    .join(" • ");
+    .join(" / ");
 }
 
 export default function AddProductReviewScreen() {
@@ -483,6 +488,8 @@ export default function AddProductReviewScreen() {
     isStitched &&
     madeOnOrder &&
     safeStr((draft.spec as any)?.variant_mode) === "made_order_variants";
+
+  const usesBaseCostWithStyleAdds = hasReadyVariants || hasMadeOrderVariants;
 
   const isSimpleReady = isStitched && !madeOnOrder && !hasReadyVariants;
 
@@ -587,28 +594,6 @@ export default function AddProductReviewScreen() {
     return list.length ? `${list.length} selected` : "Any";
   }
 
-  function colorSummary() {
-    const names = (draft.spec as any)?.colorShadeNames as any[] | undefined;
-    if (Array.isArray(names) && names.length) return formatPicked(names, "Any");
-
-    const list = (draft.spec.colorShadeIds ?? []) as any[];
-    if (!list.length) return "Any";
-
-    const map: Record<string, string> = {
-      red: "Red",
-      green: "Green",
-      yellow: "Yellow",
-      blue: "Blue",
-      golden: "Golden",
-      silver: "Silver",
-      white: "White",
-      black: "Black",
-    };
-
-    const mapped = list.map((id) => map[String(id)] ?? String(id));
-    return formatPicked(mapped, "Any");
-  }
-
   function workSummary() {
     const subNames = (draft.spec as any)?.workSubTypeNames as any[] | undefined;
     if (Array.isArray(subNames) && subNames.length)
@@ -667,7 +652,7 @@ export default function AddProductReviewScreen() {
       parts.push("No tailoring");
     }
 
-    return parts.join(" • ");
+    return parts.join(" / ");
   }
 
   function goEdit(path: string) {
@@ -694,7 +679,6 @@ export default function AddProductReviewScreen() {
 
   const dressTypeValue = dressTypeSummary();
   const fabricValue = fabricSummary();
-  const colorValue = colorSummary();
   const workValue = workSummary();
   const densityValue = densitySummary();
   const originValue = originSummary();
@@ -728,6 +712,8 @@ export default function AddProductReviewScreen() {
         </View>
       ) : null}
 
+      <Text style={styles.reviewHint}>Tap any item to update before save.</Text>
+
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Basics</Text>
 
@@ -755,18 +741,16 @@ export default function AddProductReviewScreen() {
           <Text style={styles.rowValue}>{categoryLabel(cat, madeOnOrder)}</Text>
         </Pressable>
 
-        {isStitched ? (
-          <Pressable
-            onPress={() => goEdit("/vendor/profile/add-product/q02-category")}
-            style={({ pressed }) => [
-              styles.rowBtn,
-              pressed ? styles.pressed : null,
-            ]}
-          >
-            <Text style={styles.rowTitle}>Made on order</Text>
-            <Text style={styles.rowValue}>{madeOnOrder ? "Yes" : "No"}</Text>
-          </Pressable>
-        ) : null}
+        <Pressable
+          onPress={() => goEdit("/vendor/profile/add-product")}
+          style={({ pressed }) => [
+            styles.rowBtn,
+            pressed ? styles.pressed : null,
+          ]}
+        >
+          <Text style={styles.rowTitle}>Dress type *</Text>
+          <Text style={styles.rowValue}>{dressTypeValue}</Text>
+        </Pressable>
 
         {!isStitched ||
         hasReadyVariants ||
@@ -826,10 +810,14 @@ export default function AddProductReviewScreen() {
                 pressed ? styles.pressed : null,
               ]}
             >
-              <Text style={styles.rowTitle}>Base Cost (PKR) *</Text>
+              <Text style={styles.rowTitle}>
+                {usesBaseCostWithStyleAdds
+                  ? "Base cost (PKR) *"
+                  : "Total cost (PKR) *"}
+              </Text>
               <Text style={styles.rowValue}>
                 {costTotal > 0
-                  ? `From Rs ${costTotal.toLocaleString()}`
+                  ? `${usesBaseCostWithStyleAdds ? "From " : ""}Rs ${costTotal.toLocaleString()}`
                   : "Not set"}
               </Text>
             </Pressable>
@@ -850,7 +838,7 @@ export default function AddProductReviewScreen() {
                   <Text style={styles.rowTitle}>Made-on-order styles</Text>
                   <Text style={styles.rowValue}>
                     {madeOrderVariants.length
-                      ? `${madeOrderVariants.length} style(s) • Inventory 0`
+                      ? `${madeOrderVariants.length} style(s) / Inventory 0`
                       : "Not set"}
                   </Text>
                 </Pressable>
@@ -911,7 +899,7 @@ export default function AddProductReviewScreen() {
                   <Text style={styles.rowTitle}>Ready-to-wear styles</Text>
                   <Text style={styles.rowValue}>
                     {readyVariants.length
-                      ? `${readyVariants.length} style(s) • Total stock ${readyVariantQty}`
+                      ? `${readyVariants.length} style(s) / Total stock ${readyVariantQty}`
                       : "Not set"}
                   </Text>
                 </Pressable>
@@ -990,7 +978,7 @@ export default function AddProductReviewScreen() {
                   {simpleReadyInventory.length
                     ? simpleReadyInventory
                         .map((row) => `${row.size}: ${row.qty}`)
-                        .join(" • ")
+                        .join(" / ")
                     : Array.isArray(sizes) && sizes.length
                       ? sizes.join(", ")
                     : "Not set"}
@@ -1172,17 +1160,6 @@ export default function AddProductReviewScreen() {
         <Text style={styles.sectionTitle}>Description</Text>
 
         <Pressable
-          onPress={() => goEdit("/vendor/profile/add-product")}
-          style={({ pressed }) => [
-            styles.rowBtn,
-            pressed ? styles.pressed : null,
-          ]}
-        >
-          <Text style={styles.rowTitle}>Dress Type *</Text>
-          <Text style={styles.rowValue}>{dressTypeValue}</Text>
-        </Pressable>
-
-        <Pressable
           onPress={() => goEdit("/vendor/profile/add-product/q11-description")}
           style={({ pressed }) => [
             styles.rowBtn,
@@ -1191,17 +1168,6 @@ export default function AddProductReviewScreen() {
         >
           <Text style={styles.rowTitle}>Fabric</Text>
           <Text style={styles.rowValue}>{fabricValue}</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => goEdit("/vendor/profile/add-product/q11-description")}
-          style={({ pressed }) => [
-            styles.rowBtn,
-            pressed ? styles.pressed : null,
-          ]}
-        >
-          <Text style={styles.rowTitle}>Color</Text>
-          <Text style={styles.rowValue}>{colorValue}</Text>
         </Pressable>
 
         <Pressable
@@ -1287,9 +1253,9 @@ const stylesVars = {
 
 const styles = StyleSheet.create({
   content: {
-    padding: 16,
+    padding: apSpacing.pagePad,
     paddingBottom: 24,
-    backgroundColor: stylesVars.bg,
+    backgroundColor: apColors.bg,
   },
 
   headerRow: {
@@ -1306,12 +1272,12 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    marginTop: 14,
+    marginTop: apSpacing.blockGap,
     borderRadius: apRadii.card,
     borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg,
-    padding: 16,
+    borderColor: apColors.border,
+    backgroundColor: apColors.card,
+    padding: 14,
   },
 
   errorCard: {
@@ -1323,8 +1289,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
     fontFamily: apFontFamily,
-    color: stylesVars.text,
-    marginBottom: 4,
+    color: apColors.text,
+    marginBottom: 8,
   },
 
   errorTitle: {
@@ -1344,40 +1310,46 @@ const styles = StyleSheet.create({
     color: stylesVars.danger,
   },
 
-  rowBtn: {
-    marginTop: 10,
-    borderRadius: apRadii.control,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    backgroundColor: stylesVars.blueSoft,
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
-  },
-
-  rowTitle: {
-    color: stylesVars.text,
-    fontSize: 13,
-    lineHeight: 18,
+  reviewHint: {
+    marginTop: apSpacing.blockGap,
+    color: apColors.muted,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: "700",
     fontFamily: apFontFamily,
   },
 
+  rowBtn: {
+    minHeight: 54,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+
+  rowTitle: {
+    color: apColors.text,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "800",
+    fontFamily: apFontFamily,
+  },
+
   rowValue: {
-    marginTop: 4,
-    color: stylesVars.subText,
+    marginTop: 3,
+    color: apColors.subText,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: "500",
+    fontWeight: "600",
     fontFamily: apFontFamily,
   },
 
   variantCard: {
     marginTop: 10,
-    borderRadius: apRadii.control,
+    borderRadius: apRadii.card,
     padding: 10,
-    backgroundColor: stylesVars.blueSoft,
+    backgroundColor: apColors.white,
     borderWidth: 1,
-    borderColor: "#D7E3FF",
+    borderColor: apColors.border,
     flexDirection: "row",
     gap: 12,
   },

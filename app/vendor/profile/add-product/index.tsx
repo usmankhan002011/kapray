@@ -35,7 +35,7 @@ function dressTypeSummary(draft: any) {
   }
 
   const ids = (draft?.spec?.dressTypeIds ?? []).map((x: any) => String(x));
-  if (!ids.length) return "Select Dress Type";
+  if (!ids.length) return "Select dress type";
   return `${ids.length} selected`;
 }
 
@@ -103,7 +103,7 @@ export default function AddProductDressType() {
 
   return (
     <AddProductScreen
-      title="Dress Type"
+      title="Dress type"
       onBack={onClose}
       footer={
         <AddProductFooter
@@ -114,7 +114,7 @@ export default function AddProductDressType() {
       }
     >
       <AddProductCard>
-        <AddProductField label="Dress Type" required style={{ marginTop: 0 }}>
+        <AddProductField label="Dress type" required style={{ marginTop: 0 }}>
           <AddProductSecondaryButton
             label={dressTypeValue}
             onPress={openDressTypeModal}
