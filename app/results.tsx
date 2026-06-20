@@ -14,6 +14,11 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import {
+  apColors,
+  apFontFamily,
+  apRadii,
+} from "@/components/product/addProductStyles";
+import {
   loadFavouriteProductIds,
   saveFavouriteProductIds,
 } from "@/utils/favourites";
@@ -79,7 +84,7 @@ let RESULTS_CACHE: ResultsCacheShape | null = null;
 
 function safeText(v: any) {
   const t = String(v ?? "").trim();
-  return t.length ? t : "—";
+  return t.length ? t : "-";
 }
 
 function normalizeIds(arr: any): string[] {
@@ -94,6 +99,34 @@ function anyOverlap(selected: string[], productIds: any): boolean {
   if (!p.length) return false;
   const set = new Set(p);
   return selected.some((s) => set.has(String(s)));
+}
+
+function selectedWorkSubTypeEntries(map: any) {
+  if (!map || typeof map !== "object") return [];
+
+  const out: { parentCode: string; codes: string[] }[] = [];
+  for (const [rawParentCode, rawCodes] of Object.entries(map)) {
+    const parentCode = String(rawParentCode ?? "").trim().toLowerCase();
+    const codes = normalizeIds(rawCodes);
+    if (parentCode && codes.length) out.push({ parentCode, codes });
+  }
+  return out;
+}
+
+function workSubTypesMatch(selectedMap: any, productMap: any) {
+  const selected = selectedWorkSubTypeEntries(selectedMap);
+  if (!selected.length) return true;
+  if (!productMap || typeof productMap !== "object") return false;
+
+  for (const row of selected) {
+    const productCodes = normalizeIds((productMap as any)?.[row.parentCode]);
+    if (!productCodes.length) continue;
+
+    const productSet = new Set(productCodes);
+    if (row.codes.some((code) => productSet.has(code))) return true;
+  }
+
+  return false;
 }
 
 function firstImagePath(media: any): string | null {
@@ -499,7 +532,7 @@ function idsToNames(ids: string[], map: Map<string, string>): string[] {
     .filter((x) => x.length > 0);
 }
 
-// ✅ if user selected IDs but names not loaded yet, show Loading… (not Any)
+// If user selected IDs but names are not loaded yet, show Loading.
 function namesOrLoading(
   label: string,
   selectedIds: any[],
@@ -507,7 +540,7 @@ function namesOrLoading(
 ): string {
   const hasSelection = Array.isArray(selectedIds) && selectedIds.length > 0;
   if (!hasSelection) return `${label}: Any`;
-  if (!names.length) return `${label}: Loading…`;
+  if (!names.length) return `${label}: Loading...`;
   return `${label}: ${names.join(", ")}`;
 }
 
@@ -526,7 +559,7 @@ function priceRangeSummary(
   if (minCostPkr === null && maxCostPkr !== null) {
     return `Price: Up to ${formatPKR(maxCostPkr)}`;
   }
-  return `Price: ${formatPKR(minCostPkr as number)} – ${formatPKR(maxCostPkr as number)}`;
+  return `Price: ${formatPKR(minCostPkr as number)} - ${formatPKR(maxCostPkr as number)}`;
 }
 
 function productCategoryLabel(productCategoryIds: string[]) {
@@ -554,7 +587,7 @@ export default function ResultsScreen() {
   const filters = useAppSelector((s: any) => s.filters);
   const [wizardVisible, setWizardVisible] = useState(false);
 
-  // ✅ Dress Type is now MULTI-select (empty => Any)
+  // Dress Type is multi-select. Empty means Any.
   const dressTypeIds: string[] = filters?.dressTypeIds ?? [];
 
   const hasDressTypeSelection = useMemo(() => {
@@ -564,16 +597,17 @@ export default function ResultsScreen() {
   const fabricTypeIds: string[] = filters?.fabricTypeIds ?? [];
   const colorShadeIds: string[] = filters?.colorShadeIds ?? [];
   const workTypeIds: string[] = filters?.workTypeIds ?? [];
+  const workSubTypeMap = filters?.workSubTypeMap ?? {};
   const workDensityIds: string[] = filters?.workDensityIds ?? [];
   const originCityIds: string[] = filters?.originCityIds ?? [];
   const wearStateIds: string[] = filters?.wearStateIds ?? [];
   const productCategoryIds: string[] = filters?.productCategoryIds ?? [];
 
-  // ✅ cost range (nulls => Any)
+  // Cost range. Nulls mean Any.
   const minCostPkr: number | null = filters?.minCostPkr ?? null;
   const maxCostPkr: number | null = filters?.maxCostPkr ?? null;
 
-  // ✅ vendors (multi-select, empty = Any)
+  // Vendors are multi-select. Empty means Any.
   const vendorIds: string[] = filters?.vendorIds ?? [];
 
   const hasWarmCache = Boolean(RESULTS_CACHE);
@@ -606,11 +640,11 @@ export default function ResultsScreen() {
     RESULTS_CACHE?.wearStates ?? [],
   );
 
-  // ✅ local favourites persisted on the buyer mobile. No DB yet.
+  // Local favourites persist on the buyer mobile. No DB yet.
   const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
-  // ✅ sort (default: cost ascending)
+  // Sort. Default is cost ascending.
   const [sortOpen, setSortOpen] = useState(false);
   const [sortMode, setSortMode] = useState<"cost_asc" | "cost_desc" | "date">(
     "cost_asc",
@@ -900,7 +934,7 @@ export default function ResultsScreen() {
 
       if (!productHasBuyerVisibleStock(p)) return false;
 
-      // ✅ vendor filter (multi-select). Empty => ANY
+      // Vendor filter. Empty means Any.
       if (vendorIds.length) {
         const vid =
           p?.vendor_id === null || p?.vendor_id === undefined
@@ -909,7 +943,7 @@ export default function ResultsScreen() {
         if (!vid || !vendorIds.includes(vid)) return false;
       }
 
-      // ✅ product category MULTI-select (empty => ANY)
+      // Product category filter. Empty means Any.
       if (productCategoryIds.length) {
         const category = getProductCategory(p);
 
@@ -938,17 +972,18 @@ export default function ResultsScreen() {
         if (!matchesProductCategory) return false;
       }
 
-      // ✅ dress type MULTI-select (empty => ANY)
+      // Dress type filter. Empty means Any.
       if (!anyOverlap(dressTypeIds, spec?.dressTypeIds)) return false;
 
       if (!anyOverlap(fabricTypeIds, spec?.fabricTypeIds)) return false;
       if (!anyOverlap(colorShadeIds, spec?.colorShadeIds)) return false;
       if (!anyOverlap(workTypeIds, spec?.workTypeIds)) return false;
+      if (!workSubTypesMatch(workSubTypeMap, spec?.workSubTypeMap)) return false;
       if (!anyOverlap(workDensityIds, spec?.workDensityIds)) return false;
       if (!anyOverlap(originCityIds, spec?.originCityIds)) return false;
       if (!anyOverlap(wearStateIds, spec?.wearStateIds)) return false;
 
-      // ✅ Redux-only cost range filtering
+      // Redux-only cost range filtering.
       const anyBound = minCostPkr !== null || maxCostPkr !== null;
       if (anyBound) {
         const pkr = getComparablePkr(price);
@@ -967,6 +1002,7 @@ export default function ResultsScreen() {
     fabricTypeIds,
     colorShadeIds,
     workTypeIds,
+    workSubTypeMap,
     workDensityIds,
     originCityIds,
     wearStateIds,
@@ -974,7 +1010,7 @@ export default function ResultsScreen() {
     maxCostPkr,
   ]);
 
-  // ✅ apply sort (cost asc/desc or date)
+  // Apply sort by cost or date.
   const sorted = useMemo(() => {
     const base = showFavoritesOnly
       ? (filtered ?? []).filter((p) => favoriteIds.has(Number(p.id)))
@@ -1023,7 +1059,7 @@ export default function ResultsScreen() {
     return arr;
   }, [filtered, sortMode, showFavoritesOnly, favoriteIds]);
 
-  // ✅ summary = NAMES ONLY (and "Loading…" if selection exists but names not loaded yet)
+  // Summary uses names only.
   const filtersSummary = useMemo(() => {
     const dressNames = idsToNames(dressTypeIds, dressMap);
     const fabricNames = idsToNames(fabricTypeIds, fabricMap);
@@ -1134,7 +1170,7 @@ export default function ResultsScreen() {
 
         <View style={[styles.center, styles.loadingScreen]}>
           <ActivityIndicator />
-          <Text style={styles.muted}>Loading products…</Text>
+          <Text style={styles.muted}>Loading products...</Text>
         </View>
 
         {renderWizardModal()}
@@ -1164,9 +1200,11 @@ export default function ResultsScreen() {
               pressed ? { opacity: 0.7 } : null,
             ]}
           >
-            <Text style={styles.iconText}>
-              {showFavoritesOnly ? "❤️" : "🤍"}
-            </Text>
+            <Ionicons
+              name={showFavoritesOnly ? "heart" : "heart-outline"}
+              size={19}
+              color={showFavoritesOnly ? stylesVars.danger : stylesVars.blue}
+            />
           </Pressable>
 
           <Pressable
@@ -1178,7 +1216,7 @@ export default function ResultsScreen() {
               pressed ? { opacity: 0.7 } : null,
             ]}
           >
-            <Text style={styles.iconText}>↕️</Text>
+            <Ionicons name="swap-vertical" size={19} color={stylesVars.blue} />
           </Pressable>
 
           <Pressable
@@ -1210,19 +1248,23 @@ export default function ResultsScreen() {
               pressed ? { opacity: 0.7 } : null,
             ]}
           >
-            <Text style={styles.iconText}>📦</Text>
+            <MaterialIcons
+              name="local-shipping"
+              size={19}
+              color={stylesVars.blue}
+            />
           </Pressable>
         </View>
       </View>
 
-      {/* ✅ Summary line (includes Redux-only price range) */}
+      {/* Summary line */}
       {/* <View style={styles.summaryBar}>
         <Text style={styles.summaryText} numberOfLines={2}>
           {filtersSummary}
         </Text>
       </View> */}
 
-      {/* ✅ Sort Modal (dark background) */}
+      {/* Sort Modal */}
       <Modal
         visible={sortOpen}
         transparent
@@ -1247,15 +1289,21 @@ export default function ResultsScreen() {
               }}
             >
               <View style={styles.modalLeft}>
-                <Text style={styles.modalEmoji}>💰</Text>
+                <View style={styles.modalIcon}>
+                  <MaterialIcons
+                    name="south"
+                    size={18}
+                    color={stylesVars.blue}
+                  />
+                </View>
                 <View>
                   <Text style={styles.modalItemTitle}>Price</Text>
                   <Text style={styles.modalItemSub}>Low to high</Text>
                 </View>
               </View>
-              <Text style={styles.modalRight}>
-                {sortMode === "cost_asc" ? "✅" : ""}
-              </Text>
+              {sortMode === "cost_asc" ? (
+                <MaterialIcons name="check" size={19} color={stylesVars.blue} />
+              ) : null}
             </Pressable>
 
             <View style={styles.divider} />
@@ -1271,15 +1319,21 @@ export default function ResultsScreen() {
               }}
             >
               <View style={styles.modalLeft}>
-                <Text style={styles.modalEmoji}>💸</Text>
+                <View style={styles.modalIcon}>
+                  <MaterialIcons
+                    name="north"
+                    size={18}
+                    color={stylesVars.blue}
+                  />
+                </View>
                 <View>
                   <Text style={styles.modalItemTitle}>Price</Text>
                   <Text style={styles.modalItemSub}>High to low</Text>
                 </View>
               </View>
-              <Text style={styles.modalRight}>
-                {sortMode === "cost_desc" ? "✅" : ""}
-              </Text>
+              {sortMode === "cost_desc" ? (
+                <MaterialIcons name="check" size={19} color={stylesVars.blue} />
+              ) : null}
             </Pressable>
 
             <View style={styles.divider} />
@@ -1295,15 +1349,21 @@ export default function ResultsScreen() {
               }}
             >
               <View style={styles.modalLeft}>
-                <Text style={styles.modalEmoji}>🗓️</Text>
+                <View style={styles.modalIcon}>
+                  <MaterialIcons
+                    name="event"
+                    size={18}
+                    color={stylesVars.blue}
+                  />
+                </View>
                 <View>
                   <Text style={styles.modalItemTitle}>Date</Text>
                   <Text style={styles.modalItemSub}>Newest first</Text>
                 </View>
               </View>
-              <Text style={styles.modalRight}>
-                {sortMode === "date" ? "✅" : ""}
-              </Text>
+              {sortMode === "date" ? (
+                <MaterialIcons name="check" size={19} color={stylesVars.blue} />
+              ) : null}
             </Pressable>
 
             <View style={styles.divider} />
@@ -1317,12 +1377,18 @@ export default function ResultsScreen() {
                 setSortOpen(false);
                 Alert.alert(
                   "Coming soon",
-                  "⭐ Sort by vendor rating is a feature coming soon.",
+                  "Sort by vendor rating is coming soon.",
                 );
               }}
             >
               <View style={styles.modalLeft}>
-                <Text style={styles.modalEmoji}>⭐</Text>
+                <View style={styles.modalIconMuted}>
+                  <MaterialIcons
+                    name="star-border"
+                    size={18}
+                    color={stylesVars.mutedText}
+                  />
+                </View>
                 <View>
                   <Text style={styles.modalItemTitle}>Vendor Rating</Text>
                   <Text style={styles.modalItemSub}>Feature coming soon</Text>
@@ -1346,12 +1412,12 @@ export default function ResultsScreen() {
           <Text style={styles.emptyTitle}>
             {showFavoritesOnly
               ? "No favourite products yet"
-              : "No matching products (loaded so far)"}
+              : "No matching products"}
           </Text>
           <Text style={styles.muted}>
             {showFavoritesOnly
-              ? "Tap 🤍 on any product to save it here."
-              : "Tip: press “Load more” to search more products, or broaden filters."}
+              ? "Tap the heart on any product to save it here."
+              : "Load more or broaden filters."}
           </Text>
         </View>
       ) : (
@@ -1404,11 +1470,11 @@ export default function ResultsScreen() {
                     onPress={() => void toggleFavorite(item.id)}
                     style={styles.actionBtn}
                   >
-                    <Text
-                      style={[styles.actionText, isFav ? styles.heartOn : null]}
-                    >
-                      {isFav ? "❤️" : "🤍"}
-                    </Text>
+                    <Ionicons
+                      name={isFav ? "heart" : "heart-outline"}
+                      size={18}
+                      color={isFav ? stylesVars.danger : stylesVars.text}
+                    />
                   </Pressable>
                 </View>
               </Pressable>
@@ -1419,7 +1485,7 @@ export default function ResultsScreen() {
               {loadingMore ? (
                 <View style={styles.loadingRow}>
                   <ActivityIndicator />
-                  <Text style={styles.muted}>Loading more…</Text>
+                  <Text style={styles.muted}>Loading more...</Text>
                 </View>
               ) : showFavoritesOnly ? (
                 <Text style={styles.endText}>
@@ -1443,22 +1509,22 @@ export default function ResultsScreen() {
 }
 
 const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
+  bg: apColors.bg,
+  cardBg: apColors.card,
+  border: apColors.border,
+  borderSoft: apColors.borderSoft,
+  blue: apColors.blue,
+  blueSoft: apColors.blueSoft,
+  text: apColors.text,
+  subText: apColors.subText,
+  mutedText: apColors.muted,
   placeholder: "#94A3B8",
-  danger: "#B91C1C",
-  dangerSoft: "#FEE2E2",
-  dangerBorder: "#FCA5A5",
+  danger: apColors.danger,
+  dangerSoft: "#FEF2F2",
+  dangerBorder: "#FECACA",
   overlayDark: "rgba(0,0,0,0.58)",
   overlaySoft: "rgba(255,255,255,0.14)",
-  white: "#FFFFFF",
+  white: apColors.white,
   black: "#000000",
 };
 
@@ -1488,7 +1554,7 @@ const styles = StyleSheet.create({
   searchButton: {
     width: 34,
     height: 34,
-    borderRadius: 999,
+    borderRadius: apRadii.control,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
     borderColor: "#D7E3FF",
@@ -1518,7 +1584,7 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     backgroundColor: stylesVars.cardBg,
-    borderRadius: 18,
+    borderRadius: apRadii.card,
     padding: 24,
   },
 
@@ -1543,6 +1609,7 @@ const styles = StyleSheet.create({
     textAlign: "left",
     fontSize: 13,
     fontWeight: "800",
+    fontFamily: apFontFamily,
     color: stylesVars.text,
   },
 
@@ -1556,10 +1623,10 @@ const styles = StyleSheet.create({
   iconBtn: {
     width: 34,
     height: 34,
-    borderRadius: 12,
+    borderRadius: apRadii.control,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: stylesVars.blueSoft,
+    backgroundColor: stylesVars.white,
     borderWidth: 1,
     borderColor: "#D7E3FF",
   },
@@ -1567,12 +1634,6 @@ const styles = StyleSheet.create({
   iconBtnActive: {
     backgroundColor: stylesVars.dangerSoft,
     borderColor: stylesVars.dangerBorder,
-  },
-
-  iconText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: stylesVars.blue,
   },
 
   summaryBar: {
@@ -1595,7 +1656,7 @@ const styles = StyleSheet.create({
 
   modalCard: {
     backgroundColor: stylesVars.cardBg,
-    borderRadius: 18,
+    borderRadius: apRadii.card,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: stylesVars.border,
@@ -1605,7 +1666,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 16,
     paddingBottom: 10,
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
     color: stylesVars.text,
   },
@@ -1613,19 +1674,40 @@ const styles = StyleSheet.create({
   modalItem: {
     paddingHorizontal: 18,
     paddingVertical: 12,
+    minHeight: 58,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
   },
 
   modalLeft: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
   },
 
-  modalEmoji: {
-    fontSize: 18,
+  modalIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: apRadii.control,
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  modalIconMuted: {
+    width: 32,
+    height: 32,
+    borderRadius: apRadii.control,
+    backgroundColor: stylesVars.white,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   modalItemTitle: {
@@ -1639,12 +1721,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: stylesVars.mutedText,
     marginTop: 2,
-  },
-
-  modalRight: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: stylesVars.blue,
   },
 
   divider: {
@@ -1666,8 +1742,8 @@ const styles = StyleSheet.create({
 
   modalCloseBtn: {
     margin: 14,
-    minHeight: 48,
-    borderRadius: 14,
+    minHeight: 44,
+    borderRadius: apRadii.control,
     paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
@@ -1698,8 +1774,9 @@ const styles = StyleSheet.create({
   },
 
   emptyTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
+    fontFamily: apFontFamily,
     color: stylesVars.text,
     marginBottom: 8,
   },
@@ -1707,6 +1784,7 @@ const styles = StyleSheet.create({
   muted: {
     fontSize: 14,
     lineHeight: 20,
+    fontFamily: apFontFamily,
     color: stylesVars.mutedText,
     fontWeight: "500",
   },
@@ -1715,21 +1793,21 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 18,
+    borderRadius: apRadii.card,
     overflow: "hidden",
     backgroundColor: stylesVars.cardBg,
-    marginBottom: 10,
+    marginBottom: 12,
   },
 
   image: {
     width: "100%",
-    height: 140,
+    height: 132,
     backgroundColor: "#F1F5F9",
   },
 
   imagePlaceholder: {
     width: "100%",
-    height: 140,
+    height: 132,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#F1F5F9",
@@ -1738,8 +1816,10 @@ const styles = StyleSheet.create({
   cardTitle: {
     paddingHorizontal: 10,
     paddingTop: 10,
-    fontSize: 15,
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: "700",
+    fontFamily: apFontFamily,
     color: stylesVars.text,
   },
 
@@ -1747,8 +1827,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingTop: 6,
     fontSize: 13,
-    fontWeight: "700",
-    color: stylesVars.text,
+    fontWeight: "800",
+    fontFamily: apFontFamily,
+    color: stylesVars.blue,
   },
 
   cardSub: {
@@ -1759,28 +1840,27 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    fontFamily: apFontFamily,
   },
 
   actionRow: {
     paddingHorizontal: 10,
+    paddingTop: 8,
     paddingBottom: 10,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-start",
+    justifyContent: "flex-end",
   },
 
   actionBtn: {
-    flex: 1,
-  },
-
-  actionText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: stylesVars.text,
-  },
-
-  heartOn: {
-    color: "#D11A2A",
+    width: 34,
+    height: 34,
+    borderRadius: apRadii.control,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.white,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   loadingRow: {
@@ -1793,18 +1873,16 @@ const styles = StyleSheet.create({
   loadMoreBtn: {
     marginTop: 8,
     minHeight: 48,
-    borderRadius: 14,
+    borderRadius: apRadii.control,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    backgroundColor: stylesVars.blueSoft,
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
+    backgroundColor: stylesVars.blue,
     alignItems: "center",
     justifyContent: "center",
   },
 
   loadMoreText: {
-    color: stylesVars.blue,
+    color: stylesVars.white,
     fontWeight: "700",
     fontSize: 14,
   },
@@ -1814,6 +1892,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     color: stylesVars.mutedText,
     fontWeight: "500",
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 18,
   },

@@ -14,6 +14,7 @@ import {
 
 const MODALS = [
   "fabric_modal",
+  "color_modal",
   "work_modal",
   "work-density_modal",
   "origin-city_modal",
@@ -80,6 +81,13 @@ export default function Q11Description() {
     return list.length ? `${list.length} selected` : "Any";
   }
 
+  function colorSummary() {
+    const names = (draft?.spec as any)?.colorShadeNames as any[] | undefined;
+    if (Array.isArray(names) && names.length) return formatPicked(names, "Any");
+    const list = (draft?.spec?.colorShadeIds ?? []) as any[];
+    return list.length ? `${list.length} selected` : "Any";
+  }
+
   function workSummary() {
     const subNames = (draft?.spec as any)?.workSubTypeNames as
       | any[]
@@ -117,6 +125,7 @@ export default function Q11Description() {
   }
 
   const fabricValue = fabricSummary();
+  const colorValue = colorSummary();
   const workValue = workSummary();
   const densityValue = densitySummary();
   const originValue = originSummary();
@@ -127,6 +136,7 @@ export default function Q11Description() {
     modal: ModalName;
   }> = [
     { label: "Fabric", value: fabricValue, modal: "fabric_modal" },
+    { label: "Color", value: colorValue, modal: "color_modal" },
     { label: "Work", value: workValue, modal: "work_modal" },
     { label: "Density", value: densityValue, modal: "work-density_modal" },
     { label: "Origin", value: originValue, modal: "origin-city_modal" },

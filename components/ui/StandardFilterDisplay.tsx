@@ -1,11 +1,20 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
+import { View, Text, StyleSheet, Pressable } from "react-native";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+  apStyles,
+} from "@/components/product/addProductStyles";
 
 type Props = {
   title: string;
   onBack?: () => void;
   onAny?: () => void;
   onNext?: () => void;
+  anyLabel?: string;
+  nextLabel?: string;
   children: React.ReactNode;
 };
 
@@ -14,43 +23,74 @@ export default function StandardFilterDisplay({
   onBack,
   onAny,
   onNext,
+  anyLabel = "Any",
+  nextLabel = "Next",
   children
 }: Props) {
   return (
-    <View style={styles.container}>
+    <View style={apStyles.screen}>
       <View style={styles.headerRow}>
-        <Text onPress={onBack} style={styles.action}>
-          Back
-        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          onPress={onBack}
+          style={({ pressed }) => [
+            apStyles.iconBtn,
+            pressed ? apStyles.pressed : null
+          ]}
+        >
+          <MaterialIcons name="arrow-back" size={18} color={apColors.blue} />
+        </Pressable>
 
         <Text style={styles.title} numberOfLines={1}>
           {title}
         </Text>
 
-        <Text onPress={onNext} style={styles.action}>
-          Next
-        </Text>
-      </View>
-
-      <View style={styles.anyRow}>
-        <Text onPress={onAny} style={styles.anyText}>
-          Any
-        </Text>
+        <View style={styles.headerSlot} />
       </View>
 
       <View style={styles.content}>{children}</View>
+
+      <View style={apStyles.footer}>
+        <View style={styles.footerRow}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={onAny}
+            style={({ pressed }) => [
+              apStyles.secondaryBtn,
+              styles.footerButton,
+              pressed ? apStyles.pressed : null
+            ]}
+          >
+            <Text style={apStyles.secondaryText}>{anyLabel}</Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={onNext}
+            style={({ pressed }) => [
+              apStyles.primaryBtn,
+              styles.footerButton,
+              styles.nextButton,
+              pressed ? apStyles.pressed : null
+            ]}
+          >
+            <Text style={apStyles.primaryText}>{nextLabel}</Text>
+          </Pressable>
+        </View>
+      </View>
     </View>
   );
 }
 
 const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  blue: "#2563EB",
-  text: "#0F172A",
-  mutedText: "#64748B",
-  white: "#FFFFFF"
+  bg: apColors.bg,
+  cardBg: apColors.card,
+  border: apColors.border,
+  blue: apColors.blue,
+  text: apColors.text,
+  mutedText: apColors.muted,
+  white: apColors.white
 };
 
 export const optionStyles = StyleSheet.create({
@@ -58,7 +98,7 @@ export const optionStyles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: apRadii.card,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
     marginBottom: 10
@@ -71,29 +111,23 @@ export const optionStyles = StyleSheet.create({
   },
 
   label: {
-    fontSize: 15,
+    fontSize: 14,
     color: stylesVars.text,
-    fontWeight: "600"
+    fontWeight: "700",
+    fontFamily: apFontFamily
   }
 });
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-    backgroundColor: stylesVars.bg
-  },
-
   headerRow: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
-  },
-
-  action: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: stylesVars.blue
+    justifyContent: "space-between",
+    gap: 12,
+    backgroundColor: stylesVars.bg
   },
 
   title: {
@@ -101,22 +135,32 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 18,
     fontWeight: "700",
+    fontFamily: apFontFamily,
     color: stylesVars.text,
     paddingHorizontal: 10
   },
 
-  anyRow: {
-    marginTop: 12,
-    marginBottom: 8
-  },
-
-  anyText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: stylesVars.mutedText
+  headerSlot: {
+    width: 40,
+    height: 40
   },
 
   content: {
-    flex: 1
+    flex: 1,
+    backgroundColor: stylesVars.bg
+  },
+
+  footerRow: {
+    flexDirection: "row",
+    gap: 10
+  },
+
+  footerButton: {
+    flex: 1,
+    marginTop: 0
+  },
+
+  nextButton: {
+    marginTop: 0
   }
 });

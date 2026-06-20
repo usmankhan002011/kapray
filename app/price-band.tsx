@@ -1,11 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View
-} from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import MultiSlider from "@ptomasroos/react-native-multi-slider";
 
@@ -13,6 +7,11 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearCostRange, setCostRange } from "@/store/filtersSlice";
 import StandardFilterDisplay from "@/components/ui/StandardFilterDisplay";
 import { supabase } from "@/utils/supabase/client";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+} from "@/components/product/addProductStyles";
 
 const TABLE_PRICE_BUCKETS = "price_buckets";
 
@@ -51,15 +50,11 @@ export default function PriceBand() {
   const fromResultsFilters = from === "results-filters";
 
   const [loading, setLoading] = useState(true);
-
   const [domain, setDomain] = useState({ min: 0, max: 0 });
   const [buckets, setBuckets] = useState<Bucket[]>([]);
-
-  const [bucketKey, setBucketKey] = useState<string>("any"); // ✅ ANY default
-
+  const [bucketKey, setBucketKey] = useState<string>("any");
   const [fineDomain, setFineDomain] = useState({ min: 0, max: 0 });
   const [range, setRange] = useState<[number, number]>([0, 0]);
-
   const [sliderWidth, setSliderWidth] = useState(0);
 
   useEffect(() => {
@@ -84,7 +79,7 @@ export default function PriceBand() {
             key: String(r.id),
             label: String(r.label),
             min: Number(r.min_pkr),
-            max: Number(r.max_pkr)
+            max: Number(r.max_pkr),
           }))
           .filter((b) => b.max > b.min);
 
@@ -96,8 +91,6 @@ export default function PriceBand() {
           : 0;
 
         setDomain({ min: globalMin, max: globalMax });
-
-        // ✅ LAND ON ANY
         setBucketKey("any");
         setFineDomain({ min: globalMin, max: globalMax });
         setRange([globalMin, globalMax]);
@@ -124,7 +117,6 @@ export default function PriceBand() {
     return 10000;
   }, [fineDomain]);
 
-  // ✅ ANY pressed
   const onSelectAny = () => {
     setBucketKey("any");
     setFineDomain({ min: domain.min, max: domain.max });
@@ -153,8 +145,8 @@ export default function PriceBand() {
       dispatch(
         setCostRange({
           minCostPkr: range[0],
-          maxCostPkr: range[1]
-        })
+          maxCostPkr: range[1],
+        }),
       );
     }
 
@@ -164,7 +156,7 @@ export default function PriceBand() {
 
   return (
     <StandardFilterDisplay
-      title="Cost Range"
+      title="Price"
       onBack={() => router.back()}
       onAny={onSelectAny}
       onNext={onNext}
@@ -172,31 +164,30 @@ export default function PriceBand() {
       <View style={styles.container}>
         <View style={styles.card}>
           {loading ? (
-            <Text style={styles.loadingText}>Loading…</Text>
+            <Text style={styles.loadingText}>Loading...</Text>
           ) : (
             <>
-              {/* ANY */}
               <Pressable
                 onPress={onSelectAny}
-                style={[
+                style={({ pressed }) => [
                   styles.anyPill,
-                  bucketKey === "any" && styles.anyActive
+                  bucketKey === "any" ? styles.pillActive : null,
+                  pressed ? styles.pressed : null,
                 ]}
               >
                 <Text
                   style={[
-                    styles.anyText,
-                    bucketKey === "any" && styles.anyTextActive
+                    styles.pillText,
+                    bucketKey === "any" ? styles.pillTextActive : null,
                   ]}
                 >
                   Any
                 </Text>
               </Pressable>
 
-              {/* Buckets */}
               <ScrollView
                 horizontal
-                showsHorizontalScrollIndicator
+                showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.bucketScroll}
               >
                 {buckets.map((b) => {
@@ -205,15 +196,16 @@ export default function PriceBand() {
                     <Pressable
                       key={b.key}
                       onPress={() => onSelectBucket(b.key)}
-                      style={[
+                      style={({ pressed }) => [
                         styles.bucketPill,
-                        active && styles.bucketActive
+                        active ? styles.pillActive : null,
+                        pressed ? styles.pressed : null,
                       ]}
                     >
                       <Text
                         style={[
-                          styles.bucketText,
-                          active && styles.bucketTextActive
+                          styles.pillText,
+                          active ? styles.pillTextActive : null,
                         ]}
                       >
                         {b.label}
@@ -223,15 +215,7 @@ export default function PriceBand() {
                 })}
               </ScrollView>
 
-              {/* Minimal instruction */}
-              {bucketKey !== "any" && (
-                <Text style={styles.hint}>
-                  Select bucket. Adjust range below.
-                </Text>
-              )}
-
-              {/* Slider only if bucket selected */}
-              {bucketKey !== "any" && (
+              {bucketKey !== "any" ? (
                 <>
                   <View
                     style={styles.sliderWrap}
@@ -247,41 +231,36 @@ export default function PriceBand() {
                       step={1}
                       sliderLength={sliderWidth}
                       allowOverlap={false}
+                      selectedStyle={styles.sliderSelected}
+                      unselectedStyle={styles.sliderUnselected}
                       customMarkerLeft={(e) => (
                         <Marker pressed={!!e?.pressed} />
                       )}
                       customMarkerRight={(e) => (
                         <Marker pressed={!!e?.pressed} />
                       )}
-                      onValuesChange={(v) =>
-                        setRange(v as [number, number])
-                      }
+                      onValuesChange={(v) => setRange(v as [number, number])}
                       onValuesChangeFinish={(v) => {
                         const low = clamp(
                           roundToStep(v[0], step),
                           fineDomain.min,
-                          fineDomain.max
+                          fineDomain.max,
                         );
                         const high = clamp(
                           roundToStep(v[1], step),
                           fineDomain.min,
-                          fineDomain.max
+                          fineDomain.max,
                         );
-                        setRange([
-                          Math.min(low, high),
-                          Math.max(low, high)
-                        ]);
+                        setRange([Math.min(low, high), Math.max(low, high)]);
                       }}
                     />
                   </View>
 
-                  <View style={styles.pills}>
-                    <Text style={styles.value}>
-                      {formatPKR(range[0])} – {formatPKR(range[1])}
-                    </Text>
-                  </View>
+                  <Text style={styles.value}>
+                    {formatPKR(range[0])} - {formatPKR(range[1])}
+                  </Text>
                 </>
-              )}
+              ) : null}
             </>
           )}
         </View>
@@ -291,76 +270,109 @@ export default function PriceBand() {
 }
 
 const styles = StyleSheet.create({
-  container: { paddingHorizontal: 14, paddingTop: 10 },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.06)"
+  container: {
+    paddingHorizontal: 16,
   },
-  loadingText: { fontSize: 13, color: "#6B7280" },
+
+  card: {
+    backgroundColor: apColors.white,
+    borderRadius: apRadii.card,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: apColors.border,
+  },
+
+  loadingText: {
+    fontSize: 13,
+    color: apColors.muted,
+    fontWeight: "600",
+    fontFamily: apFontFamily,
+  },
 
   anyPill: {
-    borderRadius: 999,
+    borderRadius: apRadii.pill,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#D7E3FF",
+    backgroundColor: apColors.white,
     alignSelf: "flex-start",
-    marginBottom: 12
+    marginBottom: 12,
   },
-  anyActive: {
-    backgroundColor: "#111",
-    borderColor: "#111"
-  },
-  anyText: { fontWeight: "900", fontSize: 13 },
-  anyTextActive: { color: "#fff" },
 
-  bucketScroll: { paddingBottom: 10 },
+  bucketScroll: {
+    paddingBottom: 10,
+  },
+
   bucketPill: {
     borderWidth: 1,
-    borderColor: "#FCA5A5",
-    backgroundColor: "#FEE2E2",
-    borderRadius: 999,
+    borderColor: "#D7E3FF",
+    backgroundColor: apColors.white,
+    borderRadius: apRadii.pill,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    marginRight: 8
+    marginRight: 8,
   },
-  bucketActive: {
-    backgroundColor: "#991B1B",
-    borderColor: "#991B1B"
-  },
-  bucketText: { fontWeight: "900", fontSize: 12, color: "#7F1D1D" },
-  bucketTextActive: { color: "#fff" },
 
-  hint: {
+  pillActive: {
+    backgroundColor: apColors.blue,
+    borderColor: apColors.blue,
+  },
+
+  pillText: {
+    fontWeight: "800",
     fontSize: 12,
-    color: "#6B7280",
-    marginTop: 6,
-    marginBottom: 10
+    color: apColors.blue,
+    fontFamily: apFontFamily,
   },
 
-  sliderWrap: { marginTop: 8 },
+  pillTextActive: {
+    color: apColors.white,
+  },
+
+  sliderWrap: {
+    marginTop: 8,
+  },
+
+  sliderSelected: {
+    backgroundColor: apColors.blue,
+  },
+
+  sliderUnselected: {
+    backgroundColor: apColors.border,
+  },
 
   markerOuter: {
     width: 28,
     height: 28,
-    borderRadius: 999,
-    backgroundColor: "#fff",
+    borderRadius: apRadii.pill,
+    backgroundColor: apColors.white,
     borderWidth: 1.5,
-    borderColor: "#111",
+    borderColor: apColors.blue,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
-  markerOuterPressed: { elevation: 6 },
+
+  markerOuterPressed: {
+    elevation: 6,
+  },
+
   markerInner: {
     width: 8,
     height: 8,
-    borderRadius: 999,
-    backgroundColor: "#111"
+    borderRadius: apRadii.pill,
+    backgroundColor: apColors.blue,
   },
 
-  pills: { marginTop: 14 },
-  value: { fontSize: 15, fontWeight: "800" }
+  value: {
+    marginTop: 12,
+    fontSize: 15,
+    fontWeight: "800",
+    fontFamily: apFontFamily,
+    color: apColors.text,
+  },
+
+  pressed: {
+    opacity: 0.82,
+  },
 });

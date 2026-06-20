@@ -5,13 +5,19 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  View
+  View,
 } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { getFabricTypes, FabricTypeItem } from "@/utils/supabase/fabricType";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearFabricTypes, toggleFabricType } from "@/store/filtersSlice";
 import StandardFilterDisplay from "@/components/ui/StandardFilterDisplay";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+} from "@/components/product/addProductStyles";
 
 const FABRIC_LOCAL_IMAGES: Record<string, any> = {
   chiffon: require("@/assets/fabric-types-images/CHIFFON.jpg"),
@@ -31,12 +37,11 @@ const FABRIC_LOCAL_IMAGES: Record<string, any> = {
   net: require("@/assets/fabric-types-images/NET.jpg"),
   organza: require("@/assets/fabric-types-images/ORGANZA.jpg"),
   tissue: require("@/assets/fabric-types-images/TISSUE.jpg"),
-  velvet: require("@/assets/fabric-types-images/VELVET.jpg")
+  velvet: require("@/assets/fabric-types-images/VELVET.jpg"),
 };
 
-
-const GRID_GAP = 8;
-const H_PADDING = 12;
+const GRID_GAP = 10;
+const H_PADDING = 16;
 
 export default function FabricScreen() {
   const router = useRouter();
@@ -44,7 +49,6 @@ export default function FabricScreen() {
   const dispatch = useAppDispatch();
 
   const selected = useAppSelector((s) => s.filters.fabricTypeIds);
-  const dressTypeId = useAppSelector((s) => s.filters.dressTypeId);
 
   const [items, setItems] = useState<FabricTypeItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -81,13 +85,11 @@ export default function FabricScreen() {
 
   return (
     <StandardFilterDisplay
-      title={`Fabric Type${dressTypeId ? "" : " (Dress type not set)"}`}
+      title="Fabric"
       onBack={() => router.back()}
       onAny={() => dispatch(clearFabricTypes())}
       onNext={() => (fromResultsFilters ? router.back() : router.push("/color"))}
     >
-      <Text style={styles.heading}>Select Fabric Type</Text>
-
       {loading ? <Text style={styles.infoText}>Loading...</Text> : null}
       {err ? <Text style={styles.infoText}>{err}</Text> : null}
 
@@ -104,11 +106,13 @@ export default function FabricScreen() {
 
           return (
             <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: isOn }}
               key={item.id}
               style={({ pressed }) => [
                 styles.card,
                 isOn ? styles.cardSelected : null,
-                pressed ? styles.pressed : null
+                pressed ? styles.pressed : null,
               ]}
               onPress={() => dispatch(toggleFabricType(item.id))}
             >
@@ -121,14 +125,23 @@ export default function FabricScreen() {
                   />
                 ) : (
                   <View style={styles.noImage}>
-                    <Text style={styles.noImageText}>No Image</Text>
+                    <Text style={styles.noImageText}>No image</Text>
                   </View>
                 )}
               </View>
 
-              <Text style={styles.label} numberOfLines={1}>
-                {item.name} {isOn ? "✓" : ""}
+              <Text
+                style={[styles.label, isOn ? styles.labelOn : null]}
+                numberOfLines={1}
+              >
+                {item.name}
               </Text>
+
+              {isOn ? (
+                <View style={styles.check}>
+                  <MaterialIcons name="check" size={14} color={apColors.white} />
+                </View>
+              ) : null}
             </Pressable>
           );
         }}
@@ -137,80 +150,53 @@ export default function FabricScreen() {
   );
 }
 
-const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
-  placeholder: "#94A3B8",
-  danger: "#B91C1C",
-  dangerSoft: "#FEE2E2",
-  dangerBorder: "#FCA5A5",
-  overlayDark: "rgba(0,0,0,0.58)",
-  overlaySoft: "rgba(255,255,255,0.14)",
-  white: "#FFFFFF",
-  black: "#000000"
-};
-
 const styles = StyleSheet.create({
-  heading: {
-    fontSize: 15,
-    fontWeight: "700",
-    marginBottom: 6,
-    color: stylesVars.text
-  },
-
   infoText: {
+    marginHorizontal: H_PADDING,
+    marginBottom: 8,
     fontSize: 13,
     lineHeight: 18,
-    color: stylesVars.mutedText,
+    color: apColors.muted,
     fontWeight: "500",
-    marginBottom: 6
+    fontFamily: apFontFamily,
   },
 
   listContent: {
     paddingHorizontal: H_PADDING,
-    paddingBottom: 12,
-    paddingTop: 2
+    paddingBottom: 16,
   },
 
   columnWrap: {
     gap: GRID_GAP,
-    marginBottom: GRID_GAP
+    marginBottom: GRID_GAP,
   },
 
   card: {
     flex: 1,
     borderWidth: 1,
-    borderColor: stylesVars.border,
-    borderRadius: 18,
+    borderColor: apColors.border,
+    borderRadius: apRadii.card,
     padding: 8,
-    backgroundColor: stylesVars.cardBg
+    backgroundColor: apColors.white,
   },
 
   cardSelected: {
-    borderColor: stylesVars.blue,
-    borderWidth: 2,
-    backgroundColor: stylesVars.blueSoft
+    borderColor: "#D7E3FF",
+    backgroundColor: apColors.blueSoft,
   },
 
   imageWrap: {
     width: "100%",
     height: 96,
-    borderRadius: 12,
+    borderRadius: apRadii.card,
     overflow: "hidden",
     backgroundColor: "#F1F5F9",
-    marginBottom: 8
+    marginBottom: 8,
   },
 
   image: {
     width: "100%",
-    height: 96
+    height: 96,
   },
 
   noImage: {
@@ -218,24 +204,42 @@ const styles = StyleSheet.create({
     height: 96,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F1F5F9"
+    backgroundColor: "#F1F5F9",
   },
 
   noImageText: {
     fontSize: 12,
     fontWeight: "700",
-    color: stylesVars.mutedText
+    fontFamily: apFontFamily,
+    color: apColors.muted,
   },
 
   label: {
     fontSize: 13,
     lineHeight: 18,
-    color: stylesVars.text,
+    color: apColors.text,
     textAlign: "center",
-    fontWeight: "700"
+    fontWeight: "700",
+    fontFamily: apFontFamily,
+  },
+
+  labelOn: {
+    color: apColors.blue,
+  },
+
+  check: {
+    position: "absolute",
+    right: 10,
+    top: 10,
+    width: 22,
+    height: 22,
+    borderRadius: apRadii.pill,
+    backgroundColor: apColors.blue,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   pressed: {
-    opacity: 0.82
-  }
+    opacity: 0.82,
+  },
 });

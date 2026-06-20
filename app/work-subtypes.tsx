@@ -1,128 +1,119 @@
-import React, { useEffect, useMemo, useState } from "react";
-import {
-  FlatList,
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import React, { useMemo, useState } from "react";
+import { FlatList, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { getWorkDensities, WorkDensityItem } from "@/utils/supabase/workDensity";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { clearWorkDensities, toggleWorkDensity } from "@/store/filtersSlice";
+import { setWorkSubTypesForParent } from "@/store/filtersSlice";
 import StandardFilterDisplay from "@/components/ui/StandardFilterDisplay";
 import {
   apColors,
   apFontFamily,
   apRadii,
 } from "@/components/product/addProductStyles";
-
-const WORK_DENSITY_LOCAL_IMAGES: Record<string, any> = {
-  light: require("@/assets/work-density-images/light.png"),
-  medium: require("@/assets/work-density-images/medium.jpg"),
-  heavy: require("@/assets/work-density-images/heavy.jpg"),
-  "extra-heavy": require("@/assets/work-density-images/extra-heavy.jpg"),
-};
+import {
+  getWorkSubTypes,
+  isWorkParentCode,
+  WorkSubTypeItem,
+} from "@/data/workSubTypes";
 
 const GRID_GAP = 10;
 const H_PADDING = 16;
-const IMAGE_H = 132;
 
-export default function WorkDensityScreen() {
+function safeStr(v: any) {
+  return String(v ?? "").trim();
+}
+
+function firstParam(v: unknown) {
+  if (typeof v === "string") return safeStr(v);
+  if (Array.isArray(v)) return safeStr(v[0]);
+  return "";
+}
+
+export default function WorkSubtypesScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const dispatch = useAppDispatch();
 
-  const selected = useAppSelector((s) => s.filters.workDensityIds);
+  const parentId = firstParam((params as any)?.parentId);
+  const parentCodeRaw = firstParam((params as any)?.parentCode).toLowerCase();
+  const parentName = firstParam((params as any)?.parentName) || "Work";
 
-  const [items, setItems] = useState<WorkDensityItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const parentCode = isWorkParentCode(parentCodeRaw) ? parentCodeRaw : null;
+  const items: WorkSubTypeItem[] = parentCode ? getWorkSubTypes(parentCode) : [];
 
+  const existingMap = useAppSelector(
+    (s: any) => s.filters?.workSubTypeMap ?? {},
+  );
+  const initialSelected =
+    parentCode && Array.isArray(existingMap?.[parentCode])
+      ? existingMap[parentCode]
+      : [];
+
+  const [selected, setSelected] = useState<string[]>(initialSelected);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
 
-  const from = String((params as any)?.from ?? "").trim();
-  const fromResultsFilters = from === "results-filters";
+  function toggle(code: string) {
+    setSelected((prev) =>
+      prev.includes(code) ? prev.filter((item) => item !== code) : [...prev, code],
+    );
+  }
 
-  useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    setErr(null);
+  function onDone() {
+    if (!parentCode || !parentId) {
+      router.back();
+      return;
+    }
 
-    getWorkDensities()
-      .then((res) => {
-        if (!alive) return;
-        setItems(res ?? []);
-      })
-      .catch((e) => {
-        if (!alive) return;
-        setErr(e?.message ?? "Failed to load work densities");
-      })
-      .finally(() => {
-        if (!alive) return;
-        setLoading(false);
-      });
-
-    return () => {
-      alive = false;
-    };
-  }, []);
+    dispatch(
+      setWorkSubTypesForParent({
+        parentId,
+        parentCode,
+        subTypeCodes: selected,
+      }),
+    );
+    router.back();
+  }
 
   return (
     <StandardFilterDisplay
-      title="Density"
+      title={parentName}
       onBack={() => router.back()}
-      onAny={() => dispatch(clearWorkDensities())}
-      onNext={() =>
-        fromResultsFilters ? router.back() : router.push("/origin-city")
-      }
+      onAny={() => setSelected([])}
+      onNext={onDone}
+      anyLabel="Clear"
+      nextLabel="Done"
     >
-      {loading ? <Text style={styles.infoText}>Loading...</Text> : null}
-      {err ? <Text style={styles.infoText}>{err}</Text> : null}
+      {!parentCode ? <Text style={styles.infoText}>Invalid work.</Text> : null}
 
       <FlatList
         data={items}
-        keyExtractor={(i) => i.id}
+        keyExtractor={(item) => item.code}
         numColumns={2}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         columnWrapperStyle={styles.columnWrap}
         renderItem={({ item }) => {
-          const isOn = selectedSet.has(item.id);
-          const localImg =
-            WORK_DENSITY_LOCAL_IMAGES[(item.code ?? "").toLowerCase()];
+          const isOn = selectedSet.has(item.code);
 
           return (
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ selected: isOn }}
-              key={item.id}
+              key={item.code}
               style={({ pressed }) => [
                 styles.card,
                 isOn ? styles.cardSelected : null,
                 pressed ? styles.pressed : null,
               ]}
-              onPress={() => dispatch(toggleWorkDensity(item.id))}
+              onPress={() => toggle(item.code)}
             >
               <View style={styles.imageWrap}>
-                {localImg ? (
-                  <Image
-                    source={localImg}
-                    style={styles.image}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={styles.noImage}>
-                    <Text style={styles.noImageText}>No image</Text>
-                  </View>
-                )}
+                <Image source={item.image} style={styles.image} resizeMode="cover" />
               </View>
 
               <Text
                 style={[styles.label, isOn ? styles.labelOn : null]}
-                numberOfLines={1}
+                numberOfLines={2}
               >
                 {item.name}
               </Text>
@@ -146,8 +137,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     fontSize: 13,
     lineHeight: 18,
-    color: apColors.muted,
-    fontWeight: "500",
+    color: apColors.danger,
+    fontWeight: "600",
     fontFamily: apFontFamily,
   },
 
@@ -177,7 +168,7 @@ const styles = StyleSheet.create({
 
   imageWrap: {
     width: "100%",
-    height: IMAGE_H,
+    height: 96,
     borderRadius: apRadii.card,
     overflow: "hidden",
     backgroundColor: "#F1F5F9",
@@ -186,22 +177,7 @@ const styles = StyleSheet.create({
 
   image: {
     width: "100%",
-    height: IMAGE_H,
-  },
-
-  noImage: {
-    width: "100%",
-    height: IMAGE_H,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F1F5F9",
-  },
-
-  noImageText: {
-    fontSize: 12,
-    fontWeight: "700",
-    fontFamily: apFontFamily,
-    color: apColors.muted,
+    height: 96,
   },
 
   label: {

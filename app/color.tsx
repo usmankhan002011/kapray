@@ -1,9 +1,15 @@
 import React, { useMemo } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearColorShades, toggleColorShade } from "@/store/filtersSlice";
 import StandardFilterDisplay from "@/components/ui/StandardFilterDisplay";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+} from "@/components/product/addProductStyles";
 
 type ColorShadeItem = {
   id: string;
@@ -19,11 +25,11 @@ const COLOR_SHADES: ColorShadeItem[] = [
   { id: "golden", name: "Golden", hex: "#D4AF37" },
   { id: "silver", name: "Silver", hex: "#C0C0C0" },
   { id: "white", name: "White", hex: "#FFFFFF" },
-  { id: "black", name: "Black", hex: "#000000" }
+  { id: "black", name: "Black", hex: "#000000" },
 ];
 
-const GRID_GAP = 8;
-const H_PADDING = 12;
+const GRID_GAP = 10;
+const H_PADDING = 16;
 
 export default function ColorScreen() {
   const router = useRouter();
@@ -31,8 +37,6 @@ export default function ColorScreen() {
   const dispatch = useAppDispatch();
 
   const selected = useAppSelector((s) => s.filters.colorShadeIds);
-  const dressTypeId = useAppSelector((s) => s.filters.dressTypeId);
-
   const selectedSet = useMemo(() => new Set(selected), [selected]);
 
   const from = String((params as any)?.from ?? "").trim();
@@ -40,13 +44,11 @@ export default function ColorScreen() {
 
   return (
     <StandardFilterDisplay
-      title={`Color${dressTypeId ? "" : " (Dress type not set)"}`}
+      title="Color"
       onBack={() => router.back()}
       onAny={() => dispatch(clearColorShades())}
       onNext={() => (fromResultsFilters ? router.back() : router.push("/work"))}
     >
-      <Text style={styles.heading}>Select Color Shades</Text>
-
       <FlatList
         data={COLOR_SHADES}
         keyExtractor={(i) => i.id}
@@ -59,17 +61,38 @@ export default function ColorScreen() {
 
           return (
             <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: isOn }}
               key={item.id}
-              style={[styles.card, isOn ? styles.cardSelected : null]}
+              style={({ pressed }) => [
+                styles.card,
+                isOn ? styles.cardSelected : null,
+                pressed ? styles.pressed : null,
+              ]}
               onPress={() => dispatch(toggleColorShade(item.id))}
             >
               <View style={styles.swatchWrap}>
-                <View style={[styles.swatch, { backgroundColor: item.hex }]} />
+                <View
+                  style={[
+                    styles.swatch,
+                    { backgroundColor: item.hex },
+                    item.id === "white" ? styles.whiteSwatch : null,
+                  ]}
+                />
               </View>
 
-              <Text style={styles.label} numberOfLines={1}>
-                {item.name} {isOn ? "✓" : ""}
+              <Text
+                style={[styles.label, isOn ? styles.labelOn : null]}
+                numberOfLines={1}
+              >
+                {item.name}
               </Text>
+
+              {isOn ? (
+                <View style={styles.check}>
+                  <MaterialIcons name="check" size={14} color={apColors.white} />
+                </View>
+              ) : null}
             </Pressable>
           );
         }}
@@ -79,50 +102,75 @@ export default function ColorScreen() {
 }
 
 const styles = StyleSheet.create({
-  heading: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 6,
-    color: "#111"
-  },
-
   listContent: {
     paddingHorizontal: H_PADDING,
-    paddingBottom: 12,
-    paddingTop: 2
+    paddingBottom: 16,
   },
+
   columnWrap: {
     gap: GRID_GAP,
-    marginBottom: GRID_GAP
+    marginBottom: GRID_GAP,
   },
 
   card: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 6
+    borderColor: apColors.border,
+    borderRadius: apRadii.card,
+    padding: 8,
+    backgroundColor: apColors.white,
   },
+
   cardSelected: {
-    borderColor: "#111"
+    borderColor: "#D7E3FF",
+    backgroundColor: apColors.blueSoft,
   },
 
   swatchWrap: {
     width: "100%",
-    height: 96,
-    borderRadius: 6,
+    height: 92,
+    borderRadius: apRadii.card,
     overflow: "hidden",
-    backgroundColor: "#eee",
-    marginBottom: 6
+    backgroundColor: "#F1F5F9",
+    marginBottom: 8,
   },
+
   swatch: {
     width: "100%",
-    height: 96
+    height: 92,
+  },
+
+  whiteSwatch: {
+    borderWidth: 1,
+    borderColor: apColors.border,
   },
 
   label: {
     fontSize: 13,
-    color: "#111",
-    textAlign: "center"
-  }
+    lineHeight: 18,
+    color: apColors.text,
+    textAlign: "center",
+    fontWeight: "700",
+    fontFamily: apFontFamily,
+  },
+
+  labelOn: {
+    color: apColors.blue,
+  },
+
+  check: {
+    position: "absolute",
+    right: 10,
+    top: 10,
+    width: 22,
+    height: 22,
+    borderRadius: apRadii.pill,
+    backgroundColor: apColors.blue,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  pressed: {
+    opacity: 0.82,
+  },
 });

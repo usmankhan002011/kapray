@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
@@ -7,6 +8,11 @@ import {
   toggleProductCategory,
 } from "@/store/filtersSlice";
 import StandardFilterDisplay from "@/components/ui/StandardFilterDisplay";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+} from "@/components/product/addProductStyles";
 
 type ProductCategoryId =
   | "stitched_ready"
@@ -17,7 +23,7 @@ type ProductCategoryItem = {
   id: ProductCategoryId;
   name: string;
   caption: string;
-  emoji: string;
+  icon: React.ComponentProps<typeof MaterialIcons>["name"];
 };
 
 type DisplayItem =
@@ -25,7 +31,7 @@ type DisplayItem =
       id: "all";
       name: string;
       caption: string;
-      emoji: string;
+      icon: React.ComponentProps<typeof MaterialIcons>["name"];
       isAll: true;
     }
   | (ProductCategoryItem & { isAll?: false });
@@ -34,20 +40,20 @@ const PRODUCT_CATEGORIES: ProductCategoryItem[] = [
   {
     id: "stitched_ready",
     name: "Ready-to-Wear",
-    caption: "Stock-based stitched products with standard sizes.",
-    emoji: "👗",
+    caption: "Ready stock",
+    icon: "checkroom",
   },
   {
     id: "stitched_made_order",
     name: "Made-on-Order",
-    caption: "Stitched after order with custom or exact sizing.",
-    emoji: "📏",
+    caption: "Made after order",
+    icon: "straighten",
   },
   {
     id: "unstitched",
     name: "Unstitched",
-    caption: "Fabric products with optional dyeing and tailoring.",
-    emoji: "🧵",
+    caption: "Fabric",
+    icon: "texture",
   },
 ];
 
@@ -55,22 +61,21 @@ const DISPLAY_ITEMS: DisplayItem[] = [
   {
     id: "all",
     name: "All",
-    caption: "Show all product categories.",
-    emoji: "🛍️",
+    caption: "All categories",
+    icon: "apps",
     isAll: true,
   },
   ...PRODUCT_CATEGORIES,
 ];
 
-const GRID_GAP = 8;
-const H_PADDING = 12;
+const GRID_GAP = 10;
+const H_PADDING = 16;
 
 function normalizeSelected(v: any): string[] {
   if (Array.isArray(v)) {
     return v.map((x) => String(x ?? "").trim()).filter(Boolean);
   }
 
-  // Backward compatibility with older single-select state.
   const single = String(v ?? "").trim();
   if (!single || single === "all") return [];
   return [single];
@@ -110,16 +115,11 @@ export default function ProductCategoryScreen() {
 
   return (
     <StandardFilterDisplay
-      title="Product Category"
+      title="Category"
       onBack={goBackTarget}
       onAny={() => dispatch(clearProductCategory())}
       onNext={goNextTarget}
     >
-      <Text style={styles.heading}>Select Product Category</Text>
-      <Text style={styles.subheading}>
-        Select one or more categories. Choose All to show every product type.
-      </Text>
-
       <FlatList
         data={DISPLAY_ITEMS}
         keyExtractor={(i) => i.id}
@@ -132,10 +132,11 @@ export default function ProductCategoryScreen() {
 
           return (
             <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: isOn }}
               key={item.id}
               style={({ pressed }) => [
                 styles.card,
-                item.isAll ? styles.allCard : null,
                 isOn ? styles.cardSelected : null,
                 pressed ? styles.pressed : null,
               ]}
@@ -148,31 +149,30 @@ export default function ProductCategoryScreen() {
                 dispatch(toggleProductCategory(item.id));
               }}
             >
-              <View
-                style={[styles.iconWrap, isOn ? styles.iconWrapSelected : null]}
-              >
-                <Text style={styles.bigIcon}>{item.emoji}</Text>
-                <View
-                  style={[styles.tickBubble, isOn ? styles.tickBubbleOn : null]}
-                >
-                  <Text
-                    style={[styles.tickText, isOn ? styles.tickTextOn : null]}
-                  >
-                    {isOn ? "✓" : ""}
-                  </Text>
-                </View>
+              <View style={[styles.iconBox, isOn ? styles.iconBoxOn : null]}>
+                <MaterialIcons
+                  name={item.icon}
+                  size={22}
+                  color={isOn ? apColors.blue : apColors.subText}
+                />
               </View>
 
               <Text
-                style={[styles.label, isOn ? styles.labelSelected : null]}
+                style={[styles.label, isOn ? styles.labelOn : null]}
                 numberOfLines={2}
               >
                 {item.name}
               </Text>
 
-              <Text style={styles.caption} numberOfLines={3}>
+              <Text style={styles.caption} numberOfLines={2}>
                 {item.caption}
               </Text>
+
+              {isOn ? (
+                <View style={styles.check}>
+                  <MaterialIcons name="check" size={14} color={apColors.white} />
+                </View>
+              ) : null}
             </Pressable>
           );
         }}
@@ -182,25 +182,9 @@ export default function ProductCategoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  heading: {
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 4,
-    color: "#111827",
-  },
-
-  subheading: {
-    fontSize: 12,
-    lineHeight: 18,
-    color: "#6B7280",
-    fontWeight: "500",
-    marginBottom: 10,
-  },
-
   listContent: {
     paddingHorizontal: H_PADDING,
     paddingBottom: 16,
-    paddingTop: 2,
   },
 
   columnWrap: {
@@ -210,92 +194,70 @@ const styles = StyleSheet.create({
 
   card: {
     flex: 1,
-    minHeight: 158,
+    minHeight: 136,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 16,
-    padding: 10,
-    backgroundColor: "#FFFFFF",
-  },
-
-  allCard: {
-    backgroundColor: "#F8FAFC",
+    borderColor: apColors.border,
+    borderRadius: apRadii.card,
+    padding: 12,
+    backgroundColor: apColors.white,
   },
 
   cardSelected: {
-    borderColor: "#111827",
-    backgroundColor: "#F9FAFB",
+    borderColor: "#D7E3FF",
+    backgroundColor: apColors.blueSoft,
   },
 
-  pressed: {
-    opacity: 0.82,
-  },
-
-  iconWrap: {
-    width: "100%",
-    height: 64,
-    borderRadius: 14,
-    backgroundColor: "#F3F4F6",
+  iconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: apRadii.control,
+    borderWidth: 1,
+    borderColor: apColors.border,
+    backgroundColor: apColors.white,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 10,
-    position: "relative",
   },
 
-  iconWrapSelected: {
-    backgroundColor: "#EEF2FF",
-  },
-
-  bigIcon: {
-    fontSize: 30,
-  },
-
-  tickBubble: {
-    position: "absolute",
-    right: 7,
-    top: 7,
-    width: 22,
-    height: 22,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  tickBubbleOn: {
-    borderColor: "#111827",
-    backgroundColor: "#111827",
-  },
-
-  tickText: {
-    fontSize: 13,
-    fontWeight: "900",
-    color: "#FFFFFF",
-  },
-
-  tickTextOn: {
-    color: "#FFFFFF",
+  iconBoxOn: {
+    borderColor: "#D7E3FF",
+    backgroundColor: apColors.white,
   },
 
   label: {
     fontSize: 13,
+    lineHeight: 18,
     fontWeight: "800",
-    color: "#111827",
-    textAlign: "center",
+    fontFamily: apFontFamily,
+    color: apColors.text,
   },
 
-  labelSelected: {
-    color: "#000000",
+  labelOn: {
+    color: apColors.blue,
   },
 
   caption: {
-    marginTop: 6,
-    fontSize: 11,
-    lineHeight: 15,
-    color: "#6B7280",
-    textAlign: "center",
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: "500",
+    fontFamily: apFontFamily,
+    color: apColors.muted,
+  },
+
+  check: {
+    position: "absolute",
+    right: 10,
+    top: 10,
+    width: 22,
+    height: 22,
+    borderRadius: apRadii.pill,
+    backgroundColor: apColors.blue,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  pressed: {
+    opacity: 0.82,
   },
 });
