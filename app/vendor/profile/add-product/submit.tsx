@@ -630,11 +630,17 @@ export default function AddProductSubmitScreen() {
   );
 
   const simpleReadyInventory = useMemo(
-    () =>
-      normalizeSimpleReadyInventory(
+    () => {
+      const fromPrice = normalizeSimpleReadyInventory(
         (draft.price as any)?.simple_ready_inventory,
-      ),
-    [draft.price],
+      );
+      if (fromPrice.length) return fromPrice;
+
+      return normalizeSimpleReadyInventory(
+        (draft.spec as any)?.simple_ready_inventory,
+      );
+    },
+    [draft.price, draft.spec],
   );
 
   const simpleReadyQty = useMemo(

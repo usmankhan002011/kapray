@@ -163,6 +163,7 @@ export default function Q06B1SimpleReadyInventory() {
         ...(prev?.spec ?? {}),
         has_ready_variants: false,
         variant_mode: "simple_ready",
+        simple_ready_inventory: cleaned,
       },
       price: {
         ...(prev?.price ?? {}),

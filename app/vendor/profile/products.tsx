@@ -158,6 +158,96 @@ function getVariantInventorySummary(
   };
 }
 
+function getRawSimpleReadyInventory(product: ProductRow): any[] {
+  const price = product?.price ?? {};
+  const spec = product?.spec ?? {};
+  const inventory = (product as any)?.inventory ?? {};
+
+  const raw =
+    price?.simple_ready_inventory ??
+    price?.simpleReadyInventory ??
+    spec?.simple_ready_inventory ??
+    spec?.simpleReadyInventory ??
+    inventory?.simple_ready_inventory ??
+    inventory?.simpleReadyInventory ??
+    [];
+
+  return Array.isArray(raw) ? raw : [];
+}
+
+function getSimpleReadyInventorySummary(
+  product: ProductRow,
+): VariantInventorySummary {
+  const rows = getRawSimpleReadyInventory(product);
+  let totalQty = 0;
+  const availableSizeKeys = new Set<string>();
+
+  for (const row of rows) {
+    const qty = Number(
+      row?.qty ??
+        row?.stock_qty ??
+        row?.stockQty ??
+        row?.stock ??
+        row?.quantity ??
+        0,
+    );
+
+    if (!Number.isFinite(qty) || qty <= 0) continue;
+
+    totalQty += Math.trunc(qty);
+
+    const sizeKey = String(
+      row?.size ??
+        row?.size_label ??
+        row?.sizeLabel ??
+        row?.label ??
+        row?.name ??
+        "",
+    )
+      .trim()
+      .toLowerCase();
+
+    if (sizeKey) {
+      availableSizeKeys.add(sizeKey);
+    }
+  }
+
+  if (totalQty <= 0) {
+    totalQty = Math.max(0, Math.trunc(Number(product?.inventory_qty ?? 0)));
+  }
+
+  if (!availableSizeKeys.size && totalQty > 0) {
+    const sizes = Array.isArray(product?.price?.available_sizes)
+      ? product.price.available_sizes
+      : [];
+
+    for (const size of sizes) {
+      const key = String(size ?? "").trim().toLowerCase();
+      if (key) availableSizeKeys.add(key);
+    }
+  }
+
+  return {
+    totalQty,
+    availableSizes: Math.min(6, availableSizeKeys.size),
+    variantCount: totalQty > 0 ? 1 : 0,
+    hasStock: totalQty > 0,
+  };
+}
+
+function getStitchedInventorySummary(
+  product: ProductRow,
+): VariantInventorySummary {
+  const mode = String(product?.spec?.variant_mode ?? "").trim();
+  const variantSummary = getVariantInventorySummary(product);
+
+  if (mode === "ready_variants") return variantSummary;
+  if (mode === "simple_ready") return getSimpleReadyInventorySummary(product);
+  if (variantSummary.hasStock) return variantSummary;
+
+  return getSimpleReadyInventorySummary(product);
+}
+
 function isProductCategory(v: unknown): v is ProductCategory {
   return (
     v === "unstitched_plain" ||
@@ -280,13 +370,13 @@ function getStockSummaryText(item: ProductRow) {
   if (isMadeOnOrderProduct(item)) return "Made on order";
 
   if (isStitchedReadyProduct(item)) {
-    const info = getVariantInventorySummary(item);
+    const info = getStitchedInventorySummary(item);
 
-    if (!info.hasStock) return "Variant stock: 0 total";
+    if (!info.hasStock) return "Stock: 0 total";
 
     const sizeWord = info.availableSizes === 1 ? "size" : "sizes";
     const variantWord = info.variantCount === 1 ? "variant" : "variants";
-    return `Variant stock: ${info.totalQty} total • ${info.availableSizes} ${sizeWord} • ${info.variantCount} ${variantWord}`;
+    return `Stock: ${info.totalQty} total / ${info.availableSizes} ${sizeWord} / ${info.variantCount} ${variantWord}`;
   }
 
   const qty = Math.max(0, Number(item?.inventory_qty ?? 0));
@@ -304,7 +394,7 @@ function formatStockCardText(text: string) {
     return `Stock: ${formatStockQty(Number(qtyMatch[1]))}`;
   }
 
-  const variantMatch = /^Variant stock:\s*(\d+)\s+total\b.*?\s(\d+)\s+(size|sizes)\b/i.exec(
+  const variantMatch = /^(?:Variant stock|Stock):\s*(\d+)\s+total\b.*?\s(\d+)\s+(size|sizes)\b/i.exec(
     text,
   );
   if (variantMatch) {
@@ -318,7 +408,7 @@ function isOutOfStock(item: ProductRow) {
   if (isMadeOnOrderProduct(item)) return false;
 
   if (isStitchedReadyProduct(item)) {
-    return !getVariantInventorySummary(item).hasStock;
+    return !getStitchedInventorySummary(item).hasStock;
   }
 
   return Number(item?.inventory_qty ?? 0) <= 0;
