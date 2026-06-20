@@ -187,6 +187,10 @@ function getReadyVariantFinalPrice(basePrice: number, variant: ReadyVariant) {
   return Number(basePrice || 0) + Number(variant?.additional_price_pkr || 0);
 }
 
+function countReadyVariantSizes(variant: ReadyVariant) {
+  return (variant.sizes || []).filter((row) => safeInt(row.qty) > 0).length;
+}
+
 function cleanReadyVariants(variants: ReadyVariant[]) {
   return (variants || []).map((variant, index) => {
     const variantNo = index + 1;
@@ -263,6 +267,7 @@ const ReadyVariantCard = memo(function ReadyVariantCard({
 }) {
   const images = normalizeStringArray(variant.image_paths);
   const finalPrice = getReadyVariantFinalPrice(basePrice, variant);
+  const sizeCount = countReadyVariantSizes(variant);
 
   function updateName(name: string) {
     updateVariant(variant.id, (prev) => ({
@@ -444,9 +449,9 @@ const ReadyVariantCard = memo(function ReadyVariantCard({
                   </View>
 
                   <FastNumberInput
-                    value={String(selected?.qty || "")}
+                    value={String(selected?.qty || 0)}
                     onChangeText={(t) => updateQty(size, t)}
-                    placeholder="Qty"
+                    placeholder="0"
                     placeholderTextColor={apColors.muted}
                     style={[apStyles.input, styles.inventoryInput]}
                     keyboardType="number-pad"
@@ -464,6 +469,7 @@ const ReadyVariantCard = memo(function ReadyVariantCard({
       <View style={styles.metaRow}>
         <Text style={styles.metaPill}>Rs {finalPrice.toLocaleString()}</Text>
         <Text style={styles.metaPill}>Stock {totalQty}</Text>
+        <Text style={styles.metaPill}>Sizes {sizeCount}</Text>
       </View>
     </View>
   );
