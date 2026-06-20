@@ -336,6 +336,7 @@ export function AddProductSecondaryButton({
 }
 
 export function AddProductFooter({
+  topContent,
   primaryLabel = "Continue",
   primaryIcon,
   onPrimaryPress,
@@ -346,6 +347,7 @@ export function AddProductFooter({
   onSecondaryPress,
   secondaryDisabled,
 }: {
+  topContent?: ReactNode;
   primaryLabel?: string;
   primaryIcon?: MaterialIconName | null;
   onPrimaryPress: () => void;
@@ -365,6 +367,8 @@ export function AddProductFooter({
         keyboardVisible ? apStyles.footerKeyboardVisible : null,
       ]}
     >
+      {topContent}
+
       {disabledHint ? (
         <Text
           style={[

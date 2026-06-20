@@ -566,3 +566,5 @@ Use the project scripts instead of launching Expo through npx:
 For Android:
 
                                                                             npm run android
+
+                                                                            npx.cmd expo start

@@ -1,5 +1,12 @@
-import React, { useMemo, useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Alert,
+  Pressable,
+  StyleSheet,
+  Text,
+  type TextInput,
+  View,
+} from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { useProductDraft } from "@/components/product/ProductDraftContext";
@@ -29,6 +36,10 @@ function safeQty(v: any) {
 
 function sanitizeQty(v: string) {
   return String(v ?? "").replace(/[^\d]/g, "");
+}
+
+function sizeKey(size: string) {
+  return safeStr(size).toLowerCase();
 }
 
 function initialRows(draft: any): SimpleReadyInventoryRow[] {
@@ -63,6 +74,8 @@ export default function Q06B1SimpleReadyInventory() {
   const [rows, setRows] = useState<SimpleReadyInventoryRow[]>(() =>
     initialRows(draft),
   );
+  const qtyInputRefs = useRef<Record<string, TextInput | null>>({});
+  const pendingFocusSizeRef = useRef<string | null>(null);
 
   const sizeOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -92,15 +105,27 @@ export default function Q06B1SimpleReadyInventory() {
     ? "This inventory step is only for ready-to-wear simple products."
     : validationError || "";
 
+  useEffect(() => {
+    const key = pendingFocusSizeRef.current;
+    if (!key) return;
+
+    const timer = setTimeout(() => {
+      qtyInputRefs.current[key]?.focus();
+      pendingFocusSizeRef.current = null;
+    }, 80);
+
+    return () => clearTimeout(timer);
+  }, [rows]);
+
   function toggleSize(size: string) {
+    const key = sizeKey(size);
+    const willSelect = !rows.some((row) => sizeKey(row.size) === key);
+    if (willSelect) pendingFocusSizeRef.current = key;
+
     setRows((prev) => {
-      const exists = prev.some(
-        (row) => row.size.toLowerCase() === size.toLowerCase(),
-      );
+      const exists = prev.some((row) => sizeKey(row.size) === key);
       if (exists) {
-        return prev.filter(
-          (row) => row.size.toLowerCase() !== size.toLowerCase(),
-        );
+        return prev.filter((row) => sizeKey(row.size) !== key);
       }
       return [...prev, { size, qty: 0 }];
     });
@@ -169,6 +194,12 @@ export default function Q06B1SimpleReadyInventory() {
       onBack={closeScreen}
       footer={
         <AddProductFooter
+          topContent={
+            <View style={styles.totalFooter}>
+              <Text style={styles.totalLabel}>Total inventory</Text>
+              <Text style={styles.totalValue}>{totalQty}</Text>
+            </View>
+          }
           onPrimaryPress={saveRows}
           primaryDisabled={!canContinue}
           disabledHint={disabledHint}
@@ -177,53 +208,92 @@ export default function Q06B1SimpleReadyInventory() {
     >
       <View style={apStyles.card}>
         <Text style={apStyles.label}>Available sizes and quantity *</Text>
-        <Text style={apStyles.metaHint}>
-          Select each available size and enter its inventory quantity.
-        </Text>
 
-        <View style={apStyles.chipWrap}>
+        <View style={styles.sizeGrid}>
           {sizeOptions.map((size) => {
-            const selected = rows.some((row) => row.size === size);
+            const selected = rows.find(
+              (row) => sizeKey(row.size) === sizeKey(size),
+            );
 
             return (
-              <Pressable
-                key={size}
-                onPress={() => toggleSize(size)}
-                style={({ pressed }) => [
-                  apStyles.sizeChip,
-                  selected ? apStyles.sizeChipOn : null,
-                  pressed ? apStyles.pressed : null,
-                ]}
-              >
-                <Text
-                  style={[
-                    apStyles.sizeChipText,
-                    selected ? apStyles.sizeChipTextOn : null,
+              <View key={size} style={styles.sizeCell}>
+                <Pressable
+                  onPress={() => toggleSize(size)}
+                  style={({ pressed }) => [
+                    apStyles.sizeChip,
+                    styles.sizePill,
+                    selected ? apStyles.sizeChipOn : null,
+                    pressed ? apStyles.pressed : null,
                   ]}
                 >
-                  {size}
-                </Text>
-              </Pressable>
+                  <Text
+                    style={[
+                      apStyles.sizeChipText,
+                      selected ? apStyles.sizeChipTextOn : null,
+                    ]}
+                  >
+                    {size}
+                  </Text>
+                </Pressable>
+
+                {selected ? (
+                  <FastNumberInput
+                    ref={(input) => {
+                      const key = sizeKey(size);
+                      qtyInputRefs.current[key] = input;
+                    }}
+                    value={String(selected.qty || "")}
+                    onChangeText={(text) => updateQty(size, text)}
+                    placeholder="Qty"
+                    placeholderTextColor={apColors.muted}
+                    style={[apStyles.input, styles.qtyInput]}
+                    keyboardType="number-pad"
+                    showSoftInputOnFocus
+                  />
+                ) : null}
+              </View>
             );
           })}
         </View>
-
-        {rows.map((row) => (
-          <View key={row.size} style={{ marginTop: 12 }}>
-            <Text style={apStyles.label}>{row.size} quantity</Text>
-            <FastNumberInput
-              value={row.qty ? String(row.qty) : ""}
-              onChangeText={(text) => updateQty(row.size, text)}
-              placeholder={`Qty for ${row.size}`}
-              placeholderTextColor={apColors.muted}
-              style={apStyles.input}
-              keyboardType="number-pad"
-            />
-          </View>
-        ))}
-
-        <Text style={apStyles.metaHint}>Total inventory: {totalQty}</Text>
       </View>
     </AddProductScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  sizeGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 10,
+  },
+  sizeCell: {
+    width: "30.5%",
+    minWidth: 82,
+  },
+  sizePill: {
+    width: "100%",
+  },
+  qtyInput: {
+    minHeight: 40,
+    marginTop: 8,
+    paddingHorizontal: 10,
+    textAlign: "center",
+  },
+  totalFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  totalLabel: {
+    color: apColors.muted,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  totalValue: {
+    color: apColors.text,
+    fontSize: 22,
+    fontWeight: "900",
+  },
+});
