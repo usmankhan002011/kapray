@@ -611,6 +611,11 @@ export default function AddProductSubmitScreen() {
     !madeOnOrder &&
     safeStr((draft.spec as any)?.variant_mode) === "ready_variants";
 
+  const hasMadeOrderVariants =
+    productCategory === "stitched_ready" &&
+    madeOnOrder &&
+    safeStr((draft.spec as any)?.variant_mode) === "made_order_variants";
+
   const isSimpleReady =
     productCategory === "stitched_ready" && !madeOnOrder && !hasReadyVariants;
 
@@ -682,7 +687,7 @@ export default function AddProductSubmitScreen() {
       const n = Number((draft.price as any)?.cost_pkr_total ?? 0);
       if (!Number.isFinite(n) || n <= 0) return false;
 
-      if (madeOnOrder) {
+      if (hasMadeOrderVariants) {
         const variantError = validateMadeOrderVariants(madeOrderVariants);
         if (variantError) return false;
       }
@@ -752,6 +757,7 @@ export default function AddProductSubmitScreen() {
     madeOnOrder,
     productCategory,
     hasReadyVariants,
+    hasMadeOrderVariants,
     isSimpleReady,
     simpleReadyInventory,
     readyVariants,
@@ -801,7 +807,7 @@ export default function AddProductSubmitScreen() {
         return;
       }
 
-      if (madeOnOrder) {
+      if (hasMadeOrderVariants) {
         const variantError = validateMadeOrderVariants(madeOrderVariants);
         if (variantError) {
           Alert.alert("Invalid styles", variantError);
@@ -998,7 +1004,7 @@ export default function AddProductSubmitScreen() {
           more_description: safeStr(moreDescription),
 
           product_category: finalCategory,
-          variant_mode: madeOnOrder
+          variant_mode: hasMadeOrderVariants
             ? "made_order_variants"
             : safeStr((draft.spec as any)?.variant_mode ?? ""),
 
@@ -1178,7 +1184,7 @@ export default function AddProductSubmitScreen() {
           })
         : [];
 
-      const uploadedMadeOrderVariants = madeOnOrder
+      const uploadedMadeOrderVariants = hasMadeOrderVariants
         ? await uploadMadeOrderVariantImages({
             vendorId,
             productCode: finalCode,
@@ -1194,7 +1200,7 @@ export default function AddProductSubmitScreen() {
 
       const finalSpec = {
         ...insertPayload.spec,
-        variant_mode: madeOnOrder
+        variant_mode: hasMadeOrderVariants
           ? "made_order_variants"
           : safeStr((draft.spec as any)?.variant_mode ?? ""),
         tailoring_style_presets: unstitchedTailoringEnabled
@@ -1205,7 +1211,9 @@ export default function AddProductSubmitScreen() {
       const finalPrice = {
         ...insertPayload.price,
         variants: hasReadyVariants ? uploadedReadyVariants : [],
-        made_order_variants: madeOnOrder ? uploadedMadeOrderVariants : [],
+        made_order_variants: hasMadeOrderVariants
+          ? uploadedMadeOrderVariants
+          : [],
       };
 
       const { error: updErr } = await supabase

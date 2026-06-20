@@ -220,7 +220,7 @@ export default function Q06B4MadeOrderVariants() {
       return;
     }
 
-    router.push("/vendor/profile/add-product/review" as any);
+    router.push("/vendor/profile/add-product/q11-description" as any);
   }
 
   return (

@@ -88,8 +88,8 @@ export default function Q03MadeOnOrder() {
     if (isStitchedReady && !madeOnOrder) {
       router.push(
         returnTo
-          ? (`/vendor/profile/add-product/q04-inventory?returnTo=${encodeURIComponent(returnTo)}` as any)
-          : ("/vendor/profile/add-product/q04-inventory" as any),
+          ? (`/vendor/profile/add-product/q05a-stitched-total-cost?returnTo=${encodeURIComponent(returnTo)}` as any)
+          : ("/vendor/profile/add-product/q05a-stitched-total-cost" as any),
       );
       return;
     }

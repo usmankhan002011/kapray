@@ -1,13 +1,15 @@
 import React from "react";
-import { Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { useProductDraft } from "@/components/product/ProductDraftContext";
-import { apStyles } from "@/components/product/addProductStyles";
 import {
-  AddProductPrimaryButton,
+  apRadii,
+  apStyles,
+} from "@/components/product/addProductStyles";
+import {
+  AddProductCard,
   AddProductScreen,
-  AddProductSecondaryButton,
 } from "@/components/product/add-product/AddProductWizard";
 
 export default function Q06B1ReadyVariantChoice() {
@@ -37,7 +39,10 @@ export default function Q06B1ReadyVariantChoice() {
     });
     router.push({
       pathname: "/vendor/profile/add-product/q06b2-piece-count" as any,
-      params: returnTo ? { returnTo } : {},
+      params: {
+        ...(returnTo ? { returnTo } : {}),
+        variantMode: "ready_variants",
+      },
     } as any);
   }
 
@@ -55,10 +60,12 @@ export default function Q06B1ReadyVariantChoice() {
       },
     });
 
-    router.replace({
-      pathname:
-        "/vendor/profile/add-product/q06b1-simple-ready-inventory" as any,
-      params: returnTo ? { returnTo } : {},
+    router.push({
+      pathname: "/vendor/profile/add-product/q06b2-piece-count" as any,
+      params: {
+        ...(returnTo ? { returnTo } : {}),
+        variantMode: "simple_ready",
+      },
     } as any);
   }
 
@@ -68,26 +75,65 @@ export default function Q06B1ReadyVariantChoice() {
       onBack={() => router.back()}
       backLabel="Back"
     >
-      <View style={apStyles.card}>
-        <Text style={apStyles.label}>Do you want to add styles?</Text>
+      <AddProductCard>
+        <Text style={apStyles.label}>Add styles?</Text>
         <Text style={apStyles.metaHint}>
-          Add styles for this product with different colors, design
-          alterations, sizes, stock, or additional price if applicable.
+          One style, choose No. Multiple colours/designs, choose Yes.
         </Text>
 
-        <View style={apStyles.btnStack}>
-          <AddProductPrimaryButton
-            label="Yes, add styles"
-            icon="add"
-            onPress={yes}
-          />
-          <AddProductSecondaryButton
-            label="No, continue simple product"
-            icon="arrow-forward"
+        <View style={styles.segmented}>
+          <Pressable
+            accessibilityRole="button"
             onPress={no}
-          />
+            style={({ pressed }) => [
+              styles.segment,
+              styles.segmentLeft,
+              pressed ? apStyles.pressed : null,
+            ]}
+          >
+            <Text style={styles.segmentText}>No</Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={yes}
+            style={({ pressed }) => [
+              styles.segment,
+              pressed ? apStyles.pressed : null,
+            ]}
+          >
+            <Text style={styles.segmentText}>Yes</Text>
+          </Pressable>
         </View>
-      </View>
+      </AddProductCard>
     </AddProductScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  segmented: {
+    marginTop: 14,
+    flexDirection: "row",
+    borderRadius: apRadii.control,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: "#F8FAFF",
+    overflow: "hidden",
+  },
+  segment: {
+    flex: 1,
+    minHeight: 46,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  segmentLeft: {
+    borderRightWidth: 1,
+    borderRightColor: "#D7E3FF",
+  },
+  segmentText: {
+    color: "#2563EB",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+});

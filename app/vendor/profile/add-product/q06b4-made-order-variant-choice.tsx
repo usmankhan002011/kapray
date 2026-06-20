@@ -1,14 +1,13 @@
 import React from "react";
-import { Alert, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
-import { apStyles } from "@/components/product/addProductStyles";
+import { apRadii, apStyles } from "@/components/product/addProductStyles";
 import {
-  AddProductPrimaryButton,
+  AddProductCard,
   AddProductScreen,
-  AddProductSecondaryButton,
 } from "@/components/product/add-product/AddProductWizard";
 
 function safeInt(v: any) {
@@ -125,37 +124,71 @@ export default function Q06B4MadeOrderVariantChoice() {
       return;
     }
 
-    router.push("/vendor/profile/add-product/review" as any);
+    router.push("/vendor/profile/add-product/q11-description" as any);
   }
 
   return (
     <AddProductScreen
-      title="Made-on-order Styles"
+      title="Made-on-order styles"
       onBack={() => router.back()}
       backLabel="Back"
     >
-      <View style={apStyles.card}>
-        <Text style={apStyles.label}>
-          Do you want to add made-on-order styles?
-        </Text>
-        <Text style={apStyles.metaHint}>
-          Add styles for this product with different colors, design alterations,
-          or additional price if applicable.
-        </Text>
+      <AddProductCard>
+        <Text style={apStyles.label}>Add styles?</Text>
 
-        <View style={apStyles.btnStack}>
-          <AddProductPrimaryButton
-            label="Yes, add styles"
-            icon="add"
-            onPress={goYes}
-          />
-          <AddProductSecondaryButton
-            label="No, continue without styles"
-            icon="arrow-forward"
+        <View style={styles.segmented}>
+          <Pressable
+            accessibilityRole="button"
             onPress={goNo}
-          />
+            style={({ pressed }) => [
+              styles.segment,
+              styles.segmentLeft,
+              pressed ? apStyles.pressed : null,
+            ]}
+          >
+            <Text style={styles.segmentText}>No</Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={goYes}
+            style={({ pressed }) => [
+              styles.segment,
+              pressed ? apStyles.pressed : null,
+            ]}
+          >
+            <Text style={styles.segmentText}>Yes</Text>
+          </Pressable>
         </View>
-      </View>
+      </AddProductCard>
     </AddProductScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  segmented: {
+    marginTop: 14,
+    flexDirection: "row",
+    borderRadius: apRadii.control,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: "#F8FAFF",
+    overflow: "hidden",
+  },
+  segment: {
+    flex: 1,
+    minHeight: 46,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  segmentLeft: {
+    borderRightWidth: 1,
+    borderRightColor: "#D7E3FF",
+  },
+  segmentText: {
+    color: "#2563EB",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+});

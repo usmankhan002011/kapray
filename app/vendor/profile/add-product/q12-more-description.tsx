@@ -83,8 +83,6 @@ export default function Q12MoreDescription() {
 
   const category = safeStr((draft?.spec as any)?.product_category ?? "");
   const needsTailoring = category === "unstitched_dyeing_tailoring";
-  const madeOnOrder = Boolean((draft?.spec as any)?.made_on_order ?? false);
-  const isMadeOrderStitched = category === "stitched_ready" && madeOnOrder;
 
   function patchSpec(patch: any) {
     if (typeof ctx.setSpec === "function") {
@@ -243,13 +241,6 @@ export default function Q12MoreDescription() {
     if (needsTailoring) {
       router.push(
         "/vendor/profile/add-product/q06b2-tailoring-styles" as any,
-      );
-      return;
-    }
-
-    if (isMadeOrderStitched) {
-      router.push(
-        "/vendor/profile/add-product/q06b4-made-order-variant-choice" as any,
       );
       return;
     }

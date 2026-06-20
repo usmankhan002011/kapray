@@ -13,7 +13,7 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 2. Start the app
 
    ```bash
-   npx expo start
+   npm run start
    ```
 
 In the output, you'll find options to open the app in a
@@ -51,7 +51,7 @@ Join our community of developers creating universal apps.
 
 ---
 
-npx expo run:android
+npm run android
 
 ---
 
@@ -557,36 +557,12 @@ C:\DEV\kapray\kapray\components\product\view-product\ViewProduct.screen.tsx
 
 ---
 
-Windows file association / npx launcher issue.
+Windows file association / launcher issue.
 
-Run Expo like this instead:
+Use the project scripts instead of launching Expo through npx:
 
-                                                                                  npx.cmd expo start
+                                                                              npm run start
 
-If that works, your npx command is being opened by Windows as an app link.
+For Android:
 
-Also test:
-
-                                                                                    where npx
-                                                                                    where node
-                                                                                    where npm
-
-You should see something like:
-
-C:\Program Files\nodejs\npx.cmd
-C:\Program Files\nodejs\node.exe
-C:\Program Files\nodejs\npm.cmd
-
-If where npx shows only npx or something strange, use this command permanently:
-
-                                                                              npx.cmd expo start --clear
-
-For dev build:
-
-                                                                        npx.cmd expo start --dev-client --clear
-
-If still bad, run:
-
-npm.cmd exec expo start -- --clear
-
-This bypasses broken npx.
+                                                                            npm run android

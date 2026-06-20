@@ -108,7 +108,7 @@ export default function Q05AStitchedTotalCost() {
       return;
     }
 
-    router.push("/vendor/profile/add-product/q06a-sizes" as any);
+    router.push("/vendor/profile/add-product/q06c-shipping" as any);
   }
 
   return (

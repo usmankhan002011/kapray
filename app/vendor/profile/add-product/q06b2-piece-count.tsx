@@ -16,6 +16,11 @@ export default function Q06B2PieceCount() {
   const returnTo = typeof params?.returnTo === "string" ? params.returnTo : "";
   const ctx = useProductDraft() as any;
   const pieceCount = Number(ctx.draft?.spec?.piece_count || 0);
+  const variantMode = String(
+    typeof params?.variantMode === "string"
+      ? params.variantMode
+      : (ctx.draft?.spec?.variant_mode ?? ""),
+  ).trim();
 
   function setSpec(patch: any) {
     if (typeof ctx.setSpec === "function") {
@@ -37,7 +42,10 @@ export default function Q06B2PieceCount() {
 
   function next() {
     router.push({
-      pathname: "/vendor/profile/add-product/q06b3-ready-variants" as any,
+      pathname:
+        variantMode === "simple_ready"
+          ? ("/vendor/profile/add-product/q06b1-simple-ready-inventory" as any)
+          : ("/vendor/profile/add-product/q06b3-ready-variants" as any),
       params: returnTo ? { returnTo } : {},
     } as any);
   }
@@ -56,11 +64,7 @@ export default function Q06B2PieceCount() {
       }
     >
       <View style={apStyles.card}>
-        <Text style={apStyles.label}>How many pieces are included?</Text>
-        <Text style={apStyles.metaHint}>
-          Only select the number of pieces. Piece names are not required because
-          buyers can see them in product images and description.
-        </Text>
+        <Text style={apStyles.label}>How many pieces?</Text>
 
         <View style={apStyles.segmentRow}>
           {READY_PIECE_COUNTS.map((count) => {

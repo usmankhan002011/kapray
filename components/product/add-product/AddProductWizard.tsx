@@ -39,6 +39,24 @@ type WizardStep = {
   match: (pathname: string) => boolean;
 };
 
+function isStitchedStylePath(pathname: string) {
+  return (
+    pathname.includes("/q06b1-ready-variant-choice") ||
+    pathname.includes("/q06b1-simple-ready-inventory") ||
+    pathname.includes("/q06b2-piece-count") ||
+    pathname.includes("/q06b3-ready-variants") ||
+    pathname.includes("/q06b4-made-order-variant-choice") ||
+    pathname.includes("/q06b4-made-order-variants")
+  );
+}
+
+function isStylePath(pathname: string) {
+  return (
+    isStitchedStylePath(pathname) ||
+    pathname.includes("/q06b2-tailoring-styles")
+  );
+}
+
 const STEPS: WizardStep[] = [
   {
     key: "basics",
@@ -56,11 +74,7 @@ const STEPS: WizardStep[] = [
       p.includes("/q04-inventory") ||
       p.includes("/q05") ||
       p.includes("/q06a") ||
-      p.includes("/q06b-services-costs") ||
-      p.includes("/q06b1") ||
-      p.includes("/q06b2-piece-count") ||
-      p.includes("/q06b3") ||
-      p.includes("/q06b4"),
+      p.includes("/q06b-services-costs"),
   },
   {
     key: "shipping",
@@ -73,14 +87,14 @@ const STEPS: WizardStep[] = [
     match: (p) => p.includes("/q09-images") || p.includes("/q10-videos"),
   },
   {
+    key: "styles",
+    label: "Styles",
+    match: isStylePath,
+  },
+  {
     key: "details",
     label: "Details",
     match: (p) => p.includes("/q11-description") || p.includes("/q12-more"),
-  },
-  {
-    key: "styles",
-    label: "Styles",
-    match: (p) => p.includes("/q06b2-tailoring-styles"),
   },
   {
     key: "review",
@@ -89,9 +103,39 @@ const STEPS: WizardStep[] = [
   },
 ];
 
-function getVisibleSteps(pathname: string, tailoringEnabled: boolean) {
-  const includeStyles = tailoringEnabled || pathname.includes("/q06b2-tailoring-styles");
-  return includeStyles ? STEPS : STEPS.filter((step) => step.key !== "styles");
+function moveStylesAfterDetails(steps: WizardStep[]) {
+  const styleStep = steps.find((step) => step.key === "styles");
+  const withoutStyle = steps.filter((step) => step.key !== "styles");
+  const detailsIndex = withoutStyle.findIndex((step) => step.key === "details");
+
+  if (!styleStep || detailsIndex < 0) return steps;
+
+  return [
+    ...withoutStyle.slice(0, detailsIndex + 1),
+    styleStep,
+    ...withoutStyle.slice(detailsIndex + 1),
+  ];
+}
+
+const STEPS_STYLE_AFTER_DETAILS = moveStylesAfterDetails(STEPS);
+
+function getVisibleSteps(pathname: string, draft: any) {
+  const spec = draft?.spec ?? {};
+  const isStitched = String(spec?.product_category ?? "") === "stitched_ready";
+  const isReadyStyleFlow =
+    isStitched ||
+    Boolean(spec?.has_ready_variants) ||
+    spec?.variant_mode === "ready_variants" ||
+    spec?.variant_mode === "made_order_variants" ||
+    isStitchedStylePath(pathname);
+  const includeStyles =
+    Boolean(spec?.tailoring_enabled) ||
+    isReadyStyleFlow ||
+    isStylePath(pathname);
+
+  if (!includeStyles) return STEPS.filter((step) => step.key !== "styles");
+
+  return isReadyStyleFlow ? STEPS : STEPS_STYLE_AFTER_DETAILS;
 }
 
 function getActiveStep(pathname: string, steps: WizardStep[]) {
@@ -124,8 +168,7 @@ export function AddProductProgress() {
   const pathname = usePathname();
   const { draft } = useProductDraft() as any;
   const currentPath = pathname ?? "";
-  const tailoringEnabled = Boolean(draft?.spec?.tailoring_enabled);
-  const steps = getVisibleSteps(currentPath, tailoringEnabled);
+  const steps = getVisibleSteps(currentPath, draft);
   const activeIndex = getActiveStep(currentPath, steps);
 
   return (

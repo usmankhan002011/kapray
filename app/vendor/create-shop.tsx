@@ -820,7 +820,7 @@ export default function CreateShopScreen() {
                   <View style={styles.choiceCardHeader}>
                     <MaterialIcons
                       name={form.offersDyeing ? "check-circle" : "circle"}
-                      size={18}
+                      size={16}
                       color={form.offersDyeing ? "#FFFFFF" : "#3B82F6"}
                     />
                     <Text
@@ -847,7 +847,7 @@ export default function CreateShopScreen() {
                   <View style={styles.choiceCardHeader}>
                     <MaterialIcons
                       name={!form.offersDyeing ? "check-circle" : "circle"}
-                      size={18}
+                      size={16}
                       color={!form.offersDyeing ? "#FFFFFF" : "#3B82F6"}
                     />
                     <Text
@@ -886,7 +886,7 @@ export default function CreateShopScreen() {
                   <View style={styles.choiceCardHeader}>
                     <MaterialIcons
                       name={form.offersTailoring ? "check-circle" : "circle"}
-                      size={18}
+                      size={16}
                       color={form.offersTailoring ? "#FFFFFF" : "#2563EB"}
                     />
                     <Text
@@ -919,7 +919,7 @@ export default function CreateShopScreen() {
                   <View style={styles.choiceCardHeader}>
                     <MaterialIcons
                       name={!form.offersTailoring ? "check-circle" : "circle"}
-                      size={18}
+                      size={16}
                       color={!form.offersTailoring ? "#FFFFFF" : "#2563EB"}
                     />
                     <Text
@@ -952,7 +952,7 @@ export default function CreateShopScreen() {
                   <View style={styles.choiceCardHeader}>
                     <MaterialIcons
                       name={form.exportsEnabled ? "check-circle" : "circle"}
-                      size={18}
+                      size={16}
                       color={form.exportsEnabled ? "#FFFFFF" : "#1D4ED8"}
                     />
                     <Text
@@ -982,7 +982,7 @@ export default function CreateShopScreen() {
                   <View style={styles.choiceCardHeader}>
                     <MaterialIcons
                       name={!form.exportsEnabled ? "check-circle" : "circle"}
-                      size={18}
+                      size={16}
                       color={!form.exportsEnabled ? "#FFFFFF" : "#1D4ED8"}
                     />
                     <Text
@@ -1450,19 +1450,19 @@ const styles = StyleSheet.create({
   },
   choiceGrid: {
     flexDirection: "row",
-    gap: 6,
-    padding: 4,
-    borderRadius: 12,
+    gap: 5,
+    padding: 3,
+    borderRadius: 10,
     backgroundColor: "#F8FAFC",
     borderWidth: 1,
     borderColor: "#E2E8F0",
   },
   choiceCard: {
     flex: 1,
-    minHeight: 48,
-    borderRadius: 9,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    minHeight: 44,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     backgroundColor: "transparent",
     borderWidth: 1,
     borderColor: "transparent",
@@ -1502,8 +1502,8 @@ const styles = StyleSheet.create({
     opacity: 0.82,
   },
   choiceCardTitle: {
-    fontSize: 14,
-    fontWeight: "800",
+    fontSize: 13,
+    fontWeight: "700",
     color: "#2563EB",
   },
   choiceCardTitleYes: {
