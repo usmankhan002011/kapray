@@ -1037,7 +1037,7 @@ export default function ViewProductStitchedVariants({
                 borderRadius: 16,
                 padding: 10,
                 gap: 10,
-                width: showingSimpleReady ? "100%" : "48.2%",
+                width: showingSimpleReady || isActive ? "100%" : "48.2%",
               }}
             >
               {variant.imageUrls.length ? (
@@ -1205,7 +1205,13 @@ export default function ViewProductStitchedVariants({
                   <Text
                     style={[
                       styles.meta,
-                      { color: stylesVars.blue, fontWeight: "800" },
+                      {
+                        color:
+                          readOnly || selectedSize
+                            ? stylesVars.blue
+                            : stylesVars.danger,
+                        fontWeight: "800",
+                      },
                     ]}
                   >
                     {readOnly

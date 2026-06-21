@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -225,6 +226,43 @@ const PAKISTAN_CITY_OPTIONS = [
 
 const norm = (v: unknown) => (v == null ? "" : String(v).trim());
 
+const AUTO_COUNTRY_BY_EXPORT_REGION: Record<string, string> = {
+  UK: "United Kingdom",
+  USA: "United States",
+  CANADA: "Canada",
+  KSA: "Saudi Arabia",
+  UAE: "United Arab Emirates",
+  AUSTRALIA: "Australia",
+};
+
+const MANUAL_COUNTRY_EXPORT_REGIONS = new Set(["EUROPE"]);
+
+function exportRegionKey(region: unknown) {
+  return norm(region).toUpperCase();
+}
+
+function countryForExportRegion(region: unknown) {
+  return AUTO_COUNTRY_BY_EXPORT_REGION[exportRegionKey(region)] ?? "";
+}
+
+function exportRegionNeedsCountry(region: unknown) {
+  return MANUAL_COUNTRY_EXPORT_REGIONS.has(exportRegionKey(region));
+}
+
+function isBlankOrAutoCountry(value: unknown) {
+  const country = norm(value).toLowerCase();
+  if (!country || country === "pakistan") return true;
+
+  const autoCountries = Object.values(AUTO_COUNTRY_BY_EXPORT_REGION).map((x) =>
+    x.toLowerCase(),
+  );
+  const autoRegionKeys = Object.keys(AUTO_COUNTRY_BY_EXPORT_REGION).map((x) =>
+    x.toLowerCase(),
+  );
+
+  return autoCountries.includes(country) || autoRegionKeys.includes(country);
+}
+
 function firstNonEmpty(...vals: Array<unknown>) {
   for (const v of vals) {
     const s = norm(v);
@@ -261,6 +299,7 @@ function normalizeSavedCheckoutAddress(
   const row = value as LastCheckoutAddress;
   const normalizedDestinationType =
     row.destinationType === "export" ? "export" : "inland";
+  const normalizedExportRegion = norm(row.exportRegion);
 
   const saved: LastCheckoutAddress = {
     buyerName: norm(row.buyerName),
@@ -271,9 +310,9 @@ function normalizeSavedCheckoutAddress(
     country:
       normalizedDestinationType === "inland"
         ? "Pakistan"
-        : norm(row.country) || "Pakistan",
+        : norm(row.country) || countryForExportRegion(normalizedExportRegion),
     destinationType: normalizedDestinationType,
-    exportRegion: norm(row.exportRegion),
+    exportRegion: normalizedExportRegion,
   };
 
   if (
@@ -351,6 +390,7 @@ function cleanReadyToWearTitle(title: string, selectedSize: string) {
 }
 
 function prettyCategory(v: string) {
+  if (v === "stitched_ready") return "Ready to wear";
   return v.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
@@ -1110,11 +1150,45 @@ export default function PlaceOrderScreen() {
   }, [destinationType, country]);
 
   useEffect(() => {
+    if (destinationType !== "export") return;
+
+    const autoCountry = countryForExportRegion(exportRegion);
+    if (autoCountry) {
+      if (country !== autoCountry) setCountry(autoCountry);
+      return;
+    }
+
+    if (!exportRegion.trim()) {
+      if (country === "Pakistan") setCountry("");
+      return;
+    }
+
+    if (exportRegionNeedsCountry(exportRegion) && isBlankOrAutoCountry(country)) {
+      if (country) setCountry("");
+    }
+  }, [destinationType, exportRegion, country]);
+
+  useEffect(() => {
     if (destinationType !== "inland") return;
     if (city.trim()) return;
     const inferred = inferCityFromAddress(deliveryAddress);
     if (inferred) setCity(inferred);
   }, [deliveryAddress, destinationType, city]);
+
+  const onSelectExportRegion = useCallback((region: string) => {
+    setExportRegion(region);
+
+    const autoCountry = countryForExportRegion(region);
+    if (autoCountry) {
+      setCountry(autoCountry);
+      return;
+    }
+
+    if (exportRegionNeedsCountry(region)) {
+      setCountry((current) => (isBlankOrAutoCountry(current) ? "" : current));
+      Alert.alert("Country required", "Please enter country.");
+    }
+  }, []);
 
   const fullAddressPreview = useMemo(() => {
     return buildFullAddress({
@@ -1426,7 +1500,18 @@ export default function PlaceOrderScreen() {
       ? prettyCategory(base.productCategory)
       : "—";
   const exportRegionsText = joinRegions(exportRegionList);
-  const displayCountry = destinationType === "inland" ? "Pakistan" : country;
+  const exportAutoCountry = countryForExportRegion(exportRegion);
+  const countryAutoFilled =
+    destinationType === "inland" ||
+    (destinationType === "export" && !!exportAutoCountry);
+  const countryNeedsManual =
+    destinationType === "export" && exportRegionNeedsCountry(exportRegion);
+  const countryMissing =
+    destinationType === "export" &&
+    countryNeedsManual &&
+    country.trim().length < 2;
+  const displayCountry =
+    destinationType === "inland" ? "Pakistan" : exportAutoCountry || country;
   const selectedReadyVariantTitle = resolved.shouldShowSelectedStitchedVariant
     ? cleanReadyToWearTitle(
         base.selectedVariantTitle || "Selected style",
@@ -1809,6 +1894,20 @@ export default function PlaceOrderScreen() {
                 onPress={() => {
                   if (!resolved.exportsEnabled) return;
                   setDestinationType("export");
+                  if (!exportRegion.trim()) {
+                    setCountry((current) =>
+                      isBlankOrAutoCountry(current) ? "" : current,
+                    );
+                    return;
+                  }
+                  const autoCountry = countryForExportRegion(exportRegion);
+                  if (autoCountry) {
+                    setCountry(autoCountry);
+                  } else if (exportRegionNeedsCountry(exportRegion)) {
+                    setCountry((current) =>
+                      isBlankOrAutoCountry(current) ? "" : current,
+                    );
+                  }
                 }}
               />
             </View>
@@ -1826,7 +1925,7 @@ export default function PlaceOrderScreen() {
                       key={region}
                       label={region}
                       selected={exportRegion === region}
-                      onPress={() => setExportRegion(region)}
+                      onPress={() => onSelectExportRegion(region)}
                     />
                   ))}
                 </View>
@@ -1890,11 +1989,12 @@ export default function PlaceOrderScreen() {
             <TextInput
               value={displayCountry}
               onChangeText={setCountry}
-              placeholder="e.g., Pakistan"
-              editable={destinationType !== "inland"}
+              placeholder={countryNeedsManual ? "e.g., Germany" : "e.g., Pakistan"}
+              editable={!countryAutoFilled}
               style={[
                 styles.input,
-                destinationType === "inland" ? styles.disabledInput : null,
+                countryAutoFilled ? styles.disabledInput : null,
+                countryMissing ? styles.validationInput : null,
               ]}
               placeholderTextColor={stylesVars.placeholder}
             />
@@ -2177,6 +2277,7 @@ const styles = StyleSheet.create({
 
   productMetaWrap: {
     flex: 1,
+    minWidth: 0,
     gap: 8,
   },
 
@@ -2205,9 +2306,12 @@ const styles = StyleSheet.create({
   productMetaValue: {
     fontFamily: apFontFamily,
     fontSize: 13,
+    lineHeight: 18,
     color: stylesVars.text,
     fontWeight: "700",
     letterSpacing: 0,
+    flexShrink: 1,
+    flexWrap: "wrap",
   },
 
   heroPrice: {
@@ -2468,6 +2572,10 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     backgroundColor: stylesVars.white,
     letterSpacing: 0,
+  },
+
+  validationInput: {
+    borderColor: stylesVars.danger,
   },
 
   multiline: {
