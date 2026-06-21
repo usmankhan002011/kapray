@@ -41,6 +41,7 @@ type CleanDyeSplit = {
 
 const DYE_SPLIT_TOLERANCE_M = 0.01;
 const FABRIC_STOCK_EPSILON_M = 0.05;
+const SIZE_SELECT_NAV_DELAY_MS = 120;
 const UNSTITCHED_SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
 
 const stylesVars = {
@@ -284,6 +285,12 @@ export default function SizeScreen() {
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
   const [zoomColorHex, setZoomColorHex] = useState("");
+  const [pendingStandardSize, setPendingStandardSize] = useState("");
+  const [pendingExactOpen, setPendingExactOpen] = useState(false);
+  const standardNavTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const exactNavTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const dyePalette = useMemo(
     () =>
@@ -620,7 +627,7 @@ export default function SizeScreen() {
     return u === "in" ? "in" : "cm";
   }, [params.unit]);
 
-  const selectedStandardSize = useMemo(
+  const routeSelectedStandardSize = useMemo(
     () =>
       safeDecode(
         params.selected_unstitched_size ||
@@ -637,6 +644,19 @@ export default function SizeScreen() {
       params.selectedSize,
     ],
   );
+  const selectedStandardSize =
+    pendingStandardSize || routeSelectedStandardSize;
+
+  useEffect(() => {
+    return () => {
+      if (standardNavTimerRef.current) {
+        clearTimeout(standardNavTimerRef.current);
+      }
+      if (exactNavTimerRef.current) {
+        clearTimeout(exactNavTimerRef.current);
+      }
+    };
+  }, []);
 
   const selectedStandardFabricLength = useMemo(
     () =>
@@ -813,8 +833,9 @@ export default function SizeScreen() {
 
     const fabricCostPkr = isUnstitched ? pricePerMeterPkr * fabricLengthM : 0;
     const encodedSize = encodeURIComponent(size);
+    setPendingStandardSize(size);
 
-    goPlaceOrder({
+    const nextParams = {
       mode: "standard",
       selectedSize: encodedSize,
       selected_size: encodedSize,
@@ -854,7 +875,15 @@ export default function SizeScreen() {
       custom_value_3: "",
       custom_label_4: "",
       custom_value_4: "",
-    });
+    };
+
+    if (standardNavTimerRef.current) {
+      clearTimeout(standardNavTimerRef.current);
+    }
+
+    standardNavTimerRef.current = setTimeout(() => {
+      goPlaceOrder(nextParams);
+    }, SIZE_SELECT_NAV_DELAY_MS);
   };
 
   const onContinueMeter = () => {
@@ -1007,6 +1036,19 @@ export default function SizeScreen() {
         mode: "exact",
       },
     });
+  };
+
+  const onPressExactToggle = () => {
+    setPendingExactOpen(true);
+
+    if (exactNavTimerRef.current) {
+      clearTimeout(exactNavTimerRef.current);
+    }
+
+    exactNavTimerRef.current = setTimeout(() => {
+      setPendingExactOpen(false);
+      openExactMeasurements();
+    }, SIZE_SELECT_NAV_DELAY_MS);
   };
 
   return (
@@ -1308,8 +1350,21 @@ export default function SizeScreen() {
             </Text>
           </Pressable>
 
-          <Pressable onPress={openExactMeasurements} style={styles.toggleBtn}>
-            <Text style={styles.toggleText}>Exact</Text>
+          <Pressable
+            onPress={onPressExactToggle}
+            style={[
+              styles.toggleBtn,
+              pendingExactOpen ? styles.toggleActive : null,
+            ]}
+          >
+            <Text
+              style={[
+                styles.toggleText,
+                pendingExactOpen ? styles.toggleTextActive : null,
+              ]}
+            >
+              Exact
+            </Text>
           </Pressable>
         </View>
 
