@@ -451,7 +451,13 @@ export function MediaBlock(props: {
             </ScrollView>
           </>
         ) : (
-          <Text style={styles.empty}>—</Text>
+          <View style={styles.mediaEmptyBox}>
+            <Text style={styles.mediaEmptyKicker}>Videos</Text>
+            <Text style={styles.mediaEmptyTitle}>
+              No videos uploaded by vendor
+            </Text>
+            <Text style={styles.mediaEmptyText}>Images only for this product.</Text>
+          </View>
         )}
       </View>
 
@@ -556,7 +562,13 @@ export function MediaBlock(props: {
             </ScrollView>
           </>
         ) : (
-          <Text style={styles.empty}>—</Text>
+          <View style={styles.mediaEmptyBox}>
+            <Text style={styles.mediaEmptyKicker}>Videos</Text>
+            <Text style={styles.mediaEmptyTitle}>
+              No videos uploaded by vendor
+            </Text>
+            <Text style={styles.mediaEmptyText}>Images only for this product.</Text>
+          </View>
         )}
       </View>
 

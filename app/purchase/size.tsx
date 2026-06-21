@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Modal,
   Pressable,
@@ -10,6 +10,11 @@ import {
 } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+} from "@/components/product/addProductStyles";
 import { generateDyePalette } from "@/utils/kapray/dyePalette";
 import ExactMeasurementsModal from "../(tabs)/flow/purchase/exact-measurements-modal";
 import type { ExactMeasurementSheetRow } from "../(tabs)/flow/purchase/exact-measurements-sheet";
@@ -39,20 +44,20 @@ const FABRIC_STOCK_EPSILON_M = 0.05;
 const UNSTITCHED_SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
 
 const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
+  bg: apColors.bg,
+  cardBg: apColors.card,
+  border: apColors.border,
+  borderSoft: apColors.borderSoft,
+  blue: apColors.blue,
+  blueSoft: apColors.blueSoft,
+  text: apColors.text,
+  subText: apColors.subText,
+  mutedText: apColors.muted,
   placeholder: "#94A3B8",
-  danger: "#B91C1C",
-  white: "#FFFFFF",
-  green: "#065F46",
-  greenSoft: "#ECFDF5",
+  danger: apColors.danger,
+  white: apColors.white,
+  green: apColors.success,
+  greenSoft: apColors.successSoft,
 };
 
 function norm(v: unknown) {
@@ -382,6 +387,17 @@ export default function SizeScreen() {
     );
     return existing > 0 ? String(existing) : "";
   });
+  const fabricLengthInputRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    if (!isFabricByMeterPurchase) return;
+
+    const focusTimer = setTimeout(() => {
+      fabricLengthInputRef.current?.focus();
+    }, 250);
+
+    return () => clearTimeout(focusTimer);
+  }, [isFabricByMeterPurchase]);
 
   const selectedVariantSnapshot = useMemo(
     () => safeJsonDecode<any>(params.selected_stitched_variant_snapshot, null),
@@ -1080,6 +1096,7 @@ export default function SizeScreen() {
               ) : null}
             </View>
             <TextInput
+              ref={fabricLengthInputRef}
               value={fabricLengthText}
               onChangeText={(next) => setFabricLengthText(sanitizeNumber(next))}
               placeholder="e.g., 2.5"
@@ -1272,6 +1289,12 @@ export default function SizeScreen() {
             >
               <Text style={styles.primaryInlineText}>Continue</Text>
             </Pressable>
+
+            {selectedMeterLength <= 0 ? (
+              <Text style={styles.bottomInstruction}>
+                Fill fabric length to purchase.
+              </Text>
+            ) : null}
           </View>
         ) : (
           <>
@@ -1546,31 +1569,37 @@ const styles = StyleSheet.create({
   },
 
   title: {
+    fontFamily: apFontFamily,
     fontSize: 18,
     fontWeight: "700",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   summaryCard: {
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 16,
+    borderRadius: apRadii.card,
     padding: 14,
     backgroundColor: stylesVars.cardBg,
     gap: 6,
   },
 
   summaryText: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   summaryStrong: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.text,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   toggleRow: {
@@ -1586,7 +1615,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: "#D7E3FF",
-    borderRadius: 999,
+    borderRadius: apRadii.pill,
     backgroundColor: stylesVars.blueSoft,
     alignItems: "center",
     justifyContent: "center",
@@ -1598,9 +1627,11 @@ const styles = StyleSheet.create({
   },
 
   toggleText: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     fontWeight: "700",
     color: stylesVars.blue,
+    letterSpacing: 0,
   },
 
   toggleTextActive: {
@@ -1610,16 +1641,18 @@ const styles = StyleSheet.create({
   sectionCard: {
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 16,
+    borderRadius: apRadii.card,
     padding: 14,
     backgroundColor: stylesVars.cardBg,
     gap: 10,
   },
 
   sectionTitle: {
+    fontFamily: apFontFamily,
     fontSize: 14,
     fontWeight: "700",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   fabricLengthHeader: {
@@ -1632,7 +1665,7 @@ const styles = StyleSheet.create({
   iconButton: {
     width: 34,
     height: 34,
-    borderRadius: 999,
+    borderRadius: apRadii.pill,
     borderWidth: 1,
     borderColor: "#D7E3FF",
     backgroundColor: stylesVars.blueSoft,
@@ -1644,13 +1677,15 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderWidth: 1,
     borderColor: stylesVars.borderSoft,
-    borderRadius: 12,
+    borderRadius: apRadii.control,
     paddingHorizontal: 12,
     paddingVertical: 10,
     backgroundColor: stylesVars.white,
     color: stylesVars.text,
+    fontFamily: apFontFamily,
     fontSize: 14,
     fontWeight: "600",
+    letterSpacing: 0,
   },
 
   inputReadOnly: {
@@ -1659,10 +1694,12 @@ const styles = StyleSheet.create({
   },
 
   helper: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   sizeGrid: {
@@ -1676,7 +1713,7 @@ const styles = StyleSheet.create({
     minHeight: 34,
     paddingVertical: 7,
     paddingHorizontal: 10,
-    borderRadius: 999,
+    borderRadius: apRadii.pill,
     borderWidth: 1,
     borderColor: "#D7E3FF",
     backgroundColor: stylesVars.blueSoft,
@@ -1696,9 +1733,11 @@ const styles = StyleSheet.create({
   },
 
   sizeText: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     fontWeight: "700",
     color: stylesVars.blue,
+    letterSpacing: 0,
   },
 
   sizeTextOn: {
@@ -1713,29 +1752,33 @@ const styles = StyleSheet.create({
     marginTop: 4,
     borderWidth: 1,
     borderColor: "#D7E3FF",
-    borderRadius: 14,
+    borderRadius: apRadii.card,
     padding: 12,
     backgroundColor: stylesVars.blueSoft,
     gap: 4,
   },
 
   costLine: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   costStrong: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.text,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   dyeSplitBox: {
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 14,
+    borderRadius: apRadii.card,
     padding: 12,
     backgroundColor: "#F8FAFC",
     gap: 10,
@@ -1749,15 +1792,19 @@ const styles = StyleSheet.create({
   },
 
   dyeSplitTitle: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     color: stylesVars.text,
     fontWeight: "800",
+    letterSpacing: 0,
   },
 
   dyeSplitMeta: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.mutedText,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   dyePalettePanel: {
@@ -1902,23 +1949,27 @@ const styles = StyleSheet.create({
   exactSummaryCard: {
     borderWidth: 1,
     borderColor: "#A7F3D0",
-    borderRadius: 16,
+    borderRadius: apRadii.card,
     padding: 14,
     backgroundColor: stylesVars.greenSoft,
     gap: 6,
   },
 
   resultLine: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.subText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   resultStrong: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.text,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   exactActionsRow: {
@@ -1932,7 +1983,7 @@ const styles = StyleSheet.create({
     minHeight: 38,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: apRadii.control,
     backgroundColor: stylesVars.blue,
     alignItems: "center",
     justifyContent: "center",
@@ -1943,16 +1994,18 @@ const styles = StyleSheet.create({
   },
 
   primaryInlineText: {
+    fontFamily: apFontFamily,
     color: stylesVars.white,
     fontSize: 12,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   secondaryInlineBtn: {
     minHeight: 38,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: apRadii.control,
     backgroundColor: stylesVars.white,
     borderWidth: 1,
     borderColor: "#D7E3FF",
@@ -1961,9 +2014,11 @@ const styles = StyleSheet.create({
   },
 
   secondaryInlineText: {
+    fontFamily: apFontFamily,
     color: stylesVars.blue,
     fontSize: 12,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   modalOverlay: {
@@ -1975,7 +2030,7 @@ const styles = StyleSheet.create({
 
   modalCard: {
     maxHeight: "76%",
-    borderRadius: 16,
+    borderRadius: apRadii.card,
     backgroundColor: stylesVars.cardBg,
     borderWidth: 1,
     borderColor: stylesVars.border,
@@ -2060,10 +2115,21 @@ const styles = StyleSheet.create({
   },
 
   validation: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.danger,
     fontWeight: "500",
+    letterSpacing: 0,
+  },
+
+  bottomInstruction: {
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.danger,
+    fontWeight: "800",
+    letterSpacing: 0,
   },
 
   closeBtn: {
@@ -2071,7 +2137,7 @@ const styles = StyleSheet.create({
     minHeight: 36,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 999,
+    borderRadius: apRadii.pill,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
     borderColor: "#D7E3FF",
@@ -2080,8 +2146,10 @@ const styles = StyleSheet.create({
   },
 
   link: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.blue,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 });

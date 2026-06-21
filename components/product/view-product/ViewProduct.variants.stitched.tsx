@@ -928,7 +928,9 @@ export default function ViewProductStitchedVariants({
                         justifyContent: "center",
                         backgroundColor: isActive
                           ? stylesVars.blue
-                          : stylesVars.blueSoft,
+                          : "#FFFFFF",
+                        borderWidth: 1,
+                        borderColor: isActive ? stylesVars.blue : "#D7E3FF",
                       }}
                     >
                       <Text
@@ -955,7 +957,7 @@ export default function ViewProductStitchedVariants({
                           paddingVertical: 10,
                           alignItems: "center",
                           justifyContent: "center",
-                          backgroundColor: "#EEF4FF",
+                          backgroundColor: "#FFFFFF",
                           borderWidth: 1,
                           borderColor: "#D7E3FF",
                         },
@@ -1146,7 +1148,9 @@ export default function ViewProductStitchedVariants({
                         justifyContent: "center",
                         backgroundColor: isActive
                           ? stylesVars.blue
-                          : stylesVars.blueSoft,
+                          : "#FFFFFF",
+                        borderWidth: 1,
+                        borderColor: isActive ? stylesVars.blue : "#D7E3FF",
                         opacity: hasAvailableSize ? 1 : 0.5,
                       },
                       pressed && hasAvailableSize ? styles.pressed : null,
@@ -1176,7 +1180,7 @@ export default function ViewProductStitchedVariants({
                         paddingVertical: 10,
                         alignItems: "center",
                         justifyContent: "center",
-                        backgroundColor: "#EEF4FF",
+                        backgroundColor: "#FFFFFF",
                         borderWidth: 1,
                         borderColor: "#D7E3FF",
                       },

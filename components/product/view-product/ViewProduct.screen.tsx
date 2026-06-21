@@ -1020,9 +1020,11 @@ export default function ViewProductScreen() {
     return (
       <View style={styles.specRow}>
         <Text style={[styles.specLabel, { color: stylesVars.blue }]}>
-          {title}:
+          {title}
         </Text>
-        <Text style={styles.specValue}>{list.join(", ")}</Text>
+        <Text style={[styles.specValue, styles.specPlainValue]}>
+          {list.join(", ")}
+        </Text>
       </View>
     );
   };
@@ -1051,7 +1053,7 @@ export default function ViewProductScreen() {
             borderRadius: 999,
             borderWidth: 1,
             borderColor: selected ? stylesVars.blue : "#D7E3FF",
-            backgroundColor: selected ? stylesVars.blue : "#EEF4FF",
+            backgroundColor: selected ? stylesVars.blue : "#FFFFFF",
             opacity: disabled ? 0.5 : 1,
           },
           pressed ? styles.pressed : null,
@@ -1259,6 +1261,11 @@ export default function ViewProductScreen() {
     return !isStitchedReady;
   }, [isStitchedReady, productCategory]);
 
+  const isUnstitchedPlain = productCategory === "unstitched_plain";
+  const usePlainReadOnlySummary =
+    productCategory === "unstitched_plain" ||
+    productCategory === "unstitched_dyeing";
+
   const isFabricByMeterPurchase = useMemo(() => {
     return (
       productCategory === "unstitched_plain" ||
@@ -1451,16 +1458,23 @@ export default function ViewProductScreen() {
   }, [buyerWantsTailoring, setBuyerWantsTailoring, tailoringEligible]);
 
   const showTailoringSection = useMemo(() => {
-    return Boolean(product) && showBuyerActions && isUnstitched;
-  }, [isUnstitched, product, showBuyerActions]);
+    return (
+      Boolean(product) &&
+      showBuyerActions &&
+      productCategory === "unstitched_dyeing_tailoring"
+    );
+  }, [product, productCategory, showBuyerActions]);
 
   const showVendorDyeingPreview = useMemo(() => {
     return showVendorReadOnlyPreview && showDyeing;
   }, [showDyeing, showVendorReadOnlyPreview]);
 
   const showVendorTailoringPreview = useMemo(() => {
-    return showVendorReadOnlyPreview && isUnstitched;
-  }, [isUnstitched, showVendorReadOnlyPreview]);
+    return (
+      showVendorReadOnlyPreview &&
+      productCategory === "unstitched_dyeing_tailoring"
+    );
+  }, [productCategory, showVendorReadOnlyPreview]);
 
   const categoryText = useMemo(() => {
     if (productCategory === "stitched_ready" && isMadeOnOrder) {
@@ -1885,13 +1899,33 @@ export default function ViewProductScreen() {
     isOutOfStock ||
     (isStitchedReady && !selectedStitchedVariant);
 
-  const CompactLine = ({ text }: { text: string | null }) => {
-    if (!text) return null;
+  const SummaryItem = ({
+    label,
+    value,
+  }: {
+    label: string;
+    value: string | null;
+  }) => {
+    if (!value) return null;
 
     return (
-      <Text style={styles.compactLine} numberOfLines={2}>
-        {text}
-      </Text>
+      <View style={styles.summaryItem}>
+        <Text style={styles.summaryLabel}>{label}</Text>
+        <Text style={styles.summaryValue} numberOfLines={2}>
+          {value}
+        </Text>
+      </View>
+    );
+  };
+
+  const DataItem = ({ label, value }: { label: string; value: string | null }) => {
+    if (!value) return null;
+
+    return (
+      <View style={styles.dataRow}>
+        <Text style={styles.dataLabel}>{label}</Text>
+        <Text style={styles.dataValue}>{value}</Text>
+      </View>
     );
   };
 
@@ -1909,12 +1943,12 @@ export default function ViewProductScreen() {
     if (!s) return null;
     if (s === "Made on order") return s;
     if (s.startsWith("Fabric ")) {
-      return `In Stock Fabric: ${s.replace(/^Fabric\s+/, "")}`;
+      return s.replace(/^Fabric\s+/, "");
     }
     if (s.startsWith("Qty ")) {
-      return `In Stock Qty: ${s.replace(/^Qty\s+/, "")}`;
+      return s.replace(/^Qty\s+/, "");
     }
-    return `In Stock: ${s}`;
+    return s;
   }, [inventoryText]);
 
   const priceLine = useMemo(() => compactLineValue(priceText), [priceText]);
@@ -1923,7 +1957,7 @@ export default function ViewProductScreen() {
     if (isFabricByMeterPurchase) return null;
     const s = compactLineValue(sizeText);
     if (!s) return null;
-    return `Sizes: ${s}`;
+    return s;
   }, [isFabricByMeterPurchase, sizeText]);
 
   const uploadedDate = useMemo(
@@ -2016,15 +2050,29 @@ export default function ViewProductScreen() {
         />
 
         <View style={styles.compactBlock}>
-          <CompactLine text={titleLine} />
-          <CompactLine text={categoryLine} />
+          <View style={styles.summaryHeader}>
+            <Text style={styles.summaryTitle} numberOfLines={2}>
+              {titleLine ?? "Product"}
+            </Text>
 
-          {!isStitchedReady ? (
-            <>
-              <CompactLine text={priceLine} />
-              <CompactLine text={sizesLine} />
-              <CompactLine text={inventoryLine} />
-            </>
+            {categoryLine ? (
+              <Text style={styles.summaryCategoryLine}>{categoryLine}</Text>
+            ) : null}
+          </View>
+
+          {!isStitchedReady && usePlainReadOnlySummary ? (
+            <View style={styles.dataGroup}>
+              <DataItem label="Price" value={priceLine} />
+              <DataItem label="Stock" value={inventoryLine} />
+            </View>
+          ) : null}
+
+          {!isStitchedReady && !usePlainReadOnlySummary ? (
+            <View style={styles.summaryGrid}>
+              <SummaryItem label="Price" value={priceLine} />
+              <SummaryItem label="Sizes" value={sizesLine} />
+              <SummaryItem label="Stock" value={inventoryLine} />
+            </View>
           ) : null}
 
           {!isStitchedReady &&
@@ -2062,14 +2110,13 @@ export default function ViewProductScreen() {
             </View>
           ) : null}
 
-          {isUnstitched ? (
-            <>
-              <CompactLine text={tailoringAvailabilityLine} />
-            </>
+          {isUnstitched && !isUnstitchedPlain ? (
+            <Text style={styles.summaryNote}>{tailoringAvailabilityLine}</Text>
           ) : null}
 
           {showReadOnlyProductOfferings &&
           isUnstitched &&
+          !isUnstitchedPlain &&
           !hasAnySizeLengthMap ? (
             <Text style={[styles.meta, { marginTop: 8 }]}>
               Size-length mapping not available.
