@@ -12,7 +12,6 @@ import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 import {
   UpdateProductActionButton,
   UpdateProductEmptyState,
-  UpdateProductNotice,
 } from "./UpdateProduct.components";
 import {
   resolveVariantImageUrls,
@@ -26,6 +25,7 @@ import { styles, stylesVars } from "./UpdateProduct.styles";
 type StitchedVariantInventorySectionProps = {
   variants: EditableReadyVariant[];
   resolvePublicUrl: (path: string | null | undefined) => string | null;
+  onAdditionalPriceChangeText: (variantId: string, value: string) => void;
   onSizeQtyChange: (variantId: string, size: string, value: string) => void;
 };
 
@@ -69,12 +69,7 @@ export function ExistingMadeOrderVariantList({
   variants,
 }: ExistingMadeOrderVariantListProps) {
   if (!variants.length) {
-    return (
-      <UpdateProductEmptyState
-        title="No saved made-on-order styles"
-        message="Add a style below; it will become available after Save Changes."
-      />
-    );
+    return <UpdateProductEmptyState title="No saved styles" />;
   }
 
   return (
@@ -92,7 +87,7 @@ export function ExistingMadeOrderVariantList({
 export function AddReadyVariantButton({ onPress }: AddReadyVariantButtonProps) {
   return (
     <UpdateProductActionButton
-      label="Add New Style"
+      label="Add new Styles"
       icon="add"
       onPress={onPress}
       size="medium"
@@ -106,7 +101,7 @@ export function AddMadeOrderVariantButton({
 }: AddMadeOrderVariantButtonProps) {
   return (
     <UpdateProductActionButton
-      label="Add Made-on-order Style"
+      label="Add Style"
       icon="add"
       onPress={onPress}
       size="medium"
@@ -118,37 +113,27 @@ export function AddMadeOrderVariantButton({
 export function StitchedVariantInventorySection({
   variants,
   resolvePublicUrl,
+  onAdditionalPriceChangeText,
   onSizeQtyChange,
 }: StitchedVariantInventorySectionProps) {
   if (!variants.length) return null;
 
-  const totalQty = variants.reduce(
-    (sum, variant) =>
-      sum +
-      variant.sizes.reduce((sizeSum, row) => sizeSum + Number(row.qty || 0), 0),
-    0,
-  );
-
   return (
     <View style={styles.variantInventoryBox}>
-      <Text style={styles.variantInventoryTitle}>
-        Ready-to-wear style inventory
-      </Text>
-      <Text style={styles.hint}>
-        Update saved style stock by size. Changes apply when you save.
-      </Text>
-
-      {totalQty <= 0 ? (
-        <UpdateProductNotice title="All saved style stock is 0" tone="warning">
-          Add quantity to at least one size to show available ready stock.
-        </UpdateProductNotice>
-      ) : null}
+      <Text style={styles.variantInventoryTitle}>Edit Styles</Text>
 
       {variants.map((variant) => {
         const variantImageUrls = resolveVariantImageUrls(
           variant,
           resolvePublicUrl,
         );
+        const variantTotalQty = variant.sizes.reduce(
+          (sum, row) => sum + Number(row.qty || 0),
+          0,
+        );
+        const variantUsedSizes = variant.sizes.filter(
+          (row) => Number(row.qty || 0) > 0,
+        ).length;
 
         return (
           <View key={variant.id} style={styles.variantCard}>
@@ -161,8 +146,21 @@ export function StitchedVariantInventorySection({
                 resizeMode="cover"
               />
             ) : (
-              <Text style={styles.emptyInline}>No style image found.</Text>
+              <Text style={styles.emptyInline}>No image</Text>
             )}
+
+            <Text style={styles.label}>Additional Cost (PKR)</Text>
+            <FastNumberInput
+              value={String(variant.additional_price_pkr ?? 0)}
+              onChangeText={(value) =>
+                onAdditionalPriceChangeText(variant.id, value)
+              }
+              placeholder="0"
+              placeholderTextColor={stylesVars.placeholder}
+              style={styles.input}
+              keyboardType="number-pad"
+              maxLength={8}
+            />
 
             <View style={styles.variantSizeGrid}>
               {variant.sizes.map((row) => (
@@ -185,6 +183,10 @@ export function StitchedVariantInventorySection({
                 </View>
               ))}
             </View>
+
+            <Text style={styles.variantCardMeta}>
+              Stock: {variantTotalQty} | Sizes: {variantUsedSizes}
+            </Text>
           </View>
         );
       })}
@@ -208,10 +210,7 @@ export function ReadyVariantDraftCard({
       <View style={styles.draftHeaderRow}>
         <View style={styles.sectionHeaderText}>
           <Text style={styles.variantCardTitle}>
-            New Ready Style {existingVariantCount + index + 1}
-          </Text>
-          <Text style={styles.emptyInline}>
-            Queued addition, saved after Save Changes.
+            New Style {existingVariantCount + index + 1}
           </Text>
         </View>
 
@@ -233,7 +232,7 @@ export function ReadyVariantDraftCard({
         maxLength={80}
       />
 
-      <Text style={styles.label}>Additional Price (PKR)</Text>
+      <Text style={styles.label}>Additional Cost (PKR)</Text>
       <FastNumberInput
         value={String(variant.additional_price_pkr ?? 0)}
         onChangeText={(value) => onAdditionalPriceChangeText(index, value)}
@@ -279,10 +278,7 @@ export function ReadyVariantDraftCard({
           </View>
         </ScrollView>
       ) : (
-        <UpdateProductEmptyState
-          title="No style images selected"
-          message="Add at least one image before saving this new ready style."
-        />
+        <UpdateProductEmptyState title="No images selected" />
       )}
 
       <Text style={styles.label}>Stock by size *</Text>
@@ -325,10 +321,7 @@ export function MadeOrderVariantDraftCard({
       <View style={styles.draftHeaderRow}>
         <View style={styles.sectionHeaderText}>
           <Text style={styles.variantCardTitle}>
-            New Made-on-order Style {existingVariantCount + index + 1}
-          </Text>
-          <Text style={styles.emptyInline}>
-            Queued addition, saved after Save Changes.
+            New Style {existingVariantCount + index + 1}
           </Text>
         </View>
 
@@ -350,7 +343,7 @@ export function MadeOrderVariantDraftCard({
         maxLength={80}
       />
 
-      <Text style={styles.label}>Additional Price (PKR)</Text>
+      <Text style={styles.label}>Additional Cost (PKR)</Text>
       <FastNumberInput
         value={String(variant.additional_price_pkr ?? 0)}
         onChangeText={(value) => onAdditionalPriceChangeText(index, value)}
@@ -407,10 +400,7 @@ export function MadeOrderVariantDraftCard({
           </View>
         </ScrollView>
       ) : (
-        <UpdateProductEmptyState
-          title="No style images selected"
-          message="Add at least one image before saving this made-on-order style."
-        />
+        <UpdateProductEmptyState title="No images selected" />
       )}
     </View>
   );

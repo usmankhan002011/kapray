@@ -66,12 +66,7 @@ type TailoringStyleDraftCardProps = {
 };
 
 function OptionEmptyState({ title }: { title: string }) {
-  return (
-    <UpdateProductEmptyState
-      title={title}
-      message="Add options in the vendor tailoring profile, then return here."
-    />
-  );
+  return <UpdateProductEmptyState title={title} />;
 }
 
 export function ExistingTailoringStyleList({
@@ -81,7 +76,7 @@ export function ExistingTailoringStyleList({
 
   return (
     <View style={styles.readonlyListBox}>
-      <Text style={styles.appendTitle}>Saved tailoring style cards</Text>
+      <Text style={styles.appendTitle}>Saved styles</Text>
       {stylesList.map((style, index) => (
         <Text key={`old-style-${index}`} style={styles.readonlyValue}>
           {index + 1}. {safeText(style?.title)}
@@ -96,7 +91,7 @@ export function AddTailoringStyleButton({
 }: AddTailoringStyleButtonProps) {
   return (
     <UpdateProductActionButton
-      label="Add Tailoring Style Card"
+      label="Add Style"
       icon="add"
       onPress={onPress}
       size="medium"
@@ -110,10 +105,7 @@ export function TailoringStyleCardsBox({
 }: TailoringStyleCardsBoxProps) {
   return (
     <View style={styles.appendBox}>
-      <Text style={styles.appendTitle}>Tailoring style cards</Text>
-      <Text style={styles.hint}>
-        Saved cards stay active. New cards become available after Save Changes.
-      </Text>
+      <Text style={styles.appendTitle}>Styles</Text>
 
       {children}
     </View>
@@ -130,7 +122,7 @@ export function TailoringBaseOptionSelectors({
 }: TailoringBaseOptionSelectorsProps) {
   return (
     <>
-      <Text style={styles.label}>Neck Styles</Text>
+      <Text style={styles.label}>Neck</Text>
       {blouseNeckOptions.length ? (
         <View style={styles.optionWrap}>
           {blouseNeckOptions.map((item) => (
@@ -146,7 +138,7 @@ export function TailoringBaseOptionSelectors({
         <OptionEmptyState title="No neck styles found" />
       )}
 
-      <Text style={styles.label}>Sleeve Styles</Text>
+      <Text style={styles.label}>Sleeve</Text>
       {sleeveOptions.length ? (
         <View style={styles.optionWrap}>
           {sleeveOptions.map((item) => (
@@ -162,7 +154,7 @@ export function TailoringBaseOptionSelectors({
         <OptionEmptyState title="No sleeve styles found" />
       )}
 
-      <Text style={styles.label}>Trouser Styles</Text>
+      <Text style={styles.label}>Trouser</Text>
       {trouserOptions.length ? (
         <View style={styles.optionWrap}>
           {trouserOptions.map((item) => (
@@ -180,7 +172,7 @@ export function TailoringBaseOptionSelectors({
 
       {!hasAnyVendorStyleOptions ? (
         <UpdateProductNotice title="Tailoring options missing" tone="warning">
-          Add tailoring styles in the vendor profile first, then return here.
+          Add in vendor profile.
         </UpdateProductNotice>
       ) : null}
     </>
@@ -209,10 +201,7 @@ export function TailoringStyleDraftCard({
       <View style={styles.draftHeaderRow}>
         <View style={styles.sectionHeaderText}>
           <Text style={styles.variantCardTitle}>
-            New Tailoring Card {existingStyleCount + index + 1}
-          </Text>
-          <Text style={styles.emptyInline}>
-            Attach buyer-facing copy, options, and references.
+            New Style {existingStyleCount + index + 1}
           </Text>
         </View>
 
@@ -230,7 +219,7 @@ export function TailoringStyleDraftCard({
       <TextInput
         value={style.title}
         onChangeText={(value) => onTitleChange(index, value)}
-        placeholder="e.g., Boat neck blouse with cigarette trouser"
+        placeholder="e.g., Boat neck blouse"
         placeholderTextColor={stylesVars.placeholder}
         style={styles.input}
         maxLength={100}
@@ -240,7 +229,7 @@ export function TailoringStyleDraftCard({
       <TextInput
         value={style.note}
         onChangeText={(value) => onNoteChange(index, value)}
-        placeholder="Short buyer-facing note"
+        placeholder="Short note"
         placeholderTextColor={stylesVars.placeholder}
         style={[styles.input, styles.textAreaSmall]}
         multiline
@@ -259,7 +248,7 @@ export function TailoringStyleDraftCard({
         maxLength={8}
       />
 
-      <Text style={styles.label}>Neck Options for this Style</Text>
+      <Text style={styles.label}>Neck</Text>
       {blouseNeckOptions.length ? (
         <View style={styles.optionWrap}>
           {blouseNeckOptions.map((item) => (
@@ -275,7 +264,7 @@ export function TailoringStyleDraftCard({
         <OptionEmptyState title="No neck styles found" />
       )}
 
-      <Text style={styles.label}>Sleeve Options for this Style</Text>
+      <Text style={styles.label}>Sleeve</Text>
       {sleeveOptions.length ? (
         <View style={styles.optionWrap}>
           {sleeveOptions.map((item) => (
@@ -291,7 +280,7 @@ export function TailoringStyleDraftCard({
         <OptionEmptyState title="No sleeve styles found" />
       )}
 
-      <Text style={styles.label}>Trouser Options for this Style</Text>
+      <Text style={styles.label}>Trouser</Text>
       {trouserOptions.length ? (
         <View style={styles.optionWrap}>
           {trouserOptions.map((item) => (
@@ -310,7 +299,7 @@ export function TailoringStyleDraftCard({
       )}
 
       <View style={styles.sectionHeaderRow}>
-        <Text style={styles.label}>Reference Images *</Text>
+        <Text style={styles.label}>Images *</Text>
         <UpdateProductActionButton
           label="Images"
           icon="add-photo-alternate"
@@ -329,10 +318,7 @@ export function TailoringStyleDraftCard({
           </View>
         </ScrollView>
       ) : (
-        <UpdateProductEmptyState
-          title="No reference images selected"
-          message="Add at least one image before saving this tailoring card."
-        />
+        <UpdateProductEmptyState title="No images selected" />
       )}
     </View>
   );

@@ -1,27 +1,34 @@
 import { StyleSheet } from "react-native";
 
+import {
+  apColors,
+  apFontFamily,
+  apInputTextStyle,
+  apRadii,
+} from "@/components/product/addProductStyles";
+
 export const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
+  bg: apColors.bg,
+  cardBg: apColors.card,
+  border: apColors.border,
+  borderSoft: apColors.borderSoft,
+  blue: apColors.blue,
+  blueSoft: apColors.blueSoft,
+  text: apColors.text,
+  subText: apColors.subText,
+  mutedText: apColors.muted,
   placeholder: "#94A3B8",
-  danger: "#B91C1C",
-  dangerSoft: "#FEE2E2",
+  danger: apColors.danger,
+  dangerSoft: "#FEF2F2",
   dangerBorder: "#FCA5A5",
-  warning: "#B45309",
-  warningSoft: "#FFF7ED",
+  warning: apColors.warning,
+  warningSoft: apColors.warningSoft,
   warningBorder: "#FED7AA",
-  success: "#166534",
-  successSoft: "#F0FDF4",
+  success: apColors.success,
+  successSoft: apColors.successSoft,
   successBorder: "#BBF7D0",
   overlayDark: "rgba(0,0,0,0.58)",
-  white: "#FFFFFF",
+  white: apColors.white,
   black: "#000000",
 };
 
@@ -45,9 +52,11 @@ export const styles = StyleSheet.create({
   },
 
   title: {
+    fontFamily: apFontFamily,
     fontSize: 18,
     fontWeight: "700",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   linkBtn: {
@@ -70,7 +79,7 @@ export const styles = StyleSheet.create({
 
   card: {
     marginTop: 14,
-    borderRadius: 8,
+    borderRadius: apRadii.card,
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
@@ -94,6 +103,7 @@ export const styles = StyleSheet.create({
   },
 
   sectionTitle: {
+    fontFamily: apFontFamily,
     fontSize: 15,
     fontWeight: "800",
     color: stylesVars.text,
@@ -102,7 +112,8 @@ export const styles = StyleSheet.create({
 
   sectionSubtitle: {
     marginTop: 4,
-    color: stylesVars.subText,
+    fontFamily: apFontFamily,
+    color: stylesVars.danger,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "500",
@@ -113,7 +124,7 @@ export const styles = StyleSheet.create({
     maxWidth: 150,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: apRadii.pill,
     borderWidth: 1,
     borderColor: "#D7E3FF",
     backgroundColor: stylesVars.blueSoft,
@@ -122,6 +133,7 @@ export const styles = StyleSheet.create({
   },
 
   statusPillText: {
+    fontFamily: apFontFamily,
     color: stylesVars.blue,
     fontSize: 11,
     fontWeight: "800",
@@ -138,14 +150,14 @@ export const styles = StyleSheet.create({
     minHeight: 36,
     paddingHorizontal: 11,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: apRadii.control,
   },
 
   actionButtonMedium: {
     minHeight: 44,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: apRadii.control,
   },
 
   actionButtonPrimary: {
@@ -185,24 +197,28 @@ export const styles = StyleSheet.create({
   },
 
   actionTextPrimary: {
+    fontFamily: apFontFamily,
     color: stylesVars.white,
     fontSize: 13,
     fontWeight: "800",
   },
 
   actionTextSecondary: {
+    fontFamily: apFontFamily,
     color: stylesVars.blue,
     fontSize: 13,
     fontWeight: "800",
   },
 
   actionTextDanger: {
+    fontFamily: apFontFamily,
     color: stylesVars.danger,
     fontSize: 13,
     fontWeight: "800",
   },
 
   actionTextGhost: {
+    fontFamily: apFontFamily,
     color: stylesVars.text,
     fontSize: 13,
     fontWeight: "800",
@@ -210,7 +226,7 @@ export const styles = StyleSheet.create({
 
   notice: {
     marginTop: 12,
-    borderRadius: 8,
+    borderRadius: apRadii.card,
     borderWidth: 1,
     borderColor: "#D7E3FF",
     backgroundColor: stylesVars.blueSoft,
@@ -233,6 +249,7 @@ export const styles = StyleSheet.create({
   },
 
   noticeTitle: {
+    fontFamily: apFontFamily,
     color: stylesVars.text,
     fontSize: 13,
     lineHeight: 18,
@@ -241,6 +258,7 @@ export const styles = StyleSheet.create({
 
   noticeText: {
     marginTop: 4,
+    fontFamily: apFontFamily,
     color: stylesVars.subText,
     fontSize: 13,
     lineHeight: 18,
@@ -249,7 +267,7 @@ export const styles = StyleSheet.create({
 
   emptyStateBox: {
     marginTop: 12,
-    borderRadius: 8,
+    borderRadius: apRadii.card,
     borderWidth: 1,
     borderStyle: "dashed",
     borderColor: stylesVars.borderSoft,
@@ -259,12 +277,14 @@ export const styles = StyleSheet.create({
   },
 
   emptyStateTitle: {
+    fontFamily: apFontFamily,
     color: stylesVars.text,
     fontSize: 13,
     fontWeight: "800",
   },
 
   emptyStateText: {
+    fontFamily: apFontFamily,
     color: stylesVars.mutedText,
     fontSize: 13,
     lineHeight: 18,
@@ -318,10 +338,11 @@ export const styles = StyleSheet.create({
 
   label: {
     marginTop: 10,
+    fontFamily: apFontFamily,
     fontSize: 13,
-    fontWeight: "700",
-    color: stylesVars.text,
-    letterSpacing: 0.2,
+    fontWeight: "600",
+    color: stylesVars.subText,
+    letterSpacing: 0,
   },
 
   inventoryLabel: {
@@ -340,20 +361,23 @@ export const styles = StyleSheet.create({
 
   inventoryAlertText: {
     marginTop: 8,
-    fontSize: 16,
-    lineHeight: 22,
+    fontFamily: apFontFamily,
+    fontSize: 13,
+    lineHeight: 18,
     color: stylesVars.danger,
-    fontWeight: "900",
+    fontWeight: "700",
+    letterSpacing: 0,
   },
 
   input: {
     marginTop: 8,
     borderWidth: 1,
     borderColor: stylesVars.borderSoft,
-    borderRadius: 12,
+    borderRadius: apRadii.control,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
+    ...apInputTextStyle,
     color: stylesVars.text,
     backgroundColor: stylesVars.white,
   },
@@ -365,19 +389,17 @@ export const styles = StyleSheet.create({
 
   readonlyField: {
     marginTop: 8,
-    borderWidth: 1,
-    borderColor: stylesVars.borderSoft,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: "#F8FAFC",
+    paddingVertical: 2,
+    backgroundColor: stylesVars.white,
   },
 
   readonlyValue: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: "500",
+    fontFamily: apFontFamily,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "700",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   madeOnOrderPill: {
@@ -619,6 +641,54 @@ export const styles = StyleSheet.create({
     color: stylesVars.white,
   },
 
+  serviceEditCard: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    borderRadius: apRadii.card,
+    backgroundColor: stylesVars.white,
+    padding: 12,
+    gap: 10,
+  },
+
+  serviceEditCardOn: {
+    borderColor: "#D7E3FF",
+    backgroundColor: stylesVars.white,
+  },
+
+  serviceEditHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+
+  serviceEditTitle: {
+    flex: 1,
+    minWidth: 0,
+    fontFamily: apFontFamily,
+    fontSize: 13,
+    fontWeight: "800",
+    color: stylesVars.text,
+    letterSpacing: 0,
+  },
+
+  serviceEditFields: {
+    gap: 10,
+  },
+
+  serviceStatusText: {
+    fontFamily: apFontFamily,
+    fontSize: 13,
+    fontWeight: "800",
+    color: stylesVars.mutedText,
+    letterSpacing: 0,
+  },
+
+  serviceStatusTextOn: {
+    color: stylesVars.blue,
+  },
+
   optionWrap: {
     marginTop: 8,
     flexDirection: "row",
@@ -660,16 +730,18 @@ export const styles = StyleSheet.create({
   variantInventoryBox: {
     marginTop: 12,
     borderWidth: 1,
-    borderColor: "#D7E3FF",
-    backgroundColor: "#F8FAFC",
-    borderRadius: 14,
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.white,
+    borderRadius: apRadii.card,
     padding: 12,
   },
 
   variantInventoryTitle: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     fontWeight: "800",
-    color: stylesVars.blue,
+    color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   variantCard: {
@@ -677,14 +749,16 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: stylesVars.borderSoft,
     backgroundColor: stylesVars.white,
-    borderRadius: 12,
+    borderRadius: apRadii.card,
     padding: 10,
   },
 
   variantCardTitle: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   variantGuideImage: {
@@ -705,26 +779,39 @@ export const styles = StyleSheet.create({
   },
 
   variantSizeCell: {
-    width: 84,
+    width: "23%",
   },
 
   variantSizeLabel: {
+    fontFamily: apFontFamily,
     fontSize: 11,
     fontWeight: "700",
     color: stylesVars.mutedText,
+    letterSpacing: 0,
   },
 
   variantQtyInput: {
     marginTop: 5,
     borderWidth: 1,
-    borderColor: stylesVars.dangerBorder,
-    borderRadius: 10,
-    paddingHorizontal: 10,
+    borderColor: stylesVars.borderSoft,
+    borderRadius: apRadii.control,
+    paddingHorizontal: 8,
     paddingVertical: 8,
-    fontSize: 18,
-    color: stylesVars.danger,
-    fontWeight: "900",
+    fontSize: 15,
+    ...apInputTextStyle,
+    color: stylesVars.text,
+    fontWeight: "800",
     backgroundColor: stylesVars.white,
+  },
+
+  variantCardMeta: {
+    marginTop: 10,
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+    color: stylesVars.mutedText,
+    letterSpacing: 0,
   },
 
   mediaActionRow: {

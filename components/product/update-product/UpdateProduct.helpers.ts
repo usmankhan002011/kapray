@@ -40,6 +40,7 @@ export type EditableVariantSizeRow = {
 export type EditableReadyVariant = {
   id: string;
   label: string;
+  additional_price_pkr: number;
   sourceKey: string;
   raw: any;
   sizes: EditableVariantSizeRow[];
@@ -526,6 +527,12 @@ export function readEditableStitchedVariants(
       return {
         id,
         label: name.replace(/^Variant\b/i, "Style") || `Style ${variantNo}`,
+        additional_price_pkr: safeNonNegInt(
+          variant?.additional_price_pkr ??
+            variant?.additionalPricePkr ??
+            variant?.extra_price_pkr ??
+            variant?.extraPricePkr,
+        ),
         sourceKey: key,
         raw: variant,
         sizes,
@@ -575,6 +582,7 @@ export function writeEditableStitchedVariantsToJson(args: {
     return {
       ...rawVariant,
       id: rawVariant?.id ?? variant.id ?? `variant-${variantIndex + 1}`,
+      additional_price_pkr: safeNonNegInt(variant.additional_price_pkr),
       sizes: variant.sizes.map((row) => {
         const rawRow =
           row.raw && typeof row.raw === "object" && !Array.isArray(row.raw)

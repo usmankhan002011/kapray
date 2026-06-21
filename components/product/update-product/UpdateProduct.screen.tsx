@@ -7,7 +7,6 @@ import {
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -52,7 +51,6 @@ import {
 import {
   cleanNewMadeOrderVariantDraft,
   cleanNewReadyVariantDraft,
-  categoryLabel,
   clearProductTailoringSelections,
   editedCategoryFromState,
   emptyTailoringSelections,
@@ -220,6 +218,24 @@ export default function UpdateProductScreen() {
     [],
   );
 
+  const updateStitchedVariantAdditionalPrice = useCallback(
+    (variantId: string, rawValue: string) => {
+      const additionalPrice = safeNonNegInt(sanitizeNumber(rawValue));
+
+      setStitchedVariants((prev) =>
+        prev.map((variant) =>
+          variant.id === variantId
+            ? {
+                ...variant,
+                additional_price_pkr: additionalPrice,
+              }
+            : variant,
+        ),
+      );
+    },
+    [],
+  );
+
   const updateNewReadyVariant = useCallback(
     (
       index: number,
@@ -306,7 +322,7 @@ export default function UpdateProductScreen() {
 
   async function fetchProducts() {
     if (!vendorId) {
-      Alert.alert("Vendor missing", "Please ensure vendor.id is loaded.");
+      Alert.alert("Vendor missing", "Open from vendor profile.");
       return;
     }
 
@@ -1439,6 +1455,7 @@ export default function UpdateProductScreen() {
           stitchedVariantInventoryTotalQty={
             stitchedVariantInventoryInfo.totalQty
           }
+          stitchedVariantInventoryStyleCount={stitchedVariants.length}
           isUnstitched={isUnstitched}
           onBack={() => router.back()}
         />
@@ -1460,30 +1477,16 @@ export default function UpdateProductScreen() {
 
         <UpdateProductSectionCard
           title="Basic Details"
-          subtitle={
-            selected
-              ? "Edit product details, pricing, inventory, and service options."
-              : "Select a product to edit title, pricing, media, and services."
-          }
-          badge={selected ? categoryLabel(editedProductCategory) : undefined}
         >
 
           {!selected ? (
-            <UpdateProductEmptyState
-              title="Select a product above"
-              message="Open this screen from Products > Edit so the saved product loads here."
-            />
+            <UpdateProductEmptyState title="Select product" />
           ) : (
             <>
-              <Text style={styles.label}>Title *</Text>
-              <TextInput
-                value={title}
-                onChangeText={setTitle}
-                placeholder="e.g., Bridal heavy embroidered lehenga"
-                placeholderTextColor={stylesVars.placeholder}
-                style={styles.input}
-                maxLength={80}
-              />
+              <Text style={styles.label}>Title</Text>
+              <View style={styles.readonlyField}>
+                <Text style={styles.readonlyValue}>{safeText(title)}</Text>
+              </View>
 
               {!Boolean(selected?.made_on_order) &&
               (usesVariantInventory
@@ -1539,25 +1542,15 @@ export default function UpdateProductScreen() {
                   <StitchedVariantInventorySection
                     variants={stitchedVariants}
                     resolvePublicUrl={resolvePublicUrl}
+                    onAdditionalPriceChangeText={
+                      updateStitchedVariantAdditionalPrice
+                    }
                     onSizeQtyChange={updateStitchedVariantSizeQty}
                   />
 
                   {!Boolean(selected?.made_on_order) ? (
                     <View style={styles.appendBox}>
-                      <Text style={styles.appendTitle}>
-                        Ready-to-wear styles
-                      </Text>
-                      <Text style={styles.hint}>
-                        Saved ready styles stay active. New styles below are
-                        added after Save Changes.
-                      </Text>
-
-                      {newReadyVariants.length ? null : (
-                        <UpdateProductEmptyState
-                          title="No new ready styles queued"
-                          message="Use Add New Style when this product has another ready-to-wear design."
-                        />
-                      )}
+                      <Text style={styles.appendTitle}>Ready to Wear</Text>
 
                       {newReadyVariants.map((variant, index) => (
                         <ReadyVariantDraftCard
@@ -1610,20 +1603,13 @@ export default function UpdateProductScreen() {
                       <Text style={styles.appendTitle}>
                         Made-on-order styles
                       </Text>
-                      <Text style={styles.hint}>
-                        Saved made-on-order styles stay active. New styles below
-                        are added after Save Changes.
-                      </Text>
 
                       <ExistingMadeOrderVariantList
                         variants={readMadeOrderVariants(selected?.price)}
                       />
 
                       {newMadeOrderVariants.length ? null : (
-                        <UpdateProductEmptyState
-                          title="No new made-on-order styles queued"
-                          message="Use Add Made-on-order Style when buyers can request another design."
-                        />
+                        <UpdateProductEmptyState title="No new styles" />
                       )}
 
                       {newMadeOrderVariants.map((variant, index) => (
@@ -1703,148 +1689,108 @@ export default function UpdateProductScreen() {
                     maxLength={12}
                   />
 
-                  <View style={styles.inlineToggleRow}>
-                    <Text style={[styles.label, { marginTop: 0 }]}>
-                      Dyeable
-                    </Text>
-
-                    <Pressable
-                      onPress={() => {
-                        if (!isUnstitched) return;
-                        if (dyeingEnabled && tailoringEnabled) {
-                          Alert.alert(
-                            "Dyeing is required",
-                            "Turn off stitching before turning off dyeing.",
-                          );
-                          return;
-                        }
-                        setDyeingEnabled((v) => !v);
-                      }}
-                      style={({ pressed }) => [
-                        styles.inlineTogglePill,
-                        dyeingEnabled ? styles.inlineTogglePillOn : null,
-                        pressed ? styles.pressed : null,
-                      ]}
-                    >
+                  <View
+                    style={[
+                      styles.serviceEditCard,
+                      dyeingEnabled ? styles.serviceEditCardOn : null,
+                    ]}
+                  >
+                    <View style={styles.serviceEditHeader}>
+                      <Text style={styles.serviceEditTitle}>Dyeing</Text>
                       <Text
                         style={[
-                          styles.inlineTogglePillText,
-                          dyeingEnabled ? styles.inlineTogglePillTextOn : null,
+                          styles.serviceStatusText,
+                          dyeingEnabled ? styles.serviceStatusTextOn : null,
                         ]}
                       >
                         {dyeingEnabled ? "Yes" : "No"}
                       </Text>
-                    </Pressable>
+                    </View>
+
+                    {dyeingEnabled ? (
+                      <View style={styles.serviceEditFields}>
+                        <Text style={styles.label}>Dyeing Cost (PKR) *</Text>
+                        <FastNumberInput
+                          value={String(dyeingCost ?? "")}
+                          onChangeText={(t) =>
+                            setDyeingCost(Number(sanitizeNumber(t) || "0"))
+                          }
+                          placeholder="e.g., 800"
+                          placeholderTextColor={stylesVars.placeholder}
+                          style={styles.input}
+                          keyboardType="decimal-pad"
+                          maxLength={12}
+                        />
+                      </View>
+                    ) : null}
                   </View>
 
-                  {dyeingEnabled ? (
-                    <>
-                      <Text style={styles.hint}>
-                        Buyer will pick a dye shade at checkout.
-                      </Text>
-
-                      <Text style={styles.label}>Dyeing Cost (PKR) *</Text>
-                      <FastNumberInput
-                        value={String(dyeingCost ?? "")}
-                        onChangeText={(t) =>
-                          setDyeingCost(Number(sanitizeNumber(t) || "0"))
-                        }
-                        placeholder="e.g., 800"
-                        placeholderTextColor={stylesVars.placeholder}
-                        style={styles.input}
-                        keyboardType="decimal-pad"
-                        maxLength={12}
-                      />
-                    </>
-                  ) : null}
-
-                  <View style={styles.inlineToggleRow}>
-                    <Text style={[styles.label, { marginTop: 0 }]}>
-                      Stitching available
-                    </Text>
-
-                    <Pressable
-                      onPress={() => {
-                        if (!isUnstitched) return;
-                        if (!vendorOffersTailoring) {
-                          Alert.alert(
-                            "Tailoring not enabled",
-                            "This vendor profile does not offer tailoring.",
-                          );
-                          return;
-                        }
-                        setTailoringEnabled((v) => {
-                          const next = !v;
-                          if (next) setDyeingEnabled(true);
-                          return next;
-                        });
-                      }}
-                      style={({ pressed }) => [
-                        styles.inlineTogglePill,
-                        tailoringEnabled ? styles.inlineTogglePillOn : null,
-                        pressed ? styles.pressed : null,
-                      ]}
-                    >
+                  <View
+                    style={[
+                      styles.serviceEditCard,
+                      tailoringEnabled ? styles.serviceEditCardOn : null,
+                    ]}
+                  >
+                    <View style={styles.serviceEditHeader}>
+                      <Text style={styles.serviceEditTitle}>Tailoring</Text>
                       <Text
                         style={[
-                          styles.inlineTogglePillText,
-                          tailoringEnabled
-                            ? styles.inlineTogglePillTextOn
-                            : null,
+                          styles.serviceStatusText,
+                          tailoringEnabled ? styles.serviceStatusTextOn : null,
                         ]}
                       >
                         {tailoringEnabled ? "Yes" : "No"}
                       </Text>
-                    </Pressable>
+                    </View>
+
+                    {tailoringEnabled ? (
+                      <View style={styles.serviceEditFields}>
+                        <Text style={styles.label}>Tailoring Cost (PKR) *</Text>
+                        <FastNumberInput
+                          value={String(tailoringCost ?? "")}
+                          onChangeText={(t) =>
+                            setTailoringCost(Number(sanitizeNumber(t) || "0"))
+                          }
+                          placeholder="e.g., 2500"
+                          placeholderTextColor={stylesVars.placeholder}
+                          style={styles.input}
+                          keyboardType="decimal-pad"
+                          maxLength={12}
+                        />
+
+                        <Text style={styles.label}>Turnaround (days)</Text>
+                        <FastNumberInput
+                          value={String(tailoringTurnaroundDays ?? "")}
+                          onChangeText={(t) =>
+                            setTailoringTurnaroundDays(
+                              Number(sanitizeNumber(t) || "0"),
+                            )
+                          }
+                          placeholder="e.g., 12"
+                          placeholderTextColor={stylesVars.placeholder}
+                          style={styles.input}
+                          keyboardType="number-pad"
+                          maxLength={3}
+                        />
+                      </View>
+                    ) : null}
                   </View>
 
                   {vendorLoading ? (
                     <View style={styles.loadingRow}>
                       <ActivityIndicator />
-                      <Text style={styles.loadingText}>
-                        Loading tailoring styles...
-                      </Text>
+                      <Text style={styles.loadingText}>Loading styles...</Text>
                     </View>
                   ) : null}
 
                   {!vendorLoading && !vendorOffersTailoring ? (
                     <UpdateProductNotice title="Tailoring unavailable" tone="warning">
-                      Vendor profile currently does not offer tailoring.
+                      Not enabled in vendor profile.
                     </UpdateProductNotice>
                   ) : null}
 
                   {tailoringEnabled ? (
                     <>
-                      <Text style={styles.label}>Tailoring Cost (PKR) *</Text>
-                      <FastNumberInput
-                        value={String(tailoringCost ?? "")}
-                        onChangeText={(t) =>
-                          setTailoringCost(Number(sanitizeNumber(t) || "0"))
-                        }
-                        placeholder="e.g., 2500"
-                        placeholderTextColor={stylesVars.placeholder}
-                        style={styles.input}
-                        keyboardType="decimal-pad"
-                        maxLength={12}
-                      />
-
-                      <Text style={styles.label}>
-                        Tailoring Turnaround (days)
-                      </Text>
-                      <FastNumberInput
-                        value={String(tailoringTurnaroundDays ?? "")}
-                        onChangeText={(t) =>
-                          setTailoringTurnaroundDays(
-                            Number(sanitizeNumber(t) || "0"),
-                          )
-                        }
-                        placeholder="e.g., 12"
-                        placeholderTextColor={stylesVars.placeholder}
-                        style={styles.input}
-                        keyboardType="number-pad"
-                        maxLength={3}
-                      />
-
                       {existingTailoringStylePresets.length ? null : (
                         <TailoringBaseOptionSelectors
                           blouseNeckOptions={blouseNeckOptions}
@@ -1921,7 +1867,7 @@ export default function UpdateProductScreen() {
 
         {!vendorId ? (
           <UpdateProductNotice title="Vendor not loaded" tone="warning">
-            Vendor not loaded. Please ensure vendorSlice has vendor.id (bigint).
+            Open from vendor profile.
           </UpdateProductNotice>
         ) : null}
       </ScrollView>

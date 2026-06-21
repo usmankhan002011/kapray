@@ -18,6 +18,7 @@ type ProductPreviewSectionProps = {
   previewImageUrl: string | null;
   usesVariantInventory: boolean;
   stitchedVariantInventoryTotalQty: number;
+  stitchedVariantInventoryStyleCount: number;
   isUnstitched: boolean;
   onBack: () => void;
 };
@@ -235,7 +236,7 @@ export function UpdateProductHeader({
 
       {!hasVendor ? (
         <UpdateProductNotice title="Vendor not loaded" tone="warning">
-          Vendor not loaded. Please ensure vendorSlice has vendor.id (bigint).
+          Open from vendor profile.
         </UpdateProductNotice>
       ) : null}
     </>
@@ -296,6 +297,7 @@ export function ProductPreviewSection({
   previewImageUrl,
   usesVariantInventory,
   stitchedVariantInventoryTotalQty,
+  stitchedVariantInventoryStyleCount,
   isUnstitched,
   onBack,
 }: ProductPreviewSectionProps) {
@@ -304,7 +306,6 @@ export function ProductPreviewSection({
       <UpdateProductSectionCard title="No product selected">
         <UpdateProductEmptyState
           title="Open an item from Products"
-          message="Open this screen from Products > Edit so the product can load directly."
           action={
             <UpdateProductActionButton
               label="Back to Products"
@@ -320,11 +321,7 @@ export function ProductPreviewSection({
   }
 
   return (
-    <UpdateProductSectionCard
-      title="Product Preview"
-      subtitle="Quick check before editing details below."
-      badge={Boolean(selected.made_on_order) ? "Made on order" : "Ready stock"}
-    >
+    <UpdateProductSectionCard title="Product Preview">
       <View style={styles.previewBox}>
         {previewImageUrl ? (
           <Image source={{ uri: previewImageUrl }} style={styles.previewImage} />
@@ -346,12 +343,12 @@ export function ProductPreviewSection({
           {!Boolean(selected.made_on_order) ? (
             <Text style={styles.inventoryAlertText}>
               {usesVariantInventory
-                ? `Style Inventory: ${stitchedVariantInventoryTotalQty}`
+                ? `Total stock ${stitchedVariantInventoryTotalQty} in ${stitchedVariantInventoryStyleCount} styles`
                 : isUnstitched
-                  ? `Fabric stock: ${roundMeter(
+                  ? `Total inventory: ${roundMeter(
                       Math.max(0, Number(selected.inventory_qty ?? 0)),
                     )} m`
-                  : `Inventory Qty: ${Math.max(
+                  : `Total inventory: ${Math.max(
                       0,
                       Number(selected.inventory_qty ?? 0),
                     )}`}

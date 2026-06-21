@@ -49,7 +49,6 @@ export function MediaSection({
   return (
     <UpdateProductSectionCard
       title="Media"
-      subtitle="Images, videos, and extra buyer-facing detail."
       actions={
         selected ? (
           <View style={styles.mediaActionRow}>
@@ -71,10 +70,7 @@ export function MediaSection({
       }
     >
       {!selected ? (
-        <UpdateProductEmptyState
-          title="No media loaded"
-          message="Select a product above to edit images, videos, and descriptions."
-        />
+        <UpdateProductEmptyState title="No media" />
       ) : (
         <>
           {savingMedia ? (
@@ -113,10 +109,7 @@ export function MediaSection({
               </View>
             </ScrollView>
           ) : (
-            <UpdateProductEmptyState
-              title="No images yet"
-              message="Add product photos so buyers can inspect the outfit."
-            />
+            <UpdateProductEmptyState title="No images" />
           )}
 
           <Text style={[styles.metaSmall, { marginTop: 12 }]}>Videos</Text>
@@ -168,17 +161,14 @@ export function MediaSection({
               </View>
             </ScrollView>
           ) : (
-            <UpdateProductEmptyState
-              title="No videos yet"
-              message="Optional videos can show movement, fabric weight, or detailing."
-            />
+            <UpdateProductEmptyState title="No videos" />
           )}
 
           <Text style={styles.label}>More Description</Text>
           <TextInput
             value={moreDescription}
             onChangeText={onMoreDescriptionChange}
-            placeholder="Add more details: work, fabric, lining, measurements, delivery notes, etc."
+            placeholder="Add details"
             placeholderTextColor={stylesVars.placeholder}
             style={[styles.input, styles.textArea]}
             multiline

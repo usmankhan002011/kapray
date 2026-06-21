@@ -48,7 +48,7 @@ export function DressTypeField({
         {currentProductCategory &&
         currentProductCategory !== editedProductCategory ? (
           <Text style={styles.hint}>
-            Current saved category: {categoryLabel(currentProductCategory)}
+            Saved: {categoryLabel(currentProductCategory)}
           </Text>
         ) : null}
       </View>
@@ -77,11 +77,6 @@ export function InventoryStockField({
         keyboardType={isUnstitched ? "decimal-pad" : "number-pad"}
         maxLength={10}
       />
-      <Text style={styles.hint}>
-        {isUnstitched
-          ? "Enter total fabric currently available in meters."
-          : "Enter available pieces."}
-      </Text>
     </>
   );
 }
@@ -108,15 +103,19 @@ export function StitchedPricingFields({
         maxLength={12}
       />
 
-      <Text style={styles.label}>Available Sizes (comma separated)</Text>
-      <TextInput
-        value={(availableSizes ?? []).join(", ")}
-        onChangeText={onAvailableSizesChangeText}
-        placeholder="e.g., XS, S, M, L, XL, XXL, All"
-        placeholderTextColor={stylesVars.placeholder}
-        style={styles.input}
-        maxLength={80}
-      />
+      {madeOnOrder ? (
+        <>
+          <Text style={styles.label}>Sizes</Text>
+          <TextInput
+            value={(availableSizes ?? []).join(", ")}
+            onChangeText={onAvailableSizesChangeText}
+            placeholder="e.g., XS, S, M, L, XL, XXL, All"
+            placeholderTextColor={stylesVars.placeholder}
+            style={styles.input}
+            maxLength={80}
+          />
+        </>
+      ) : null}
     </>
   );
 }
@@ -124,7 +123,7 @@ export function StitchedPricingFields({
 export function OutOfStockNotice() {
   return (
     <UpdateProductNotice title="Out of stock" tone="danger">
-      Update inventory to make this product visible again.
+      Stock 0 hides product.
     </UpdateProductNotice>
   );
 }
