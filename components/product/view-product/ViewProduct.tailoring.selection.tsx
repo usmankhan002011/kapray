@@ -350,7 +350,7 @@ export default function ViewProductTailoringSelection({
   return (
     <View style={{ marginTop: 12 }}>
       <Text style={[styles.label, { color: stylesVars.blue }]}>
-        Do you want stitching?
+        Do you want tailoring?
       </Text>
       <View style={{ marginTop: 10 }}>
         <View style={{ flexDirection: "row", gap: 12, flexWrap: "wrap" }}>
@@ -358,8 +358,8 @@ export default function ViewProductTailoringSelection({
             onPress={() => {
               if (!tailoringEligible) {
                 Alert.alert(
-                  "Stitching not available",
-                  "This product is not eligible for stitching.",
+                  "Tailoring not available",
+                  "This product is not eligible for tailoring.",
                 );
                 return;
               }
@@ -421,7 +421,7 @@ export default function ViewProductTailoringSelection({
       </View>
       {!tailoringEligible ? (
         <Text style={[styles.meta, { marginTop: 6 }]}>
-          Stitching is not available for this product.
+          Tailoring is not available for this product.
         </Text>
       ) : null}
 

@@ -44,6 +44,14 @@ function getShadeColumnIndex(shade: Shade) {
   return match ? Number(match[1]) : 0;
 }
 
+function getShadeCode(shade: Shade) {
+  const match = /^shade_(\d+)_(\d+)$/i.exec(String(shade.id));
+  if (!match) return "";
+  const column = String(Number(match[1]) + 1).padStart(2, "0");
+  const row = String(Number(match[2]) + 1).padStart(2, "0");
+  return `Dye-C${column}-R${row}`;
+}
+
 function setCachedDyeSelection(
   productId: string | null | undefined,
   productCode: string | null | undefined,
@@ -90,7 +98,7 @@ export default function DyePaletteModal() {
     setCachedDyeSelection(productId, productCode, {
       id: String(selectedShade.id),
       hex: String(selectedShade.hex),
-      label: String(selectedShade.label ?? "")
+      label: getShadeCode(selectedShade) || String(selectedShade.label ?? "")
     });
 
     router.back();

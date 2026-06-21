@@ -139,6 +139,14 @@ function safeDecode(v: string) {
   }
 }
 
+function getDyeShadeCode(id: string) {
+  const match = /^shade_(\d+)_(\d+)$/i.exec(String(id || ""));
+  if (!match) return "";
+  const column = String(Number(match[1]) + 1).padStart(2, "0");
+  const row = String(Number(match[2]) + 1).padStart(2, "0");
+  return `Dye-C${column}-R${row}`;
+}
+
 function cleanIdParam(v: string) {
   const s = String(v ?? "").trim();
   if (!s) return "";
@@ -671,7 +679,9 @@ export default function ViewProductScreen() {
       setBuyerWantsDyeing(true);
       setSelectedDyeShadeId(String(cachedShade.id));
       setSelectedDyeHex(String(cachedShade.hex));
-      setSelectedDyeLabel(String(cachedShade.label));
+      setSelectedDyeLabel(
+        String(cachedShade.label || getDyeShadeCode(String(cachedShade.id))),
+      );
     }, [productId, productCode, setBuyerWantsDyeing]),
   );
 
@@ -705,6 +715,7 @@ export default function ViewProductScreen() {
       if (id) setSelectedDyeShadeId(id);
       if (hex) setSelectedDyeHex(hex);
       if (label) setSelectedDyeLabel(label);
+      else if (id) setSelectedDyeLabel(getDyeShadeCode(id));
       else if (hex) setSelectedDyeLabel(hex);
     }
   }, [params]);
@@ -1264,7 +1275,8 @@ export default function ViewProductScreen() {
   const isUnstitchedPlain = productCategory === "unstitched_plain";
   const usePlainReadOnlySummary =
     productCategory === "unstitched_plain" ||
-    productCategory === "unstitched_dyeing";
+    productCategory === "unstitched_dyeing" ||
+    productCategory === "unstitched_dyeing_tailoring";
 
   const isFabricByMeterPurchase = useMemo(() => {
     return (
@@ -1522,7 +1534,7 @@ export default function ViewProductScreen() {
         dyeing_selected: "1",
         dye_shade_id: selectedDyeShadeId || "",
         dye_hex: selectedDyeHex || "",
-        dye_label: selectedDyeLabel || "",
+        dye_label: selectedDyeLabel || getDyeShadeCode(selectedDyeShadeId),
       },
     });
   }, [
@@ -1748,8 +1760,10 @@ export default function ViewProductScreen() {
             ? encodeURIComponent(selectedDyeHex)
             : "",
         dye_label:
-          wantsDyeing && selectedDyeLabel
-            ? encodeURIComponent(selectedDyeLabel)
+          wantsDyeing && (selectedDyeLabel || getDyeShadeCode(selectedDyeShadeId))
+            ? encodeURIComponent(
+                selectedDyeLabel || getDyeShadeCode(selectedDyeShadeId),
+              )
             : "",
         dyeing_cost_pkr:
           showDyeing && wantsDyeing
@@ -2063,6 +2077,7 @@ export default function ViewProductScreen() {
           {!isStitchedReady && usePlainReadOnlySummary ? (
             <View style={styles.dataGroup}>
               <DataItem label="Price" value={priceLine} />
+              <DataItem label="Sizes" value={sizesLine} />
               <DataItem label="Stock" value={inventoryLine} />
             </View>
           ) : null}

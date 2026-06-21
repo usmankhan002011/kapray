@@ -1176,6 +1176,9 @@ export default function PlaceOrderScreen() {
     base.currency,
   ]);
 
+  const exportRegionMissing =
+    destinationType === "export" && !exportRegion.trim();
+
   const canContinue =
     buyerName.trim().length >= 2 &&
     buyerMobile.trim().replace(/\D/g, "").length >= 10 &&
@@ -1915,7 +1918,14 @@ export default function PlaceOrderScreen() {
 
             <View style={styles.shippingBox}>
               <Text style={styles.shippingTitle}>Shipping</Text>
-              <Text style={styles.shippingValue}>{courierSummary}</Text>
+              <Text
+                style={[
+                  styles.shippingValue,
+                  exportRegionMissing ? styles.validationText : null,
+                ]}
+              >
+                {courierSummary}
+              </Text>
               {!!base.weightKg && (
                 <Text style={styles.shippingMeta}>
                   Weight used: {base.weightKg} kg
@@ -2593,6 +2603,10 @@ const styles = StyleSheet.create({
     color: stylesVars.text,
     fontWeight: "800",
     letterSpacing: 0,
+  },
+
+  validationText: {
+    color: stylesVars.danger,
   },
 
   shippingMeta: {
