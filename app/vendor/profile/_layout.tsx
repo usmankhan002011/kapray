@@ -23,6 +23,16 @@ export default function VendorProfileTabsLayout() {
           tabBarStyle: styles.tabBar,
         }}
       >
+        {/* SETTINGS TAB */}
+        <Tabs.Screen
+          name="settings"
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <CircleTab label="SETTINGS" focused={focused} />
+            ),
+          }}
+        />
+
         {/* PRODUCTS TAB */}
         <Tabs.Screen
           name="products"
@@ -39,16 +49,6 @@ export default function VendorProfileTabsLayout() {
           options={{
             tabBarIcon: ({ focused }) => (
               <CircleTab label="ORDERS" focused={focused} />
-            ),
-          }}
-        />
-
-        {/* SETTINGS TAB */}
-        <Tabs.Screen
-          name="settings"
-          options={{
-            tabBarIcon: ({ focused }) => (
-              <CircleTab label="SETTINGS" focused={focused} />
             ),
           }}
         />

@@ -1,5 +1,6 @@
 // app/vendor/profile/products.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import {
   ActivityIndicator,
   Alert,
@@ -15,6 +16,12 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
+import {
+  apColors,
+  apFontFamily,
+  apInputTextStyle,
+  apRadii,
+} from "@/components/product/addProductStyles";
 
 const PRODUCTS_TABLE = "products";
 const BUCKET_VENDOR = "vendor_images";
@@ -373,36 +380,16 @@ function getStockSummaryText(item: ProductRow) {
   if (isStitchedReadyProduct(item)) {
     const info = getStitchedInventorySummary(item);
 
-    if (!info.hasStock) return "Stock: 0 total";
+    if (!info.hasStock) return "Total stock 0";
 
-    const sizeWord = info.availableSizes === 1 ? "size" : "sizes";
-    const variantWord = info.variantCount === 1 ? "variant" : "variants";
-    return `Stock: ${info.totalQty} total / ${info.availableSizes} ${sizeWord} / ${info.variantCount} ${variantWord}`;
+    const styleWord = info.variantCount === 1 ? "style" : "styles";
+    return `Total stock ${info.totalQty} in ${info.variantCount} ${styleWord}`;
   }
 
   const qty = Math.max(0, Number(item?.inventory_qty ?? 0));
-  return isUnstitchedProduct(item) ? `Fabric: ${qty} m` : `Qty: ${qty}`;
-}
-
-function formatStockCardText(text: string) {
-  const fabricMatch = /^Fabric:\s*([0-9.]+)\s*m$/i.exec(text);
-  if (fabricMatch) {
-    return `Stock: ${formatStockQty(Number(fabricMatch[1]))} m`;
-  }
-
-  const qtyMatch = /^Qty:\s*([0-9.]+)$/i.exec(text);
-  if (qtyMatch) {
-    return `Stock: ${formatStockQty(Number(qtyMatch[1]))}`;
-  }
-
-  const variantMatch = /^(?:Variant stock|Stock):\s*(\d+)\s+total\b.*?\s(\d+)\s+(size|sizes)\b/i.exec(
-    text,
-  );
-  if (variantMatch) {
-    return `Stock: ${variantMatch[1]} / ${variantMatch[2]} ${variantMatch[3]}`;
-  }
-
-  return text;
+  return isUnstitchedProduct(item)
+    ? `Total stock ${formatStockQty(qty)} m`
+    : `Total stock ${formatStockQty(qty)}`;
 }
 
 function isOutOfStock(item: ProductRow) {
@@ -503,16 +490,12 @@ export default function VendorProductsScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const heading = useMemo(() => {
-    return vendorId ? `Products (Vendor #${vendorId})` : "Products";
-  }, [vendorId]);
-
   const trimmedSearch = searchQuery.trim();
   const searching = trimmedSearch.length > 0;
 
   async function fetchProductsReset() {
     if (!vendorId) {
-      Alert.alert("Vendor missing", "Please ensure vendor.id is loaded.");
+      Alert.alert("Vendor missing", "Open from vendor profile.");
       return;
     }
 
@@ -687,7 +670,7 @@ export default function VendorProductsScreen() {
     const code = safeText(item.product_code);
     const title = safeText(item.title);
     const categoryText = productCategoryCardLabel(item);
-    const stockText = formatStockCardText(getStockSummaryText(item));
+    const stockText = getStockSummaryText(item);
     const outOfStock = isOutOfStock(item);
 
     return (
@@ -727,13 +710,15 @@ export default function VendorProductsScreen() {
         </Pressable>
         <View style={styles.itemActions}>
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Edit product"
             style={({ pressed }) => [
               styles.actionBtn,
               pressed ? styles.pressed : null,
             ]}
             onPress={() => editProduct(item)}
           >
-            <Text style={styles.actionText}>Edit</Text>
+            <MaterialIcons name="edit" size={17} color={stylesVars.blue} />
           </Pressable>
         </View>
       </View>
@@ -754,34 +739,55 @@ export default function VendorProductsScreen() {
       ListHeaderComponent={
         <>
           <View style={styles.topBar}>
-            <Text style={styles.title}>{heading}</Text>
-            <Text
-              style={[styles.refresh, loading && styles.disabledText]}
-              onPress={loading ? undefined : fetchProductsReset}
-            >
-              {loading ? "Loading..." : "Refresh"}
-            </Text>
-          </View>
+            <View style={styles.headerText}>
+              <Text style={styles.title}>Products</Text>
+              {vendorId ? (
+                <Text style={styles.vendorMeta}>Vendor #{vendorId}</Text>
+              ) : null}
+            </View>
 
-          <View style={styles.card}>
             <Pressable
               style={({ pressed }) => [
-                styles.primaryBtn,
+                styles.refreshBtn,
+                loading ? styles.disabledButton : null,
                 pressed ? styles.pressed : null,
               ]}
-              onPress={startNewProduct}
+              onPress={loading ? undefined : fetchProductsReset}
+              disabled={loading}
             >
-              <Text style={styles.primaryText}>Add New Product</Text>
+              <View style={styles.actionContent}>
+                <MaterialIcons
+                  name="refresh"
+                  size={17}
+                  color={stylesVars.blue}
+                />
+                <Text style={styles.refreshText}>
+                  {loading ? "Loading" : "Refresh"}
+                </Text>
+              </View>
             </Pressable>
           </View>
 
+          <Pressable
+            style={({ pressed }) => [
+              styles.primaryBtn,
+              pressed ? styles.pressed : null,
+            ]}
+            onPress={startNewProduct}
+          >
+            <View style={styles.primaryContent}>
+              <MaterialIcons name="add" size={19} color={stylesVars.white} />
+              <Text style={styles.primaryText}>Add New Product</Text>
+            </View>
+          </Pressable>
+
           {vendorId ? (
             <View style={styles.searchCard}>
-              <Text style={styles.searchLabel}>Search your products</Text>
+              <Text style={styles.searchLabel}>Search</Text>
               <TextInput
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                placeholder="Search by code, name, or category (stitched, unstitched)"
+                placeholder="Code, name, category"
                 placeholderTextColor={stylesVars.mutedText}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -791,36 +797,28 @@ export default function VendorProductsScreen() {
             </View>
           ) : null}
 
-          <Text style={styles.listInstruction}>
-            Tap any product to view. Edit to update
-          </Text>
-
           <Text style={styles.section}>
-            {searching ? "Search Results" : "Recent Products"}
+            {searching ? "Results" : "Recent Products"}
           </Text>
 
           {!vendorId ? (
             <View style={styles.listCard}>
-              <Text style={styles.empty}>
-                Vendor not loaded. Please ensure vendorSlice has vendor.id.
-              </Text>
+              <Text style={styles.empty}>Vendor not loaded.</Text>
             </View>
           ) : loading ? (
             <View style={styles.listCard}>
               <View style={styles.loadingRow}>
                 <ActivityIndicator />
-                <Text style={styles.loadingText}>Loading products…</Text>
+                <Text style={styles.loadingText}>Loading products...</Text>
               </View>
             </View>
           ) : searching && !products.length ? (
             <View style={styles.listCard}>
-              <Text style={styles.empty}>
-                No matching products found for this vendor.
-              </Text>
+              <Text style={styles.empty}>No matches.</Text>
             </View>
           ) : !products.length ? (
             <View style={styles.listCard}>
-              <Text style={styles.empty}>No products yet.</Text>
+              <Text style={styles.empty}>No products.</Text>
             </View>
           ) : null}
         </>
@@ -831,7 +829,7 @@ export default function VendorProductsScreen() {
             {loadingMore ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator />
-                <Text style={styles.loadingText}>Loading more…</Text>
+                <Text style={styles.loadingText}>Loading more...</Text>
               </View>
             ) : hasMore ? (
               <Pressable
@@ -844,7 +842,7 @@ export default function VendorProductsScreen() {
                 <Text style={styles.loadMoreText}>Load more</Text>
               </Pressable>
             ) : (
-              <Text style={styles.endText}>product list complete</Text>
+              <Text style={styles.endText}>All products loaded</Text>
             )}
           </View>
         ) : (
@@ -855,22 +853,23 @@ export default function VendorProductsScreen() {
   );
 }
 const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
-  danger: "#B91C1C",
-  white: "#FFFFFF",
+  bg: apColors.bg,
+  cardBg: apColors.card,
+  border: apColors.border,
+  borderSoft: apColors.borderSoft,
+  blue: apColors.blue,
+  blueSoft: apColors.blueSoft,
+  text: apColors.text,
+  subText: apColors.subText,
+  mutedText: apColors.muted,
+  danger: apColors.danger,
+  white: apColors.white,
 };
 
 const styles = StyleSheet.create({
   content: {
     padding: 16,
-    paddingBottom: 24,
+    paddingBottom: 92,
     backgroundColor: stylesVars.bg,
   },
 
@@ -881,42 +880,56 @@ const styles = StyleSheet.create({
     gap: 12,
   },
 
+  headerText: {
+    flex: 1,
+    minWidth: 0,
+  },
+
   title: {
-    fontSize: 18,
-    fontWeight: "700",
+    fontFamily: apFontFamily,
+    fontSize: 20,
+    fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
-  refresh: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: stylesVars.blue,
+  vendorMeta: {
+    marginTop: 2,
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+    color: stylesVars.mutedText,
+    letterSpacing: 0,
   },
 
-  disabledText: {
+  disabledButton: {
     opacity: 0.6,
   },
 
-  card: {
-    marginTop: 14,
-    borderRadius: 18,
+  refreshBtn: {
+    minHeight: 38,
+    paddingHorizontal: 12,
+    borderRadius: apRadii.control,
     borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg,
-    padding: 18,
+    borderColor: "#D7E3FF",
+    backgroundColor: stylesVars.blueSoft,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
-  meta: {
-    marginBottom: 14,
+  refreshText: {
+    fontFamily: apFontFamily,
     fontSize: 13,
-    lineHeight: 18,
-    color: stylesVars.mutedText,
-    fontWeight: "500",
+    fontWeight: "800",
+    color: stylesVars.blue,
+    letterSpacing: 0,
   },
 
   primaryBtn: {
+    marginTop: 14,
     minHeight: 48,
-    borderRadius: 14,
+    borderRadius: apRadii.control,
     paddingVertical: 12,
     paddingHorizontal: 14,
     backgroundColor: stylesVars.blue,
@@ -924,15 +937,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
+  primaryContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+
   primaryText: {
+    fontFamily: apFontFamily,
     color: stylesVars.white,
-    fontWeight: "700",
+    fontWeight: "800",
     fontSize: 14,
+    letterSpacing: 0,
   },
 
   searchCard: {
     marginTop: 14,
-    borderRadius: 18,
+    borderRadius: apRadii.card,
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
@@ -940,61 +962,50 @@ const styles = StyleSheet.create({
   },
 
   searchLabel: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     fontWeight: "800",
     color: stylesVars.text,
     marginBottom: 8,
+    letterSpacing: 0,
   },
 
   searchInput: {
     minHeight: 46,
-    borderRadius: 14,
+    borderRadius: apRadii.control,
     borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: "#F8FAFC",
+    borderColor: stylesVars.borderSoft,
+    backgroundColor: stylesVars.white,
     paddingHorizontal: 12,
+    ...apInputTextStyle,
     color: stylesVars.text,
-    fontSize: 10,
-    fontWeight: "600",
-  },
-
-  searchHint: {
-    marginTop: 8,
-    fontSize: 12,
-    lineHeight: 17,
-    color: stylesVars.mutedText,
-    fontWeight: "500",
-  },
-
-  listInstruction: {
-    marginTop: 16,
-    fontSize: 13,
-    lineHeight: 18,
-    color: stylesVars.mutedText,
+    fontSize: 14,
     fontWeight: "600",
   },
 
   section: {
-    marginTop: 6,
+    marginTop: 16,
+    fontFamily: apFontFamily,
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   listCard: {
     marginTop: 10,
-    borderRadius: 18,
+    borderRadius: apRadii.card,
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
-    padding: 18,
+    padding: 16,
   },
 
   item: {
     marginTop: 10,
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 16,
+    borderRadius: apRadii.card,
     backgroundColor: stylesVars.cardBg,
     flexDirection: "row",
     alignItems: "center",
@@ -1012,7 +1023,7 @@ const styles = StyleSheet.create({
   thumbWrap: {
     width: 54,
     height: 54,
-    borderRadius: 12,
+    borderRadius: apRadii.control,
     overflow: "hidden",
     backgroundColor: "#F1F5F9",
     borderWidth: 1,
@@ -1031,9 +1042,11 @@ const styles = StyleSheet.create({
   },
 
   thumbFallbackText: {
+    fontFamily: apFontFamily,
     color: stylesVars.mutedText,
     fontWeight: "600",
     fontSize: 10,
+    letterSpacing: 0,
   },
 
   itemMid: {
@@ -1042,31 +1055,39 @@ const styles = StyleSheet.create({
   },
 
   itemCode: {
+    fontFamily: apFontFamily,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "800",
     color: stylesVars.blue,
+    letterSpacing: 0,
   },
 
   itemTitle: {
     marginTop: 2,
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: "500",
+    fontWeight: "700",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   stockText: {
     marginTop: 2,
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.mutedText,
     fontWeight: "600",
+    letterSpacing: 0,
   },
 
   outOfStockText: {
     marginTop: 2,
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.danger,
-    fontWeight: "700",
+    fontWeight: "800",
+    letterSpacing: 0,
   },
 
   itemActions: {
@@ -1076,9 +1097,9 @@ const styles = StyleSheet.create({
   },
 
   actionBtn: {
-    minWidth: 70,
-    height: 32,
-    borderRadius: 10,
+    width: 34,
+    height: 30,
+    borderRadius: apRadii.control,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
     borderColor: "#D7E3FF",
@@ -1086,17 +1107,28 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
+  actionContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+  },
+
   actionText: {
+    fontFamily: apFontFamily,
     color: stylesVars.blue,
     fontWeight: "800",
     fontSize: 12,
+    letterSpacing: 0,
   },
 
   empty: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   loadingRow: {
@@ -1107,9 +1139,11 @@ const styles = StyleSheet.create({
   },
 
   loadingText: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     color: stylesVars.mutedText,
     fontWeight: "600",
+    letterSpacing: 0,
   },
 
   footer: {
@@ -1120,7 +1154,7 @@ const styles = StyleSheet.create({
   loadMoreBtn: {
     marginTop: 8,
     minHeight: 48,
-    borderRadius: 14,
+    borderRadius: apRadii.control,
     paddingVertical: 12,
     paddingHorizontal: 14,
     backgroundColor: stylesVars.blueSoft,
@@ -1131,18 +1165,22 @@ const styles = StyleSheet.create({
   },
 
   loadMoreText: {
+    fontFamily: apFontFamily,
     color: stylesVars.blue,
-    fontWeight: "700",
+    fontWeight: "800",
     fontSize: 14,
+    letterSpacing: 0,
   },
 
   endText: {
     marginTop: 10,
     textAlign: "center",
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   pressed: {

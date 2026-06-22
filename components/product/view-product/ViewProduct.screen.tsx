@@ -1030,7 +1030,7 @@ export default function ViewProductScreen() {
 
     return (
       <View style={styles.specRow}>
-        <Text style={[styles.specLabel, { color: stylesVars.blue }]}>
+        <Text style={[styles.specLabel, { color: stylesVars.text }]}>
           {title}
         </Text>
         <Text style={[styles.specValue, styles.specPlainValue]}>
@@ -2220,8 +2220,8 @@ export default function ViewProductScreen() {
           {safeText((product as any)?.spec?.more_description ?? "").trim() !==
           "—" ? (
             <View style={{ marginTop: 12 }}>
-              <Text style={[styles.specTitle, { color: stylesVars.blue }]}>
-                More Description
+              <Text style={[styles.specLabel, { color: stylesVars.text }]}>
+                Description
               </Text>
               <Text style={styles.moreDescText}>{moreDescriptionText}</Text>
             </View>

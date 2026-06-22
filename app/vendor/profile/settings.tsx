@@ -1,17 +1,52 @@
 import React, { useState } from "react";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import {
   Alert,
   Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
 import { Redirect, useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearSelectedVendor } from "@/store/vendorSlice";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+} from "@/components/product/addProductStyles";
+
+type SettingsIconName = React.ComponentProps<typeof MaterialIcons>["name"];
+
+function SettingsActionRow({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: SettingsIconName;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.actionRow,
+        pressed ? styles.pressed : null,
+      ]}
+    >
+      <View style={styles.actionIconBox}>
+        <MaterialIcons name={icon} size={19} color={stylesVars.blue} />
+      </View>
+      <Text style={styles.actionText}>{label}</Text>
+      <MaterialIcons name="chevron-right" size={22} color={stylesVars.mutedText} />
+    </Pressable>
+  );
+}
 
 export default function VendorSettingsScreen() {
   const router = useRouter();
@@ -58,37 +93,37 @@ export default function VendorSettingsScreen() {
         contentContainerStyle={styles.content}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>Vendor Settings</Text>
+          <Text style={styles.title}>Settings</Text>
 
-          <TouchableOpacity
-            style={styles.logoutButton}
+          <Pressable
+            style={({ pressed }) => [
+              styles.logoutButton,
+              pressed ? styles.pressed : null,
+            ]}
             onPress={() => setLogoutVisible(true)}
           >
-            <Text style={styles.logoutText}>Logout</Text>
-          </TouchableOpacity>
+            <Text style={styles.logoutText}>Log out</Text>
+          </Pressable>
         </View>
 
         <View style={styles.card}>
-          <TouchableOpacity
-            style={styles.placeholder}
+          <SettingsActionRow
+            icon="storefront"
+            label="View Profile"
             onPress={() => router.push("/vendor/profile/view-profile")}
-          >
-            <Text style={styles.actionText}>View Profile</Text>
-          </TouchableOpacity>
+          />
 
-          <TouchableOpacity
-            style={styles.placeholder}
+          <SettingsActionRow
+            icon="rate-review"
+            label="Reviews"
             onPress={() => router.push("/vendor/profile/reviews")}
-          >
-            <Text style={styles.actionText}>Reviews</Text>
-          </TouchableOpacity>
+          />
 
-          <TouchableOpacity
-            style={styles.placeholder}
+          <SettingsActionRow
+            icon="edit"
+            label="Edit Shop"
             onPress={() => router.push("/vendor/profile/edit-vendor")}
-          >
-            <Text style={styles.actionText}>Edit Shop</Text>
-          </TouchableOpacity>
+          />
         </View>
       </ScrollView>
 
@@ -104,30 +139,34 @@ export default function VendorSettingsScreen() {
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Log out?</Text>
             <Text style={styles.modalMessage}>
-              You will need to sign in again to manage your shop.
+              Sign in again to manage shop.
             </Text>
 
             <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.cancelButton}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.cancelButton,
+                  pressed ? styles.pressed : null,
+                ]}
                 onPress={() => setLogoutVisible(false)}
                 disabled={loggingOut}
               >
                 <Text style={styles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
+              </Pressable>
 
-              <TouchableOpacity
-                style={[
+              <Pressable
+                style={({ pressed }) => [
                   styles.confirmLogoutButton,
                   loggingOut && styles.disabledButton,
+                  pressed ? styles.pressed : null,
                 ]}
                 onPress={handleLogout}
                 disabled={loggingOut}
               >
                 <Text style={styles.confirmLogoutText}>
-                  {loggingOut ? "Logging out..." : "Logout"}
+                  {loggingOut ? "Logging out..." : "Log out"}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -137,21 +176,19 @@ export default function VendorSettingsScreen() {
 }
 
 const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
-  placeholder: "#94A3B8",
-  danger: "#B91C1C",
-  dangerSoft: "#FEE2E2",
+  bg: apColors.bg,
+  cardBg: apColors.card,
+  border: apColors.border,
+  borderSoft: apColors.borderSoft,
+  blue: apColors.blue,
+  blueSoft: apColors.blueSoft,
+  text: apColors.text,
+  subText: apColors.subText,
+  mutedText: apColors.muted,
+  danger: apColors.danger,
+  dangerSoft: "#FEF2F2",
   dangerBorder: "#FCA5A5",
-  white: "#FFFFFF",
-  black: "#000000",
+  white: apColors.white,
   overlay: "rgba(15, 23, 42, 0.35)",
 };
 
@@ -163,7 +200,7 @@ const styles = StyleSheet.create({
 
   content: {
     padding: 16,
-    paddingBottom: 24,
+    paddingBottom: 96,
     backgroundColor: stylesVars.bg,
   },
 
@@ -176,36 +213,51 @@ const styles = StyleSheet.create({
 
   title: {
     flex: 1,
-    fontSize: 18,
-    fontWeight: "700",
+    fontFamily: apFontFamily,
+    fontSize: 20,
+    fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   card: {
     marginTop: 14,
-    borderRadius: 18,
+    borderRadius: apRadii.card,
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
-    padding: 18,
+    padding: 10,
+    gap: 10,
   },
 
-  placeholder: {
-    minHeight: 48,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: stylesVars.blueSoft,
+  actionRow: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    borderRadius: apRadii.control,
     borderWidth: 1,
     borderColor: "#D7E3FF",
-    marginTop: 10,
+    backgroundColor: stylesVars.blueSoft,
+  },
+
+  actionIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: stylesVars.white,
+    alignItems: "center",
     justifyContent: "center",
   },
 
   actionText: {
+    flex: 1,
+    fontFamily: apFontFamily,
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "800",
     color: stylesVars.blue,
+    letterSpacing: 0,
   },
 
   logoutButton: {
@@ -221,9 +273,11 @@ const styles = StyleSheet.create({
   },
 
   logoutText: {
+    fontFamily: apFontFamily,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "800",
     color: stylesVars.danger,
+    letterSpacing: 0,
   },
 
   modalOverlay: {
@@ -237,7 +291,7 @@ const styles = StyleSheet.create({
   modalCard: {
     width: "100%",
     maxWidth: 380,
-    borderRadius: 18,
+    borderRadius: apRadii.card,
     backgroundColor: stylesVars.white,
     padding: 18,
     borderWidth: 1,
@@ -245,16 +299,21 @@ const styles = StyleSheet.create({
   },
 
   modalTitle: {
+    fontFamily: apFontFamily,
     fontSize: 18,
-    fontWeight: "700",
+    fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   modalMessage: {
     marginTop: 8,
+    fontFamily: apFontFamily,
     fontSize: 14,
     lineHeight: 20,
     color: stylesVars.subText,
+    fontWeight: "500",
+    letterSpacing: 0,
   },
 
   modalActions: {
@@ -267,7 +326,7 @@ const styles = StyleSheet.create({
   cancelButton: {
     minHeight: 44,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: apRadii.control,
     borderWidth: 1,
     borderColor: stylesVars.borderSoft,
     backgroundColor: stylesVars.white,
@@ -276,27 +335,35 @@ const styles = StyleSheet.create({
   },
 
   cancelText: {
+    fontFamily: apFontFamily,
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   confirmLogoutButton: {
     minHeight: 44,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: apRadii.control,
     backgroundColor: stylesVars.danger,
     justifyContent: "center",
     alignItems: "center",
   },
 
   confirmLogoutText: {
+    fontFamily: apFontFamily,
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "800",
     color: stylesVars.white,
+    letterSpacing: 0,
   },
 
   disabledButton: {
     opacity: 0.7,
+  },
+
+  pressed: {
+    opacity: 0.82,
   },
 });

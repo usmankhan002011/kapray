@@ -781,7 +781,9 @@ export default function ViewProductStitchedVariants({
           {readOnly ? "Styles Offered" : "Choose a Style"}
         </Text>
         {!readOnly ? (
-          <Text style={[styles.meta, { marginTop: 4 }]}></Text>
+          <Text style={[styles.meta, { marginTop: 4 }]}>
+            Tap card to view
+          </Text>
         ) : null}
 
         <View
@@ -796,6 +798,10 @@ export default function ViewProductStitchedVariants({
           {madeOrderVariants.map((variant, index) => {
             const isActive = activeVariantId === variant.id;
             const finalPrice = basePrice + variant.additional_price_pkr;
+            const compactCard = !isActive;
+            const styleLabel =
+              variant.label || `Style ${variant.variant_no || index + 1}`;
+            const styleName = variant.name || variant.display_name;
 
             return (
               <Pressable
@@ -803,8 +809,8 @@ export default function ViewProductStitchedVariants({
                 disabled={readOnly}
                 onPress={() => {
                   if (readOnly) return;
-                  setActiveVariantId(variant.id);
-                  onSelect(makeMadeOrderSelection(variant, basePrice));
+                  setPreviewVariant(variant);
+                  setPreviewIndex(0);
                 }}
                 style={({ pressed }) => [
                   {
@@ -814,23 +820,11 @@ export default function ViewProductStitchedVariants({
                     borderRadius: 16,
                     padding: 10,
                     gap: 10,
-                    width: "48.2%",
+                    width: isActive ? "100%" : "48.2%",
                   },
                   pressed && !readOnly ? styles.pressed : null,
                 ]}
               >
-                {readOnly ? (
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontWeight: "900",
-                      color: stylesVars.text,
-                    }}
-                  >
-                    Style {index + 1}
-                  </Text>
-                ) : null}
-
                 {variant.imageUrls.length ? (
                   <ScrollView
                     horizontal
@@ -878,76 +872,104 @@ export default function ViewProductStitchedVariants({
                 )}
 
                 <View style={{ gap: 4 }}>
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontWeight: "900",
-                      color: stylesVars.text,
-                    }}
-                    numberOfLines={2}
-                  >
-                    {variant.display_name}
-                  </Text>
+                  {compactCard ? (
+                    <>
+                      <Text
+                        style={[
+                          styles.specLabel,
+                          { color: stylesVars.text, fontWeight: "900" },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {styleLabel}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.dataValue,
+                          {
+                            fontSize: 13,
+                            lineHeight: 18,
+                            fontWeight: "700",
+                            color: stylesVars.mutedText,
+                          },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {styleName}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.metaLine,
+                          {
+                            marginTop: 2,
+                            fontSize: 12,
+                            lineHeight: 17,
+                            fontWeight: "700",
+                            color: stylesVars.mutedText,
+                          },
+                        ]}
+                      >
+                        {money(finalPrice)}
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Text
+                        style={[
+                          styles.dataValue,
+                          {
+                            fontSize: 14,
+                            lineHeight: 19,
+                            fontWeight: "900",
+                            color: stylesVars.text,
+                          },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {variant.display_name}
+                      </Text>
 
-                  <Text style={styles.metaLine}>
-                    Base price: {money(basePrice)}
-                  </Text>
-                  <Text style={styles.metaLine}>
-                    Additional cost: {money(variant.additional_price_pkr)}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.metaLine,
-                      { fontWeight: "900", color: stylesVars.text },
-                    ]}
-                  >
-                    Total cost: {money(finalPrice)}
-                  </Text>
-                  <Text style={styles.metaLine}>
-                    Estimated time:{" "}
-                    {variant.estimated_days > 0
-                      ? `${variant.estimated_days} days`
-                      : "To be confirmed"}
-                  </Text>
-                  {variant.note ? (
-                    <Text style={styles.metaLine}>{variant.note}</Text>
-                  ) : null}
+                      <Text style={styles.metaLine}>
+                        Base price: {money(basePrice)}
+                      </Text>
+                      <Text style={styles.metaLine}>
+                        Additional cost: {money(variant.additional_price_pkr)}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.metaLine,
+                          { fontWeight: "900", color: stylesVars.text },
+                        ]}
+                      >
+                        Total cost: {money(finalPrice)}
+                      </Text>
+                      <Text style={styles.metaLine}>
+                        Estimated time:{" "}
+                        {variant.estimated_days > 0
+                          ? `${variant.estimated_days} days`
+                          : "To be confirmed"}
+                      </Text>
+                      {variant.note ? (
+                        <Text style={styles.metaLine}>{variant.note}</Text>
+                      ) : null}
+                    </>
+                  )}
                 </View>
 
                 {!readOnly ? (
                   <View
-                    style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}
+                    style={{
+                      width: "100%",
+                      flexDirection: "row",
+                      justifyContent: "center",
+                      gap: 10,
+                      flexWrap: "wrap",
+                    }}
                   >
-                    <View
-                      style={{
-                        minHeight: 42,
-                        borderRadius: 999,
-                        paddingHorizontal: 16,
-                        paddingVertical: 10,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        backgroundColor: isActive
-                          ? stylesVars.blue
-                          : "#FFFFFF",
-                        borderWidth: 1,
-                        borderColor: isActive ? stylesVars.blue : "#D7E3FF",
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          fontWeight: "900",
-                          color: isActive ? "#FFFFFF" : stylesVars.blue,
-                        }}
-                      >
-                        {isActive ? "Style Selected" : "Tap to Select"}
-                      </Text>
-                    </View>
-
                     <Pressable
                       onPress={() => {
-                        setPreviewVariant(variant);
-                        setPreviewIndex(0);
+                        setActiveVariantId(variant.id);
+                        onSelect(makeMadeOrderSelection(variant, basePrice));
                       }}
                       style={({ pressed }) => [
                         {
@@ -957,9 +979,11 @@ export default function ViewProductStitchedVariants({
                           paddingVertical: 10,
                           alignItems: "center",
                           justifyContent: "center",
-                          backgroundColor: "#FFFFFF",
+                          backgroundColor: isActive
+                            ? stylesVars.blue
+                            : "#FFFFFF",
                           borderWidth: 1,
-                          borderColor: "#D7E3FF",
+                          borderColor: isActive ? stylesVars.blue : "#D7E3FF",
                         },
                         pressed ? styles.pressed : null,
                       ]}
@@ -968,10 +992,10 @@ export default function ViewProductStitchedVariants({
                         style={{
                           fontSize: 12,
                           fontWeight: "900",
-                          color: stylesVars.blue,
+                          color: isActive ? "#FFFFFF" : stylesVars.blue,
                         }}
                       >
-                        View Card
+                        {isActive ? "Style Selected" : "Select Style"}
                       </Text>
                     </Pressable>
                   </View>
@@ -1007,6 +1031,9 @@ export default function ViewProductStitchedVariants({
             ? "Product Styles Offered"
             : "Choose a Style"}
       </Text>
+      {!readOnly && !showingSimpleReady ? (
+        <Text style={[styles.meta, { marginTop: 4 }]}>Tap card to view</Text>
+      ) : null}
 
       <View
         style={{
@@ -1017,7 +1044,7 @@ export default function ViewProductStitchedVariants({
           rowGap: 12,
         }}
       >
-        {displayReadyVariants.map((variant) => {
+        {displayReadyVariants.map((variant, index) => {
           const visibleSizes = variant.sizes.filter((row) => !isAllSize(row));
           const isActive = activeVariantId === variant.id;
           const selectedSize =
@@ -1026,10 +1053,23 @@ export default function ViewProductStitchedVariants({
               : "";
           const finalPrice = basePrice + variant.additional_price_pkr;
           const hasAvailableSize = visibleSizes.some((row) => row.qty > 0);
+          const compactCard = !showingSimpleReady && !isActive;
+          const detailTextStyle = compactCard
+            ? { fontSize: 12, lineHeight: 17 }
+            : null;
+          const styleLabel =
+            variant.label || `Style ${variant.variant_no || index + 1}`;
+          const styleName = variant.name || variant.display_name;
 
           return (
-            <View
+            <Pressable
               key={variant.id}
+              disabled={readOnly || showingSimpleReady}
+              onPress={() => {
+                if (readOnly || showingSimpleReady) return;
+                setPreviewVariant(variant);
+                setPreviewIndex(0);
+              }}
               style={{
                 borderWidth: 1.5,
                 borderColor: isActive ? stylesVars.blue : "#D7E3FF",
@@ -1091,49 +1131,103 @@ export default function ViewProductStitchedVariants({
               )}
 
               <View style={{ gap: 4 }}>
-                <Text
-                  style={{
-                    fontSize: 14,
-                    fontWeight: "900",
-                    color: stylesVars.text,
-                  }}
-                  numberOfLines={2}
-                >
-                  {variant.display_name}
-                </Text>
+                {compactCard ? (
+                  <>
+                    <Text
+                      style={[
+                        styles.specLabel,
+                        { color: stylesVars.text, fontWeight: "900" },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {styleLabel}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.dataValue,
+                        {
+                          fontSize: 13,
+                          lineHeight: 18,
+                          fontWeight: "700",
+                          color: stylesVars.mutedText,
+                        },
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {styleName}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.metaLine,
+                        {
+                          marginTop: 2,
+                          fontSize: 12,
+                          lineHeight: 17,
+                          fontWeight: "700",
+                          color: stylesVars.mutedText,
+                        },
+                      ]}
+                    >
+                      {money(finalPrice)}
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text
+                      style={[
+                        styles.dataValue,
+                        {
+                          fontSize: 14,
+                          lineHeight: 19,
+                          fontWeight: "900",
+                          color: stylesVars.text,
+                        },
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {variant.display_name}
+                    </Text>
 
-                {variant.name ? (
-                  <Text style={styles.metaLine}>
-                    Color / Design: {variant.name}
-                  </Text>
-                ) : null}
-                <Text style={styles.metaLine}>
-                  Base price: {money(basePrice)}
-                </Text>
-                {!showingSimpleReady ? (
-                  <Text style={styles.metaLine}>
-                    Additional cost: {money(variant.additional_price_pkr)}
-                  </Text>
-                ) : null}
-                <Text
-                  style={[
-                    styles.metaLine,
-                    { fontWeight: "900", color: stylesVars.text },
-                  ]}
-                >
-                  Total cost: {money(finalPrice)}
-                </Text>
-                {variant.note ? (
-                  <Text style={styles.metaLine}>{variant.note}</Text>
-                ) : null}
-                {variant.sku ? (
-                  <Text style={styles.metaLine}>SKU: {variant.sku}</Text>
-                ) : null}
+                    <Text style={[styles.metaLine, detailTextStyle]}>
+                      Base price: {money(basePrice)}
+                    </Text>
+                    {!showingSimpleReady ? (
+                      <Text style={[styles.metaLine, detailTextStyle]}>
+                        Additional cost: {money(variant.additional_price_pkr)}
+                      </Text>
+                    ) : null}
+                    <Text
+                      style={[
+                        styles.metaLine,
+                        detailTextStyle,
+                        { fontWeight: "900", color: stylesVars.text },
+                      ]}
+                    >
+                      Total cost: {money(finalPrice)}
+                    </Text>
+                    {variant.note ? (
+                      <Text style={[styles.metaLine, detailTextStyle]}>
+                        {variant.note}
+                      </Text>
+                    ) : null}
+                    {variant.sku ? (
+                      <Text style={[styles.metaLine, detailTextStyle]}>
+                        SKU: {variant.sku}
+                      </Text>
+                    ) : null}
+                  </>
+                )}
               </View>
 
               {!readOnly && !showingSimpleReady ? (
                 <View
-                  style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}
+                  style={{
+                    width: "100%",
+                    flexDirection: "row",
+                    justifyContent: "center",
+                    gap: 10,
+                    flexWrap: "wrap",
+                  }}
                 >
                   <Pressable
                     disabled={!hasAvailableSize}
@@ -1164,37 +1258,6 @@ export default function ViewProductStitchedVariants({
                       }}
                     >
                       {isActive ? "Style Selected" : "Select Style"}
-                    </Text>
-                  </Pressable>
-
-                  <Pressable
-                    onPress={() => {
-                      setPreviewVariant(variant);
-                      setPreviewIndex(0);
-                    }}
-                    style={({ pressed }) => [
-                      {
-                        minHeight: 42,
-                        borderRadius: 999,
-                        paddingHorizontal: 16,
-                        paddingVertical: 10,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        backgroundColor: "#FFFFFF",
-                        borderWidth: 1,
-                        borderColor: "#D7E3FF",
-                      },
-                      pressed ? styles.pressed : null,
-                    ]}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: "900",
-                        color: stylesVars.blue,
-                      }}
-                    >
-                      View Card
                     </Text>
                   </Pressable>
                 </View>
@@ -1284,8 +1347,8 @@ export default function ViewProductStitchedVariants({
 
                           <Text
                             style={{
-                              fontSize: 10.5,
-                              lineHeight: 14,
+                              fontSize: 12,
+                              lineHeight: 16,
                               fontWeight: "800",
                               color: selected
                                 ? "#FFFFFF"
@@ -1306,7 +1369,7 @@ export default function ViewProductStitchedVariants({
                   </View>
                 </View>
               ) : null}
-            </View>
+            </Pressable>
           );
         })}
       </View>
@@ -1447,11 +1510,6 @@ function VariantPreviewModal({
 
             {previewVariant ? (
               <View style={{ gap: 4 }}>
-                {"sizes" in previewVariant && previewVariant.name ? (
-                  <Text style={styles.metaLine}>
-                    Color / Design: {previewVariant.name}
-                  </Text>
-                ) : null}
                 <Text style={styles.metaLine}>
                   Base price: {money(basePrice)}
                 </Text>
