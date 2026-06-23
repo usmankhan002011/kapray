@@ -1415,6 +1415,14 @@ export default function OrderDetailScreen() {
                           : ""
                       }
                     />
+                    <KVRow
+                      label="Total fabric cost"
+                      value={
+                        fabricCostPkr != null
+                          ? money(order.currency, fabricCostPkr)
+                          : ""
+                      }
+                    />
                   </>
                 ) : null}
 

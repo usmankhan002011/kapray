@@ -1696,6 +1696,10 @@ export default function PlaceOrderScreen() {
                         : ""
                     }
                   />
+                  <KVRow
+                    label="Total fabric cost"
+                    value={formatMoney(base.currency, base.fabricCostPkr)}
+                  />
                 </View>
               ) : null}
 

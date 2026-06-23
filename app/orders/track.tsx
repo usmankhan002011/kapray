@@ -12,6 +12,11 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+} from "@/components/product/addProductStyles";
 
 type VendorRow = {
   id: number;
@@ -328,7 +333,7 @@ export default function TrackOrdersScreen() {
             ]}
             numberOfLines={1}
           >
-            {item.status}
+            {humanizeCat(item.status)}
           </Text>
         </View>
 
@@ -337,7 +342,7 @@ export default function TrackOrdersScreen() {
         </Text>
 
         <Text style={styles.small} numberOfLines={1}>
-          Dress Cat: {dressCat}
+          Category: {dressCat}
         </Text>
 
         {selectedVariant.hasVariant ? (
@@ -509,8 +514,7 @@ export default function TrackOrdersScreen() {
                 {searched ? "No orders found" : "Search to view orders"}
               </Text>
               <Text style={styles.emptyText}>
-                Tip: Use buyer mobile + optional buyer name + optional vendor
-                filter to narrow results.
+                Use buyer mobile. Add name or vendor to narrow results.
               </Text>
             </View>
           }
@@ -521,22 +525,22 @@ export default function TrackOrdersScreen() {
 }
 
 const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
+  bg: apColors.bg,
+  cardBg: apColors.card,
+  border: apColors.border,
+  borderSoft: apColors.borderSoft,
+  blue: apColors.blue,
+  blueSoft: apColors.blueSoft,
+  text: apColors.text,
+  subText: apColors.subText,
+  mutedText: apColors.muted,
   placeholder: "#94A3B8",
-  danger: "#B91C1C",
+  danger: apColors.danger,
   dangerSoft: "#FEE2E2",
   dangerBorder: "#FCA5A5",
-  success: "#166534",
-  successSoft: "#DCFCE7",
-  white: "#FFFFFF",
+  success: apColors.success,
+  successSoft: apColors.successSoft,
+  white: apColors.white,
   black: "#000000",
 };
 
@@ -553,50 +557,57 @@ const styles = StyleSheet.create({
   },
 
   title: {
+    fontFamily: apFontFamily,
     fontSize: 18,
-    fontWeight: "700",
+    fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   subtitle: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   cardForm: {
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 18,
-    padding: 18,
+    borderRadius: apRadii.card,
+    padding: 16,
     gap: 10,
     backgroundColor: stylesVars.cardBg,
   },
 
   label: {
+    fontFamily: apFontFamily,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "800",
     color: stylesVars.text,
-    letterSpacing: 0.2,
+    letterSpacing: 0,
   },
 
   input: {
     borderWidth: 1,
     borderColor: stylesVars.borderSoft,
-    borderRadius: 12,
+    borderRadius: apRadii.control,
     paddingHorizontal: 12,
     paddingVertical: 10,
+    fontFamily: apFontFamily,
     fontSize: 14,
     color: stylesVars.text,
     fontWeight: "500",
     backgroundColor: stylesVars.white,
+    letterSpacing: 0,
   },
 
   vendorOptionsBox: {
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 12,
+    borderRadius: apRadii.card,
     overflow: "hidden",
     maxHeight: 220,
     backgroundColor: stylesVars.cardBg,
@@ -610,17 +621,21 @@ const styles = StyleSheet.create({
   },
 
   vendorOptionTitle: {
+    fontFamily: apFontFamily,
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   vendorOptionSub: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     fontWeight: "500",
     color: stylesVars.mutedText,
     marginTop: 2,
+    letterSpacing: 0,
   },
 
   selectedVendorRow: {
@@ -629,7 +644,7 @@ const styles = StyleSheet.create({
     gap: 10,
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 12,
+    borderRadius: apRadii.card,
     padding: 12,
     backgroundColor: stylesVars.cardBg,
   },
@@ -639,24 +654,28 @@ const styles = StyleSheet.create({
   },
 
   selectedVendorTitle: {
+    fontFamily: apFontFamily,
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   selectedVendorSub: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     fontWeight: "500",
     color: stylesVars.mutedText,
     marginTop: 2,
+    letterSpacing: 0,
   },
 
   clearBtn: {
     minHeight: 40,
     borderWidth: 1,
     borderColor: "#D7E3FF",
-    borderRadius: 12,
+    borderRadius: apRadii.control,
     paddingHorizontal: 14,
     paddingVertical: 10,
     backgroundColor: stylesVars.blueSoft,
@@ -665,25 +684,29 @@ const styles = StyleSheet.create({
   },
 
   clearBtnText: {
+    fontFamily: apFontFamily,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "800",
     color: stylesVars.blue,
+    letterSpacing: 0,
   },
 
   primaryBtn: {
     minHeight: 48,
     backgroundColor: stylesVars.blue,
     paddingVertical: 12,
-    borderRadius: 14,
+    borderRadius: apRadii.control,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 2,
   },
 
   primaryText: {
+    fontFamily: apFontFamily,
     color: stylesVars.white,
-    fontWeight: "700",
+    fontWeight: "800",
     fontSize: 14,
+    letterSpacing: 0,
   },
 
   disabledBtn: {
@@ -701,10 +724,12 @@ const styles = StyleSheet.create({
   },
 
   helper: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   loadingArea: {
@@ -724,8 +749,8 @@ const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 18,
-    padding: 18,
+    borderRadius: apRadii.card,
+    padding: 16,
     gap: 8,
     backgroundColor: stylesVars.cardBg,
   },
@@ -743,56 +768,66 @@ const styles = StyleSheet.create({
   },
 
   orderNo: {
+    fontFamily: apFontFamily,
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "800",
     flex: 1,
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   line: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.subText,
-    fontWeight: "500",
+    fontWeight: "600",
+    letterSpacing: 0,
   },
 
   small: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   variantBox: {
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
-    backgroundColor: stylesVars.blueSoft,
-    borderRadius: 12,
-    padding: 10,
+    borderTopWidth: 1,
+    borderTopColor: stylesVars.border,
+    paddingTop: 8,
     gap: 3,
   },
 
   variantTitle: {
-    fontSize: 12,
-    lineHeight: 17,
-    color: stylesVars.blue,
+    fontFamily: apFontFamily,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.text,
     fontWeight: "800",
+    letterSpacing: 0,
   },
 
   variantMeta: {
-    fontSize: 11,
-    lineHeight: 16,
-    color: stylesVars.subText,
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 17,
+    color: stylesVars.mutedText,
     fontWeight: "600",
+    letterSpacing: 0,
   },
 
   badge: {
+    fontFamily: apFontFamily,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "800",
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: apRadii.control,
     overflow: "hidden",
+    letterSpacing: 0,
   },
 
   badgeRed: {
@@ -810,14 +845,16 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: apRadii.control,
     backgroundColor: stylesVars.successSoft,
   },
 
   reviewPillText: {
+    fontFamily: apFontFamily,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "800",
     color: stylesVars.success,
+    letterSpacing: 0,
   },
 
   empty: {
@@ -827,16 +864,20 @@ const styles = StyleSheet.create({
   },
 
   emptyTitle: {
+    fontFamily: apFontFamily,
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   emptyText: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
     textAlign: "center",
     fontWeight: "500",
+    letterSpacing: 0,
   },
 });

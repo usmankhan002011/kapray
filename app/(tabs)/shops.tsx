@@ -1,4 +1,4 @@
-// app/vendor-search.tsx
+// app/(tabs)/shops.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -14,6 +14,11 @@ import { useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setVendorIds } from "@/store/filtersSlice";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+} from "@/components/product/addProductStyles";
 
 const VENDOR_TABLE = "vendor";
 
@@ -26,7 +31,7 @@ type VendorRow = {
 
 function safe(v: any) {
   const s = String(v ?? "").trim();
-  return s.length ? s : "—";
+  return s.length ? s : "-";
 }
 
 export default function VendorSearchScreen() {
@@ -128,11 +133,11 @@ export default function VendorSearchScreen() {
         <Pressable
           onPress={apply}
           style={({ pressed }) => [
-            styles.applyBtn,
+            styles.actionBtn,
             pressed ? styles.pressed : null,
           ]}
         >
-          <Text style={styles.applyText}>✅ Apply</Text>
+          <Text style={styles.actionText}>Apply</Text>
         </Pressable>
       </View>
 
@@ -140,7 +145,7 @@ export default function VendorSearchScreen() {
         <TextInput
           value={q}
           onChangeText={setQ}
-          placeholder="Search vendor / shop / city…"
+          placeholder="Search vendor / shop / city..."
           placeholderTextColor={stylesVars.placeholder}
           style={styles.searchInput}
           autoCapitalize="none"
@@ -150,64 +155,70 @@ export default function VendorSearchScreen() {
         <Pressable
           onPress={clear}
           style={({ pressed }) => [
-            styles.clearBtn,
+            styles.actionBtn,
             pressed ? styles.pressed : null,
           ]}
         >
-          <Text style={styles.clearText}>🧹 Clear</Text>
+          <Text style={styles.actionText}>Clear</Text>
         </Pressable>
       </View>
 
-      <Text style={styles.helperText}>
-        Select vendors to filter their products.
-      </Text>
-
-      <Text style={styles.meta}>
-        Selected: <Text style={styles.metaStrong}>{selected.size}</Text>
-      </Text>
+      <View style={styles.summaryRow}>
+        <Text style={styles.helperText}>Select vendors to filter products.</Text>
+        <Text style={styles.meta}>
+          <Text style={styles.metaStrong}>{selected.size}</Text> selected
+        </Text>
+      </View>
 
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator />
-          <Text style={styles.muted}>Loading vendors…</Text>
+          <Text style={styles.muted}>Loading vendors...</Text>
         </View>
       ) : (
         <FlatList
           data={filtered}
           keyExtractor={(item) => String(item.id)}
           contentContainerStyle={styles.listContent}
-          ItemSeparatorComponent={() => <View style={styles.sep} />}
           renderItem={({ item }) => {
             const id = String(item.id);
             const on = selected.has(id);
+            const title = safe(item.shop_name || item.name);
+            const subTitle = item.shop_name ? safe(item.name) : `Vendor #${id}`;
 
             return (
-              <View style={styles.row}>
+              <View style={[styles.vendorCard, on && styles.vendorCardSelected]}>
                 <Pressable
                   onPress={() => openVendorProfile(id)}
                   style={({ pressed }) => [
-                    styles.rowLeft,
+                    styles.vendorInfo,
                     pressed ? styles.pressed : null,
                   ]}
                 >
                   <Text style={styles.rowTitle} numberOfLines={1}>
-                    {safe(item.name)}
+                    {title}
                   </Text>
                   <Text style={styles.rowSub} numberOfLines={1}>
-                    {safe(item.shop_name)} • {safe(item.location)}
+                    {subTitle}
                   </Text>
-                  <Text style={styles.viewProfileText}>View Profile</Text>
+                  <Text style={styles.rowSub} numberOfLines={1}>
+                    {safe(item.location)}
+                  </Text>
+                  <Text style={styles.viewProfileText}>View</Text>
                 </Pressable>
 
                 <Pressable
                   onPress={() => toggle(id)}
                   style={({ pressed }) => [
-                    styles.tickBtn,
+                    styles.selectBtn,
+                    on && styles.selectBtnOn,
                     pressed ? styles.pressed : null,
                   ]}
                   hitSlop={8}
                 >
-                  <Text style={styles.tick}>{on ? "✅" : "⬜️"}</Text>
+                  <Text style={[styles.selectText, on && styles.selectTextOn]}>
+                    {on ? "Selected" : "Select"}
+                  </Text>
                 </Pressable>
               </View>
             );
@@ -224,22 +235,22 @@ export default function VendorSearchScreen() {
 }
 
 const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
+  bg: apColors.bg,
+  cardBg: apColors.card,
+  border: apColors.border,
+  borderSoft: apColors.borderSoft,
+  blue: apColors.blue,
+  blueSoft: apColors.blueSoft,
+  text: apColors.text,
+  subText: apColors.subText,
+  mutedText: apColors.muted,
   placeholder: "#94A3B8",
-  danger: "#B91C1C",
+  danger: apColors.danger,
   dangerSoft: "#FEE2E2",
   dangerBorder: "#FCA5A5",
   overlayDark: "rgba(0,0,0,0.58)",
   overlaySoft: "rgba(255,255,255,0.14)",
-  white: "#FFFFFF",
+  white: apColors.white,
   black: "#000000",
 };
 
@@ -260,23 +271,29 @@ const styles = StyleSheet.create({
   },
 
   link: {
-    fontSize: 14,
+    fontFamily: apFontFamily,
+    fontSize: 13,
+    lineHeight: 18,
     color: stylesVars.blue,
-    fontWeight: "700",
+    fontWeight: "800",
+    letterSpacing: 0,
   },
 
   title: {
     flex: 1,
     textAlign: "center",
+    fontFamily: apFontFamily,
     fontSize: 18,
-    fontWeight: "700",
+    lineHeight: 24,
+    fontWeight: "800",
     color: stylesVars.text,
     paddingHorizontal: 10,
+    letterSpacing: 0,
   },
 
-  applyBtn: {
+  actionBtn: {
     minHeight: 40,
-    borderRadius: 12,
+    borderRadius: apRadii.pill,
     paddingVertical: 8,
     paddingHorizontal: 12,
     backgroundColor: stylesVars.blueSoft,
@@ -286,10 +303,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  applyText: {
+  actionText: {
+    fontFamily: apFontFamily,
     fontSize: 13,
-    fontWeight: "700",
+    lineHeight: 18,
+    fontWeight: "800",
     color: stylesVars.blue,
+    letterSpacing: 0,
   },
 
   searchWrap: {
@@ -304,119 +324,159 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderColor: stylesVars.borderSoft,
-    borderRadius: 12,
+    borderRadius: apRadii.control,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
+    fontFamily: apFontFamily,
     color: stylesVars.text,
+    fontWeight: "500",
     backgroundColor: stylesVars.white,
+    letterSpacing: 0,
   },
 
-  clearBtn: {
-    minHeight: 40,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: stylesVars.cardBg,
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  clearText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: stylesVars.text,
-  },
-
-  helperText: {
+  summaryRow: {
     paddingHorizontal: 16,
     paddingTop: 2,
     paddingBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  helperText: {
+    flex: 1,
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.subText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   meta: {
-    paddingHorizontal: 16,
-    paddingBottom: 6,
+    fontFamily: apFontFamily,
     fontSize: 12,
+    lineHeight: 17,
     color: stylesVars.mutedText,
-    fontWeight: "500",
+    fontWeight: "600",
+    letterSpacing: 0,
   },
 
   metaStrong: {
     color: stylesVars.text,
-    fontWeight: "700",
+    fontWeight: "800",
   },
 
   listContent: {
     padding: 16,
     paddingTop: 10,
-  },
-
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
+    paddingBottom: 110,
     gap: 12,
-    paddingVertical: 12,
   },
 
-  rowLeft: {
+  vendorCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    borderRadius: apRadii.card,
+    backgroundColor: stylesVars.cardBg,
+    minWidth: 0,
+  },
+
+  vendorCardSelected: {
+    borderColor: stylesVars.blue,
+    backgroundColor: stylesVars.blueSoft,
+  },
+
+  vendorInfo: {
     flex: 1,
+    minWidth: 0,
   },
 
   rowTitle: {
+    fontFamily: apFontFamily,
     fontSize: 14,
-    fontWeight: "700",
+    lineHeight: 19,
+    fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   rowSub: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     fontWeight: "500",
     color: stylesVars.mutedText,
-    marginTop: 3,
+    marginTop: 2,
+    letterSpacing: 0,
   },
 
   viewProfileText: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
-    fontWeight: "700",
+    fontWeight: "800",
     color: stylesVars.blue,
     marginTop: 4,
+    letterSpacing: 0,
   },
 
-  tickBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+  selectBtn: {
+    minHeight: 34,
+    minWidth: 78,
+    borderRadius: apRadii.pill,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: stylesVars.white,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
   },
 
-  tick: {
-    fontSize: 18,
-    fontWeight: "700",
+  selectBtnOn: {
+    borderColor: stylesVars.blue,
+    backgroundColor: stylesVars.blue,
   },
 
-  sep: {
-    height: 1,
-    backgroundColor: stylesVars.border,
+  selectText: {
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "800",
+    color: stylesVars.blue,
+    letterSpacing: 0,
+  },
+
+  selectTextOn: {
+    color: stylesVars.white,
   },
 
   center: {
-    padding: 24,
+    margin: 16,
+    padding: 18,
+    borderRadius: apRadii.card,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.cardBg,
     alignItems: "center",
     justifyContent: "center",
   },
 
   muted: {
-    fontSize: 14,
+    fontFamily: apFontFamily,
+    fontSize: 13,
+    lineHeight: 18,
     color: stylesVars.mutedText,
-    fontWeight: "500",
+    fontWeight: "600",
     marginTop: 8,
+    letterSpacing: 0,
   },
 
   pressed: {

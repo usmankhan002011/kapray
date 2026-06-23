@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
+import { apColors, apFontFamily } from "@/components/product/addProductStyles";
 
 type Props = {
   rating: number | null | undefined;
@@ -43,11 +44,15 @@ const styles = StyleSheet.create({
   },
   stars: {
     color: "#F59E0B",
+    fontFamily: apFontFamily,
     fontWeight: "700",
+    letterSpacing: 0,
   },
   valueText: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: apColors.text,
+    letterSpacing: 0,
   },
 });

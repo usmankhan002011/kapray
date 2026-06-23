@@ -432,6 +432,9 @@ export default function ViewProductTailoringSelection({
               <Text style={[styles.label, { color: stylesVars.blue }]}>
                 Select a tailoring style
               </Text>
+              <Text style={[styles.meta, { marginTop: 4 }]}>
+                Tap card to view
+              </Text>
 
               <View
                 style={{
@@ -442,7 +445,7 @@ export default function ViewProductTailoringSelection({
                   rowGap: 12,
                 }}
               >
-                {tailoringStylePresets.map((preset) => {
+                {tailoringStylePresets.map((preset, index) => {
                   const presetImages = resolvePresetImageUrls(
                     preset,
                     resolvePublicUrl,
@@ -451,16 +454,23 @@ export default function ViewProductTailoringSelection({
                   const extraCost = safeInt0(preset.extra_cost_pkr);
 
                   return (
-                    <View
+                    <Pressable
                       key={preset.id}
-                      style={{
-                        width: "48.2%",
-                        borderRadius: 16,
-                        borderWidth: 1,
-                        borderColor: isSelected ? stylesVars.blue : "#D7E3FF",
-                        backgroundColor: isSelected ? "#DCEBFF" : "#FFFFFF",
-                        overflow: "hidden",
+                      onPress={() => {
+                        setPreviewImageIndex(0);
+                        setPreviewPresetId(preset.id || "");
                       }}
+                      style={({ pressed }) => [
+                        {
+                          width: "48.2%",
+                          borderRadius: 16,
+                          borderWidth: 1,
+                          borderColor: isSelected ? stylesVars.blue : "#D7E3FF",
+                          backgroundColor: isSelected ? "#DCEBFF" : "#FFFFFF",
+                          overflow: "hidden",
+                        },
+                        pressed ? styles.pressed : null,
+                      ]}
                     >
                       {presetImages.length ? (
                         <ScrollView
@@ -474,119 +484,86 @@ export default function ViewProductTailoringSelection({
                           }}
                         >
                           {presetImages.map((uri, imgIndex) => (
-                            <Pressable
+                            <View
                               key={`${uri}-${imgIndex}`}
-                              onPress={() => {
-                                setSelectedTailoringStyleId(preset.id);
-                                setPreviewImageIndex(imgIndex);
-                                setPreviewPresetId(preset.id || "");
+                              style={{
+                                width: 128,
+                                height: 180,
+                                borderRadius: 14,
+                                overflow: "hidden",
+                                backgroundColor: "#EEF2F7",
+                                borderWidth: 1,
+                                borderColor: "#E2E8F0",
                               }}
-                              style={({ pressed }) => [
-                                {
-                                  width: 128,
-                                  height: 180,
-                                  borderRadius: 14,
-                                  overflow: "hidden",
-                                  backgroundColor: "#EEF2F7",
-                                  borderWidth: 1,
-                                  borderColor: "#E2E8F0",
-                                },
-                                pressed ? styles.pressed : null,
-                              ]}
                             >
                               <Image
                                 source={{ uri }}
                                 style={{ width: "100%", height: "100%" }}
                                 resizeMode="contain"
                               />
-                            </Pressable>
+                            </View>
                           ))}
                         </ScrollView>
                       ) : (
-                        <Pressable
-                          onPress={() => setSelectedTailoringStyleId(preset.id)}
-                          style={({ pressed }) => [
-                            pressed ? styles.pressed : null,
-                          ]}
+                        <View
+                          style={{
+                            width: "100%",
+                            height: 120,
+                            backgroundColor: "#EEF2F7",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
                         >
-                          <View
-                            style={{
-                              width: "100%",
-                              height: 120,
-                              backgroundColor: "#EEF2F7",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                          >
-                            <Text style={styles.meta}>No image</Text>
-                          </View>
-                        </Pressable>
+                          <Text style={styles.meta}>No image</Text>
+                        </View>
                       )}
-
-                      {presetImages.length > 1 ? (
-                        <Text
-                          style={[
-                            styles.meta,
-                            {
-                              paddingHorizontal: 10,
-                              paddingBottom: 2,
-                              fontSize: 10,
-                              color: stylesVars.blue,
-                              fontWeight: "700",
-                            },
-                          ]}
-                        >
-                          Swipe images • tap to enlarge
-                        </Text>
-                      ) : null}
 
                       <View
                         style={{
                           padding: 10,
-                          minHeight: 124,
+                          minHeight: 112,
                           justifyContent: "space-between",
                         }}
                       >
                         <View>
-                          <View
+                          <Text
                             style={{
-                              flexDirection: "row",
-                              justifyContent: "space-between",
-                              alignItems: "flex-start",
-                              gap: 8,
+                              fontSize: 13,
+                              lineHeight: 18,
+                              fontWeight: "900",
+                              color: stylesVars.text,
                             }}
+                            numberOfLines={1}
                           >
-                            <Text
-                              style={{
-                                fontSize: 13,
-                                fontWeight: "700",
-                                color: stylesVars.text,
-                                flex: 1,
-                              }}
-                              numberOfLines={2}
-                            >
-                              {preset.title || "Untitled style"}
-                            </Text>
-                          </View>
+                            Style {index + 1}
+                          </Text>
 
-                          {preset.note ? (
-                            <Text
-                              style={[styles.meta, { marginTop: 6 }]}
-                              numberOfLines={2}
-                            >
-                              {preset.note}
-                            </Text>
-                          ) : null}
+                          <Text
+                            style={{
+                              marginTop: 3,
+                              fontSize: 12,
+                              lineHeight: 17,
+                              fontWeight: "700",
+                              color: stylesVars.mutedText,
+                            }}
+                            numberOfLines={2}
+                          >
+                            {preset.title || "Untitled style"}
+                          </Text>
 
                           {extraCost > 0 ? (
                             <Text
-                              style={[styles.meta, { marginTop: 8 }]}
-                              numberOfLines={2}
+                              style={[
+                                styles.meta,
+                                {
+                                  marginTop: 6,
+                                  color: stylesVars.text,
+                                  fontWeight: "800",
+                                },
+                              ]}
+                              numberOfLines={1}
                             >
-                              Additional tailoring cost for this style:{" "}
-                              <Text style={styles.specValue}>
-                                PKR {extraCost}
-                              </Text>
+                              + PKR {extraCost.toLocaleString()}
                             </Text>
                           ) : null}
                         </View>
@@ -594,7 +571,7 @@ export default function ViewProductTailoringSelection({
                         <View
                           style={{
                             flexDirection: "row",
-                            justifyContent: "space-between",
+                            justifyContent: "center",
                             alignItems: "center",
                             gap: 6,
                             marginTop: 8,
@@ -606,9 +583,9 @@ export default function ViewProductTailoringSelection({
                             }
                             style={({ pressed }) => [
                               {
-                                flex: 1,
                                 minHeight: 28,
-                                paddingHorizontal: 6,
+                                minWidth: 86,
+                                paddingHorizontal: 12,
                                 paddingVertical: 5,
                                 borderRadius: 10,
                                 backgroundColor: stylesVars.blue,
@@ -626,45 +603,12 @@ export default function ViewProductTailoringSelection({
                               }}
                               numberOfLines={1}
                             >
-                              Select
-                            </Text>
-                          </Pressable>
-
-                          <Pressable
-                            onPress={() => {
-                              setPreviewImageIndex(0);
-                              setPreviewPresetId(preset.id || "");
-                            }}
-                            style={({ pressed }) => [
-                              {
-                                flex: 1,
-                                minHeight: 28,
-                                paddingHorizontal: 6,
-                                paddingVertical: 5,
-                                borderRadius: 10,
-                                borderWidth: 1,
-                                borderColor: "#D7E3FF",
-                                backgroundColor: "#FFFFFF",
-                                alignItems: "center",
-                                justifyContent: "center",
-                              },
-                              pressed ? styles.pressed : null,
-                            ]}
-                          >
-                            <Text
-                              style={{
-                                color: stylesVars.text,
-                                fontSize: 10,
-                                fontWeight: "700",
-                              }}
-                              numberOfLines={1}
-                            >
-                              View Card
+                              {isSelected ? "Selected" : "Select"}
                             </Text>
                           </Pressable>
                         </View>
                       </View>
-                    </View>
+                    </Pressable>
                   );
                 })}
               </View>
@@ -1055,7 +999,7 @@ export default function ViewProductTailoringSelection({
                 <View
                   style={{
                     flexDirection: "row",
-                    justifyContent: "space-between",
+                    justifyContent: "flex-start",
                     alignItems: "flex-start",
                     gap: 12,
                   }}
@@ -1070,34 +1014,6 @@ export default function ViewProductTailoringSelection({
                   >
                     {previewPreset?.title || "Untitled style"}
                   </Text>
-
-                  <Pressable
-                    onPress={() => setPreviewPresetId("")}
-                    style={({ pressed }) => [
-                      {
-                        minHeight: 34,
-                        paddingHorizontal: 12,
-                        paddingVertical: 8,
-                        borderRadius: 10,
-                        borderWidth: 1,
-                        borderColor: "#D7E3FF",
-                        backgroundColor: "#FFFFFF",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      },
-                      pressed ? styles.pressed : null,
-                    ]}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: "700",
-                        color: stylesVars.text,
-                      }}
-                    >
-                      Close
-                    </Text>
-                  </Pressable>
                 </View>
 
                 {previewPresetImages.length ? (
@@ -1167,6 +1083,34 @@ export default function ViewProductTailoringSelection({
                       }}
                     >
                       Select
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => setPreviewPresetId("")}
+                    style={({ pressed }) => [
+                      {
+                        minHeight: 34,
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: "#D7E3FF",
+                        backgroundColor: "#FFFFFF",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      },
+                      pressed ? styles.pressed : null,
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "700",
+                        color: stylesVars.text,
+                      }}
+                    >
+                      Close
                     </Text>
                   </Pressable>
                 </View>

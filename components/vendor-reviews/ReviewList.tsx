@@ -1,5 +1,10 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+} from "@/components/product/addProductStyles";
 import StarRating from "./StarRating";
 
 export type ReviewListItem = {
@@ -19,7 +24,11 @@ type Props = {
 function formatDate(value: string) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString();
+  return d.toLocaleDateString("en-PK", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 export default function ReviewList({
@@ -40,11 +49,11 @@ export default function ReviewList({
       {reviews.map((item) => (
         <View key={item.id} style={styles.card}>
           <View style={styles.topRow}>
-            <StarRating rating={item.rating} size={14} />
+            <View style={styles.ratingWrap}>
+              <StarRating rating={item.rating} size={14} />
+            </View>
             <Text style={styles.date}>{formatDate(item.created_at)}</Text>
           </View>
-
-          <Text style={styles.buyerLabel}>Buyer</Text>
 
           <Text style={styles.comment}>
             {String(item.comment ?? "").trim() || "—"}
@@ -70,59 +79,71 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   card: {
-    borderRadius: 18,
+    borderRadius: apRadii.card,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
-    padding: 18,
+    borderColor: apColors.border,
+    backgroundColor: apColors.card,
+    padding: 16,
+    gap: 10,
   },
   topRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
     gap: 10,
+    minWidth: 0,
+  },
+  ratingWrap: {
+    flex: 1,
+    minWidth: 0,
   },
   date: {
+    fontFamily: apFontFamily,
     fontSize: 12,
+    lineHeight: 17,
     fontWeight: "600",
-    color: "#64748B",
-  },
-  buyerLabel: {
-    marginTop: 10,
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#0F172A",
+    color: apColors.muted,
+    letterSpacing: 0,
+    flexShrink: 0,
   },
   comment: {
-    marginTop: 8,
+    fontFamily: apFontFamily,
     fontSize: 14,
     lineHeight: 20,
     fontWeight: "500",
-    color: "#475569",
+    color: apColors.subText,
+    letterSpacing: 0,
   },
   replyBox: {
-    marginTop: 12,
-    borderRadius: 14,
-    backgroundColor: "#F8FAFC",
+    borderRadius: apRadii.control,
+    backgroundColor: apColors.bg,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: apColors.border,
     padding: 12,
+    gap: 6,
   },
   replyTitle: {
+    fontFamily: apFontFamily,
     fontSize: 12,
-    fontWeight: "700",
-    color: "#0F172A",
+    lineHeight: 17,
+    fontWeight: "800",
+    color: apColors.text,
+    letterSpacing: 0,
   },
   replyText: {
-    marginTop: 6,
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "500",
-    color: "#475569",
+    color: apColors.subText,
+    letterSpacing: 0,
   },
   empty: {
+    fontFamily: apFontFamily,
     fontSize: 13,
+    lineHeight: 18,
     fontWeight: "500",
-    color: "#64748B",
+    color: apColors.muted,
+    letterSpacing: 0,
   },
 });

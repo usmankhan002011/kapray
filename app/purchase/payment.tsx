@@ -1262,6 +1262,10 @@ export default function PaymentScreen() {
                         : ""
                     }
                   />
+                  <KVRow
+                    label="Total fabric cost"
+                    value={formatMoney(data.currency, data.fabricCostPkr)}
+                  />
                 </>
               ) : null}
 

@@ -3,7 +3,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
+  Linking,
   Pressable,
   SafeAreaView,
   StyleSheet,
@@ -11,9 +13,16 @@ import {
   TextInput,
   View,
 } from "react-native";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
 import { useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { useAppSelector } from "@/store/hooks";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+} from "@/components/product/addProductStyles";
 
 type OrderRow = {
   id: number;
@@ -41,6 +50,29 @@ type DyeSplit = {
   dye_shade_id: string;
   dye_hex: string;
   dye_label: string;
+};
+
+type OrdersTab = "active" | "completed";
+
+type VendorExportDetails = {
+  id: string;
+  shopName: string;
+  ownerName: string;
+  mobile: string;
+  address: string;
+};
+
+type OrderExportDetails = {
+  orderNo: string;
+  status: string;
+  buyer: string;
+  product: string;
+  category: string;
+  selectedStyle: string;
+  fabric: string;
+  dyeing: string;
+  city: string;
+  total: string;
 };
 
 function norm(v: unknown) {
@@ -109,17 +141,312 @@ function getSelectedVariant(spec: any) {
   };
 }
 
+function textOrDash(v: any) {
+  return cleanText(v) || "-";
+}
+
+function escHtml(v: unknown) {
+  return String(v ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function formatPrintedAt(date = new Date()) {
+  return date.toLocaleString("en-PK", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function tabTitle(tab: OrdersTab) {
+  return tab === "active" ? "Active Orders" : "Completed Orders";
+}
+
+function getOrderExportDetails(item: OrderRow): OrderExportDetails {
+  const spec =
+    item.spec_snapshot && typeof item.spec_snapshot === "object"
+      ? item.spec_snapshot
+      : {};
+  const selectedVariant = getSelectedVariant(spec);
+  const dyeHex = safeText(spec?.dye_hex ?? spec?.dyeing_hex ?? "");
+  const dyeLabel = cleanText(
+    spec?.dye_label ?? spec?.dyeing_label ?? spec?.dye_shade_id ?? "",
+  );
+  const dyeSplits = normalizeDyeSplits(spec?.dyeing_splits);
+  const dyeSplitText = dyeSplits
+    .map(
+      (row) =>
+        `${row.length_m}m${row.dye_label ? ` Code ${row.dye_label}` : ""}`,
+    )
+    .join(", ");
+  const hasDye = dyeHex && dyeHex !== "â€”";
+  const dyeing = dyeSplits.length
+    ? dyeSplitText
+    : dyeLabel
+      ? `Code ${dyeLabel}`
+      : hasDye
+        ? "Selected"
+        : "";
+
+  const selectedUnstitchedSize = cleanText(spec?.selected_unstitched_size);
+  const selectedFabricLengthM = numOrNull(spec?.selected_fabric_length_m);
+  const fabricCostPkr = numOrNull(spec?.fabric_cost_pkr);
+  const fabric = [
+    selectedUnstitchedSize ? `Size ${selectedUnstitchedSize}` : "",
+    selectedFabricLengthM != null ? `${selectedFabricLengthM}m` : "",
+    fabricCostPkr != null ? money(item.currency, fabricCostPkr) : "",
+  ]
+    .filter(Boolean)
+    .join(" | ");
+
+  const selectedStyle = selectedVariant.hasVariant
+    ? [
+        selectedVariant.title || "Selected style",
+        selectedVariant.size ? `Size ${selectedVariant.size}` : "",
+        selectedVariant.color ? `Color ${selectedVariant.color}` : "",
+        selectedVariant.price != null
+          ? money(item.currency, selectedVariant.price)
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" | ")
+    : "";
+
+  const destinationType = safeText(spec?.destination_type ?? "");
+  const exportRegion = safeText(spec?.export_region ?? "");
+  const city = [
+    cleanText(item.city) || "-",
+    destinationType !== "â€”" ? humanizeCat(destinationType) : "",
+    exportRegion !== "â€”" ? exportRegion : "",
+  ]
+    .filter(Boolean)
+    .join(" | ");
+
+  return {
+    orderNo: item.order_no || `Order #${item.id}`,
+    status: humanizeCat(item.status),
+    buyer: `${textOrDash(item.buyer_name)} (${textOrDash(item.buyer_mobile)})`,
+    product: [textOrDash(item.title_snapshot), cleanText(item.product_code_snapshot)]
+      .filter(Boolean)
+      .join(" | "),
+    category: humanizeCat(
+      spec?.product_category ?? spec?.dress_category ?? spec?.dress_cat ?? "",
+    ),
+    selectedStyle,
+    fabric,
+    dyeing,
+    city,
+    total: money(item.currency, item.total_pkr),
+  };
+}
+
+function buildOrdersPdfHtml(args: {
+  tab: OrdersTab;
+  rows: OrderRow[];
+  vendor: VendorExportDetails;
+  printedAt: string;
+}) {
+  const title = tabTitle(args.tab);
+  const totalAmount = args.rows.reduce((sum, row) => {
+    const n = numOrNull(row.total_pkr);
+    return sum + (n ?? 0);
+  }, 0);
+  const currency = args.rows[0]?.currency || "PKR";
+
+  const orderRows = args.rows.length
+    ? args.rows
+        .map((row, index) => {
+          const d = getOrderExportDetails(row);
+          return `
+            <tr>
+              <td class="num">${index + 1}</td>
+              <td><strong>${escHtml(d.orderNo)}</strong><br><span>${escHtml(d.status)}</span></td>
+              <td>${escHtml(d.buyer)}</td>
+              <td><strong>${escHtml(d.product)}</strong><br><span>${escHtml(d.category)}</span></td>
+              <td>${escHtml(d.selectedStyle || d.fabric || "-")}</td>
+              <td>${escHtml(d.dyeing || "-")}</td>
+              <td>${escHtml(d.city)}</td>
+              <td class="total">${escHtml(d.total)}</td>
+            </tr>
+          `;
+        })
+        .join("")
+    : `<tr><td colspan="8" class="empty">No orders</td></tr>`;
+
+  return `
+  <!doctype html>
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <style>
+        @page { size: A4 landscape; margin: 18px; }
+        body {
+          margin: 0;
+          font-family: Arial, sans-serif;
+          color: #0F172A;
+          background: #FFFFFF;
+        }
+        .wrap { padding: 4px; }
+        .top {
+          display: flex;
+          justify-content: space-between;
+          gap: 16px;
+          border-bottom: 1px solid #D7E3FF;
+          padding-bottom: 10px;
+          margin-bottom: 10px;
+        }
+        h1 { margin: 0 0 6px; font-size: 20px; }
+        .meta { font-size: 10px; line-height: 1.45; color: #475569; }
+        .meta strong { color: #0F172A; }
+        .summary {
+          text-align: right;
+          font-size: 11px;
+          line-height: 1.55;
+          white-space: nowrap;
+        }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        th {
+          text-align: left;
+          font-size: 9px;
+          color: #2563EB;
+          border-bottom: 1px solid #D7E3FF;
+          padding: 6px 5px;
+          text-transform: uppercase;
+        }
+        td {
+          font-size: 9px;
+          line-height: 1.35;
+          border-bottom: 1px solid #E5E7EB;
+          padding: 6px 5px;
+          vertical-align: top;
+          word-break: break-word;
+        }
+        td span { color: #64748B; }
+        .num { width: 28px; color: #64748B; }
+        .total { text-align: right; font-weight: 700; white-space: nowrap; }
+        .empty { text-align: center; color: #64748B; padding: 18px; }
+        .foot {
+          margin-top: 10px;
+          font-size: 9px;
+          color: #64748B;
+          text-align: right;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="wrap">
+        <div class="top">
+          <div>
+            <h1>${escHtml(title)}</h1>
+            <div class="meta"><strong>${escHtml(args.vendor.shopName)}</strong></div>
+            <div class="meta">Vendor ID: <strong>${escHtml(args.vendor.id)}</strong></div>
+            <div class="meta">Owner: <strong>${escHtml(args.vendor.ownerName)}</strong></div>
+            <div class="meta">Mobile: <strong>${escHtml(args.vendor.mobile)}</strong></div>
+            <div class="meta">Address: <strong>${escHtml(args.vendor.address)}</strong></div>
+          </div>
+          <div class="summary">
+            <div>Printed: <strong>${escHtml(args.printedAt)}</strong></div>
+            <div>Orders: <strong>${args.rows.length}</strong></div>
+            <div>Total: <strong>${escHtml(money(currency, totalAmount))}</strong></div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Order</th>
+              <th>Buyer</th>
+              <th>Product</th>
+              <th>Style/Fabric</th>
+              <th>Dyeing</th>
+              <th>City</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>${orderRows}</tbody>
+        </table>
+
+        <div class="foot">Kapray - ${escHtml(title)}</div>
+      </div>
+    </body>
+  </html>
+  `;
+}
+
+function buildOrdersWhatsAppText(args: {
+  tab: OrdersTab;
+  rows: OrderRow[];
+  vendor: VendorExportDetails;
+  printedAt: string;
+}) {
+  const title = tabTitle(args.tab);
+  const totalAmount = args.rows.reduce((sum, row) => {
+    const n = numOrNull(row.total_pkr);
+    return sum + (n ?? 0);
+  }, 0);
+  const currency = args.rows[0]?.currency || "PKR";
+  const header = [
+    `Kapray ${title}`,
+    `Printed: ${args.printedAt}`,
+    `Shop: ${args.vendor.shopName}`,
+    `Vendor ID: ${args.vendor.id}`,
+    `Owner: ${args.vendor.ownerName}`,
+    `Mobile: ${args.vendor.mobile}`,
+    `Orders: ${args.rows.length}`,
+    `Total: ${money(currency, totalAmount)}`,
+  ];
+
+  const lines = args.rows.map((row, index) => {
+    const d = getOrderExportDetails(row);
+    return [
+      `${index + 1}. ${d.orderNo}`,
+      d.status,
+      d.buyer,
+      d.product,
+      d.selectedStyle || d.fabric,
+      d.dyeing ? `Dyeing: ${d.dyeing}` : "",
+      d.city,
+      d.total,
+    ]
+      .filter(Boolean)
+      .join(" | ");
+  });
+
+  return [...header, "", ...lines].join("\n");
+}
+
+async function openWhatsAppText(text: string) {
+  const encoded = encodeURIComponent(text);
+
+  try {
+    await Linking.openURL(`whatsapp://send?text=${encoded}`);
+    return;
+  } catch {
+    // Fall through to the web link.
+  }
+
+  await Linking.openURL(`https://wa.me/?text=${encoded}`);
+}
+
 export default function OrdersIndexScreen() {
   const router = useRouter();
   const vendorIdFromStore = useAppSelector(
     (s) => (s.vendor as any)?.id ?? null,
   );
+  const vendorFromStore = useAppSelector((s) => (s.vendor as any) ?? {});
 
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<OrderRow[]>([]);
   const [query, setQuery] = useState("");
+  const [exporting, setExporting] = useState<"" | "pdf" | "whatsapp">("");
 
-  const [tab, setTab] = useState<"active" | "completed">("active");
+  const [tab, setTab] = useState<OrdersTab>("active");
 
   const load = useCallback(async () => {
     try {
@@ -264,6 +591,89 @@ export default function OrdersIndexScreen() {
     });
   }, [rows, query]);
 
+  const vendorExportDetails = useMemo<VendorExportDetails>(
+    () => ({
+      id: textOrDash(vendorIdFromStore),
+      shopName: textOrDash(
+        vendorFromStore.shop_name ??
+          vendorFromStore.name ??
+          vendorFromStore.owner_name,
+      ),
+      ownerName: textOrDash(vendorFromStore.owner_name ?? vendorFromStore.name),
+      mobile: textOrDash(vendorFromStore.mobile),
+      address: textOrDash(vendorFromStore.address ?? vendorFromStore.location),
+    }),
+    [
+      vendorFromStore.address,
+      vendorFromStore.location,
+      vendorFromStore.mobile,
+      vendorFromStore.name,
+      vendorFromStore.owner_name,
+      vendorFromStore.shop_name,
+      vendorIdFromStore,
+    ],
+  );
+
+  const canExport = Boolean(vendorIdFromStore && rows.length && !exporting);
+
+  const handlePdfExport = useCallback(async () => {
+    if (!rows.length) {
+      Alert.alert("No orders", `No ${tab} orders to export.`);
+      return;
+    }
+
+    try {
+      setExporting("pdf");
+      const printedAt = formatPrintedAt();
+      const html = buildOrdersPdfHtml({
+        tab,
+        rows,
+        vendor: vendorExportDetails,
+        printedAt,
+      });
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      const canShare = await Sharing.isAvailableAsync();
+
+      if (canShare) {
+        await Sharing.shareAsync(uri, {
+          mimeType: "application/pdf",
+          dialogTitle: `${tabTitle(tab)} PDF`,
+          UTI: "com.adobe.pdf",
+        });
+      } else {
+        await Print.printAsync({ html });
+      }
+    } catch (e: any) {
+      console.warn("orders pdf export failed:", e?.message ?? e);
+      Alert.alert("PDF failed", e?.message ?? "Could not create PDF.");
+    } finally {
+      setExporting("");
+    }
+  }, [rows, tab, vendorExportDetails]);
+
+  const handleWhatsAppExport = useCallback(async () => {
+    if (!rows.length) {
+      Alert.alert("No orders", `No ${tab} orders to share.`);
+      return;
+    }
+
+    try {
+      setExporting("whatsapp");
+      const text = buildOrdersWhatsAppText({
+        tab,
+        rows,
+        vendor: vendorExportDetails,
+        printedAt: formatPrintedAt(),
+      });
+      await openWhatsAppText(text);
+    } catch (e: any) {
+      console.warn("orders whatsapp export failed:", e?.message ?? e);
+      Alert.alert("WhatsApp unavailable", "Could not open WhatsApp.");
+    } finally {
+      setExporting("");
+    }
+  }, [rows, tab, vendorExportDetails]);
+
   const renderItem = ({ item }: { item: OrderRow }) => {
     const orderNo = item.order_no || `Order #${item.id}`;
     const status = norm(item.status);
@@ -276,6 +686,9 @@ export default function OrdersIndexScreen() {
 
     const dyeHex = safeText(spec?.dye_hex ?? spec?.dyeing_hex ?? "");
     const dyeSplits = normalizeDyeSplits(spec?.dyeing_splits);
+    const dyeLabel = cleanText(
+      spec?.dye_label ?? spec?.dyeing_label ?? spec?.dye_shade_id ?? "",
+    );
     const dyeSplitText = dyeSplits
       .map(
         (row) =>
@@ -283,6 +696,11 @@ export default function OrdersIndexScreen() {
       )
       .join(", ");
     const hasDyeSplit = dyeSplits.length > 0;
+    const dyeSummary = hasDyeSplit
+      ? dyeSplitText
+      : dyeLabel
+        ? `Code ${dyeLabel}`
+        : "";
     const hasDye = dyeHex && dyeHex !== "—";
 
     const dressCat = humanizeCat(
@@ -323,26 +741,26 @@ export default function OrdersIndexScreen() {
             style={[styles.badge, isNew ? styles.badgeRed : styles.badgeBlue]}
             numberOfLines={1}
           >
-            {item.status}
+            {humanizeCat(item.status)}
           </Text>
         </View>
 
-        <Text style={styles.line} numberOfLines={1}>
+        <Text style={styles.line} numberOfLines={2}>
           {item.title_snapshot} • {item.product_code_snapshot}
         </Text>
 
-        <Text style={styles.small} numberOfLines={1}>
-          Dress Cat: {dressCat}
+        <Text style={styles.small} numberOfLines={2}>
+          Category: {dressCat}
         </Text>
 
         {selectedVariant.hasVariant ? (
           <View style={styles.variantBox}>
-            <Text style={styles.variantTitle} numberOfLines={1}>
+            <Text style={styles.variantTitle} numberOfLines={2}>
               Selected Style:{" "}
               {selectedVariant.title || "Ready-to-wear style"}
             </Text>
 
-            <Text style={styles.variantMeta} numberOfLines={1}>
+            <Text style={styles.variantMeta} numberOfLines={2}>
               {selectedVariant.size ? `Size: ${selectedVariant.size}` : ""}
               {selectedVariant.size && selectedVariant.color ? " • " : ""}
               {selectedVariant.color ? `Color: ${selectedVariant.color}` : ""}
@@ -373,38 +791,47 @@ export default function OrdersIndexScreen() {
         ) : null}
 
         {hasDye || hasDyeSplit ? (
-          <View style={styles.dyeRow}>
-            <Text style={styles.small} numberOfLines={1}>
-              Dyeing{dyeSplitText ? `: ${dyeSplitText}` : ""}
-            </Text>
-            <View style={styles.dyeSwatchStack}>
-              {hasDyeSplit ? (
-                dyeSplits.slice(0, 4).map((row, index) => (
+          <View style={styles.dyeBlock}>
+            <View style={styles.dyeHeaderRow}>
+              <Text style={styles.dyeTitle}>Dyeing</Text>
+              <View style={styles.dyeSwatchStack}>
+                {hasDyeSplit ? (
+                  dyeSplits.map((row, index) => (
+                    <View
+                      key={`${row.dye_shade_id}-${index}`}
+                      style={[
+                        styles.dyeSwatch,
+                        { backgroundColor: row.dye_hex || stylesVars.white },
+                      ]}
+                    />
+                  ))
+                ) : (
                   <View
-                    key={`${row.dye_shade_id}-${index}`}
-                    style={[
-                      styles.dyeSwatch,
-                      { backgroundColor: row.dye_hex || stylesVars.white },
-                    ]}
+                    style={[styles.dyeSwatch, { backgroundColor: dyeHex }]}
                   />
-                ))
-              ) : (
-                <View style={[styles.dyeSwatch, { backgroundColor: dyeHex }]} />
-              )}
+                )}
+              </View>
             </View>
+
+            {dyeSummary ? (
+              <Text style={styles.dyeText}>{dyeSummary}</Text>
+            ) : null}
           </View>
         ) : null}
 
-        <View style={styles.rowBetween}>
-          <Text style={styles.small} numberOfLines={1}>
-            Buyer: {item.buyer_name} ({item.buyer_mobile})
-          </Text>
-          <Text style={styles.small} numberOfLines={1}>
+        <View style={styles.orderFooter}>
+          <View style={styles.buyerWrap}>
+            <Text style={styles.footerLabel}>Buyer</Text>
+            <Text style={styles.footerValue} numberOfLines={2}>
+              {item.buyer_name} ({item.buyer_mobile})
+            </Text>
+          </View>
+          <Text style={styles.totalText} numberOfLines={1}>
             {money(item.currency, item.total_pkr)}
           </Text>
         </View>
 
-        <Text style={styles.small} numberOfLines={1}>
+        <Text style={styles.small} numberOfLines={2}>
           City: {item.city || "—"}
           {destinationType !== "—"
             ? ` • ${humanizeCat(destinationType)}${exportRegion !== "—" ? ` • ${exportRegion}` : ""}`
@@ -473,15 +900,49 @@ export default function OrdersIndexScreen() {
           autoCorrect={false}
         />
 
-        <Pressable
-          onPress={load}
-          style={({ pressed }) => [
-            styles.refreshBtn,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Text style={styles.refreshText}>Refresh</Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={load}
+            disabled={loading || Boolean(exporting)}
+            style={({ pressed }) => [
+              styles.actionBtn,
+              (loading || Boolean(exporting)) && styles.actionBtnDisabled,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.actionText} numberOfLines={1}>
+              {loading ? "Loading..." : "Refresh"}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={handlePdfExport}
+            disabled={!canExport || loading}
+            style={({ pressed }) => [
+              styles.actionBtn,
+              (!canExport || loading) && styles.actionBtnDisabled,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.actionText} numberOfLines={1}>
+              {exporting === "pdf" ? "PDF..." : "PDF"}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={handleWhatsAppExport}
+            disabled={!canExport || loading}
+            style={({ pressed }) => [
+              styles.actionBtn,
+              (!canExport || loading) && styles.actionBtnDisabled,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.actionText} numberOfLines={1}>
+              {exporting === "whatsapp" ? "WhatsApp..." : "WhatsApp"}
+            </Text>
+          </Pressable>
+        </View>
       </View>
 
       {!vendorIdFromStore ? (
@@ -517,20 +978,20 @@ export default function OrdersIndexScreen() {
 }
 
 const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
+  bg: apColors.bg,
+  cardBg: apColors.card,
+  border: apColors.border,
+  borderSoft: apColors.borderSoft,
+  blue: apColors.blue,
+  blueSoft: apColors.blueSoft,
+  text: apColors.text,
+  subText: apColors.subText,
+  mutedText: apColors.muted,
   placeholder: "#94A3B8",
-  danger: "#B91C1C",
+  danger: apColors.danger,
   dangerSoft: "#FEE2E2",
   dangerBorder: "#FCA5A5",
-  white: "#FFFFFF",
+  white: apColors.white,
 };
 
 const styles = StyleSheet.create({
@@ -550,22 +1011,28 @@ const styles = StyleSheet.create({
   },
 
   title: {
+    fontFamily: apFontFamily,
     fontSize: 18,
-    fontWeight: "700",
+    fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   subtitle: {
     marginTop: 4,
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   subtitleStrong: {
-    fontWeight: "700",
+    fontFamily: apFontFamily,
+    fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   rowBetween: {
@@ -573,6 +1040,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 10,
     alignItems: "center",
+    minWidth: 0,
   },
 
   tabRow: {
@@ -585,7 +1053,7 @@ const styles = StyleSheet.create({
     minHeight: 40,
     borderWidth: 1,
     borderColor: "#D7E3FF",
-    borderRadius: 999,
+    borderRadius: apRadii.pill,
     paddingVertical: 10,
     alignItems: "center",
     justifyContent: "center",
@@ -598,9 +1066,11 @@ const styles = StyleSheet.create({
   },
 
   tabText: {
-    fontWeight: "700",
+    fontFamily: apFontFamily,
+    fontWeight: "800",
     fontSize: 12,
     color: stylesVars.blue,
+    letterSpacing: 0,
   },
 
   tabTextActive: {
@@ -610,31 +1080,46 @@ const styles = StyleSheet.create({
   search: {
     borderWidth: 1,
     borderColor: stylesVars.borderSoft,
-    borderRadius: 12,
+    borderRadius: apRadii.control,
     paddingHorizontal: 12,
     paddingVertical: 10,
+    fontFamily: apFontFamily,
     fontSize: 14,
     color: stylesVars.text,
+    fontWeight: "500",
     backgroundColor: stylesVars.white,
+    letterSpacing: 0,
   },
 
-  refreshBtn: {
-    alignSelf: "flex-start",
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  actionBtn: {
+    flex: 1,
     minHeight: 36,
     borderWidth: 1,
     borderColor: "#D7E3FF",
-    borderRadius: 999,
-    paddingHorizontal: 14,
+    borderRadius: apRadii.pill,
+    paddingHorizontal: 10,
     paddingVertical: 8,
     backgroundColor: stylesVars.blueSoft,
     alignItems: "center",
     justifyContent: "center",
   },
 
-  refreshText: {
-    fontWeight: "700",
+  actionBtnDisabled: {
+    opacity: 0.55,
+  },
+
+  actionText: {
+    fontFamily: apFontFamily,
+    fontWeight: "800",
     fontSize: 12,
     color: stylesVars.blue,
+    letterSpacing: 0,
   },
 
   pressed: {
@@ -649,9 +1134,11 @@ const styles = StyleSheet.create({
   },
 
   loadingText: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     color: stylesVars.mutedText,
     fontWeight: "600",
+    letterSpacing: 0,
   },
 
   list: {
@@ -664,8 +1151,8 @@ const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 18,
-    padding: 18,
+    borderRadius: apRadii.card,
+    padding: 16,
     gap: 8,
     backgroundColor: stylesVars.cardBg,
   },
@@ -676,56 +1163,72 @@ const styles = StyleSheet.create({
   },
 
   orderNo: {
+    fontFamily: apFontFamily,
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "800",
     color: stylesVars.text,
     flex: 1,
+    letterSpacing: 0,
   },
 
   line: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.subText,
-    fontWeight: "500",
+    fontWeight: "600",
+    letterSpacing: 0,
+    flexShrink: 1,
   },
 
   small: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
+    flexShrink: 1,
   },
 
   variantBox: {
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
-    backgroundColor: stylesVars.blueSoft,
-    borderRadius: 12,
-    padding: 10,
+    borderTopWidth: 1,
+    borderTopColor: stylesVars.border,
+    paddingTop: 8,
     gap: 3,
   },
 
   variantTitle: {
-    fontSize: 12,
-    lineHeight: 17,
-    color: stylesVars.blue,
+    fontFamily: apFontFamily,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.text,
     fontWeight: "800",
+    letterSpacing: 0,
+    flexShrink: 1,
   },
 
   variantMeta: {
-    fontSize: 11,
-    lineHeight: 16,
-    color: stylesVars.subText,
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 17,
+    color: stylesVars.mutedText,
     fontWeight: "600",
+    letterSpacing: 0,
+    flexShrink: 1,
   },
 
   badge: {
+    fontFamily: apFontFamily,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "800",
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: apRadii.control,
     overflow: "hidden",
+    letterSpacing: 0,
+    maxWidth: 132,
+    flexShrink: 0,
   },
 
   badgeRed: {
@@ -738,25 +1241,106 @@ const styles = StyleSheet.create({
     backgroundColor: stylesVars.blueSoft,
   },
 
-  dyeRow: {
+  dyeBlock: {
+    borderTopWidth: 1,
+    borderTopColor: stylesVars.border,
+    paddingTop: 8,
+    gap: 7,
+    minWidth: 0,
+  },
+
+  dyeHeaderRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+    minWidth: 0,
+  },
+
+  dyeTitle: {
+    flex: 1,
+    minWidth: 0,
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.text,
+    fontWeight: "800",
+    letterSpacing: 0,
+  },
+
+  dyeText: {
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.mutedText,
+    fontWeight: "600",
+    letterSpacing: 0,
+    flexShrink: 1,
   },
 
   dyeSwatchStack: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "flex-end",
+    flexWrap: "wrap",
     gap: 4,
+    maxWidth: 116,
+    flexShrink: 1,
   },
 
   dyeSwatch: {
-    width: 22,
-    height: 22,
-    borderRadius: 7,
+    width: 18,
+    height: 18,
+    borderRadius: apRadii.control,
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.white,
+  },
+
+  orderFooter: {
+    borderTopWidth: 1,
+    borderTopColor: stylesVars.border,
+    paddingTop: 9,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    minWidth: 0,
+  },
+
+  buyerWrap: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+
+  footerLabel: {
+    fontFamily: apFontFamily,
+    fontSize: 11,
+    lineHeight: 15,
+    color: stylesVars.mutedText,
+    fontWeight: "700",
+    letterSpacing: 0,
+  },
+
+  footerValue: {
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.text,
+    fontWeight: "700",
+    letterSpacing: 0,
+  },
+
+  totalText: {
+    fontFamily: apFontFamily,
+    fontSize: 13,
+    lineHeight: 18,
+    color: stylesVars.text,
+    fontWeight: "800",
+    letterSpacing: 0,
+    flexShrink: 0,
+    textAlign: "right",
   },
 
   empty: {
@@ -766,16 +1350,20 @@ const styles = StyleSheet.create({
   },
 
   emptyTitle: {
+    fontFamily: apFontFamily,
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   emptyText: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
     textAlign: "center",
+    letterSpacing: 0,
   },
 });

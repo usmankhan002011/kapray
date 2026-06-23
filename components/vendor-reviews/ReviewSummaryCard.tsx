@@ -1,5 +1,10 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+} from "@/components/product/addProductStyles";
 import StarRating from "./StarRating";
 
 type Props = {
@@ -20,18 +25,24 @@ export default function ReviewSummaryCard({
 
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>{title}</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>{title}</Text>
+        {hasReviews ? (
+          <Text style={styles.countText}>
+            {count} review{count === 1 ? "" : "s"}
+          </Text>
+        ) : null}
+      </View>
 
       {hasReviews ? (
         <>
           <View style={styles.topRow}>
             <Text style={styles.bigValue}>{avg.toFixed(1)}</Text>
-            <StarRating rating={avg} showValue={false} size={16} />
+            <View style={styles.ratingWrap}>
+              <StarRating rating={avg} showValue={false} size={16} />
+              <Text style={styles.meta}>Average</Text>
+            </View>
           </View>
-
-          <Text style={styles.meta}>
-            {count} review{count === 1 ? "" : "s"}
-          </Text>
         </>
       ) : (
         <Text style={styles.empty}>No reviews yet.</Text>
@@ -43,38 +54,66 @@ export default function ReviewSummaryCard({
 const styles = StyleSheet.create({
   card: {
     marginTop: 14,
-    borderRadius: 18,
+    borderRadius: apRadii.card,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: "#FFFFFF",
-    padding: 18,
+    borderColor: apColors.border,
+    backgroundColor: apColors.card,
+    padding: 16,
+    gap: 12,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
   },
   title: {
+    flex: 1,
+    fontFamily: apFontFamily,
     fontSize: 15,
+    fontWeight: "800",
+    color: apColors.text,
+    letterSpacing: 0,
+  },
+  countText: {
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 17,
     fontWeight: "700",
-    color: "#0F172A",
+    color: apColors.blue,
+    letterSpacing: 0,
   },
   topRow: {
-    marginTop: 10,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
   },
   bigValue: {
-    fontSize: 24,
+    fontFamily: apFontFamily,
+    fontSize: 26,
+    lineHeight: 31,
     fontWeight: "800",
-    color: "#0F172A",
+    color: apColors.text,
+    letterSpacing: 0,
+  },
+  ratingWrap: {
+    flex: 1,
+    gap: 4,
   },
   meta: {
-    marginTop: 8,
+    fontFamily: apFontFamily,
     fontSize: 13,
-    fontWeight: "500",
-    color: "#64748B",
+    lineHeight: 18,
+    fontWeight: "600",
+    color: apColors.muted,
+    letterSpacing: 0,
   },
   empty: {
-    marginTop: 10,
+    fontFamily: apFontFamily,
     fontSize: 13,
+    lineHeight: 18,
     fontWeight: "500",
-    color: "#64748B",
+    color: apColors.muted,
+    letterSpacing: 0,
   },
 });
