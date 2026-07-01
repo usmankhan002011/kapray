@@ -402,6 +402,91 @@ export const styles = StyleSheet.create({
     letterSpacing: 0,
   },
 
+  saleRecordBox: {
+    marginTop: 12,
+    borderRadius: apRadii.card,
+    borderWidth: 1,
+    borderColor: stylesVars.dangerBorder,
+    backgroundColor: stylesVars.dangerSoft,
+    padding: 12,
+  },
+
+  saleRecordHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+
+  saleRecordTitle: {
+    flex: 1,
+    fontFamily: apFontFamily,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "900",
+    color: stylesVars.text,
+    letterSpacing: 0,
+  },
+
+  saleRecordPill: {
+    minHeight: 26,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: apRadii.pill,
+    borderWidth: 1,
+    borderColor: stylesVars.dangerBorder,
+    backgroundColor: stylesVars.white,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  saleRecordPillText: {
+    fontFamily: apFontFamily,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "900",
+    color: stylesVars.danger,
+    letterSpacing: 0,
+  },
+
+  saleRecordRow: {
+    marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+
+  saleRecordLabel: {
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "700",
+    color: stylesVars.mutedText,
+    letterSpacing: 0,
+  },
+
+  saleRecordOldPrice: {
+    flexShrink: 1,
+    fontFamily: apFontFamily,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "800",
+    color: stylesVars.mutedText,
+    textDecorationLine: "line-through",
+    letterSpacing: 0,
+  },
+
+  saleRecordSalePrice: {
+    flexShrink: 1,
+    fontFamily: apFontFamily,
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: "900",
+    color: stylesVars.danger,
+    letterSpacing: 0,
+  },
+
   madeOnOrderPill: {
     marginTop: 8,
     alignSelf: "flex-start",

@@ -22,6 +22,7 @@ import {
   apInputTextStyle,
   apRadii,
 } from "@/components/product/addProductStyles";
+import { getActiveProductSale } from "@/utils/kapray/productSale";
 
 const PRODUCTS_TABLE = "products";
 const BUCKET_VENDOR = "vendor_images";
@@ -661,6 +662,16 @@ export default function VendorProductsScreen() {
     } as any);
   }
 
+  function openSale(item: ProductRow) {
+    router.push({
+      pathname: "/vendor/profile/product-sale",
+      params: {
+        productId: item.id,
+        product_id: item.id,
+      },
+    } as any);
+  }
+
   function startNewProduct() {
     resetDraft();
     router.push("/vendor/profile/add-product");
@@ -672,6 +683,7 @@ export default function VendorProductsScreen() {
     const categoryText = productCategoryCardLabel(item);
     const stockText = getStockSummaryText(item);
     const outOfStock = isOutOfStock(item);
+    const saleInfo = getActiveProductSale(item.price);
 
     return (
       <View style={styles.item}>
@@ -706,9 +718,30 @@ export default function VendorProductsScreen() {
             {outOfStock ? (
               <Text style={styles.outOfStockText}>Out of stock</Text>
             ) : null}
+            {saleInfo ? (
+              <Text style={styles.saleText}>
+                Sale {saleInfo.currentLabel} -{saleInfo.discountPercent}%
+              </Text>
+            ) : null}
           </View>
         </Pressable>
         <View style={styles.itemActions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Set product sale"
+            style={({ pressed }) => [
+              styles.actionBtn,
+              saleInfo ? styles.saleActionBtn : null,
+              pressed ? styles.pressed : null,
+            ]}
+            onPress={() => openSale(item)}
+          >
+            <MaterialIcons
+              name="local-offer"
+              size={17}
+              color={saleInfo ? stylesVars.danger : stylesVars.blue}
+            />
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Edit product"
@@ -863,6 +896,8 @@ const stylesVars = {
   subText: apColors.subText,
   mutedText: apColors.muted,
   danger: apColors.danger,
+  dangerSoft: "#FEE2E2",
+  dangerBorder: "#FCA5A5",
   white: apColors.white,
 };
 
@@ -1090,10 +1125,20 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
 
+  saleText: {
+    marginTop: 2,
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    color: stylesVars.danger,
+    fontWeight: "800",
+    letterSpacing: 0,
+  },
+
   itemActions: {
     paddingRight: 10,
     paddingLeft: 4,
     justifyContent: "center",
+    gap: 8,
   },
 
   actionBtn: {
@@ -1105,6 +1150,11 @@ const styles = StyleSheet.create({
     borderColor: "#D7E3FF",
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  saleActionBtn: {
+    backgroundColor: stylesVars.dangerSoft,
+    borderColor: stylesVars.dangerBorder,
   },
 
   actionContent: {

@@ -34,6 +34,10 @@ import {
 import { MediaSection } from "./UpdateProduct.media";
 import { styles, stylesVars } from "./UpdateProduct.styles";
 import {
+  getActiveProductSale,
+  syncProductSaleWithLivePrice,
+} from "@/utils/kapray/productSale";
+import {
   AddTailoringStyleButton,
   ExistingTailoringStyleList,
   TailoringBaseOptionSelectors,
@@ -509,6 +513,11 @@ export default function UpdateProductScreen() {
   }, [priceMode, stitchedVariants.length]);
 
   const media = useMemo(() => safeJson(selected?.media), [selected]);
+
+  const activeSaleInfo = useMemo(
+    () => getActiveProductSale(selected?.price),
+    [selected?.price],
+  );
 
   const imagePaths = useMemo(
     () => (Array.isArray(media?.images) ? media.images.map(String) : []),
@@ -1027,12 +1036,15 @@ export default function UpdateProductScreen() {
         ];
       }
 
+      const now = new Date().toISOString();
+      nextPrice = syncProductSaleWithLivePrice(nextPrice, now);
+
       const updatePayload: any = {
         title: title.trim(),
         product_category: nextProductCategory,
         price: nextPrice,
         spec: nextSpec,
-        updated_at: new Date().toISOString(),
+        updated_at: now,
       };
 
       if (Boolean(selected?.made_on_order)) {
@@ -1501,6 +1513,33 @@ export default function UpdateProductScreen() {
                 editedProductCategory={editedProductCategory}
                 currentProductCategory={currentProductCategory}
               />
+
+              {activeSaleInfo ? (
+                <View style={styles.saleRecordBox}>
+                  <View style={styles.saleRecordHeader}>
+                    <Text style={styles.saleRecordTitle}>Sale record</Text>
+                    <View style={styles.saleRecordPill}>
+                      <Text style={styles.saleRecordPillText}>
+                        -{activeSaleInfo.discountPercent}%
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.saleRecordRow}>
+                    <Text style={styles.saleRecordLabel}>Previous</Text>
+                    <Text style={styles.saleRecordOldPrice}>
+                      {activeSaleInfo.previousLabel}
+                    </Text>
+                  </View>
+
+                  <View style={styles.saleRecordRow}>
+                    <Text style={styles.saleRecordLabel}>Current</Text>
+                    <Text style={styles.saleRecordSalePrice}>
+                      {activeSaleInfo.currentLabel}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
 
               {!Boolean(selected?.made_on_order) && !usesVariantInventory ? (
                 <InventoryStockField

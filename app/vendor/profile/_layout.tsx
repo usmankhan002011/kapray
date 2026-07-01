@@ -56,6 +56,7 @@ export default function VendorProfileTabsLayout() {
         {/* HIDE NON-TAB SCREENS */}
         <Tabs.Screen name="index" options={{ href: null }} />
         <Tabs.Screen name="update-product" options={{ href: null }} />
+        <Tabs.Screen name="product-sale" options={{ href: null }} />
         <Tabs.Screen name="view-profile" options={{ href: null }} />
         <Tabs.Screen name="add-product_legacy" options={{ href: null }} />
         <Tabs.Screen name="edit-vendor" options={{ href: null }} />

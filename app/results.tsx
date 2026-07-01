@@ -24,6 +24,7 @@ import {
 } from "@/utils/favourites";
 import { useAppSelector } from "@/store/hooks";
 import { supabase } from "@/utils/supabase/client";
+import { getActiveProductSale } from "@/utils/kapray/productSale";
 import Wizard from "./wizard";
 
 const PRODUCTS_TABLE = "products";
@@ -1437,6 +1438,7 @@ export default function ResultsScreen() {
             const isFav = favoriteIds.has(item.id);
             const categoryLabel = productCategoryCardLabel(item);
             const badge = stockBadgeText(item);
+            const saleInfo = getActiveProductSale(item.price);
 
             return (
               <Pressable style={styles.card} onPress={() => openProduct(item)}>
@@ -1452,9 +1454,27 @@ export default function ResultsScreen() {
                   {safeText(item.title)}
                 </Text>
 
-                <Text style={styles.cardPrice} numberOfLines={1}>
-                  {formatPrice(item.price)}
-                </Text>
+                {saleInfo ? (
+                  <View style={styles.cardSaleBlock}>
+                    <View style={styles.cardSaleRow}>
+                      <Text style={styles.cardSalePrice} numberOfLines={1}>
+                        {saleInfo.currentLabel}
+                      </Text>
+                      <View style={styles.discountPill}>
+                        <Text style={styles.discountText}>
+                          -{saleInfo.discountPercent}%
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.cardOldPrice} numberOfLines={1}>
+                      {saleInfo.previousLabel}
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.cardPrice} numberOfLines={1}>
+                    {formatPrice(item.price)}
+                  </Text>
+                )}
 
                 <View style={{ marginTop: 0, paddingTop: 0, paddingBottom: 0 }}>
                   <Text style={styles.cardSub} numberOfLines={2}>
@@ -1830,6 +1850,61 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     fontFamily: apFontFamily,
     color: stylesVars.blue,
+  },
+
+  cardSaleBlock: {
+    paddingHorizontal: 10,
+    paddingTop: 6,
+    minHeight: 42,
+  },
+
+  cardSaleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minHeight: 18,
+  },
+
+  cardSalePrice: {
+    flexShrink: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "900",
+    fontFamily: apFontFamily,
+    color: stylesVars.danger,
+    letterSpacing: 0,
+  },
+
+  discountPill: {
+    minHeight: 18,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: apRadii.pill,
+    borderWidth: 1,
+    borderColor: stylesVars.dangerBorder,
+    backgroundColor: stylesVars.dangerSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  discountText: {
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: "900",
+    fontFamily: apFontFamily,
+    color: stylesVars.danger,
+    letterSpacing: 0,
+  },
+
+  cardOldPrice: {
+    marginTop: 2,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "700",
+    fontFamily: apFontFamily,
+    color: stylesVars.mutedText,
+    textDecorationLine: "line-through",
+    letterSpacing: 0,
   },
 
   cardSub: {
