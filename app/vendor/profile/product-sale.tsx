@@ -97,6 +97,23 @@ export default function ProductSaleScreen() {
     : "-";
 
   const newSaleCost = Number(sanitizeNumber(saleCostText) || "0");
+  const newSaleLabel = reference
+    ? `${formatPkr(newSaleCost)}${reference.unitSuffix}`
+    : "-";
+  const newDiscountPercent =
+    reference && Number.isFinite(newSaleCost) && newSaleCost > 0
+      ? Math.max(
+          1,
+          Math.min(
+            99,
+            Math.round(
+              ((reference.previousCostPkr - newSaleCost) /
+                reference.previousCostPkr) *
+                100,
+            ),
+          ),
+        )
+      : 0;
   const canSave =
     Boolean(product && vendorId && productId && reference) &&
     Number.isFinite(newSaleCost) &&
@@ -141,7 +158,7 @@ export default function ProductSaleScreen() {
     void loadProduct();
   }, [loadProduct]);
 
-  async function saveSale() {
+  function confirmSaveSale() {
     if (!product || !vendorId || !productId || !reference) return;
 
     const cleaned = Number(sanitizeNumber(saleCostText) || "0");
@@ -157,6 +174,43 @@ export default function ProductSaleScreen() {
       );
       return;
     }
+
+    const cleanSaleLabel = `${formatPkr(cleaned)}${reference.unitSuffix}`;
+    const discountPercent = Math.max(
+      1,
+      Math.min(
+        99,
+        Math.round(
+          ((reference.previousCostPkr - cleaned) /
+            reference.previousCostPkr) *
+            100,
+        ),
+      ),
+    );
+
+    Alert.alert(
+      "Confirm Sale Price?",
+      [
+        `Product: ${safeText(product.product_code)}`,
+        `Previous price: ${previousLabel}`,
+        `New sale price: ${cleanSaleLabel}`,
+        `Discount: -${discountPercent}%`,
+      ].join("\n"),
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Confirm Sale",
+          style: "destructive",
+          onPress: () => {
+            void saveSale(cleaned);
+          },
+        },
+      ],
+    );
+  }
+
+  async function saveSale(cleaned: number) {
+    if (!product || !vendorId || !productId || !reference) return;
 
     try {
       setSaving(true);
@@ -321,6 +375,17 @@ export default function ProductSaleScreen() {
               maxLength={12}
             />
 
+            {canSave ? (
+              <View style={styles.previewBox}>
+                <Text style={styles.previewPrice}>{newSaleLabel}</Text>
+                <View style={styles.previewPill}>
+                  <Text style={styles.previewPillText}>
+                    -{newDiscountPercent}%
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+
             {reference ? (
               <Text style={styles.hint}>
                 Enter a price below {previousLabel}.
@@ -336,7 +401,7 @@ export default function ProductSaleScreen() {
             accessibilityRole="button"
             accessibilityLabel="Save product sale"
             disabled={!canSave}
-            onPress={saveSale}
+            onPress={confirmSaveSale}
             style={({ pressed }) => [
               styles.primaryBtn,
               !canSave ? styles.disabled : null,
@@ -547,6 +612,44 @@ const styles = StyleSheet.create({
     ...apInputTextStyle,
     color: stylesVars.text,
     backgroundColor: stylesVars.white,
+  },
+
+  previewBox: {
+    marginTop: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  previewPrice: {
+    flexShrink: 1,
+    fontFamily: apFontFamily,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: "900",
+    color: stylesVars.danger,
+    letterSpacing: 0,
+  },
+
+  previewPill: {
+    minHeight: 26,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: apRadii.pill,
+    borderWidth: 1,
+    borderColor: stylesVars.dangerBorder,
+    backgroundColor: stylesVars.dangerSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  previewPillText: {
+    fontFamily: apFontFamily,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "900",
+    color: stylesVars.danger,
+    letterSpacing: 0,
   },
 
   hint: {

@@ -90,7 +90,7 @@ export function StitchedPricingFields({
 }: StitchedPricingFieldsProps) {
   return (
     <>
-      <Text style={styles.label}>
+      <Text style={[styles.label, styles.priceLabel]}>
         {madeOnOrder ? "Cost From (PKR) *" : "Total Cost (PKR) *"}
       </Text>
       <FastNumberInput
@@ -98,7 +98,7 @@ export function StitchedPricingFields({
         onChangeText={onPriceTotalChangeText}
         placeholder="e.g., 25000"
         placeholderTextColor={stylesVars.placeholder}
-        style={styles.input}
+        style={[styles.input, styles.priceInput]}
         keyboardType="decimal-pad"
         maxLength={12}
       />

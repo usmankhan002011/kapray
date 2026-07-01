@@ -130,6 +130,8 @@ export default function ViewProductTailoringSelection({
     boolean | null
   >(null);
 
+  const hasMultipleTailoringStyles = tailoringStylePresets.length > 1;
+
   const selectedPreset = useMemo<TailoringStylePreset | null>(() => {
     return (
       tailoringStylePresets.find((p) => p.id === selectedTailoringStyleId) ??
@@ -430,7 +432,9 @@ export default function ViewProductTailoringSelection({
           {hasTailoringStylePresets ? (
             <>
               <Text style={[styles.label, { color: stylesVars.blue }]}>
-                Select a tailoring style
+                {hasMultipleTailoringStyles
+                  ? "Select a tailoring style"
+                  : "Select tailoring design"}
               </Text>
               <Text style={[styles.meta, { marginTop: 4 }]}>
                 Tap card to view
@@ -462,7 +466,7 @@ export default function ViewProductTailoringSelection({
                       }}
                       style={({ pressed }) => [
                         {
-                          width: "48.2%",
+                          width: hasMultipleTailoringStyles ? "48.2%" : "100%",
                           borderRadius: 16,
                           borderWidth: 1,
                           borderColor: isSelected ? stylesVars.blue : "#D7E3FF",
@@ -535,7 +539,9 @@ export default function ViewProductTailoringSelection({
                             }}
                             numberOfLines={1}
                           >
-                            Style {index + 1}
+                            {hasMultipleTailoringStyles
+                              ? `Style ${index + 1}`
+                              : "Design"}
                           </Text>
 
                           <Text
@@ -548,7 +554,10 @@ export default function ViewProductTailoringSelection({
                             }}
                             numberOfLines={2}
                           >
-                            {preset.title || "Untitled style"}
+                            {preset.title ||
+                              (hasMultipleTailoringStyles
+                                ? "Untitled style"
+                                : "Untitled design")}
                           </Text>
 
                           {extraCost > 0 ? (
@@ -626,12 +635,16 @@ export default function ViewProductTailoringSelection({
                 >
                   {!hasStyleVariationOptions ? (
                     <Text style={[styles.meta, { color: stylesVars.danger || "#B42318" }]}>
-                      No style variations offered for this style.
+                      {hasMultipleTailoringStyles
+                        ? "No style variations offered for this style."
+                        : "No design variations offered for this design."}
                     </Text>
                   ) : (
                     <>
                       <Text style={[styles.label, { color: stylesVars.blue }]}>
-                        Do you want style variations?
+                        {hasMultipleTailoringStyles
+                          ? "Do you want style variations?"
+                          : "Do you want design variations?"}
                       </Text>
 
                       <View
@@ -663,7 +676,9 @@ export default function ViewProductTailoringSelection({
                               { color: stylesVars.blue, marginTop: 10 },
                             ]}
                           >
-                            Select style variations
+                            {hasMultipleTailoringStyles
+                              ? "Select style variations"
+                              : "Select design variations"}
                           </Text>
 
                           <View
@@ -796,7 +811,9 @@ export default function ViewProductTailoringSelection({
 
                       {buyerWantsStyleVariations === false ? (
                         <Text style={[styles.meta, { marginTop: 10 }]}>
-                          No change in the selected style.
+                          {hasMultipleTailoringStyles
+                            ? "No change in the selected style."
+                            : "No change in the selected design."}
                         </Text>
                       ) : null}
                     </>
@@ -804,7 +821,9 @@ export default function ViewProductTailoringSelection({
                 </View>
               ) : (
                 <Text style={[styles.meta, { marginTop: 10 }]}>
-                  Select one style card to continue.
+                  {hasMultipleTailoringStyles
+                    ? "Select one style card to continue."
+                    : "Select the tailoring design to continue."}
                 </Text>
               )}
 
@@ -826,7 +845,11 @@ export default function ViewProductTailoringSelection({
                   <TextInput
                     value={customTailoringNote}
                     onChangeText={setCustomTailoringNote}
-                    placeholder="Optional instruction for this selected style"
+                    placeholder={
+                      hasMultipleTailoringStyles
+                        ? "Optional instruction for this selected style"
+                        : "Optional instruction for this selected design"
+                    }
                     placeholderTextColor="#94A3B8"
                     multiline
                     style={{
@@ -847,7 +870,7 @@ export default function ViewProductTailoringSelection({
             </>
           ) : (
             <Text style={[styles.meta, { marginTop: 6 }]}>
-              Tailoring style cards are not available for this product yet.
+              Tailoring designs are not available for this product yet.
             </Text>
           )}
         </View>
@@ -1012,7 +1035,10 @@ export default function ViewProductTailoringSelection({
                       color: stylesVars.text,
                     }}
                   >
-                    {previewPreset?.title || "Untitled style"}
+                    {previewPreset?.title ||
+                      (hasMultipleTailoringStyles
+                        ? "Untitled style"
+                        : "Untitled design")}
                   </Text>
                 </View>
 
@@ -1041,7 +1067,8 @@ export default function ViewProductTailoringSelection({
 
                   {safeInt0(previewPreset?.extra_cost_pkr) > 0 ? (
                     <Text style={styles.meta}>
-                      Additional tailoring cost for this style:{" "}
+                      Additional tailoring cost for this{" "}
+                      {hasMultipleTailoringStyles ? "style" : "design"}:{" "}
                       <Text style={styles.specValue}>
                         PKR {safeInt0(previewPreset?.extra_cost_pkr)}
                       </Text>

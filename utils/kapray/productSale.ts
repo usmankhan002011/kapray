@@ -14,6 +14,19 @@ export type ProductSaleInfo = {
   unitSuffix: string;
 };
 
+export type ProductPriceRevisionInfo = {
+  active: true;
+  unit: ProductSaleUnit;
+  priceKey: "cost_pkr_total" | "cost_pkr_per_meter";
+  previousKey: "previous_cost_pkr_total" | "previous_cost_pkr_per_meter";
+  currentCostPkr: number;
+  previousCostPkr: number;
+  currentLabel: string;
+  previousLabel: string;
+  unitSuffix: string;
+  updatedAt: string | null;
+};
+
 type ProductSaleKeys = Pick<
   ProductSaleInfo,
   "unit" | "priceKey" | "previousKey" | "saleKey" | "unitSuffix"
@@ -130,6 +143,69 @@ export function getProductSaleReferenceCost(priceInput: unknown) {
     currentCostPkr: safePositiveNumber(price?.[keys.priceKey]),
     previousCostPkr:
       sale?.previousCostPkr ?? safePositiveNumber(price?.[keys.priceKey]),
+  };
+}
+
+export function getProductRegularPriceRevision(
+  priceInput: unknown,
+): ProductPriceRevisionInfo | null {
+  const price = safeJson(priceInput);
+  const revision = safeJson(price?.regular_price_revision);
+  const keys = getProductSaleKeys(price);
+
+  if (!keys || revision?.active !== true) return null;
+
+  const revisionUnit = String(revision?.unit ?? "").trim();
+  if (revisionUnit && revisionUnit !== keys.unit) return null;
+
+  const currentCost = safePositiveNumber(price?.[keys.priceKey]);
+  const previousCost = safePositiveNumber(revision?.[keys.previousKey]);
+
+  if (currentCost <= 0 || previousCost <= 0 || currentCost === previousCost) {
+    return null;
+  }
+
+  return {
+    active: true,
+    unit: keys.unit,
+    priceKey: keys.priceKey,
+    previousKey: keys.previousKey,
+    currentCostPkr: currentCost,
+    previousCostPkr: previousCost,
+    currentLabel: `${formatPkr(currentCost)}${keys.unitSuffix}`,
+    previousLabel: `${formatPkr(previousCost)}${keys.unitSuffix}`,
+    unitSuffix: keys.unitSuffix,
+    updatedAt:
+      typeof revision?.updated_at === "string" ? revision.updated_at : null,
+  };
+}
+
+export function applyProductRegularPriceRevision(
+  priceInput: unknown,
+  previousCostPkr: number,
+  currentCostPkr: number,
+  nowIso = new Date().toISOString(),
+) {
+  const price = safeJson(priceInput);
+  const keys = getProductSaleKeys(price);
+  if (!keys) return price;
+
+  const previousCost = roundPkr(previousCostPkr);
+  const currentCost = roundPkr(currentCostPkr);
+
+  if (previousCost <= 0 || currentCost <= 0 || previousCost === currentCost) {
+    return price;
+  }
+
+  return {
+    ...price,
+    regular_price_revision: {
+      active: true,
+      unit: keys.unit,
+      [keys.previousKey]: previousCost,
+      [keys.priceKey]: currentCost,
+      updated_at: nowIso,
+    },
   };
 }
 

@@ -121,6 +121,18 @@ function safeText(v: unknown) {
   return t.length ? t : "—";
 }
 
+function designText(value: unknown, fallback = "Design") {
+  const s = String(value ?? "").trim();
+  if (!s || s === "â€”" || s === "—") return fallback;
+
+  return (
+    s
+      .replace(/^(?:Variant|Style)\s+\d+\s*:\s*/i, "")
+      .replace(/^(?:Variant|Style)\s+\d+$/i, "")
+      .trim() || fallback
+  );
+}
+
 function isHttpUrl(v: unknown) {
   return typeof v === "string" && /^https?:\/\//i.test(v);
 }
@@ -1380,6 +1392,7 @@ export default function ViewProductScreen() {
   const hasTailoringStylePresets = useMemo(() => {
     return tailoringStylePresets.length > 0;
   }, [tailoringStylePresets]);
+  const hasMultipleTailoringStylePresets = tailoringStylePresets.length > 1;
 
   const sizeLengthMap = useMemo(() => {
     return ((product as any)?.spec?.size_length_m ?? {}) as Record<
@@ -1591,8 +1604,12 @@ export default function ViewProductScreen() {
     if (tailoringEligible && buyerWantsTailoring) {
       if (!tailoringSelection?.presetId) {
         Alert.alert(
-          "Select tailoring style",
-          "Please select a tailoring style card.",
+          hasMultipleTailoringStylePresets
+            ? "Select tailoring style"
+            : "Select tailoring design",
+          hasMultipleTailoringStylePresets
+            ? "Please select a tailoring style card."
+            : "Please select the tailoring design.",
         );
         return;
       }
@@ -1865,6 +1882,7 @@ export default function ViewProductScreen() {
     buyerWantsTailoring,
     dyeingCostPkr,
     hasAnySizeLengthMap,
+    hasMultipleTailoringStylePresets,
     imageUrls,
     isFabricByMeterPurchase,
     isMadeOnOrder,
@@ -2443,7 +2461,9 @@ export default function ViewProductScreen() {
                     color: stylesVars.blue,
                   }}
                 >
-                  Selected Tailoring Style
+                  {hasMultipleTailoringStylePresets
+                    ? "Selected Tailoring Style"
+                    : "Selected Tailoring Design"}
                 </Text>
 
                 <View
@@ -2486,7 +2506,10 @@ export default function ViewProductScreen() {
 
                     {tailoringSelection?.extraCostPkr ? (
                       <Text style={styles.metaLine}>
-                        Style Extra Cost: PKR{" "}
+                        {hasMultipleTailoringStylePresets
+                          ? "Style Extra Cost"
+                          : "Design Extra Cost"}
+                        : PKR{" "}
                         {tailoringSelection.extraCostPkr.toLocaleString()}
                       </Text>
                     ) : null}
@@ -2559,7 +2582,9 @@ export default function ViewProductScreen() {
             {hasTailoringStylePresets ? (
               <View style={{ marginTop: 14, gap: 12 }}>
                 <Text style={[styles.specTitle, { color: stylesVars.blue }]}>
-                  Styles Offered
+                  {hasMultipleTailoringStylePresets
+                    ? "Styles Offered"
+                    : "Tailoring Design Offered"}
                 </Text>
                 {tailoringStylePresets.map((preset, index) => {
                   const presetImageUrls = resolveTailoringPresetImageUrls(
@@ -2568,7 +2593,10 @@ export default function ViewProductScreen() {
                   );
                   const extraCost = safeInt0(preset.extra_cost_pkr);
                   const title =
-                    String(preset.title || "").trim() || `Style ${index + 1}`;
+                    String(preset.title || "").trim() ||
+                    (hasMultipleTailoringStylePresets
+                      ? `Style ${index + 1}`
+                      : "Design");
 
                   return (
                     <View
@@ -2589,7 +2617,9 @@ export default function ViewProductScreen() {
                           color: stylesVars.text,
                         }}
                       >
-                        Style Card {index + 1}
+                        {hasMultipleTailoringStylePresets
+                          ? `Style Card ${index + 1}`
+                          : "Tailoring Design"}
                       </Text>
 
                       {presetImageUrls.length ? (
@@ -2643,7 +2673,7 @@ export default function ViewProductScreen() {
               </View>
             ) : (
               <Text style={[styles.meta, { marginTop: 10 }]}>
-                No tailoring style cards added for this product.
+                No tailoring designs added for this product.
               </Text>
             )}
           </View>
@@ -2675,7 +2705,7 @@ export default function ViewProductScreen() {
                   <Text
                     style={[styles.sectionTitle, { color: stylesVars.blue }]}
                   >
-                    Selected Style
+                    Selected Design
                   </Text>
 
                   <View
@@ -2723,9 +2753,11 @@ export default function ViewProductScreen() {
                         }}
                         numberOfLines={2}
                       >
-                        {selectedStitchedVariant.rawVariant?.display_name ||
-                          selectedStitchedVariant.title ||
-                          selectedStitchedVariant.label}
+                        {designText(
+                          selectedStitchedVariant.rawVariant?.display_name ||
+                            selectedStitchedVariant.title ||
+                            selectedStitchedVariant.label,
+                        )}
                       </Text>
 
                       {!isMadeOnOrder ? (
@@ -2747,7 +2779,7 @@ export default function ViewProductScreen() {
                       Base Cost: PKR {baseCost.toLocaleString()}
                     </Text>
                     <Text style={styles.metaLine}>
-                      Style Additional Cost: PKR{" "}
+                      Design Additional Cost: PKR{" "}
                       {additionalCost.toLocaleString()}
                     </Text>
                     <Text

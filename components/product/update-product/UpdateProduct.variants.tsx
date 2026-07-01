@@ -65,19 +65,37 @@ type MadeOrderVariantDraftCardProps = {
   onRemoveImage: (index: number, imageIndex: number) => void;
 };
 
+function designText(value: unknown, fallback = "Design") {
+  const s = String(value ?? "").trim();
+  if (!s || s === "â€”" || s === "—" || s === "Ã¢â‚¬â€") return fallback;
+
+  return (
+    s
+      .replace(/^(?:Variant|Style)\s+\d+\s*:\s*/i, "")
+      .replace(/^(?:Variant|Style)\s+\d+$/i, "")
+      .trim() || fallback
+  );
+}
+
 export function ExistingMadeOrderVariantList({
   variants,
 }: ExistingMadeOrderVariantListProps) {
   if (!variants.length) {
-    return <UpdateProductEmptyState title="No saved styles" />;
+    return <UpdateProductEmptyState title="No saved designs" />;
   }
+
+  const hasSingleVariant = variants.length === 1;
 
   return (
     <View style={styles.readonlyListBox}>
-      <Text style={styles.appendTitle}>Saved styles</Text>
+      <Text style={styles.appendTitle}>
+        {hasSingleVariant ? "Saved design" : "Saved styles"}
+      </Text>
       {variants.map((variant, index) => (
         <Text key={`old-made-${index}`} style={styles.readonlyValue}>
-          {variantDisplayTitle(variant, index + 1)}
+          {hasSingleVariant
+            ? designText(variantDisplayTitle(variant, index + 1))
+            : variantDisplayTitle(variant, index + 1)}
         </Text>
       ))}
     </View>
@@ -117,10 +135,13 @@ export function StitchedVariantInventorySection({
   onSizeQtyChange,
 }: StitchedVariantInventorySectionProps) {
   if (!variants.length) return null;
+  const hasSingleVariant = variants.length === 1;
 
   return (
     <View style={styles.variantInventoryBox}>
-      <Text style={styles.variantInventoryTitle}>Edit Styles</Text>
+      <Text style={styles.variantInventoryTitle}>
+        {hasSingleVariant ? "Edit Design" : "Edit Styles"}
+      </Text>
 
       {variants.map((variant) => {
         const variantImageUrls = resolveVariantImageUrls(
@@ -137,7 +158,9 @@ export function StitchedVariantInventorySection({
 
         return (
           <View key={variant.id} style={styles.variantCard}>
-            <Text style={styles.variantCardTitle}>{variant.label}</Text>
+            <Text style={styles.variantCardTitle}>
+              {hasSingleVariant ? designText(variant.label) : variant.label}
+            </Text>
 
             {variantImageUrls[0] ? (
               <Image

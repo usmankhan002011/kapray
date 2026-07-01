@@ -236,6 +236,20 @@ function cleanReadyToWearTitle(title: string, sizeLike: string) {
     .trim();
 }
 
+function designText(value: unknown, fallback = "") {
+  const s = String(value ?? "").trim();
+  if (!s || s === "â€”" || s === "—" || s === "Ã¢â‚¬â€") {
+    return fallback;
+  }
+
+  return (
+    s
+      .replace(/^(?:Variant|Style)\s+\d+\s*:\s*/i, "")
+      .replace(/^(?:Variant|Style)\s+\d+$/i, "")
+      .trim() || fallback
+  );
+}
+
 function cleanVariationLabel(value: string, kind: "neck" | "sleeve") {
   if (!value) return "";
   const pattern = kind === "neck" ? /\bneck\b/gi : /\bsleeve\b/gi;
@@ -639,6 +653,9 @@ export default function PaymentScreen() {
       safeDecode(params.tailoring_style_extra_cost_pkr) ||
         (selectedTailoringStyleSnapshot as any)?.extra_cost_pkr,
     );
+    const totalTailoringCostPkr = tailoringSelected
+      ? tailoringCostPkr + tailoringStyleExtraCostPkr
+      : 0;
 
     const hasStyleSelected =
       tailoringSelected &&
@@ -734,6 +751,7 @@ export default function PaymentScreen() {
       selectedTrouserVariation,
       customTailoringNote,
       tailoringStyleExtraCostPkr,
+      totalTailoringCostPkr,
       hasStyleSelected,
     };
   }, [params]);
@@ -1079,11 +1097,14 @@ export default function PaymentScreen() {
     isReadyToWearStitched || isMadeOrderStitched;
 
   const selectedStitchedVariantTitle = isReadyToWearStitched
-    ? cleanReadyToWearTitle(
-        data.selectedVariantTitle || "Selected style",
-        data.selectedVariantSize || data.sizeLabel,
+    ? designText(
+        cleanReadyToWearTitle(
+          data.selectedVariantTitle || "Selected design",
+          data.selectedVariantSize || data.sizeLabel,
+        ),
+        "Selected design",
       )
-    : data.selectedVariantTitle;
+    : designText(data.selectedVariantTitle);
   // Keep original image handling untouched: imageUrl already carries the correct selected style image.
   const productSummaryImageUrl = data.imageUrl;
   const productSummaryTitle = isReadyToWearStitched
@@ -1149,7 +1170,7 @@ export default function PaymentScreen() {
                   <>
                     <View style={styles.productMetaInfo}>
                       <Text style={styles.productMetaLabel}>
-                        Selected style
+                        Selected design
                       </Text>
                       <Text style={styles.productMetaValue}>
                         {selectedStitchedVariantTitle || "Not selected"}
@@ -1197,28 +1218,28 @@ export default function PaymentScreen() {
                 data.selectedVariantColor) ? (
                 <View style={styles.customBlock}>
                   <KVRow
-                    label="Selected style"
+                    label="Selected design"
                     value={
-                      data.selectedVariantTitle ||
+                      designText(data.selectedVariantTitle) ||
                       data.selectedVariantSize ||
-                      "Selected style"
+                      "Selected design"
                     }
                   />
                   {!!data.selectedVariantSize && (
                     <KVRow
-                      label="Style size"
+                      label="Design size"
                       value={data.selectedVariantSize}
                     />
                   )}
                   {!!data.selectedVariantColor && (
                     <KVRow
-                      label="Style color"
+                      label="Design color"
                       value={data.selectedVariantColor}
                     />
                   )}
                   {data.selectedVariantPricePkr > 0 ? (
                     <KVRow
-                      label="Style price"
+                      label="Design price"
                       value={formatMoney(
                         data.currency,
                         data.selectedVariantPricePkr,
@@ -1345,9 +1366,9 @@ export default function PaymentScreen() {
                       )}
 
                       <KVRow
-                        label="Style"
+                        label="Design"
                         value={
-                          data.selectedTailoringStyleTitle || "Selected style"
+                          data.selectedTailoringStyleTitle || "Selected design"
                         }
                       />
 
@@ -1386,7 +1407,7 @@ export default function PaymentScreen() {
 
                       {data.tailoringStyleExtraCostPkr > 0 ? (
                         <KVRow
-                          label="Additional style cost"
+                          label="Additional design cost"
                           value={formatMoney(
                             data.currency,
                             data.tailoringStyleExtraCostPkr,
@@ -1404,6 +1425,14 @@ export default function PaymentScreen() {
                       ) : null}
                     </>
                   ) : null}
+
+                  <KVRow
+                    label="Total Tailoring Cost"
+                    value={formatMoney(
+                      data.currency,
+                      data.totalTailoringCostPkr,
+                    )}
+                  />
                 </View>
               ) : null}
             </PlainSection>
@@ -1455,7 +1484,7 @@ export default function PaymentScreen() {
 
             {data.tailoringStyleExtraCostPkr > 0 ? (
               <PriceRow
-                label="Additional style cost"
+                label="Additional design cost"
                 value={formatMoney(
                   data.currency,
                   data.tailoringStyleExtraCostPkr,

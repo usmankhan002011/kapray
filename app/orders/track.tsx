@@ -63,6 +63,20 @@ function cleanText(v: any) {
   return t.length ? t : "";
 }
 
+function designText(value: unknown, fallback = "") {
+  const s = String(value ?? "").trim();
+  if (!s || s === "â€”" || s === "—" || s === "Ã¢â‚¬â€") {
+    return fallback;
+  }
+
+  return (
+    s
+      .replace(/^(?:Variant|Style)\s+\d+\s*:\s*/i, "")
+      .replace(/^(?:Variant|Style)\s+\d+$/i, "")
+      .trim() || fallback
+  );
+}
+
 function humanizeCat(v: any) {
   const s = String(v ?? "").trim();
   if (!s) return "—";
@@ -87,7 +101,7 @@ function numOrNull(v: any): number | null {
 }
 
 function getSelectedVariant(spec: any) {
-  const title = cleanText(spec?.selected_variant_title);
+  const title = designText(cleanText(spec?.selected_variant_title));
   const size = cleanText(spec?.selected_variant_size);
   const color = cleanText(spec?.selected_variant_color);
   const price = numOrNull(spec?.selected_variant_price_pkr);
@@ -348,8 +362,8 @@ export default function TrackOrdersScreen() {
         {selectedVariant.hasVariant ? (
           <View style={styles.variantBox}>
             <Text style={styles.variantTitle} numberOfLines={1}>
-              Selected Style:{" "}
-              {selectedVariant.title || "Ready-to-wear style"}
+              Selected Design:{" "}
+              {selectedVariant.title || "Ready-to-wear design"}
             </Text>
 
             <Text style={styles.variantMeta} numberOfLines={1}>

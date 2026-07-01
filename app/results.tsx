@@ -1456,9 +1456,12 @@ export default function ResultsScreen() {
 
                 {saleInfo ? (
                   <View style={styles.cardSaleBlock}>
-                    <View style={styles.cardSaleRow}>
-                      <Text style={styles.cardSalePrice} numberOfLines={1}>
-                        {saleInfo.currentLabel}
+                    <Text style={styles.cardSalePrice} numberOfLines={1}>
+                      {saleInfo.currentLabel}
+                    </Text>
+                    <View style={styles.cardOldPriceRow}>
+                      <Text style={styles.cardOldPrice} numberOfLines={1}>
+                        {saleInfo.previousLabel}
                       </Text>
                       <View style={styles.discountPill}>
                         <Text style={styles.discountText}>
@@ -1466,9 +1469,6 @@ export default function ResultsScreen() {
                         </Text>
                       </View>
                     </View>
-                    <Text style={styles.cardOldPrice} numberOfLines={1}>
-                      {saleInfo.previousLabel}
-                    </Text>
                   </View>
                 ) : (
                   <Text style={styles.cardPrice} numberOfLines={1}>
@@ -1542,6 +1542,9 @@ const stylesVars = {
   danger: apColors.danger,
   dangerSoft: "#FEF2F2",
   dangerBorder: "#FECACA",
+  saleOrange: "#EA580C",
+  saleOrangeSoft: "#FFF7ED",
+  saleOrangeBorder: "#FDBA74",
   overlayDark: "rgba(0,0,0,0.58)",
   overlaySoft: "rgba(255,255,255,0.14)",
   white: apColors.white,
@@ -1855,20 +1858,21 @@ const styles = StyleSheet.create({
   cardSaleBlock: {
     paddingHorizontal: 10,
     paddingTop: 6,
-    minHeight: 42,
+    minHeight: 44,
   },
 
-  cardSaleRow: {
+  cardOldPriceRow: {
+    marginTop: 2,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    minHeight: 18,
+    gap: 5,
+    minHeight: 16,
   },
 
   cardSalePrice: {
-    flexShrink: 1,
+    width: "100%",
     fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 17,
     fontWeight: "900",
     fontFamily: apFontFamily,
     color: stylesVars.danger,
@@ -1876,28 +1880,28 @@ const styles = StyleSheet.create({
   },
 
   discountPill: {
-    minHeight: 18,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    minHeight: 16,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
     borderRadius: apRadii.pill,
     borderWidth: 1,
-    borderColor: stylesVars.dangerBorder,
-    backgroundColor: stylesVars.dangerSoft,
+    borderColor: stylesVars.saleOrangeBorder,
+    backgroundColor: stylesVars.saleOrangeSoft,
     alignItems: "center",
     justifyContent: "center",
   },
 
   discountText: {
-    fontSize: 10,
-    lineHeight: 12,
+    fontSize: 9,
+    lineHeight: 11,
     fontWeight: "900",
     fontFamily: apFontFamily,
-    color: stylesVars.danger,
+    color: stylesVars.saleOrange,
     letterSpacing: 0,
   },
 
   cardOldPrice: {
-    marginTop: 2,
+    flexShrink: 1,
     fontSize: 11,
     lineHeight: 14,
     fontWeight: "700",

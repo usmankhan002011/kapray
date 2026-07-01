@@ -73,13 +73,18 @@ export function ExistingTailoringStyleList({
   stylesList,
 }: ExistingTailoringStyleListProps) {
   if (!stylesList.length) return null;
+  const hasSingleStyle = stylesList.length === 1;
 
   return (
     <View style={styles.readonlyListBox}>
-      <Text style={styles.appendTitle}>Saved styles</Text>
+      <Text style={styles.appendTitle}>
+        {hasSingleStyle ? "Saved design" : "Saved styles"}
+      </Text>
       {stylesList.map((style, index) => (
         <Text key={`old-style-${index}`} style={styles.readonlyValue}>
-          {index + 1}. {safeText(style?.title)}
+          {hasSingleStyle
+            ? safeText(style?.title)
+            : `${index + 1}. ${safeText(style?.title)}`}
         </Text>
       ))}
     </View>

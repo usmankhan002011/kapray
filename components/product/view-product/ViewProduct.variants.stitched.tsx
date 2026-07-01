@@ -672,6 +672,27 @@ function money(value: number) {
   return `PKR ${Number(value || 0).toLocaleString()}`;
 }
 
+function stripStyleNumber(value: unknown) {
+  return safeText(value)
+    .replace(/^(?:Variant|Style)\s+\d+\s*:\s*/i, "")
+    .replace(/^(?:Variant|Style)\s+\d+$/i, "")
+    .trim();
+}
+
+function designTitleFromVariant(
+  variant: ReadyVariantCard | MadeOrderVariantCard | null | undefined,
+  fallback = "Design",
+) {
+  if (!variant) return fallback;
+
+  return (
+    stripStyleNumber(variant.name) ||
+    stripStyleNumber(variant.display_name) ||
+    stripStyleNumber(variant.label) ||
+    fallback
+  );
+}
+
 function stockMessage(qty: number) {
   if (qty <= 0) return "Out of stock";
   if (qty <= 2) return `Only ${qty} left`;
@@ -766,6 +787,10 @@ export default function ViewProductStitchedVariants({
       : [];
 
   const showingSimpleReady = !variants.length && !!simpleReadyCard;
+  const hasMultipleReadyStyles = variants.length > 1;
+  const hasSingleReadyStyle = variants.length === 1;
+  const hasMultipleMadeOrderStyles = madeOrderVariants.length > 1;
+  const hasSingleMadeOrderStyle = madeOrderVariants.length === 1;
 
   useEffect(() => {
     const selectedRawId = selectedVariant?.rawVariant?.id;
@@ -778,7 +803,13 @@ export default function ViewProductStitchedVariants({
     return (
       <View style={styles.card}>
         <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>
-          {readOnly ? "Styles Offered" : "Choose a Style"}
+          {readOnly
+            ? hasMultipleMadeOrderStyles
+              ? "Styles Offered"
+              : "Design Offered"
+            : hasMultipleMadeOrderStyles
+              ? "Choose a Style"
+              : "Choose a Design"}
         </Text>
         {!readOnly ? (
           <Text style={[styles.meta, { marginTop: 4 }]}>
@@ -798,10 +829,13 @@ export default function ViewProductStitchedVariants({
           {madeOrderVariants.map((variant, index) => {
             const isActive = activeVariantId === variant.id;
             const finalPrice = basePrice + variant.additional_price_pkr;
-            const compactCard = !isActive;
-            const styleLabel =
-              variant.label || `Style ${variant.variant_no || index + 1}`;
-            const styleName = variant.name || variant.display_name;
+            const compactCard = hasMultipleMadeOrderStyles && !isActive;
+            const styleLabel = hasMultipleMadeOrderStyles
+              ? variant.label || `Style ${variant.variant_no || index + 1}`
+              : "Design";
+            const styleName = hasMultipleMadeOrderStyles
+              ? variant.name || variant.display_name
+              : designTitleFromVariant(variant, "Available design");
 
             return (
               <Pressable
@@ -820,7 +854,10 @@ export default function ViewProductStitchedVariants({
                     borderRadius: 16,
                     padding: 10,
                     gap: 10,
-                    width: isActive ? "100%" : "48.2%",
+                    width:
+                      !hasMultipleMadeOrderStyles || isActive
+                        ? "100%"
+                        : "48.2%",
                   },
                   pressed && !readOnly ? styles.pressed : null,
                 ]}
@@ -867,7 +904,11 @@ export default function ViewProductStitchedVariants({
                       justifyContent: "center",
                     }}
                   >
-                    <Text style={styles.meta}>No style image</Text>
+                    <Text style={styles.meta}>
+                      {hasMultipleMadeOrderStyles
+                        ? "No style image"
+                        : "No design image"}
+                    </Text>
                   </View>
                 )}
 
@@ -926,7 +967,9 @@ export default function ViewProductStitchedVariants({
                         ]}
                         numberOfLines={2}
                       >
-                        {variant.display_name}
+                        {hasMultipleMadeOrderStyles
+                          ? variant.display_name
+                          : designTitleFromVariant(variant)}
                       </Text>
 
                       <Text style={styles.metaLine}>
@@ -995,7 +1038,13 @@ export default function ViewProductStitchedVariants({
                           color: isActive ? "#FFFFFF" : stylesVars.blue,
                         }}
                       >
-                        {isActive ? "Style Selected" : "Select Style"}
+                        {isActive
+                          ? hasMultipleMadeOrderStyles
+                            ? "Style Selected"
+                            : "Design Selected"
+                          : hasMultipleMadeOrderStyles
+                            ? "Select Style"
+                            : "Select Design"}
                       </Text>
                     </Pressable>
                   </View>
@@ -1013,6 +1062,7 @@ export default function ViewProductStitchedVariants({
           styles={styles}
           stylesVars={stylesVars}
           basePrice={basePrice}
+          designWording={hasSingleMadeOrderStyle}
         />
       </View>
     );
@@ -1028,8 +1078,12 @@ export default function ViewProductStitchedVariants({
             ? "Ready-to-wear Sizes Offered"
             : "Choose a Size"
           : readOnly
-            ? "Product Styles Offered"
-            : "Choose a Style"}
+            ? hasMultipleReadyStyles
+              ? "Product Styles Offered"
+              : "Product Design Offered"
+            : hasMultipleReadyStyles
+              ? "Choose a Style"
+              : "Choose a Design"}
       </Text>
       {!readOnly && !showingSimpleReady ? (
         <Text style={[styles.meta, { marginTop: 4 }]}>Tap card to view</Text>
@@ -1053,13 +1107,22 @@ export default function ViewProductStitchedVariants({
               : "";
           const finalPrice = basePrice + variant.additional_price_pkr;
           const hasAvailableSize = visibleSizes.some((row) => row.qty > 0);
-          const compactCard = !showingSimpleReady && !isActive;
+          const compactCard =
+            !showingSimpleReady && hasMultipleReadyStyles && !isActive;
           const detailTextStyle = compactCard
             ? { fontSize: 12, lineHeight: 17 }
             : null;
-          const styleLabel =
-            variant.label || `Style ${variant.variant_no || index + 1}`;
-          const styleName = variant.name || variant.display_name;
+          const styleLabel = hasMultipleReadyStyles
+            ? variant.label || `Style ${variant.variant_no || index + 1}`
+            : showingSimpleReady
+              ? "Ready-to-wear"
+              : "Design";
+          const styleName = hasMultipleReadyStyles
+            ? variant.name || variant.display_name
+            : designTitleFromVariant(
+                variant,
+                showingSimpleReady ? "Ready-to-wear" : "Available design",
+              );
 
           return (
             <Pressable
@@ -1077,7 +1140,10 @@ export default function ViewProductStitchedVariants({
                 borderRadius: 16,
                 padding: 10,
                 gap: 10,
-                width: showingSimpleReady || isActive ? "100%" : "48.2%",
+                width:
+                  showingSimpleReady || hasSingleReadyStyle || isActive
+                    ? "100%"
+                    : "48.2%",
               }}
             >
               {variant.imageUrls.length ? (
@@ -1126,7 +1192,9 @@ export default function ViewProductStitchedVariants({
                     justifyContent: "center",
                   }}
                 >
-                  <Text style={styles.meta}>No style image</Text>
+                  <Text style={styles.meta}>
+                    {hasMultipleReadyStyles ? "No style image" : "No image"}
+                  </Text>
                 </View>
               )}
 
@@ -1185,7 +1253,9 @@ export default function ViewProductStitchedVariants({
                       ]}
                       numberOfLines={2}
                     >
-                      {variant.display_name}
+                      {showingSimpleReady || hasMultipleReadyStyles
+                        ? variant.display_name
+                        : designTitleFromVariant(variant)}
                     </Text>
 
                     <Text style={[styles.metaLine, detailTextStyle]}>
@@ -1257,7 +1327,13 @@ export default function ViewProductStitchedVariants({
                         color: isActive ? "#FFFFFF" : stylesVars.blue,
                       }}
                     >
-                      {isActive ? "Style Selected" : "Select Style"}
+                      {isActive
+                        ? hasMultipleReadyStyles
+                          ? "Style Selected"
+                          : "Design Selected"
+                        : hasMultipleReadyStyles
+                          ? "Select Style"
+                          : "Select Design"}
                     </Text>
                   </Pressable>
                 </View>
@@ -1382,6 +1458,7 @@ export default function ViewProductStitchedVariants({
         styles={styles}
         stylesVars={stylesVars}
         basePrice={basePrice}
+        designWording={hasSingleReadyStyle}
       />
     </View>
   );
@@ -1395,6 +1472,7 @@ function VariantPreviewModal({
   styles,
   stylesVars,
   basePrice,
+  designWording = false,
 }: {
   previewVariant: ReadyVariantCard | MadeOrderVariantCard | null;
   previewIndex: number;
@@ -1405,6 +1483,7 @@ function VariantPreviewModal({
   styles: any;
   stylesVars: any;
   basePrice: number;
+  designWording?: boolean;
 }) {
   const estimatedDays =
     previewVariant && "estimated_days" in previewVariant
@@ -1450,7 +1529,9 @@ function VariantPreviewModal({
                   color: stylesVars.text,
                 }}
               >
-                {previewVariant?.display_name ?? "Style"}
+                {designWording
+                  ? designTitleFromVariant(previewVariant)
+                  : previewVariant?.display_name ?? "Style"}
               </Text>
 
               <Pressable

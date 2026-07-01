@@ -34,7 +34,10 @@ import {
 import { MediaSection } from "./UpdateProduct.media";
 import { styles, stylesVars } from "./UpdateProduct.styles";
 import {
+  applyProductRegularPriceRevision,
+  formatPkr,
   getActiveProductSale,
+  getProductRegularPriceRevision,
   syncProductSaleWithLivePrice,
 } from "@/utils/kapray/productSale";
 import {
@@ -99,6 +102,71 @@ import type {
 
 const PRODUCTS_TABLE = "products";
 const BUCKET_VENDOR = "vendor_images";
+
+function roundPriceForCompare(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(value * 100) / 100;
+}
+
+type InventoryUnit = "unit" | "m";
+
+type InventoryChangeInfo = {
+  previousQty: number;
+  nextQty: number;
+  unit: InventoryUnit;
+  previousLabel: string;
+  nextLabel: string;
+};
+
+type InventoryRevisionRecordInfo = {
+  previousLabel: string;
+  currentLabel: string;
+};
+
+function formatInventoryQty(value: number, unit: InventoryUnit) {
+  const qty =
+    unit === "m"
+      ? roundMeter(Math.max(0, value))
+      : Math.max(0, Math.trunc(value));
+  const formatted = String(qty)
+    .replace(/(\.\d*?)0+$/, "$1")
+    .replace(/\.$/, "");
+
+  return unit === "m" ? `${formatted} m` : formatted;
+}
+
+function normalizeInventoryQty(value: unknown, unit: InventoryUnit) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return unit === "m"
+    ? roundMeter(Math.max(0, n))
+    : Math.max(0, Math.trunc(n));
+}
+
+function getInventoryRevisionRecordInfo(
+  product: ProductRow | null,
+): InventoryRevisionRecordInfo | null {
+  if (!product || Boolean(product.made_on_order)) return null;
+
+  const spec = safeJson(product.spec);
+  const revision = safeJson(spec?.inventory_revision);
+  if (revision?.active !== true) return null;
+
+  const unit: InventoryUnit = revision?.unit === "m" ? "m" : "unit";
+  const previousQty = normalizeInventoryQty(revision?.previous_qty, unit);
+  const revisionCurrentQty = normalizeInventoryQty(revision?.current_qty, unit);
+  const currentQty = normalizeInventoryQty(product.inventory_qty, unit);
+
+  if (previousQty === currentQty || revisionCurrentQty !== currentQty) {
+    return null;
+  }
+
+  return {
+    previousLabel: formatInventoryQty(previousQty, unit),
+    currentLabel: formatInventoryQty(currentQty, unit),
+  };
+}
+
 export default function UpdateProductScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
@@ -518,6 +586,14 @@ export default function UpdateProductScreen() {
     () => getActiveProductSale(selected?.price),
     [selected?.price],
   );
+  const regularPriceRevisionInfo = useMemo(
+    () => getProductRegularPriceRevision(selected?.price),
+    [selected?.price],
+  );
+  const inventoryRevisionInfo = useMemo(
+    () => getInventoryRevisionRecordInfo(selected),
+    [selected],
+  );
 
   const imagePaths = useMemo(
     () => (Array.isArray(media?.images) ? media.images.map(String) : []),
@@ -700,7 +776,85 @@ export default function UpdateProductScreen() {
     newTailoringStyles.length,
   ]);
 
-  async function saveUpdate() {
+  function getBasePriceChangeInfo() {
+    if (!selected) return null;
+
+    const price = safeJson(selected.price);
+    const previous =
+      priceMode === "unstitched_per_meter"
+        ? safeNumOrZero(price?.cost_pkr_per_meter)
+        : safeNumOrZero(price?.cost_pkr_total);
+    const next =
+      priceMode === "unstitched_per_meter"
+        ? safeNumOrZero(pricePerMeter)
+        : safeNumOrZero(priceTotal);
+
+    if (roundPriceForCompare(previous) === roundPriceForCompare(next)) {
+      return null;
+    }
+
+    const unitSuffix =
+      priceMode === "unstitched_per_meter" ? " / meter" : "";
+
+    return {
+      previousCostPkr: previous,
+      nextCostPkr: next,
+      previousLabel:
+        previous > 0 ? `${formatPkr(previous)}${unitSuffix}` : "Not set",
+      nextLabel: `${formatPkr(next)}${unitSuffix}`,
+    };
+  }
+
+  function getInventoryChangeInfo(): InventoryChangeInfo | null {
+    if (!selected || Boolean(selected.made_on_order)) return null;
+
+    const unit: InventoryUnit =
+      priceMode === "unstitched_per_meter" ? "m" : "unit";
+    const previousSpec = safeJson(selected.spec);
+    const previousSource =
+      selected.inventory_qty ??
+      (unit === "m" ? previousSpec?.inventory_length_m : 0);
+    const previousQty = normalizeInventoryQty(previousSource, unit);
+
+    let nextQty: number | null = null;
+
+    if (
+      priceMode === "stitched_total" &&
+      (stitchedVariants.length > 0 || newReadyVariants.length > 0)
+    ) {
+      nextQty = normalizeInventoryQty(
+        stitchedVariantInventoryInfo.totalQty +
+          newReadyVariants.reduce(
+            (sum, variant) => sum + sumReadyVariantDraftQty(variant),
+            0,
+          ),
+        unit,
+      );
+    } else if (inventoryEditable) {
+      const parsedInventoryInput = Number(
+        sanitizeNumber(inventoryQtyText) || "0",
+      );
+      nextQty = normalizeInventoryQty(
+        Number.isFinite(parsedInventoryInput) ? parsedInventoryInput : 0,
+        unit,
+      );
+    }
+
+    if (nextQty == null || previousQty === nextQty) return null;
+
+    return {
+      previousQty,
+      nextQty,
+      unit,
+      previousLabel: formatInventoryQty(previousQty, unit),
+      nextLabel: formatInventoryQty(nextQty, unit),
+    };
+  }
+
+  async function saveUpdate(options?: {
+    confirmedPriceChange?: boolean;
+    confirmedInventoryChange?: boolean;
+  }) {
     if (saving) return;
 
     if (
@@ -770,6 +924,63 @@ export default function UpdateProductScreen() {
         );
         return;
       }
+    }
+
+    const priceChangeInfo = getBasePriceChangeInfo();
+    const inventoryChangeInfo = getInventoryChangeInfo();
+    if (priceChangeInfo && !options?.confirmedPriceChange) {
+      Alert.alert(
+        "Confirm Price Change?",
+        [
+          `Product: ${safeText(selected?.product_code)}`,
+          `Previous price: ${priceChangeInfo.previousLabel}`,
+          `New price: ${priceChangeInfo.nextLabel}`,
+          activeSaleInfo
+            ? "This product has an active sale record. Saving may update or end that sale record."
+            : null,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Confirm Update",
+            style: "destructive",
+            onPress: () => {
+              void saveUpdate({
+                confirmedPriceChange: true,
+                confirmedInventoryChange: options?.confirmedInventoryChange,
+              });
+            },
+          },
+        ],
+      );
+      return;
+    }
+
+    if (inventoryChangeInfo && !options?.confirmedInventoryChange) {
+      Alert.alert(
+        "Confirm Inventory Change?",
+        [
+          `Product: ${safeText(selected?.product_code)}`,
+          `Previous stock: ${inventoryChangeInfo.previousLabel}`,
+          `New stock: ${inventoryChangeInfo.nextLabel}`,
+        ].join("\n"),
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Confirm Stock",
+            style: "destructive",
+            onPress: () => {
+              void saveUpdate({
+                confirmedPriceChange: options?.confirmedPriceChange,
+                confirmedInventoryChange: true,
+              });
+            },
+          },
+        ],
+      );
+      return;
     }
 
     try {
@@ -1037,6 +1248,23 @@ export default function UpdateProductScreen() {
       }
 
       const now = new Date().toISOString();
+      if (priceChangeInfo && !activeSaleInfo) {
+        nextPrice = applyProductRegularPriceRevision(
+          nextPrice,
+          priceChangeInfo.previousCostPkr,
+          priceChangeInfo.nextCostPkr,
+          now,
+        );
+      }
+      if (inventoryChangeInfo) {
+        nextSpec.inventory_revision = {
+          active: true,
+          previous_qty: inventoryChangeInfo.previousQty,
+          current_qty: inventoryChangeInfo.nextQty,
+          unit: inventoryChangeInfo.unit,
+          updated_at: now,
+        };
+      }
       nextPrice = syncProductSaleWithLivePrice(nextPrice, now);
 
       const updatePayload: any = {
@@ -1102,7 +1330,19 @@ export default function UpdateProductScreen() {
       Alert.alert(
         "Updated",
         `Saved changes for ${safeText(updated.product_code)}`,
-        [{ text: "OK", onPress: () => router.back() }],
+        [
+          {
+            text: "OK",
+            onPress: () =>
+              router.replace({
+                pathname: "/vendor/profile/products",
+                params: {
+                  updated_product_id: String(updated.id),
+                  refresh: String(Date.now()),
+                },
+              } as any),
+          },
+        ],
       );
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not update product.");
@@ -1539,6 +1779,100 @@ export default function UpdateProductScreen() {
                     </Text>
                   </View>
                 </View>
+              ) : regularPriceRevisionInfo ? (
+                <View style={[styles.saleRecordBox, styles.revisionRecordBox]}>
+                  <View style={styles.saleRecordHeader}>
+                    <Text style={styles.saleRecordTitle}>Price revision</Text>
+                    <View
+                      style={[
+                        styles.saleRecordPill,
+                        styles.revisionRecordPill,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.saleRecordPillText,
+                          styles.revisionRecordPillText,
+                        ]}
+                      >
+                        Revised
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.saleRecordRow}>
+                    <Text style={styles.saleRecordLabel}>Previous</Text>
+                    <Text
+                      style={[
+                        styles.saleRecordOldPrice,
+                        styles.revisionRecordOldPrice,
+                      ]}
+                    >
+                      {regularPriceRevisionInfo.previousLabel}
+                    </Text>
+                  </View>
+
+                  <View style={styles.saleRecordRow}>
+                    <Text style={styles.saleRecordLabel}>Current</Text>
+                    <Text
+                      style={[
+                        styles.saleRecordSalePrice,
+                        styles.revisionRecordCurrentPrice,
+                      ]}
+                    >
+                      {regularPriceRevisionInfo.currentLabel}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+
+              {inventoryRevisionInfo ? (
+                <View style={[styles.saleRecordBox, styles.revisionRecordBox]}>
+                  <View style={styles.saleRecordHeader}>
+                    <Text style={styles.saleRecordTitle}>
+                      Inventory revision
+                    </Text>
+                    <View
+                      style={[
+                        styles.saleRecordPill,
+                        styles.revisionRecordPill,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.saleRecordPillText,
+                          styles.revisionRecordPillText,
+                        ]}
+                      >
+                        Revised
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.saleRecordRow}>
+                    <Text style={styles.saleRecordLabel}>Previous</Text>
+                    <Text
+                      style={[
+                        styles.saleRecordOldPrice,
+                        styles.revisionRecordOldPrice,
+                      ]}
+                    >
+                      {inventoryRevisionInfo.previousLabel}
+                    </Text>
+                  </View>
+
+                  <View style={styles.saleRecordRow}>
+                    <Text style={styles.saleRecordLabel}>Current</Text>
+                    <Text
+                      style={[
+                        styles.saleRecordSalePrice,
+                        styles.revisionRecordCurrentPrice,
+                      ]}
+                    >
+                      {inventoryRevisionInfo.currentLabel}
+                    </Text>
+                  </View>
+                </View>
               ) : null}
 
               {!Boolean(selected?.made_on_order) && !usesVariantInventory ? (
@@ -1715,7 +2049,9 @@ export default function UpdateProductScreen() {
                 </>
               ) : (
                 <>
-                  <Text style={styles.label}>Cost per Meter (PKR) *</Text>
+                  <Text style={[styles.label, styles.priceLabel]}>
+                    Cost per Meter (PKR) *
+                  </Text>
                   <FastNumberInput
                     value={String(pricePerMeter ?? "")}
                     onChangeText={(t) =>
@@ -1723,7 +2059,7 @@ export default function UpdateProductScreen() {
                     }
                     placeholder="e.g., 1800"
                     placeholderTextColor={stylesVars.placeholder}
-                    style={styles.input}
+                    style={[styles.input, styles.priceInput]}
                     keyboardType="decimal-pad"
                     maxLength={12}
                   />

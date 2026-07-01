@@ -96,6 +96,7 @@ export default function Q06B4MadeOrderVariants() {
     () => (variants.length ? variants : [makeEditableMadeOrderVariant(1)]),
     [variants],
   );
+  const hasSingleVariant = editableVariants.length === 1;
 
   const disabledHint = useMemo(() => {
     if (!vendorId) return "Vendor not loaded.";
@@ -225,7 +226,7 @@ export default function Q06B4MadeOrderVariants() {
 
   return (
     <AddProductScreen
-      title="Made-on-order styles"
+      title={hasSingleVariant ? "Made-on-order design" : "Made-on-order styles"}
       onBack={() => router.back()}
       footer={
         <AddProductFooter
@@ -237,7 +238,9 @@ export default function Q06B4MadeOrderVariants() {
     >
 
         <View style={apStyles.card}>
-          <Text style={apStyles.label}>Add product styles</Text>
+          <Text style={apStyles.label}>
+            {hasSingleVariant ? "Add product design" : "Add product styles"}
+          </Text>
 
           <Text style={apStyles.metaHint}>
             Add styles when this made-on-order stitched product can be made in
@@ -269,7 +272,9 @@ export default function Q06B4MadeOrderVariants() {
             pressed ? apStyles.pressed : null,
           ]}
         >
-          <Text style={apStyles.secondaryText}>+ Add Style</Text>
+          <Text style={apStyles.secondaryText}>
+            {hasSingleVariant ? "+ Add Design" : "+ Add Style"}
+          </Text>
         </Pressable>
     </AddProductScreen>
   );

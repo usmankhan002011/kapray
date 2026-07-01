@@ -252,6 +252,7 @@ const ReadyVariantCard = memo(function ReadyVariantCard({
   pickVariantImages,
   makeVariantPrimaryImage,
   removeVariantImage,
+  useDesignLabel,
 }: {
   variant: ReadyVariant;
   idx: number;
@@ -264,6 +265,7 @@ const ReadyVariantCard = memo(function ReadyVariantCard({
   pickVariantImages: (variantId: string) => Promise<void>;
   makeVariantPrimaryImage: (variantId: string, index: number) => void;
   removeVariantImage: (variantId: string, path: string) => void;
+  useDesignLabel?: boolean;
 }) {
   const images = normalizeStringArray(variant.image_paths);
   const finalPrice = getReadyVariantFinalPrice(basePrice, variant);
@@ -311,7 +313,9 @@ const ReadyVariantCard = memo(function ReadyVariantCard({
   return (
     <View style={styles.variantCard}>
       <View style={styles.variantHeader}>
-        <Text style={styles.variantTitle}>Style {idx + 1}</Text>
+        <Text style={styles.variantTitle}>
+          {useDesignLabel ? "Design" : `Style ${idx + 1}`}
+        </Text>
 
         <Pressable
           onPress={() => removeVariant(variant.id)}
@@ -494,6 +498,7 @@ export default function Q06B3ReadyVariants() {
   });
 
   const totalQty = useMemo(() => sumReadyVariantQty(variants), [variants]);
+  const hasSingleVariant = variants.length === 1;
 
   useEffect(() => {
     ctxRef.current = ctx;
@@ -657,13 +662,15 @@ export default function Q06B3ReadyVariants() {
 
   return (
     <AddProductScreen
-      title="Ready Styles"
+      title={hasSingleVariant ? "Ready Design" : "Ready Styles"}
       onBack={closeScreen}
       contentStyle={styles.screenContent}
     >
       <View style={styles.contentBlock}>
         <View style={styles.summaryPanel}>
-          <Text style={styles.summaryTitle}>Multiple styles</Text>
+          <Text style={styles.summaryTitle}>
+            {hasSingleVariant ? "Design" : "Multiple styles"}
+          </Text>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryPill}>
               From Rs {basePrice.toLocaleString()}
@@ -698,6 +705,7 @@ export default function Q06B3ReadyVariants() {
                 pickVariantImages={pickVariantImages}
                 makeVariantPrimaryImage={makeVariantPrimaryImage}
                 removeVariantImage={removeVariantImage}
+                useDesignLabel={hasSingleVariant}
               />
             ))}
 
@@ -709,14 +717,18 @@ export default function Q06B3ReadyVariants() {
                 pressed ? apStyles.pressed : null,
               ]}
             >
-              <Text style={apStyles.secondaryText}>Add more styles</Text>
+              <Text style={apStyles.secondaryText}>
+                {hasSingleVariant ? "Add more designs" : "Add more styles"}
+              </Text>
             </Pressable>
           </>
         )}
 
         <View style={styles.actionPanel}>
           <View style={styles.totalFooter}>
-            <Text style={styles.totalLabel}>Styles</Text>
+            <Text style={styles.totalLabel}>
+              {hasSingleVariant ? "Designs" : "Styles"}
+            </Text>
             <Text style={styles.totalValue}>{variants.length}</Text>
           </View>
           <View style={styles.totalFooter}>

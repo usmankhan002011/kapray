@@ -88,6 +88,8 @@ export default function MadeOrderVariantEditor({
   const label =
     safeStr(variant?.label).replace(/^Variant\b/i, "Style") ||
     `Style ${variantNo}`;
+  const displayLabel =
+    !canRemove && /^(?:Style|Variant)\s+1$/i.test(label) ? "Design" : label;
   const name = safeStr(variant?.name);
   const images = useMemo(() => normalizeImages(variant?.images), [variant]);
 
@@ -199,7 +201,7 @@ export default function MadeOrderVariantEditor({
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.variantTitle}>{label}</Text>
+          <Text style={styles.variantTitle}>{displayLabel}</Text>
           {displayName ? (
             <Text style={styles.variantSubtitle}>{displayName}</Text>
           ) : null}

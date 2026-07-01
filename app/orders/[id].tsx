@@ -292,6 +292,20 @@ function cleanVariantTitle(value: string, sizeValue: string) {
     .trim();
 }
 
+function designText(value: unknown, fallback = "Design") {
+  const s = String(value ?? "").trim();
+  if (!s || s === "â€”" || s === "—" || s === "Ã¢â‚¬â€") {
+    return fallback;
+  }
+
+  return (
+    s
+      .replace(/^(?:Variant|Style)\s+\d+\s*:\s*/i, "")
+      .replace(/^(?:Variant|Style)\s+\d+$/i, "")
+      .trim() || fallback
+  );
+}
+
 function buildAddressPreview(args: {
   address: string;
   city: string;
@@ -1018,6 +1032,15 @@ export default function OrderDetailScreen() {
     );
   }, [order, spec]);
 
+  const totalTailoringCostPkr = useMemo(() => {
+    if (!order || !tailoringSelected) return null;
+    if (tailoringCostPkr == null && tailoringStyleExtraCostPkr == null) {
+      return null;
+    }
+
+    return (tailoringCostPkr ?? 0) + (tailoringStyleExtraCostPkr ?? 0);
+  }, [order, tailoringCostPkr, tailoringSelected, tailoringStyleExtraCostPkr]);
+
   const destinationType = useMemo(() => {
     if (!order) return "";
     const raw = safeText(spec?.destination_type ?? "");
@@ -1304,7 +1327,7 @@ export default function OrderDetailScreen() {
             </SectionCard>
 
             {selectedStitchedVariant ? (
-              <SectionCard title="Selected Style">
+              <SectionCard title="Selected Design">
                 <View style={styles.variantRow}>
                   {selectedStitchedVariant.imageUrl ? (
                     <View style={styles.variantImageWrap}>
@@ -1318,7 +1341,10 @@ export default function OrderDetailScreen() {
 
                   <View style={styles.variantInfoWrap}>
                     <Text style={styles.variantTitle} numberOfLines={2}>
-                      {selectedStitchedVariant.title || "Selected style"}
+                      {designText(
+                        selectedStitchedVariant.title,
+                        "Selected design",
+                      )}
                     </Text>
                     {!isMadeOrderStitchedOrder ? (
                       <KVRow
@@ -1359,7 +1385,7 @@ export default function OrderDetailScreen() {
 
                 {!!selectedStitchedVariant.note && (
                   <View style={styles.noteBox}>
-                    <Text style={styles.noteLabel}>Style note</Text>
+                    <Text style={styles.noteLabel}>Design note</Text>
                     <Text style={styles.noteText}>
                       {selectedStitchedVariant.note}
                     </Text>
@@ -1499,7 +1525,10 @@ export default function OrderDetailScreen() {
                       </View>
                     )}
 
-                    <KVRow label="Style" value={selectedTailoringStyleTitle} />
+                    <KVRow
+                      label="Design"
+                      value={selectedTailoringStyleTitle}
+                    />
                     <KVRow
                       label="Neck"
                       value={
@@ -1535,7 +1564,7 @@ export default function OrderDetailScreen() {
 
                     {tailoringStyleExtraCostPkr != null ? (
                       <KVRow
-                        label="Additional style cost"
+                        label="Additional design cost"
                         value={money(
                           order.currency,
                           tailoringStyleExtraCostPkr,
@@ -1551,6 +1580,13 @@ export default function OrderDetailScreen() {
                         </Text>
                       </View>
                     )}
+
+                    {totalTailoringCostPkr != null ? (
+                      <KVRow
+                        label="Total Tailoring Cost"
+                        value={money(order.currency, totalTailoringCostPkr)}
+                      />
+                    ) : null}
                   </View>
                 ) : null}
               </SectionCard>
@@ -1628,7 +1664,7 @@ export default function OrderDetailScreen() {
 
               {tailoringStyleExtraCostPkr != null ? (
                 <PriceRow
-                  label="Additional style tailoring cost"
+                  label="Additional design cost"
                   value={money(order.currency, tailoringStyleExtraCostPkr)}
                 />
               ) : null}

@@ -389,6 +389,20 @@ function cleanReadyToWearTitle(title: string, selectedSize: string) {
     .trim();
 }
 
+function designText(value: unknown, fallback = "") {
+  const s = String(value ?? "").trim();
+  if (!s || s === "â€”" || s === "—" || s === "Ã¢â‚¬â€") {
+    return fallback;
+  }
+
+  return (
+    s
+      .replace(/^(?:Variant|Style)\s+\d+\s*:\s*/i, "")
+      .replace(/^(?:Variant|Style)\s+\d+$/i, "")
+      .trim() || fallback
+  );
+}
+
 function prettyCategory(v: string) {
   if (v === "stitched_ready") return "Ready to wear";
   return v.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1513,13 +1527,16 @@ export default function PlaceOrderScreen() {
   const displayCountry =
     destinationType === "inland" ? "Pakistan" : exportAutoCountry || country;
   const selectedReadyVariantTitle = resolved.shouldShowSelectedStitchedVariant
-    ? cleanReadyToWearTitle(
-        base.selectedVariantTitle || "Selected style",
-        resolved.isMadeOrderStitched
-          ? ""
-          : base.selectedVariantSize || base.sizeLabel,
+    ? designText(
+        cleanReadyToWearTitle(
+          base.selectedVariantTitle || "Selected design",
+          resolved.isMadeOrderStitched
+            ? ""
+            : base.selectedVariantSize || base.sizeLabel,
+        ),
+        "Selected design",
       )
-    : base.selectedVariantTitle;
+    : designText(base.selectedVariantTitle);
 
   return (
     <SafeAreaView
@@ -1584,7 +1601,7 @@ export default function PlaceOrderScreen() {
                   <>
                     <View style={styles.productMetaInfo}>
                       <Text style={styles.productMetaLabel}>
-                        Selected style
+                        Selected design
                       </Text>
                       <Text style={styles.productMetaValue}>
                         {selectedReadyVariantTitle || "Not selected"}
@@ -1639,8 +1656,8 @@ export default function PlaceOrderScreen() {
             <SectionCard title="Customization">
               {!resolved.isUnstitched ? (
                 <KVRow
-                  label="Selected style"
-                  value={base.selectedVariantTitle || "Not selected"}
+                  label="Selected design"
+                  value={designText(base.selectedVariantTitle, "Not selected")}
                 />
               ) : null}
 
@@ -1792,9 +1809,9 @@ export default function PlaceOrderScreen() {
                       )}
 
                       <KVRow
-                        label="Style"
+                        label="Design"
                         value={
-                          base.selectedTailoringStyleTitle || "Selected style"
+                          base.selectedTailoringStyleTitle || "Selected design"
                         }
                       />
 
@@ -1832,7 +1849,7 @@ export default function PlaceOrderScreen() {
 
                       {base.styleExtraCostPkr > 0 ? (
                         <KVRow
-                          label="Additional style cost"
+                          label="Additional design cost"
                           value={formatMoney(
                             base.currency,
                             base.styleExtraCostPkr,
@@ -1850,6 +1867,17 @@ export default function PlaceOrderScreen() {
                       )}
                     </>
                   ) : null}
+
+                  <KVRow
+                    label="Total Tailoring Cost"
+                    value={formatMoney(
+                      base.currency,
+                      base.tailoringCostPkr +
+                        (base.styleExtraCostPkr > 0
+                          ? base.styleExtraCostPkr
+                          : 0),
+                    )}
+                  />
                 </View>
               ) : null}
             </SectionCard>
@@ -2060,7 +2088,7 @@ export default function PlaceOrderScreen() {
 
             {base.styleExtraCostPkr > 0 ? (
               <PriceRow
-                label="Additional style cost"
+                label="Additional design cost"
                 value={formatMoney(base.currency, base.styleExtraCostPkr)}
               />
             ) : null}

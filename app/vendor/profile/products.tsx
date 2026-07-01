@@ -22,12 +22,18 @@ import {
   apInputTextStyle,
   apRadii,
 } from "@/components/product/addProductStyles";
-import { getActiveProductSale } from "@/utils/kapray/productSale";
+import {
+  formatPkr,
+  getActiveProductSale,
+  getProductRegularPriceRevision,
+  getProductSaleKeys,
+} from "@/utils/kapray/productSale";
 
 const PRODUCTS_TABLE = "products";
 const BUCKET_VENDOR = "vendor_images";
 
 const PAGE_SIZE = 30;
+const LOW_STOCK_THRESHOLD = 5;
 
 type ProductCategory =
   | "unstitched_plain"
@@ -54,6 +60,27 @@ type VariantInventorySummary = {
   availableSizes: number;
   variantCount: number;
   hasStock: boolean;
+};
+
+type ProductCardPriceDisplay = {
+  tone: "sale" | "revision" | "regular";
+  currentLabel: string;
+  previousLabel?: string;
+  discountLabel?: string;
+};
+
+type ProductCardStockDisplay = {
+  label: string;
+  value: string;
+};
+
+type ProductCardStockStatus = {
+  label: "Out of stock" | "Low stock";
+  tone: "danger" | "warning";
+};
+
+type ProductCardInventoryRevision = {
+  previousLabel: string;
 };
 
 function safeInt(v: any) {
@@ -375,32 +402,146 @@ function productCategoryCardLabel(item: ProductRow) {
   return isMadeOnOrderProduct(item) ? "Made-on-order" : "Product";
 }
 
-function getStockSummaryText(item: ProductRow) {
-  if (isMadeOnOrderProduct(item)) return "Made on order";
+function getStockSummaryDisplay(item: ProductRow): ProductCardStockDisplay {
+  if (isMadeOnOrderProduct(item)) {
+    return { label: "", value: "Made on order" };
+  }
 
   if (isStitchedReadyProduct(item)) {
     const info = getStitchedInventorySummary(item);
 
-    if (!info.hasStock) return "Total stock 0";
+    if (!info.hasStock) return { label: "Total stock", value: "0" };
 
     const styleWord = info.variantCount === 1 ? "style" : "styles";
-    return `Total stock ${info.totalQty} in ${info.variantCount} ${styleWord}`;
+    return {
+      label: "Total stock",
+      value: `${info.totalQty} in ${info.variantCount} ${styleWord}`,
+    };
   }
 
   const qty = Math.max(0, Number(item?.inventory_qty ?? 0));
-  return isUnstitchedProduct(item)
-    ? `Total stock ${formatStockQty(qty)} m`
-    : `Total stock ${formatStockQty(qty)}`;
+  return {
+    label: "Total stock",
+    value: isUnstitchedProduct(item)
+      ? `${formatStockQty(qty)} m`
+      : formatStockQty(qty),
+  };
 }
 
-function isOutOfStock(item: ProductRow) {
-  if (isMadeOnOrderProduct(item)) return false;
+function getStockUnit(item: ProductRow) {
+  return isUnstitchedProduct(item) ? "m" : "unit";
+}
+
+function normalizeStockQtyForUnit(value: unknown, unit: string) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  if (unit === "m") return Math.round(n * 100) / 100;
+  return Math.trunc(n);
+}
+
+function getCurrentStockQty(item: ProductRow) {
+  if (isMadeOnOrderProduct(item)) return null;
 
   if (isStitchedReadyProduct(item)) {
-    return !getStitchedInventorySummary(item).hasStock;
+    return getStitchedInventorySummary(item).totalQty;
   }
 
-  return Number(item?.inventory_qty ?? 0) <= 0;
+  const qty = Number(item?.inventory_qty ?? 0);
+  return Number.isFinite(qty) ? qty : 0;
+}
+
+function getInventoryRevisionDisplay(
+  item: ProductRow,
+): ProductCardInventoryRevision | null {
+  if (isMadeOnOrderProduct(item)) return null;
+
+  const revision = item?.spec?.inventory_revision;
+  if (!revision || typeof revision !== "object" || revision?.active !== true) {
+    return null;
+  }
+
+  const unit = String(revision?.unit ?? getStockUnit(item)).trim() || "unit";
+  if (unit !== getStockUnit(item)) return null;
+
+  const previousQty = normalizeStockQtyForUnit(revision?.previous_qty, unit);
+  const revisionCurrentQty = normalizeStockQtyForUnit(
+    revision?.current_qty,
+    unit,
+  );
+  const currentQty = normalizeStockQtyForUnit(getCurrentStockQty(item), unit);
+
+  if (
+    previousQty == null ||
+    revisionCurrentQty == null ||
+    currentQty == null ||
+    previousQty === currentQty ||
+    revisionCurrentQty !== currentQty
+  ) {
+    return null;
+  }
+
+  const suffix = unit === "m" ? " m" : "";
+
+  return {
+    previousLabel: `Previous stock ${formatStockQty(previousQty)}${suffix}`,
+  };
+}
+
+function getStockStatusDisplay(
+  item: ProductRow,
+): ProductCardStockStatus | null {
+  if (isMadeOnOrderProduct(item)) return null;
+
+  const qty = isStitchedReadyProduct(item)
+    ? getStitchedInventorySummary(item).totalQty
+    : Number(item?.inventory_qty ?? 0);
+
+  if (!Number.isFinite(qty) || qty <= 0) {
+    return { label: "Out of stock", tone: "danger" };
+  }
+
+  if (qty <= LOW_STOCK_THRESHOLD) {
+    return { label: "Low stock", tone: "warning" };
+  }
+
+  return null;
+}
+
+function getProductCardPriceDisplay(
+  item: ProductRow,
+): ProductCardPriceDisplay | null {
+  const saleInfo = getActiveProductSale(item.price);
+
+  if (saleInfo) {
+    return {
+      tone: "sale",
+      currentLabel: saleInfo.currentLabel,
+      previousLabel: saleInfo.previousLabel,
+      discountLabel: `-${saleInfo.discountPercent}%`,
+    };
+  }
+
+  const regularRevision = getProductRegularPriceRevision(item.price);
+
+  if (regularRevision) {
+    return {
+      tone: "revision",
+      currentLabel: regularRevision.currentLabel,
+      previousLabel: regularRevision.previousLabel,
+    };
+  }
+
+  const keys = getProductSaleKeys(item.price);
+  if (!keys) return null;
+
+  const price = item?.price ?? {};
+  const currentCost = positiveNumber(price?.[keys.priceKey]);
+  if (currentCost <= 0) return null;
+
+  return {
+    tone: "regular",
+    currentLabel: `${formatPkr(currentCost)}${keys.unitSuffix}`,
+  };
 }
 
 function getSearchCategories(searchText: string): ProductCategory[] {
@@ -488,11 +629,19 @@ export default function VendorProductsScreen() {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [products, setProducts] = useState<ProductRow[]>([]);
+  const [productCount, setProductCount] = useState<number | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
   const trimmedSearch = searchQuery.trim();
   const searching = trimmedSearch.length > 0;
+  const displayedProductCount = productCount ?? products.length;
+  const productCountLabel = `Total Products: ${displayedProductCount.toLocaleString()}`;
+  const newProductIdParam = String((params as any)?.new_product_id ?? "").trim();
+  const updatedProductIdParam = String(
+    (params as any)?.updated_product_id ?? "",
+  ).trim();
+  const refreshParam = String((params as any)?.refresh ?? "").trim();
 
   async function fetchProductsReset() {
     if (!vendorId) {
@@ -508,6 +657,7 @@ export default function VendorProductsScreen() {
         .from(PRODUCTS_TABLE)
         .select(
           "id, product_code, title, created_at, inventory_qty, made_on_order, product_category, spec, price, media",
+          { count: "exact" },
         )
         .eq("vendor_id", vendorId);
 
@@ -515,7 +665,7 @@ export default function VendorProductsScreen() {
         query = applyVendorProductSearch(query, trimmedSearch);
       }
 
-      const { data, error } = await query
+      const { data, error, count } = await query
         .order("created_at", { ascending: false })
         .range(0, PAGE_SIZE - 1);
 
@@ -534,6 +684,7 @@ export default function VendorProductsScreen() {
       });
 
       setProducts(mapped);
+      setProductCount(typeof count === "number" ? count : rows.length);
       setHasMore(rows.length === PAGE_SIZE);
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not load products.");
@@ -601,13 +752,21 @@ export default function VendorProductsScreen() {
       if (vendorId) {
         void fetchProductsReset();
       }
-    }, [vendorId, trimmedSearch]),
+    }, [
+      vendorId,
+      trimmedSearch,
+      newProductIdParam,
+      updatedProductIdParam,
+      refreshParam,
+    ]),
   );
 
   useEffect(() => {
-    const newIdRaw = String((params as any)?.new_product_id ?? "").trim();
-    const newId = safeInt(newIdRaw);
-    if (newId == null || !vendorId) return;
+    const newId = safeInt(newProductIdParam);
+    const updatedId = safeInt(updatedProductIdParam);
+    const targetId = updatedId ?? newId;
+    const shouldPrepend = newId != null && updatedId == null;
+    if (targetId == null || !vendorId) return;
 
     let alive = true;
 
@@ -618,7 +777,7 @@ export default function VendorProductsScreen() {
           .select(
             "id, product_code, title, created_at, inventory_qty, made_on_order, product_category, spec, price, media",
           )
-          .eq("id", newId)
+          .eq("id", targetId)
           .eq("vendor_id", vendorId)
           .single();
 
@@ -630,9 +789,12 @@ export default function VendorProductsScreen() {
         const banner_url = publicUrlForStoragePath(imgPath);
 
         setProducts((prev) => {
+          const mappedRow = { ...row, banner_url };
           const exists = prev.some((p) => p.id === row.id);
-          if (exists) return prev;
-          return [{ ...row, banner_url }, ...prev];
+          if (exists) {
+            return prev.map((p) => (p.id === row.id ? mappedRow : p));
+          }
+          return shouldPrepend ? [mappedRow, ...prev] : prev;
         });
       } catch {
         // ignore
@@ -642,7 +804,7 @@ export default function VendorProductsScreen() {
     return () => {
       alive = false;
     };
-  }, [params, vendorId]);
+  }, [newProductIdParam, refreshParam, updatedProductIdParam, vendorId]);
 
   function openProduct(item: ProductRow) {
     router.push(
@@ -681,9 +843,11 @@ export default function VendorProductsScreen() {
     const code = safeText(item.product_code);
     const title = safeText(item.title);
     const categoryText = productCategoryCardLabel(item);
-    const stockText = getStockSummaryText(item);
-    const outOfStock = isOutOfStock(item);
+    const stockDisplay = getStockSummaryDisplay(item);
+    const inventoryRevision = getInventoryRevisionDisplay(item);
+    const stockStatus = getStockStatusDisplay(item);
     const saleInfo = getActiveProductSale(item.price);
+    const priceDisplay = getProductCardPriceDisplay(item);
 
     return (
       <View style={styles.item}>
@@ -710,18 +874,80 @@ export default function VendorProductsScreen() {
               {title}
             </Text>
 
+            {priceDisplay ? (
+              <View style={styles.priceBlock}>
+                <Text
+                  style={[
+                    styles.cardPrice,
+                    priceDisplay.tone === "sale" ? styles.salePrice : null,
+                  ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.82}
+                >
+                  {priceDisplay.currentLabel}
+                </Text>
+                {priceDisplay.previousLabel ? (
+                  <View style={styles.previousPriceRow}>
+                    {priceDisplay.discountLabel ? (
+                      <View style={styles.discountBadge}>
+                        <Text style={styles.discountBadgeText}>
+                          {priceDisplay.discountLabel}
+                        </Text>
+                      </View>
+                    ) : null}
+                    <Text
+                      style={[
+                        styles.previousPrice,
+                        priceDisplay.tone === "sale"
+                          ? styles.salePreviousPrice
+                          : null,
+                        priceDisplay.tone === "revision"
+                          ? styles.revisionPreviousPrice
+                          : null,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {priceDisplay.previousLabel}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
             <Text style={styles.stockText} numberOfLines={2}>
               {categoryText}
             </Text>
-            <Text style={styles.stockText}>{stockText}</Text>
-
-            {outOfStock ? (
-              <Text style={styles.outOfStockText}>Out of stock</Text>
-            ) : null}
-            {saleInfo ? (
-              <Text style={styles.saleText}>
-                Sale {saleInfo.currentLabel} -{saleInfo.discountPercent}%
+            <Text style={styles.stockText}>
+              {stockDisplay.label ? `${stockDisplay.label} ` : ""}
+              <Text style={styles.stockValueText}>{stockDisplay.value}</Text>
+            </Text>
+            {inventoryRevision ? (
+              <Text style={styles.inventoryRevisionText}>
+                {inventoryRevision.previousLabel}
               </Text>
+            ) : null}
+
+            {stockStatus ? (
+              <View
+                style={[
+                  styles.stockStatusTag,
+                  stockStatus.tone === "danger"
+                    ? styles.stockStatusDanger
+                    : styles.stockStatusWarning,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.stockStatusText,
+                    stockStatus.tone === "danger"
+                      ? styles.stockStatusDangerText
+                      : styles.stockStatusWarningText,
+                  ]}
+                >
+                  {stockStatus.label}
+                </Text>
+              </View>
             ) : null}
           </View>
         </Pressable>
@@ -830,9 +1056,14 @@ export default function VendorProductsScreen() {
             </View>
           ) : null}
 
-          <Text style={styles.section}>
-            {searching ? "Results" : "Recent Products"}
-          </Text>
+          <View style={styles.sectionRow}>
+            <Text style={styles.section}>
+              {searching ? "Results" : "Recent Products"}
+            </Text>
+            {vendorId ? (
+              <Text style={styles.productCountText}>{productCountLabel}</Text>
+            ) : null}
+          </View>
 
           {!vendorId ? (
             <View style={styles.listCard}>
@@ -1018,12 +1249,31 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  section: {
+  sectionRow: {
     marginTop: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+
+  section: {
+    flex: 1,
     fontFamily: apFontFamily,
     fontSize: 15,
     fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
+  },
+
+  productCountText: {
+    flexShrink: 0,
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "800",
+    color: stylesVars.mutedText,
+    textAlign: "right",
     letterSpacing: 0,
   },
 
@@ -1107,6 +1357,70 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
 
+  priceBlock: {
+    marginTop: 4,
+  },
+
+  cardPrice: {
+    fontFamily: apFontFamily,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "900",
+    color: stylesVars.text,
+    letterSpacing: 0,
+  },
+
+  salePrice: {
+    color: stylesVars.danger,
+  },
+
+  previousPriceRow: {
+    marginTop: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  discountBadge: {
+    minHeight: 20,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: apRadii.pill,
+    borderWidth: 1,
+    borderColor: "#FDBA74",
+    backgroundColor: "#FFF7ED",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  discountBadgeText: {
+    fontFamily: apFontFamily,
+    fontSize: 11,
+    lineHeight: 13,
+    fontWeight: "900",
+    color: "#C2410C",
+    letterSpacing: 0,
+  },
+
+  previousPrice: {
+    flexShrink: 1,
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: "800",
+    color: stylesVars.mutedText,
+    textDecorationLine: "line-through",
+    letterSpacing: 0,
+  },
+
+  salePreviousPrice: {
+    color: stylesVars.mutedText,
+  },
+
+  revisionPreviousPrice: {
+    color: stylesVars.text,
+  },
+
   stockText: {
     marginTop: 2,
     fontFamily: apFontFamily,
@@ -1116,22 +1430,60 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
 
-  outOfStockText: {
-    marginTop: 2,
+  stockValueText: {
     fontFamily: apFontFamily,
-    fontSize: 12,
-    color: stylesVars.danger,
-    fontWeight: "800",
+    fontWeight: "900",
+    color: stylesVars.text,
     letterSpacing: 0,
   },
 
-  saleText: {
-    marginTop: 2,
+  inventoryRevisionText: {
+    marginTop: 1,
     fontFamily: apFontFamily,
     fontSize: 12,
-    color: stylesVars.danger,
+    lineHeight: 15,
     fontWeight: "800",
+    color: stylesVars.mutedText,
+    textDecorationLine: "line-through",
     letterSpacing: 0,
+  },
+
+  stockStatusTag: {
+    marginTop: 5,
+    alignSelf: "flex-start",
+    minHeight: 24,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: apRadii.pill,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  stockStatusDanger: {
+    borderColor: stylesVars.dangerBorder,
+    backgroundColor: stylesVars.dangerSoft,
+  },
+
+  stockStatusWarning: {
+    borderColor: "#FDBA74",
+    backgroundColor: "#FFF7ED",
+  },
+
+  stockStatusText: {
+    fontFamily: apFontFamily,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "900",
+    letterSpacing: 0,
+  },
+
+  stockStatusDangerText: {
+    color: stylesVars.danger,
+  },
+
+  stockStatusWarningText: {
+    color: "#C2410C",
   },
 
   itemActions: {

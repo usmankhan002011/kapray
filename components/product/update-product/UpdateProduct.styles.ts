@@ -382,6 +382,22 @@ export const styles = StyleSheet.create({
     backgroundColor: stylesVars.white,
   },
 
+  priceLabel: {
+    color: stylesVars.danger,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "900",
+  },
+
+  priceInput: {
+    color: stylesVars.danger,
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: "900",
+    borderColor: stylesVars.dangerBorder,
+    backgroundColor: "#FFF7F7",
+  },
+
   textArea: {
     minHeight: 120,
     paddingTop: 12,
@@ -409,6 +425,11 @@ export const styles = StyleSheet.create({
     borderColor: stylesVars.dangerBorder,
     backgroundColor: stylesVars.dangerSoft,
     padding: 12,
+  },
+
+  revisionRecordBox: {
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.white,
   },
 
   saleRecordHeader: {
@@ -440,6 +461,11 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
+  revisionRecordPill: {
+    borderColor: stylesVars.border,
+    backgroundColor: "#F8FAFC",
+  },
+
   saleRecordPillText: {
     fontFamily: apFontFamily,
     fontSize: 11,
@@ -447,6 +473,10 @@ export const styles = StyleSheet.create({
     fontWeight: "900",
     color: stylesVars.danger,
     letterSpacing: 0,
+  },
+
+  revisionRecordPillText: {
+    color: stylesVars.text,
   },
 
   saleRecordRow: {
@@ -477,6 +507,10 @@ export const styles = StyleSheet.create({
     letterSpacing: 0,
   },
 
+  revisionRecordOldPrice: {
+    color: stylesVars.text,
+  },
+
   saleRecordSalePrice: {
     flexShrink: 1,
     fontFamily: apFontFamily,
@@ -485,6 +519,10 @@ export const styles = StyleSheet.create({
     fontWeight: "900",
     color: stylesVars.danger,
     letterSpacing: 0,
+  },
+
+  revisionRecordCurrentPrice: {
+    color: stylesVars.text,
   },
 
   madeOnOrderPill: {
