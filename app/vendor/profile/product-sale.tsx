@@ -371,6 +371,7 @@ export default function ProductSaleScreen() {
               placeholder="e.g., 8000"
               placeholderTextColor={stylesVars.placeholder}
               style={styles.input}
+              commitMode="change"
               keyboardType="decimal-pad"
               maxLength={12}
             />

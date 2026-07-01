@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { useAppSelector } from "@/store/hooks";
 import * as ImagePicker from "expo-image-picker";
@@ -392,9 +392,8 @@ export default function UpdateProductScreen() {
     [updateNewTailoringStyle],
   );
 
-  async function fetchProducts() {
+  const fetchProducts = useCallback(async () => {
     if (!vendorId) {
-      Alert.alert("Vendor missing", "Open from vendor profile.");
       return;
     }
 
@@ -420,7 +419,7 @@ export default function UpdateProductScreen() {
     } finally {
       setLoadingList(false);
     }
-  }
+  }, [vendorId]);
 
   const fetchVendorTailoring = useCallback(async () => {
     if (!vendorId) {
@@ -468,11 +467,13 @@ export default function UpdateProductScreen() {
     }
   }, [vendorId]);
 
-  useEffect(() => {
-    void fetchProducts();
-    void fetchVendorTailoring();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vendorId]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!vendorId) return;
+      void fetchProducts();
+      void fetchVendorTailoring();
+    }, [fetchProducts, fetchVendorTailoring, vendorId]),
+  );
 
   useEffect(() => {
     if (routeProductId != null) {
@@ -928,6 +929,38 @@ export default function UpdateProductScreen() {
 
     const priceChangeInfo = getBasePriceChangeInfo();
     const inventoryChangeInfo = getInventoryChangeInfo();
+    if (priceChangeInfo && activeSaleInfo) {
+      Alert.alert(
+        "Product Already On SALE",
+        [
+          "You have already placed this product on SALE.",
+          "",
+          "To change the regular product cost, end SALE first.",
+          "",
+          "To continue the sale at a different price, open SALE and enter the new SALE price.",
+          "",
+          "Existing orders will not change.",
+        ].join("\n"),
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Open SALE",
+            onPress: () => {
+              if (!selectedId) return;
+              router.push({
+                pathname: "/vendor/profile/product-sale",
+                params: {
+                  productId: String(selectedId),
+                  product_id: String(selectedId),
+                },
+              } as any);
+            },
+          },
+        ],
+      );
+      return;
+    }
+
     if (priceChangeInfo && !options?.confirmedPriceChange) {
       Alert.alert(
         "Confirm Price Change?",
@@ -935,9 +968,7 @@ export default function UpdateProductScreen() {
           `Product: ${safeText(selected?.product_code)}`,
           `Previous price: ${priceChangeInfo.previousLabel}`,
           `New price: ${priceChangeInfo.nextLabel}`,
-          activeSaleInfo
-            ? "This product has an active sale record. Saving may update or end that sale record."
-            : null,
+          "Existing orders stay unchanged. New orders will use the revised live price.",
         ]
           .filter(Boolean)
           .join("\n"),
@@ -2060,6 +2091,7 @@ export default function UpdateProductScreen() {
                     placeholder="e.g., 1800"
                     placeholderTextColor={stylesVars.placeholder}
                     style={[styles.input, styles.priceInput]}
+                    commitMode="change"
                     keyboardType="decimal-pad"
                     maxLength={12}
                   />
@@ -2093,6 +2125,7 @@ export default function UpdateProductScreen() {
                           placeholder="e.g., 800"
                           placeholderTextColor={stylesVars.placeholder}
                           style={styles.input}
+                          commitMode="change"
                           keyboardType="decimal-pad"
                           maxLength={12}
                         />
@@ -2129,6 +2162,7 @@ export default function UpdateProductScreen() {
                           placeholder="e.g., 2500"
                           placeholderTextColor={stylesVars.placeholder}
                           style={styles.input}
+                          commitMode="change"
                           keyboardType="decimal-pad"
                           maxLength={12}
                         />

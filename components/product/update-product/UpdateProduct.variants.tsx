@@ -181,6 +181,7 @@ export function StitchedVariantInventorySection({
               placeholder="0"
               placeholderTextColor={stylesVars.placeholder}
               style={styles.input}
+              commitMode="change"
               keyboardType="number-pad"
               maxLength={8}
             />
@@ -200,6 +201,7 @@ export function StitchedVariantInventorySection({
                     placeholder="0"
                     placeholderTextColor={stylesVars.placeholder}
                     style={styles.variantQtyInput}
+                    commitMode="change"
                     keyboardType="number-pad"
                     maxLength={6}
                   />
@@ -262,6 +264,7 @@ export function ReadyVariantDraftCard({
         placeholder="0"
         placeholderTextColor={stylesVars.placeholder}
         style={styles.input}
+        commitMode="change"
         keyboardType="number-pad"
         maxLength={8}
       />
@@ -318,6 +321,7 @@ export function ReadyVariantDraftCard({
               placeholder="0"
               placeholderTextColor={stylesVars.placeholder}
               style={styles.variantQtyInput}
+              commitMode="change"
               keyboardType="number-pad"
               maxLength={6}
             />
@@ -373,6 +377,7 @@ export function MadeOrderVariantDraftCard({
         placeholder="0"
         placeholderTextColor={stylesVars.placeholder}
         style={styles.input}
+        commitMode="change"
         keyboardType="number-pad"
         maxLength={8}
       />

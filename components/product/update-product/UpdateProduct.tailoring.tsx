@@ -249,6 +249,7 @@ export function TailoringStyleDraftCard({
         placeholder="0"
         placeholderTextColor={stylesVars.placeholder}
         style={styles.input}
+        commitMode="change"
         keyboardType="number-pad"
         maxLength={8}
       />

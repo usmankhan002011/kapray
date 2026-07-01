@@ -391,11 +391,10 @@ export const styles = StyleSheet.create({
 
   priceInput: {
     color: stylesVars.danger,
-    fontSize: 20,
-    lineHeight: 26,
-    fontWeight: "900",
-    borderColor: stylesVars.dangerBorder,
-    backgroundColor: "#FFF7F7",
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: "800",
+    borderColor: stylesVars.borderSoft,
   },
 
   textArea: {

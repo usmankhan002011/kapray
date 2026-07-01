@@ -138,11 +138,12 @@ export function getProductSaleReferenceCost(priceInput: unknown) {
 
   if (!keys) return null;
 
+  const liveCost = safePositiveNumber(price?.[keys.priceKey]);
+
   return {
     ...keys,
-    currentCostPkr: safePositiveNumber(price?.[keys.priceKey]),
-    previousCostPkr:
-      sale?.previousCostPkr ?? safePositiveNumber(price?.[keys.priceKey]),
+    currentCostPkr: liveCost,
+    previousCostPkr: sale?.previousCostPkr ?? liveCost,
   };
 }
 
@@ -192,6 +193,7 @@ export function applyProductRegularPriceRevision(
 
   const previousCost = roundPkr(previousCostPkr);
   const currentCost = roundPkr(currentCostPkr);
+  const rawSale = safeJson(price?.sale);
 
   if (previousCost <= 0 || currentCost <= 0 || previousCost === currentCost) {
     return price;
@@ -199,6 +201,17 @@ export function applyProductRegularPriceRevision(
 
   return {
     ...price,
+    sale:
+      rawSale?.active === true
+        ? rawSale
+        : {
+            ...rawSale,
+            active: false,
+            unit: keys.unit,
+            [keys.previousKey]: currentCost,
+            [keys.saleKey]: 0,
+            updated_at: nowIso,
+          },
     regular_price_revision: {
       active: true,
       unit: keys.unit,
@@ -220,19 +233,22 @@ export function applyProductSale(
 
   const nextSaleCost = roundPkr(newSaleCostPkr);
   const activeSale = getActiveProductSale(price);
+  const liveCost = safePositiveNumber(price?.[keys.priceKey]);
   const previousCost =
-    activeSale?.previousCostPkr || safePositiveNumber(price?.[keys.priceKey]);
+    activeSale?.previousCostPkr || liveCost;
+  const rawSale = safeJson(price?.sale);
 
   return {
     ...price,
     [keys.priceKey]: nextSaleCost,
     sale: {
-      ...safeJson(price?.sale),
+      ...rawSale,
       active: true,
       unit: keys.unit,
       [keys.previousKey]: roundPkr(previousCost),
       [keys.saleKey]: nextSaleCost,
-      started_at: safeJson(price?.sale)?.started_at ?? nowIso,
+      started_at:
+        rawSale?.active === true ? rawSale?.started_at ?? nowIso : nowIso,
       updated_at: nowIso,
       ended_at: null,
     },

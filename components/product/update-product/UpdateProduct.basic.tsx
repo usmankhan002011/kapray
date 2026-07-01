@@ -99,6 +99,7 @@ export function StitchedPricingFields({
         placeholder="e.g., 25000"
         placeholderTextColor={stylesVars.placeholder}
         style={[styles.input, styles.priceInput]}
+        commitMode="change"
         keyboardType="decimal-pad"
         maxLength={12}
       />

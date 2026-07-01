@@ -20,6 +20,7 @@ import {
 
 export type TailoringSelection = {
   presetId: string | null;
+  styleLabel?: "style" | "design";
   title?: string;
   imageUrl?: string;
   extraCostPkr?: number;
@@ -233,6 +234,7 @@ export default function ViewProductTailoringSelection({
 
     onChange({
       presetId: selectedPreset.id || null,
+      styleLabel: hasMultipleTailoringStyles ? "style" : "design",
       title: selectedPreset.title || "",
       imageUrl: resolvedSelectedPresetImage || "",
       extraCostPkr: safeInt0(selectedPreset.extra_cost_pkr),
@@ -622,7 +624,15 @@ export default function ViewProductTailoringSelection({
                 })}
               </View>
 
-              {selectedPreset ? (
+              {!selectedPreset ? (
+                <Text style={[styles.meta, { marginTop: 10 }]}>
+                  {hasMultipleTailoringStyles
+                    ? "Select one style card to continue."
+                    : "Select the tailoring design to continue."}
+                </Text>
+              ) : null}
+
+              {selectedPreset && hasStyleVariationOptions ? (
                 <View
                   style={{
                     marginTop: 10,
@@ -633,53 +643,45 @@ export default function ViewProductTailoringSelection({
                     borderColor: "#D7E3FF",
                   }}
                 >
-                  {!hasStyleVariationOptions ? (
-                    <Text style={[styles.meta, { color: stylesVars.danger || "#B42318" }]}>
-                      {hasMultipleTailoringStyles
-                        ? "No style variations offered for this style."
-                        : "No design variations offered for this design."}
-                    </Text>
-                  ) : (
+                  <Text style={[styles.label, { color: stylesVars.blue }]}>
+                    {hasMultipleTailoringStyles
+                      ? "Do you want style variations?"
+                      : "Do you want design variations?"}
+                  </Text>
+
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      gap: 10,
+                      marginTop: 8,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <SelectPill
+                      label="Yes"
+                      selected={buyerWantsStyleVariations === true}
+                      onPress={() => setBuyerWantsStyleVariations(true)}
+                    />
+
+                    <SelectPill
+                      label="No"
+                      selected={buyerWantsStyleVariations === false}
+                      onPress={() => setBuyerWantsStyleVariations(false)}
+                    />
+                  </View>
+
+                  {buyerWantsStyleVariations === true ? (
                     <>
-                      <Text style={[styles.label, { color: stylesVars.blue }]}>
-                        {hasMultipleTailoringStyles
-                          ? "Do you want style variations?"
-                          : "Do you want design variations?"}
-                      </Text>
-
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          gap: 10,
-                          marginTop: 8,
-                          flexWrap: "wrap",
-                        }}
+                      <Text
+                        style={[
+                          styles.label,
+                          { color: stylesVars.blue, marginTop: 10 },
+                        ]}
                       >
-                        <SelectPill
-                          label="Yes"
-                          selected={buyerWantsStyleVariations === true}
-                          onPress={() => setBuyerWantsStyleVariations(true)}
-                        />
-
-                        <SelectPill
-                          label="No"
-                          selected={buyerWantsStyleVariations === false}
-                          onPress={() => setBuyerWantsStyleVariations(false)}
-                        />
-                      </View>
-
-                      {buyerWantsStyleVariations === true ? (
-                        <>
-                          <Text
-                            style={[
-                              styles.label,
-                              { color: stylesVars.blue, marginTop: 10 },
-                            ]}
-                          >
-                            {hasMultipleTailoringStyles
-                              ? "Select style variations"
-                              : "Select design variations"}
-                          </Text>
+                        {hasMultipleTailoringStyles
+                          ? "Select style variations"
+                          : "Select design variations"}
+                      </Text>
 
                           <View
                             style={{
@@ -806,26 +808,18 @@ export default function ViewProductTailoringSelection({
                               )}
                             </View>
                           ) : null}
-                        </>
-                      ) : null}
-
-                      {buyerWantsStyleVariations === false ? (
-                        <Text style={[styles.meta, { marginTop: 10 }]}>
-                          {hasMultipleTailoringStyles
-                            ? "No change in the selected style."
-                            : "No change in the selected design."}
-                        </Text>
-                      ) : null}
                     </>
-                  )}
+                  ) : null}
+
+                  {buyerWantsStyleVariations === false ? (
+                    <Text style={[styles.meta, { marginTop: 10 }]}>
+                      {hasMultipleTailoringStyles
+                        ? "No change in the selected style."
+                        : "No change in the selected design."}
+                    </Text>
+                  ) : null}
                 </View>
-              ) : (
-                <Text style={[styles.meta, { marginTop: 10 }]}>
-                  {hasMultipleTailoringStyles
-                    ? "Select one style card to continue."
-                    : "Select the tailoring design to continue."}
-                </Text>
-              )}
+              ) : null}
 
               {selectedPreset ? (
                 <View

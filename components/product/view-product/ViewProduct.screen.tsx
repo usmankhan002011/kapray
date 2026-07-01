@@ -137,6 +137,50 @@ function isHttpUrl(v: unknown) {
   return typeof v === "string" && /^https?:\/\//i.test(v);
 }
 
+function safeArray(v: any): any[] {
+  return Array.isArray(v) ? v : [];
+}
+
+function getReadyStyleCount(product: any) {
+  const price = product?.price ?? {};
+  const spec = product?.spec ?? {};
+  const inventory = product?.inventory ?? {};
+
+  return [
+    product?.variants,
+    price?.variants,
+    price?.ready_variants,
+    price?.readyVariants,
+    price?.stitched_variants,
+    price?.stitchedVariants,
+    spec?.variants,
+    spec?.ready_variants,
+    spec?.readyVariants,
+    spec?.stitched_variants,
+    spec?.stitchedVariants,
+    inventory?.variants,
+    inventory?.ready_variants,
+    inventory?.stitched_variants,
+  ].reduce((max, value) => Math.max(max, safeArray(value).length), 0);
+}
+
+function getMadeOrderStyleCount(product: any) {
+  const price = product?.price ?? {};
+  const spec = product?.spec ?? {};
+  const inventory = product?.inventory ?? {};
+
+  return [
+    price?.made_order_variants,
+    price?.madeOrderVariants,
+    product?.made_order_variants,
+    product?.madeOrderVariants,
+    spec?.made_order_variants,
+    spec?.madeOrderVariants,
+    inventory?.made_order_variants,
+    inventory?.madeOrderVariants,
+  ].reduce((max, value) => Math.max(max, safeArray(value).length), 0);
+}
+
 function firstParam(v: unknown): string | null {
   if (typeof v === "string") return v.trim() || null;
   if (Array.isArray(v) && typeof v[0] === "string") return v[0].trim() || null;
@@ -1588,6 +1632,19 @@ export default function ViewProductScreen() {
     const selectedVariantMode = selectedVariantMadeOnOrder
       ? "made_order_variants"
       : String((selectedStitchedVariant as any)?.variant_mode ?? "");
+    const selectedVariantLabel =
+      isStitchedReady && selectedStitchedVariant
+        ? selectedVariantMadeOnOrder
+          ? getMadeOrderStyleCount(product) > 1
+            ? "style"
+            : "design"
+          : getReadyStyleCount(product) > 1
+            ? "style"
+            : "design"
+        : "design";
+    const tailoringStyleLabel = hasMultipleTailoringStylePresets
+      ? "style"
+      : "design";
 
     if (isStitchedReady && !selectedStitchedVariant) {
       Alert.alert(
@@ -1663,6 +1720,10 @@ export default function ViewProductScreen() {
         selected_variant_made_on_order: selectedVariantMadeOnOrder ? "1" : "0",
         variant_mode: selectedVariantMode,
         selected_variant_mode: selectedVariantMode,
+        selected_variant_label:
+          isStitchedReady && selectedStitchedVariant
+            ? selectedVariantLabel
+            : "",
         currency: "PKR",
         imageUrl,
 
@@ -1759,7 +1820,10 @@ export default function ViewProductScreen() {
             : "",
         selected_stitched_variant_snapshot:
           isStitchedReady && selectedStitchedVariant
-            ? encodeJsonParam(selectedStitchedVariant)
+            ? encodeJsonParam({
+                ...selectedStitchedVariant,
+                selection_label: selectedVariantLabel,
+              })
             : "",
 
         size_length_m: hasAnySizeLengthMap
@@ -1815,8 +1879,13 @@ export default function ViewProductScreen() {
             : "",
         selected_tailoring_style_snapshot:
           tailoringEligible && buyerWantsTailoring && tailoringSelection
-            ? encodeJsonParam(tailoringSelection)
+            ? encodeJsonParam({
+                ...tailoringSelection,
+                styleLabel: tailoringStyleLabel,
+              })
             : "",
+        tailoring_style_label:
+          tailoringEligible && buyerWantsTailoring ? tailoringStyleLabel : "",
         tailoring_style_extra_cost_pkr:
           tailoringEligible &&
           buyerWantsTailoring &&
@@ -2699,13 +2768,30 @@ export default function ViewProductScreen() {
                     (selectedStitchedVariant as any)?.pricePkr ??
                     (selectedStitchedVariant as any)?.price_pkr,
                 ) || baseCost + additionalCost;
+              const selectedVariantIsMadeOnOrder =
+                Boolean((selectedStitchedVariant as any)?.made_on_order) ||
+                String(
+                  (selectedStitchedVariant as any)?.variant_mode ?? "",
+                ) === "made_order_variants" ||
+                String(
+                  (selectedStitchedVariant as any)?.rawVariant?.variant_mode ??
+                    "",
+                ) === "made_order_variants";
+              const selectedVariantNoun =
+                selectedVariantIsMadeOnOrder
+                  ? getMadeOrderStyleCount(product) > 1
+                    ? "Style"
+                    : "Design"
+                  : getReadyStyleCount(product) > 1
+                    ? "Style"
+                    : "Design";
 
               return (
                 <View style={styles.card}>
                   <Text
                     style={[styles.sectionTitle, { color: stylesVars.blue }]}
                   >
-                    Selected Design
+                    Selected {selectedVariantNoun}
                   </Text>
 
                   <View

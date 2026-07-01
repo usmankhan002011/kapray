@@ -621,6 +621,7 @@ export default function VendorProductsScreen() {
   const { resetDraft } = useProductDraft();
 
   const vendorIdRaw =
+    useAppSelector((s: any) => s?.vendorSlice?.id ?? null) ??
     useAppSelector((s: any) => s?.vendorSlice?.vendor?.id ?? null) ??
     useAppSelector((s: any) => s?.vendor?.id ?? null);
 
@@ -645,7 +646,6 @@ export default function VendorProductsScreen() {
 
   async function fetchProductsReset() {
     if (!vendorId) {
-      Alert.alert("Vendor missing", "Open from vendor profile.");
       return;
     }
 
@@ -1008,11 +1008,11 @@ export default function VendorProductsScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.refreshBtn,
-                loading ? styles.disabledButton : null,
+                loading || !vendorId ? styles.disabledButton : null,
                 pressed ? styles.pressed : null,
               ]}
-              onPress={loading ? undefined : fetchProductsReset}
-              disabled={loading}
+              onPress={loading || !vendorId ? undefined : fetchProductsReset}
+              disabled={loading || !vendorId}
             >
               <View style={styles.actionContent}>
                 <MaterialIcons
