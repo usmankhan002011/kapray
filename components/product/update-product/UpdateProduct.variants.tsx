@@ -14,9 +14,11 @@ import {
   UpdateProductEmptyState,
 } from "./UpdateProduct.components";
 import {
+  READY_STANDARD_SIZES,
   resolveVariantImageUrls,
   variantDisplayTitle,
   type EditableReadyVariant,
+  type EditableVariantSizeRow,
   type NewMadeOrderVariantDraft,
   type NewReadyVariantDraft,
 } from "./UpdateProduct.helpers";
@@ -27,6 +29,12 @@ type StitchedVariantInventorySectionProps = {
   resolvePublicUrl: (path: string | null | undefined) => string | null;
   onAdditionalPriceChangeText: (variantId: string, value: string) => void;
   onSizeQtyChange: (variantId: string, size: string, value: string) => void;
+};
+
+type SimpleReadyInventorySectionProps = {
+  rows: EditableVariantSizeRow[];
+  onToggleSize: (size: string) => void;
+  onSizeQtyChange: (size: string, value: string) => void;
 };
 
 type ExistingMadeOrderVariantListProps = {
@@ -77,6 +85,10 @@ function designText(value: unknown, fallback = "Design") {
   );
 }
 
+function sizeKey(value: unknown) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
 export function ExistingMadeOrderVariantList({
   variants,
 }: ExistingMadeOrderVariantListProps) {
@@ -98,6 +110,77 @@ export function ExistingMadeOrderVariantList({
             : variantDisplayTitle(variant, index + 1)}
         </Text>
       ))}
+    </View>
+  );
+}
+
+export function SimpleReadyInventorySection({
+  rows,
+  onToggleSize,
+  onSizeQtyChange,
+}: SimpleReadyInventorySectionProps) {
+  const sizeOptions = Array.from(
+    new Set(
+      [...READY_STANDARD_SIZES, ...rows.map((row) => row.size)]
+        .map((size) => String(size ?? "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const totalQty = rows.reduce((sum, row) => sum + Number(row.qty || 0), 0);
+  const usedSizes = rows.filter((row) => Number(row.qty || 0) > 0).length;
+
+  return (
+    <View style={styles.variantInventoryBox}>
+      <Text style={styles.variantInventoryTitle}>Edit Design</Text>
+      <Text style={styles.label}>Stock by size *</Text>
+
+      <View style={styles.variantSizeGrid}>
+        {sizeOptions.map((size) => {
+          const selected = rows.find(
+            (row) => sizeKey(row.size) === sizeKey(size),
+          );
+
+          return (
+            <View key={`simple-ready-${size}`} style={styles.variantSizeCell}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => onToggleSize(size)}
+                style={({ pressed }) => [
+                  styles.optionPill,
+                  selected ? styles.optionPillOn : null,
+                  pressed ? styles.pressed : null,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.optionPillText,
+                    selected ? styles.optionPillTextOn : null,
+                  ]}
+                >
+                  {size}
+                </Text>
+              </Pressable>
+
+              {selected ? (
+                <FastNumberInput
+                  value={String(selected.qty ?? 0)}
+                  onChangeText={(value) => onSizeQtyChange(size, value)}
+                  placeholder="0"
+                  placeholderTextColor={stylesVars.placeholder}
+                  style={styles.variantQtyInput}
+                  commitMode="change"
+                  keyboardType="number-pad"
+                  maxLength={6}
+                />
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
+
+      <Text style={styles.variantCardMeta}>
+        Stock: {totalQty} | Sizes: {usedSizes}
+      </Text>
     </View>
   );
 }

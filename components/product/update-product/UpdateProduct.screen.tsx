@@ -53,6 +53,7 @@ import {
   ExistingMadeOrderVariantList,
   MadeOrderVariantDraftCard,
   ReadyVariantDraftCard,
+  SimpleReadyInventorySection,
   StitchedVariantInventorySection,
 } from "./UpdateProduct.variants";
 import {
@@ -61,6 +62,7 @@ import {
   clearProductTailoringSelections,
   editedCategoryFromState,
   emptyTailoringSelections,
+  getSimpleReadyInventoryInfo,
   extFromUri,
   getStitchedVariantInventoryInfo,
   guessContentTypeFromExt,
@@ -70,6 +72,7 @@ import {
   makeEmptyTailoringStyleDraft,
   nextVariantNoFromList,
   normalizeStringList,
+  readEditableSimpleReadyInventory,
   readEditableStitchedVariants,
   readMadeOrderVariants,
   readProductTailoringSelections,
@@ -87,6 +90,7 @@ import {
   sumReadyVariantDraftQty,
   writeEditableStitchedVariantsToJson,
   writeProductTailoringSelections,
+  writeSimpleReadyInventoryToJson,
 } from "./UpdateProduct.helpers";
 import type {
   EditableReadyVariant,
@@ -230,6 +234,11 @@ export default function UpdateProductScreen() {
   const [stitchedVariants, setStitchedVariants] = useState<
     EditableReadyVariant[]
   >([]);
+  const [simpleReadyInventory, setSimpleReadyInventory] = useState<
+    EditableVariantSizeRow[]
+  >([]);
+  const [simpleReadyInventoryActive, setSimpleReadyInventoryActive] =
+    useState(false);
 
   const [newReadyVariants, setNewReadyVariants] = useState<
     NewReadyVariantDraft[]
@@ -302,6 +311,43 @@ export default function UpdateProductScreen() {
                 additional_price_pkr: additionalPrice,
               }
             : variant,
+        ),
+      );
+    },
+    [],
+  );
+
+  const toggleSimpleReadySize = useCallback((size: string) => {
+    const clean = String(size ?? "").trim();
+    const key = clean.toLowerCase();
+    if (!key) return;
+
+    setSimpleReadyInventory((prev) => {
+      const exists = prev.some(
+        (row) => String(row.size ?? "").trim().toLowerCase() === key,
+      );
+
+      if (exists) {
+        return prev.filter(
+          (row) => String(row.size ?? "").trim().toLowerCase() !== key,
+        );
+      }
+
+      return [...prev, { size: clean, qty: 0, raw: {} }];
+    });
+  }, []);
+
+  const updateSimpleReadySizeQty = useCallback(
+    (size: string, rawValue: string) => {
+      const key = String(size ?? "").trim().toLowerCase();
+      const qty = safeNonNegInt(sanitizeNumber(rawValue));
+      if (!key) return;
+
+      setSimpleReadyInventory((prev) =>
+        prev.map((row) =>
+          String(row.size ?? "").trim().toLowerCase() === key
+            ? { ...row, qty }
+            : row,
         ),
       );
     },
@@ -545,6 +591,9 @@ export default function UpdateProductScreen() {
 
     setSelectedTailoringStyles(readProductTailoringSelections(spec));
     setStitchedVariants(readEditableStitchedVariants(selected));
+    const nextSimpleReadyInventory = readEditableSimpleReadyInventory(selected);
+    setSimpleReadyInventory(nextSimpleReadyInventory);
+    setSimpleReadyInventoryActive(nextSimpleReadyInventory.length > 0);
     setNewReadyVariants([]);
     setNewMadeOrderVariants([]);
     setNewTailoringStyles(
@@ -577,9 +626,27 @@ export default function UpdateProductScreen() {
     return getStitchedVariantInventoryInfo(stitchedVariants);
   }, [stitchedVariants]);
 
+  const simpleReadyInventoryInfo = useMemo(() => {
+    return getSimpleReadyInventoryInfo(simpleReadyInventory);
+  }, [simpleReadyInventory]);
+
   const usesVariantInventory = useMemo(() => {
     return priceMode === "stitched_total" && stitchedVariants.length > 0;
   }, [priceMode, stitchedVariants.length]);
+
+  const usesSimpleReadyInventory = useMemo(() => {
+    return (
+      priceMode === "stitched_total" &&
+      !Boolean(selected?.made_on_order) &&
+      stitchedVariants.length === 0 &&
+      simpleReadyInventoryActive
+    );
+  }, [
+    priceMode,
+    selected?.made_on_order,
+    simpleReadyInventoryActive,
+    stitchedVariants.length,
+  ]);
 
   const media = useMemo(() => safeJson(selected?.media), [selected]);
 
@@ -819,7 +886,12 @@ export default function UpdateProductScreen() {
 
     let nextQty: number | null = null;
 
-    if (
+    if (priceMode === "stitched_total" && usesSimpleReadyInventory) {
+      nextQty = normalizeInventoryQty(
+        simpleReadyInventoryInfo.totalQty,
+        unit,
+      );
+    } else if (
       priceMode === "stitched_total" &&
       (stitchedVariants.length > 0 || newReadyVariants.length > 0)
     ) {
@@ -937,7 +1009,7 @@ export default function UpdateProductScreen() {
           "",
           "To change the regular product cost, end SALE first.",
           "",
-          "To continue the sale at a different price, open SALE and enter the new SALE price.",
+          "To continue the SALE at a different price, open SALE and enter the new SALE price.",
           "",
           "Existing orders will not change.",
         ].join("\n"),
@@ -1105,6 +1177,17 @@ export default function UpdateProductScreen() {
           nextPrice,
           nextSpec,
           variants: stitchedVariants,
+        });
+
+        nextPrice = written.nextPrice;
+        nextSpec = written.nextSpec;
+      }
+
+      if (priceMode === "stitched_total" && usesSimpleReadyInventory) {
+        const written = writeSimpleReadyInventoryToJson({
+          nextPrice,
+          nextSpec,
+          rows: simpleReadyInventory,
         });
 
         nextPrice = written.nextPrice;
@@ -1308,6 +1391,8 @@ export default function UpdateProductScreen() {
 
       if (Boolean(selected?.made_on_order)) {
         updatePayload.inventory_qty = 0;
+      } else if (priceMode === "stitched_total" && usesSimpleReadyInventory) {
+        updatePayload.inventory_qty = simpleReadyInventoryInfo.totalQty;
       } else if (
         priceMode === "stitched_total" &&
         (stitchedVariants.length > 0 || newReadyVariants.length > 0)
@@ -1774,6 +1859,8 @@ export default function UpdateProductScreen() {
               {!Boolean(selected?.made_on_order) &&
               (usesVariantInventory
                 ? stitchedVariantInventoryInfo.allOutOfStock
+                : usesSimpleReadyInventory
+                  ? simpleReadyInventoryInfo.allOutOfStock
                 : Number(inventoryQty ?? 0) <= 0) ? (
                 <OutOfStockNotice />
               ) : null}
@@ -1906,7 +1993,9 @@ export default function UpdateProductScreen() {
                 </View>
               ) : null}
 
-              {!Boolean(selected?.made_on_order) && !usesVariantInventory ? (
+              {!Boolean(selected?.made_on_order) &&
+              !usesVariantInventory &&
+              !usesSimpleReadyInventory ? (
                 <InventoryStockField
                   isUnstitched={isUnstitched}
                   value={inventoryQtyText}
@@ -1951,6 +2040,14 @@ export default function UpdateProductScreen() {
                     }
                     onSizeQtyChange={updateStitchedVariantSizeQty}
                   />
+
+                  {usesSimpleReadyInventory ? (
+                    <SimpleReadyInventorySection
+                      rows={simpleReadyInventory}
+                      onToggleSize={toggleSimpleReadySize}
+                      onSizeQtyChange={updateSimpleReadySizeQty}
+                    />
+                  ) : null}
 
                   {!Boolean(selected?.made_on_order) ? (
                     <View style={styles.appendBox}>
