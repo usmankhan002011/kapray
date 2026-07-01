@@ -11,14 +11,20 @@ import {
   Text,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+} from "@/components/product/addProductStyles";
 import {
   loadFavouriteProductIds,
   saveFavouriteProductIds,
 } from "@/utils/favourites";
 import { useAppSelector } from "@/store/hooks";
 import { supabase } from "@/utils/supabase/client";
+import { getActiveProductSale } from "@/utils/kapray/productSale";
 import Wizard from "./wizard";
 
 const PRODUCTS_TABLE = "products";
@@ -32,6 +38,8 @@ const TABLE_ORIGIN_CITIES = "origin_cities";
 const TABLE_WEAR_STATES = "wear_states";
 
 const PAGE_SIZE = 30;
+const FABRIC_STOCK_EPSILON_M = 0.05;
+const UNSTITCHED_SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
 
 type ProductCategory =
   | "unstitched_plain"
@@ -77,7 +85,7 @@ let RESULTS_CACHE: ResultsCacheShape | null = null;
 
 function safeText(v: any) {
   const t = String(v ?? "").trim();
-  return t.length ? t : "—";
+  return t.length ? t : "-";
 }
 
 function normalizeIds(arr: any): string[] {
@@ -92,6 +100,34 @@ function anyOverlap(selected: string[], productIds: any): boolean {
   if (!p.length) return false;
   const set = new Set(p);
   return selected.some((s) => set.has(String(s)));
+}
+
+function selectedWorkSubTypeEntries(map: any) {
+  if (!map || typeof map !== "object") return [];
+
+  const out: { parentCode: string; codes: string[] }[] = [];
+  for (const [rawParentCode, rawCodes] of Object.entries(map)) {
+    const parentCode = String(rawParentCode ?? "").trim().toLowerCase();
+    const codes = normalizeIds(rawCodes);
+    if (parentCode && codes.length) out.push({ parentCode, codes });
+  }
+  return out;
+}
+
+function workSubTypesMatch(selectedMap: any, productMap: any) {
+  const selected = selectedWorkSubTypeEntries(selectedMap);
+  if (!selected.length) return true;
+  if (!productMap || typeof productMap !== "object") return false;
+
+  for (const row of selected) {
+    const productCodes = normalizeIds((productMap as any)?.[row.parentCode]);
+    if (!productCodes.length) continue;
+
+    const productSet = new Set(productCodes);
+    if (row.codes.some((code) => productSet.has(code))) return true;
+  }
+
+  return false;
 }
 
 function firstImagePath(media: any): string | null {
@@ -114,7 +150,38 @@ function publicUrlForStoragePath(path: string | null): string | null {
 function safeStockQty(v: unknown) {
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) return 0;
-  return Math.trunc(n);
+  return n;
+}
+
+function positiveNumber(v: unknown) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function formatStockQty(n: number) {
+  if (!Number.isFinite(n) || n <= 0) return "0";
+  return String(Math.round(n * 100) / 100)
+    .replace(/(\.\d*?)0+$/, "$1")
+    .replace(/\.$/, "");
+}
+
+function getSmallestMappedFabricLengthM(product: ProductRow) {
+  const sizeMap = (product?.spec?.size_length_m ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const lengths = UNSTITCHED_SIZE_ORDER.map((size) =>
+    positiveNumber(sizeMap?.[size]),
+  ).filter((n) => n > 0);
+
+  return lengths.length ? Math.min(...lengths) : 0;
+}
+
+function hasEnoughFabricForSmallestSize(product: ProductRow) {
+  const availableM = positiveNumber(product?.inventory_qty);
+  const smallestM = getSmallestMappedFabricLengthM(product);
+  if (smallestM <= 0) return availableM > 0;
+  return availableM + FABRIC_STOCK_EPSILON_M >= smallestM;
 }
 
 function getRawReadyVariants(product: any): any[] {
@@ -185,23 +252,123 @@ function getVariantInventorySummary(product: any): VariantInventorySummary {
   };
 }
 
-function getProductCategory(product: ProductRow): ProductCategory | null {
-  const fromDb = product?.product_category;
-  if (fromDb) return fromDb;
+function getRawSimpleReadyInventory(product: any): any[] {
+  const price = product?.price ?? {};
+  const spec = product?.spec ?? {};
+  const inventory = product?.inventory ?? {};
 
-  const fromSpec = product?.spec?.product_category;
-  if (
-    fromSpec === "unstitched_plain" ||
-    fromSpec === "unstitched_dyeing" ||
-    fromSpec === "unstitched_dyeing_tailoring" ||
-    fromSpec === "stitched_ready"
-  ) {
-    return fromSpec;
+  const raw =
+    price?.simple_ready_inventory ??
+    price?.simpleReadyInventory ??
+    spec?.simple_ready_inventory ??
+    spec?.simpleReadyInventory ??
+    inventory?.simple_ready_inventory ??
+    inventory?.simpleReadyInventory ??
+    [];
+
+  return Array.isArray(raw) ? raw : [];
+}
+
+function getSimpleReadyInventorySummary(
+  product: ProductRow,
+): VariantInventorySummary {
+  const rows = getRawSimpleReadyInventory(product);
+  let totalQty = 0;
+  let lowestPositiveQty = Infinity;
+  const availableSizeSet = new Set<string>();
+
+  for (const row of rows) {
+    const size = String(row?.size ?? row?.label ?? row?.name ?? "")
+      .trim()
+      .toUpperCase();
+    const qty = safeStockQty(
+      row?.qty ?? row?.stock_qty ?? row?.stock ?? row?.quantity ?? 0,
+    );
+
+    if (qty <= 0) continue;
+    totalQty += qty;
+    if (size) availableSizeSet.add(size);
+    lowestPositiveQty = Math.min(lowestPositiveQty, qty);
   }
 
-  const priceMode = String(product?.price?.mode ?? "");
+  if (totalQty <= 0) {
+    totalQty = safeStockQty(product?.inventory_qty);
+  }
+
+  if (!availableSizeSet.size && totalQty > 0) {
+    for (const item of normalizeIds(product?.price?.available_sizes)) {
+      availableSizeSet.add(item.toUpperCase());
+    }
+  }
+
+  return {
+    totalQty,
+    availableSizes: availableSizeSet.size,
+    lowestPositiveQty:
+      lowestPositiveQty === Infinity ? totalQty : lowestPositiveQty,
+    hasStock: totalQty > 0,
+  };
+}
+
+function getStitchedInventorySummary(
+  product: ProductRow,
+): VariantInventorySummary {
+  const mode = String(product?.spec?.variant_mode ?? "").trim();
+  const variantSummary = getVariantInventorySummary(product);
+
+  if (mode === "ready_variants") return variantSummary;
+  if (mode === "simple_ready") return getSimpleReadyInventorySummary(product);
+  if (variantSummary.hasStock) return variantSummary;
+
+  return getSimpleReadyInventorySummary(product);
+}
+
+function isProductCategory(v: unknown): v is ProductCategory {
+  return (
+    v === "unstitched_plain" ||
+    v === "unstitched_dyeing" ||
+    v === "unstitched_dyeing_tailoring" ||
+    v === "stitched_ready"
+  );
+}
+
+function getProductCategory(product: ProductRow): ProductCategory | null {
+  const fromSpec = String(product?.spec?.product_category ?? "").trim();
+  const fromDb = String(product?.product_category ?? "").trim();
+  const exactCategories = [fromSpec, fromDb].filter(isProductCategory);
+  const spec = product?.spec ?? {};
+  const price = product?.price ?? {};
+  const priceMode = String(price?.mode ?? "").trim();
+  const isUnstitched =
+    exactCategories.some((category) => isUnstitchedCategory(category)) ||
+    fromDb === "unstitched" ||
+    priceMode.includes("unstitched");
+
+  if (isUnstitched) {
+    if (
+      exactCategories.includes("unstitched_dyeing_tailoring") ||
+      isTruthyFlag(spec?.tailoring_enabled) ||
+      isTruthyFlag(spec?.tailoring_selected)
+    ) {
+      return "unstitched_dyeing_tailoring";
+    }
+
+    if (
+      exactCategories.includes("unstitched_dyeing") ||
+      isTruthyFlag(spec?.dyeing_enabled) ||
+      isTruthyFlag(spec?.dyeing_selected) ||
+      positiveNumber(price?.dyeing_cost_pkr) > 0 ||
+      positiveNumber(spec?.dyeing_cost_pkr) > 0
+    ) {
+      return "unstitched_dyeing";
+    }
+
+    return "unstitched_plain";
+  }
+
+  if (exactCategories.includes("stitched_ready")) return "stitched_ready";
+
   if (priceMode === "stitched_total") return "stitched_ready";
-  if (priceMode === "unstitched_per_meter") return "unstitched_plain";
 
   return null;
 }
@@ -209,32 +376,103 @@ function getProductCategory(product: ProductRow): ProductCategory | null {
 function isStitchedReadyProduct(product: ProductRow) {
   return getProductCategory(product) === "stitched_ready";
 }
+
+function isUnstitchedCategory(category: ProductCategory | null) {
+  return (
+    category === "unstitched_plain" ||
+    category === "unstitched_dyeing" ||
+    category === "unstitched_dyeing_tailoring"
+  );
+}
+
+function isTruthyFlag(v: unknown) {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v !== 0;
+  if (typeof v === "string") {
+    const s = v.trim().toLowerCase();
+    return s === "true" || s === "1" || s === "yes" || s === "y";
+  }
+  return false;
+}
+
+function isMadeOnOrderProduct(product: ProductRow) {
+  return (
+    isTruthyFlag(product?.made_on_order) ||
+    isTruthyFlag(product?.spec?.made_on_order)
+  );
+}
+
+function isUnstitchedProduct(product: ProductRow) {
+  const category = getProductCategory(product);
+  if (isUnstitchedCategory(category)) return true;
+
+  const rawCategory = String(product?.product_category ?? "").trim();
+  if (rawCategory === "unstitched") return true;
+
+  const priceMode = String(product?.price?.mode ?? "").trim();
+  return priceMode.includes("unstitched");
+}
+
 function productHasBuyerVisibleStock(product: ProductRow) {
-  if (Boolean(product?.made_on_order)) return true;
+  if (isMadeOnOrderProduct(product)) return true;
 
   if (isStitchedReadyProduct(product)) {
-    return getVariantInventorySummary(product).hasStock;
+    return getStitchedInventorySummary(product).hasStock;
   }
 
-  return safeStockQty(product?.inventory_qty) > 0;
+  if (getProductCategory(product) === "unstitched_dyeing_tailoring") {
+    return hasEnoughFabricForSmallestSize(product);
+  }
+
+  return positiveNumber(product?.inventory_qty) > 0;
 }
 function stockBadgeText(product: ProductRow) {
-  if (Boolean(product?.made_on_order)) return "Made on order";
+  if (isMadeOnOrderProduct(product)) return "Made on order";
 
   if (isStitchedReadyProduct(product)) {
-    const info = getVariantInventorySummary(product);
+    const info = getStitchedInventorySummary(product);
 
     if (!info.hasStock) return "Out of stock";
 
     const sizeText =
       info.availableSizes === 1 ? "1 size" : `${info.availableSizes} sizes`;
 
-    return `Qty: ${info.totalQty} • ${sizeText} available`;
+    return `Stock: ${info.totalQty} / ${sizeText}`;
   }
 
-  const qty = safeStockQty(product?.inventory_qty);
+  const qty = positiveNumber(product?.inventory_qty);
   if (qty <= 0) return "Out of stock";
-  return `Qty: ${qty}`;
+  if (
+    getProductCategory(product) === "unstitched_dyeing_tailoring" &&
+    !hasEnoughFabricForSmallestSize(product)
+  ) {
+    return "Out of stock";
+  }
+  return isUnstitchedProduct(product)
+    ? `Stock: ${formatStockQty(qty)} m`
+    : `Stock: ${formatStockQty(qty)}`;
+}
+
+function productCategoryCardLabel(product: ProductRow) {
+  const category = getProductCategory(product);
+
+  if (category === "stitched_ready") {
+    return isMadeOnOrderProduct(product) ? "Made-on-order" : "Ready-to-wear";
+  }
+
+  if (category === "unstitched_dyeing_tailoring") {
+    return "Unstitched + dyeing + tailoring";
+  }
+
+  if (category === "unstitched_dyeing") {
+    return "Unstitched + dyeing";
+  }
+
+  if (category === "unstitched_plain" || isUnstitchedProduct(product)) {
+    return "Unstitched plain fabric";
+  }
+
+  return isMadeOnOrderProduct(product) ? "Made-on-order" : "Product";
 }
 /**
  * Numeric PKR value for filtering:
@@ -295,7 +533,7 @@ function idsToNames(ids: string[], map: Map<string, string>): string[] {
     .filter((x) => x.length > 0);
 }
 
-// ✅ if user selected IDs but names not loaded yet, show Loading… (not Any)
+// If user selected IDs but names are not loaded yet, show Loading.
 function namesOrLoading(
   label: string,
   selectedIds: any[],
@@ -303,7 +541,7 @@ function namesOrLoading(
 ): string {
   const hasSelection = Array.isArray(selectedIds) && selectedIds.length > 0;
   if (!hasSelection) return `${label}: Any`;
-  if (!names.length) return `${label}: Loading…`;
+  if (!names.length) return `${label}: Loading...`;
   return `${label}: ${names.join(", ")}`;
 }
 
@@ -322,7 +560,7 @@ function priceRangeSummary(
   if (minCostPkr === null && maxCostPkr !== null) {
     return `Price: Up to ${formatPKR(maxCostPkr)}`;
   }
-  return `Price: ${formatPKR(minCostPkr as number)} – ${formatPKR(maxCostPkr as number)}`;
+  return `Price: ${formatPKR(minCostPkr as number)} - ${formatPKR(maxCostPkr as number)}`;
 }
 
 function productCategoryLabel(productCategoryIds: string[]) {
@@ -350,7 +588,7 @@ export default function ResultsScreen() {
   const filters = useAppSelector((s: any) => s.filters);
   const [wizardVisible, setWizardVisible] = useState(false);
 
-  // ✅ Dress Type is now MULTI-select (empty => Any)
+  // Dress Type is multi-select. Empty means Any.
   const dressTypeIds: string[] = filters?.dressTypeIds ?? [];
 
   const hasDressTypeSelection = useMemo(() => {
@@ -360,16 +598,17 @@ export default function ResultsScreen() {
   const fabricTypeIds: string[] = filters?.fabricTypeIds ?? [];
   const colorShadeIds: string[] = filters?.colorShadeIds ?? [];
   const workTypeIds: string[] = filters?.workTypeIds ?? [];
+  const workSubTypeMap = filters?.workSubTypeMap ?? {};
   const workDensityIds: string[] = filters?.workDensityIds ?? [];
   const originCityIds: string[] = filters?.originCityIds ?? [];
   const wearStateIds: string[] = filters?.wearStateIds ?? [];
   const productCategoryIds: string[] = filters?.productCategoryIds ?? [];
 
-  // ✅ cost range (nulls => Any)
+  // Cost range. Nulls mean Any.
   const minCostPkr: number | null = filters?.minCostPkr ?? null;
   const maxCostPkr: number | null = filters?.maxCostPkr ?? null;
 
-  // ✅ vendors (multi-select, empty = Any)
+  // Vendors are multi-select. Empty means Any.
   const vendorIds: string[] = filters?.vendorIds ?? [];
 
   const hasWarmCache = Boolean(RESULTS_CACHE);
@@ -402,11 +641,11 @@ export default function ResultsScreen() {
     RESULTS_CACHE?.wearStates ?? [],
   );
 
-  // ✅ local favourites persisted on the buyer mobile. No DB yet.
+  // Local favourites persist on the buyer mobile. No DB yet.
   const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
-  // ✅ sort (default: cost ascending)
+  // Sort. Default is cost ascending.
   const [sortOpen, setSortOpen] = useState(false);
   const [sortMode, setSortMode] = useState<"cost_asc" | "cost_desc" | "date">(
     "cost_asc",
@@ -459,6 +698,34 @@ export default function ResultsScreen() {
       .order("created_at", { ascending: false })
       .range(from, to);
   }
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!RESULTS_CACHE) return;
+
+      let alive = true;
+
+      async function refreshProducts() {
+        const { data, error } = await fetchPage(0, PAGE_SIZE - 1);
+        if (!alive || error) return;
+
+        const rows = ((data as any) ?? []) as ProductRow[];
+        const nextHasMore = rows.length === PAGE_SIZE;
+
+        setProducts(rows);
+        setHasMore(nextHasMore);
+        RESULTS_CACHE = RESULTS_CACHE
+          ? { ...RESULTS_CACHE, products: rows, hasMore: nextHasMore }
+          : RESULTS_CACHE;
+      }
+
+      void refreshProducts();
+
+      return () => {
+        alive = false;
+      };
+    }, []),
+  );
 
   useEffect(() => {
     let alive = true;
@@ -668,7 +935,7 @@ export default function ResultsScreen() {
 
       if (!productHasBuyerVisibleStock(p)) return false;
 
-      // ✅ vendor filter (multi-select). Empty => ANY
+      // Vendor filter. Empty means Any.
       if (vendorIds.length) {
         const vid =
           p?.vendor_id === null || p?.vendor_id === undefined
@@ -677,7 +944,7 @@ export default function ResultsScreen() {
         if (!vid || !vendorIds.includes(vid)) return false;
       }
 
-      // ✅ product category MULTI-select (empty => ANY)
+      // Product category filter. Empty means Any.
       if (productCategoryIds.length) {
         const category = getProductCategory(p);
 
@@ -685,24 +952,19 @@ export default function ResultsScreen() {
 
         for (const selectedCategory of productCategoryIds) {
           if (selectedCategory === "stitched_ready") {
-            if (!Boolean(p?.made_on_order) && category === "stitched_ready") {
+            if (!isMadeOnOrderProduct(p) && category === "stitched_ready") {
               matchesProductCategory = true;
             }
           }
 
           if (selectedCategory === "stitched_made_order") {
-            if (Boolean(p?.made_on_order)) {
+            if (isMadeOnOrderProduct(p)) {
               matchesProductCategory = true;
             }
           }
 
           if (selectedCategory === "unstitched") {
-            const isUnstitched =
-              category === "unstitched_plain" ||
-              category === "unstitched_dyeing" ||
-              category === "unstitched_dyeing_tailoring";
-
-            if (isUnstitched) {
+            if (isUnstitchedProduct(p)) {
               matchesProductCategory = true;
             }
           }
@@ -711,17 +973,18 @@ export default function ResultsScreen() {
         if (!matchesProductCategory) return false;
       }
 
-      // ✅ dress type MULTI-select (empty => ANY)
+      // Dress type filter. Empty means Any.
       if (!anyOverlap(dressTypeIds, spec?.dressTypeIds)) return false;
 
       if (!anyOverlap(fabricTypeIds, spec?.fabricTypeIds)) return false;
       if (!anyOverlap(colorShadeIds, spec?.colorShadeIds)) return false;
       if (!anyOverlap(workTypeIds, spec?.workTypeIds)) return false;
+      if (!workSubTypesMatch(workSubTypeMap, spec?.workSubTypeMap)) return false;
       if (!anyOverlap(workDensityIds, spec?.workDensityIds)) return false;
       if (!anyOverlap(originCityIds, spec?.originCityIds)) return false;
       if (!anyOverlap(wearStateIds, spec?.wearStateIds)) return false;
 
-      // ✅ Redux-only cost range filtering
+      // Redux-only cost range filtering.
       const anyBound = minCostPkr !== null || maxCostPkr !== null;
       if (anyBound) {
         const pkr = getComparablePkr(price);
@@ -740,6 +1003,7 @@ export default function ResultsScreen() {
     fabricTypeIds,
     colorShadeIds,
     workTypeIds,
+    workSubTypeMap,
     workDensityIds,
     originCityIds,
     wearStateIds,
@@ -747,7 +1011,7 @@ export default function ResultsScreen() {
     maxCostPkr,
   ]);
 
-  // ✅ apply sort (cost asc/desc or date)
+  // Apply sort by cost or date.
   const sorted = useMemo(() => {
     const base = showFavoritesOnly
       ? (filtered ?? []).filter((p) => favoriteIds.has(Number(p.id)))
@@ -796,7 +1060,7 @@ export default function ResultsScreen() {
     return arr;
   }, [filtered, sortMode, showFavoritesOnly, favoriteIds]);
 
-  // ✅ summary = NAMES ONLY (and "Loading…" if selection exists but names not loaded yet)
+  // Summary uses names only.
   const filtersSummary = useMemo(() => {
     const dressNames = idsToNames(dressTypeIds, dressMap);
     const fabricNames = idsToNames(fabricTypeIds, fabricMap);
@@ -907,7 +1171,7 @@ export default function ResultsScreen() {
 
         <View style={[styles.center, styles.loadingScreen]}>
           <ActivityIndicator />
-          <Text style={styles.muted}>Loading products…</Text>
+          <Text style={styles.muted}>Loading products...</Text>
         </View>
 
         {renderWizardModal()}
@@ -937,9 +1201,11 @@ export default function ResultsScreen() {
               pressed ? { opacity: 0.7 } : null,
             ]}
           >
-            <Text style={styles.iconText}>
-              {showFavoritesOnly ? "❤️" : "🤍"}
-            </Text>
+            <Ionicons
+              name={showFavoritesOnly ? "heart" : "heart-outline"}
+              size={19}
+              color={showFavoritesOnly ? stylesVars.danger : stylesVars.blue}
+            />
           </Pressable>
 
           <Pressable
@@ -951,7 +1217,7 @@ export default function ResultsScreen() {
               pressed ? { opacity: 0.7 } : null,
             ]}
           >
-            <Text style={styles.iconText}>↕️</Text>
+            <Ionicons name="swap-vertical" size={19} color={stylesVars.blue} />
           </Pressable>
 
           <Pressable
@@ -983,19 +1249,23 @@ export default function ResultsScreen() {
               pressed ? { opacity: 0.7 } : null,
             ]}
           >
-            <Text style={styles.iconText}>📦</Text>
+            <MaterialIcons
+              name="local-shipping"
+              size={19}
+              color={stylesVars.blue}
+            />
           </Pressable>
         </View>
       </View>
 
-      {/* ✅ Summary line (includes Redux-only price range) */}
+      {/* Summary line */}
       {/* <View style={styles.summaryBar}>
         <Text style={styles.summaryText} numberOfLines={2}>
           {filtersSummary}
         </Text>
       </View> */}
 
-      {/* ✅ Sort Modal (dark background) */}
+      {/* Sort Modal */}
       <Modal
         visible={sortOpen}
         transparent
@@ -1020,15 +1290,21 @@ export default function ResultsScreen() {
               }}
             >
               <View style={styles.modalLeft}>
-                <Text style={styles.modalEmoji}>💰</Text>
+                <View style={styles.modalIcon}>
+                  <MaterialIcons
+                    name="south"
+                    size={18}
+                    color={stylesVars.blue}
+                  />
+                </View>
                 <View>
                   <Text style={styles.modalItemTitle}>Price</Text>
                   <Text style={styles.modalItemSub}>Low to high</Text>
                 </View>
               </View>
-              <Text style={styles.modalRight}>
-                {sortMode === "cost_asc" ? "✅" : ""}
-              </Text>
+              {sortMode === "cost_asc" ? (
+                <MaterialIcons name="check" size={19} color={stylesVars.blue} />
+              ) : null}
             </Pressable>
 
             <View style={styles.divider} />
@@ -1044,15 +1320,21 @@ export default function ResultsScreen() {
               }}
             >
               <View style={styles.modalLeft}>
-                <Text style={styles.modalEmoji}>💸</Text>
+                <View style={styles.modalIcon}>
+                  <MaterialIcons
+                    name="north"
+                    size={18}
+                    color={stylesVars.blue}
+                  />
+                </View>
                 <View>
                   <Text style={styles.modalItemTitle}>Price</Text>
                   <Text style={styles.modalItemSub}>High to low</Text>
                 </View>
               </View>
-              <Text style={styles.modalRight}>
-                {sortMode === "cost_desc" ? "✅" : ""}
-              </Text>
+              {sortMode === "cost_desc" ? (
+                <MaterialIcons name="check" size={19} color={stylesVars.blue} />
+              ) : null}
             </Pressable>
 
             <View style={styles.divider} />
@@ -1068,15 +1350,21 @@ export default function ResultsScreen() {
               }}
             >
               <View style={styles.modalLeft}>
-                <Text style={styles.modalEmoji}>🗓️</Text>
+                <View style={styles.modalIcon}>
+                  <MaterialIcons
+                    name="event"
+                    size={18}
+                    color={stylesVars.blue}
+                  />
+                </View>
                 <View>
                   <Text style={styles.modalItemTitle}>Date</Text>
                   <Text style={styles.modalItemSub}>Newest first</Text>
                 </View>
               </View>
-              <Text style={styles.modalRight}>
-                {sortMode === "date" ? "✅" : ""}
-              </Text>
+              {sortMode === "date" ? (
+                <MaterialIcons name="check" size={19} color={stylesVars.blue} />
+              ) : null}
             </Pressable>
 
             <View style={styles.divider} />
@@ -1090,12 +1378,18 @@ export default function ResultsScreen() {
                 setSortOpen(false);
                 Alert.alert(
                   "Coming soon",
-                  "⭐ Sort by vendor rating is a feature coming soon.",
+                  "Sort by vendor rating is coming soon.",
                 );
               }}
             >
               <View style={styles.modalLeft}>
-                <Text style={styles.modalEmoji}>⭐</Text>
+                <View style={styles.modalIconMuted}>
+                  <MaterialIcons
+                    name="star-border"
+                    size={18}
+                    color={stylesVars.mutedText}
+                  />
+                </View>
                 <View>
                   <Text style={styles.modalItemTitle}>Vendor Rating</Text>
                   <Text style={styles.modalItemSub}>Feature coming soon</Text>
@@ -1119,12 +1413,12 @@ export default function ResultsScreen() {
           <Text style={styles.emptyTitle}>
             {showFavoritesOnly
               ? "No favourite products yet"
-              : "No matching products (loaded so far)"}
+              : "No matching products"}
           </Text>
           <Text style={styles.muted}>
             {showFavoritesOnly
-              ? "Tap 🤍 on any product to save it here."
-              : "Tip: press “Load more” to search more products, or broaden filters."}
+              ? "Tap the heart on any product to save it here."
+              : "Load more or broaden filters."}
           </Text>
         </View>
       ) : (
@@ -1142,8 +1436,9 @@ export default function ResultsScreen() {
             const imgPath = firstImagePath(item.media);
             const url = publicUrlForStoragePath(imgPath);
             const isFav = favoriteIds.has(item.id);
-            const category = getProductCategory(item);
+            const categoryLabel = productCategoryCardLabel(item);
             const badge = stockBadgeText(item);
+            const saleInfo = getActiveProductSale(item.price);
 
             return (
               <Pressable style={styles.card} onPress={() => openProduct(item)}>
@@ -1159,40 +1454,35 @@ export default function ResultsScreen() {
                   {safeText(item.title)}
                 </Text>
 
-                <Text style={styles.cardPrice} numberOfLines={1}>
-                  {formatPrice(item.price)}
-                </Text>
+                {saleInfo ? (
+                  <View style={styles.cardSaleBlock}>
+                    <View style={styles.cardSaleRow}>
+                      <Text style={styles.cardSalePrice} numberOfLines={1}>
+                        {saleInfo.currentLabel}
+                      </Text>
+                      <View style={styles.discountPill}>
+                        <Text style={styles.discountText}>
+                          -{saleInfo.discountPercent}%
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.cardOldPrice} numberOfLines={1}>
+                      {saleInfo.previousLabel}
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.cardPrice} numberOfLines={1}>
+                    {formatPrice(item.price)}
+                  </Text>
+                )}
 
                 <View style={{ marginTop: 0, paddingTop: 0, paddingBottom: 0 }}>
-                  {item?.made_on_order ? (
-                    <Text style={styles.cardSub} numberOfLines={1}>
-                      Made on order
-                    </Text>
-                  ) : (
-                    <>
-                      <Text style={styles.cardSub} numberOfLines={1}>
-                        {category === "stitched_ready"
-                          ? "Ready-to-wear"
-                          : "Unstitched"}
-                      </Text>
-
-                      {category === "unstitched_dyeing_tailoring" ? (
-                        <Text style={styles.cardSub} numberOfLines={1}>
-                          Tailoring available
-                        </Text>
-                      ) : null}
-
-                      {category === "unstitched_dyeing" ? (
-                        <Text style={styles.cardSub} numberOfLines={1}>
-                          Dyeing available
-                        </Text>
-                      ) : null}
-
-                      <Text style={styles.cardSub} numberOfLines={1}>
-                        {badge}
-                      </Text>
-                    </>
-                  )}
+                  <Text style={styles.cardSub} numberOfLines={2}>
+                    {categoryLabel}
+                  </Text>
+                  <Text style={styles.cardSub} numberOfLines={1}>
+                    {badge}
+                  </Text>
                 </View>
 
                 <View style={styles.actionRow}>
@@ -1200,11 +1490,11 @@ export default function ResultsScreen() {
                     onPress={() => void toggleFavorite(item.id)}
                     style={styles.actionBtn}
                   >
-                    <Text
-                      style={[styles.actionText, isFav ? styles.heartOn : null]}
-                    >
-                      {isFav ? "❤️" : "🤍"}
-                    </Text>
+                    <Ionicons
+                      name={isFav ? "heart" : "heart-outline"}
+                      size={18}
+                      color={isFav ? stylesVars.danger : stylesVars.text}
+                    />
                   </Pressable>
                 </View>
               </Pressable>
@@ -1215,7 +1505,7 @@ export default function ResultsScreen() {
               {loadingMore ? (
                 <View style={styles.loadingRow}>
                   <ActivityIndicator />
-                  <Text style={styles.muted}>Loading more…</Text>
+                  <Text style={styles.muted}>Loading more...</Text>
                 </View>
               ) : showFavoritesOnly ? (
                 <Text style={styles.endText}>
@@ -1239,22 +1529,22 @@ export default function ResultsScreen() {
 }
 
 const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
+  bg: apColors.bg,
+  cardBg: apColors.card,
+  border: apColors.border,
+  borderSoft: apColors.borderSoft,
+  blue: apColors.blue,
+  blueSoft: apColors.blueSoft,
+  text: apColors.text,
+  subText: apColors.subText,
+  mutedText: apColors.muted,
   placeholder: "#94A3B8",
-  danger: "#B91C1C",
-  dangerSoft: "#FEE2E2",
-  dangerBorder: "#FCA5A5",
+  danger: apColors.danger,
+  dangerSoft: "#FEF2F2",
+  dangerBorder: "#FECACA",
   overlayDark: "rgba(0,0,0,0.58)",
   overlaySoft: "rgba(255,255,255,0.14)",
-  white: "#FFFFFF",
+  white: apColors.white,
   black: "#000000",
 };
 
@@ -1284,7 +1574,7 @@ const styles = StyleSheet.create({
   searchButton: {
     width: 34,
     height: 34,
-    borderRadius: 999,
+    borderRadius: apRadii.control,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
     borderColor: "#D7E3FF",
@@ -1314,7 +1604,7 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     backgroundColor: stylesVars.cardBg,
-    borderRadius: 18,
+    borderRadius: apRadii.card,
     padding: 24,
   },
 
@@ -1339,6 +1629,7 @@ const styles = StyleSheet.create({
     textAlign: "left",
     fontSize: 13,
     fontWeight: "800",
+    fontFamily: apFontFamily,
     color: stylesVars.text,
   },
 
@@ -1352,10 +1643,10 @@ const styles = StyleSheet.create({
   iconBtn: {
     width: 34,
     height: 34,
-    borderRadius: 12,
+    borderRadius: apRadii.control,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: stylesVars.blueSoft,
+    backgroundColor: stylesVars.white,
     borderWidth: 1,
     borderColor: "#D7E3FF",
   },
@@ -1363,12 +1654,6 @@ const styles = StyleSheet.create({
   iconBtnActive: {
     backgroundColor: stylesVars.dangerSoft,
     borderColor: stylesVars.dangerBorder,
-  },
-
-  iconText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: stylesVars.blue,
   },
 
   summaryBar: {
@@ -1391,7 +1676,7 @@ const styles = StyleSheet.create({
 
   modalCard: {
     backgroundColor: stylesVars.cardBg,
-    borderRadius: 18,
+    borderRadius: apRadii.card,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: stylesVars.border,
@@ -1401,7 +1686,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 16,
     paddingBottom: 10,
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
     color: stylesVars.text,
   },
@@ -1409,19 +1694,40 @@ const styles = StyleSheet.create({
   modalItem: {
     paddingHorizontal: 18,
     paddingVertical: 12,
+    minHeight: 58,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
   },
 
   modalLeft: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
   },
 
-  modalEmoji: {
-    fontSize: 18,
+  modalIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: apRadii.control,
+    backgroundColor: stylesVars.blueSoft,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  modalIconMuted: {
+    width: 32,
+    height: 32,
+    borderRadius: apRadii.control,
+    backgroundColor: stylesVars.white,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   modalItemTitle: {
@@ -1435,12 +1741,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: stylesVars.mutedText,
     marginTop: 2,
-  },
-
-  modalRight: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: stylesVars.blue,
   },
 
   divider: {
@@ -1462,8 +1762,8 @@ const styles = StyleSheet.create({
 
   modalCloseBtn: {
     margin: 14,
-    minHeight: 48,
-    borderRadius: 14,
+    minHeight: 44,
+    borderRadius: apRadii.control,
     paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
@@ -1494,8 +1794,9 @@ const styles = StyleSheet.create({
   },
 
   emptyTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
+    fontFamily: apFontFamily,
     color: stylesVars.text,
     marginBottom: 8,
   },
@@ -1503,6 +1804,7 @@ const styles = StyleSheet.create({
   muted: {
     fontSize: 14,
     lineHeight: 20,
+    fontFamily: apFontFamily,
     color: stylesVars.mutedText,
     fontWeight: "500",
   },
@@ -1511,21 +1813,21 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 18,
+    borderRadius: apRadii.card,
     overflow: "hidden",
     backgroundColor: stylesVars.cardBg,
-    marginBottom: 10,
+    marginBottom: 12,
   },
 
   image: {
     width: "100%",
-    height: 140,
+    height: 132,
     backgroundColor: "#F1F5F9",
   },
 
   imagePlaceholder: {
     width: "100%",
-    height: 140,
+    height: 132,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#F1F5F9",
@@ -1534,8 +1836,10 @@ const styles = StyleSheet.create({
   cardTitle: {
     paddingHorizontal: 10,
     paddingTop: 10,
-    fontSize: 15,
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: "700",
+    fontFamily: apFontFamily,
     color: stylesVars.text,
   },
 
@@ -1543,8 +1847,64 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingTop: 6,
     fontSize: 13,
+    fontWeight: "800",
+    fontFamily: apFontFamily,
+    color: stylesVars.blue,
+  },
+
+  cardSaleBlock: {
+    paddingHorizontal: 10,
+    paddingTop: 6,
+    minHeight: 42,
+  },
+
+  cardSaleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minHeight: 18,
+  },
+
+  cardSalePrice: {
+    flexShrink: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "900",
+    fontFamily: apFontFamily,
+    color: stylesVars.danger,
+    letterSpacing: 0,
+  },
+
+  discountPill: {
+    minHeight: 18,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: apRadii.pill,
+    borderWidth: 1,
+    borderColor: stylesVars.dangerBorder,
+    backgroundColor: stylesVars.dangerSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  discountText: {
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: "900",
+    fontFamily: apFontFamily,
+    color: stylesVars.danger,
+    letterSpacing: 0,
+  },
+
+  cardOldPrice: {
+    marginTop: 2,
+    fontSize: 11,
+    lineHeight: 14,
     fontWeight: "700",
-    color: stylesVars.text,
+    fontFamily: apFontFamily,
+    color: stylesVars.mutedText,
+    textDecorationLine: "line-through",
+    letterSpacing: 0,
   },
 
   cardSub: {
@@ -1555,28 +1915,27 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    fontFamily: apFontFamily,
   },
 
   actionRow: {
     paddingHorizontal: 10,
+    paddingTop: 8,
     paddingBottom: 10,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-start",
+    justifyContent: "flex-end",
   },
 
   actionBtn: {
-    flex: 1,
-  },
-
-  actionText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: stylesVars.text,
-  },
-
-  heartOn: {
-    color: "#D11A2A",
+    width: 34,
+    height: 34,
+    borderRadius: apRadii.control,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.white,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   loadingRow: {
@@ -1589,18 +1948,16 @@ const styles = StyleSheet.create({
   loadMoreBtn: {
     marginTop: 8,
     minHeight: 48,
-    borderRadius: 14,
+    borderRadius: apRadii.control,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    backgroundColor: stylesVars.blueSoft,
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
+    backgroundColor: stylesVars.blue,
     alignItems: "center",
     justifyContent: "center",
   },
 
   loadMoreText: {
-    color: stylesVars.blue,
+    color: stylesVars.white,
     fontWeight: "700",
     fontSize: 14,
   },
@@ -1610,6 +1967,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     color: stylesVars.mutedText,
     fontWeight: "500",
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 18,
   },

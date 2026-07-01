@@ -11,6 +11,12 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "@/utils/supabase/client";
+import DyePaletteReferenceButton from "@/components/product/DyePaletteReferenceButton";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+} from "@/components/product/addProductStyles";
 import ExactMeasurementsModal from "../(tabs)/flow/purchase/exact-measurements-modal";
 import type { ExactMeasurementSheetRow } from "../(tabs)/flow/purchase/exact-measurements-sheet";
 
@@ -29,6 +35,7 @@ type Params = {
   selected_variant_made_on_order?: string;
   variant_mode?: string;
   selected_variant_mode?: string;
+  selected_variant_snapshot?: string;
 
   price?: string;
   currency?: string;
@@ -92,10 +99,12 @@ type Params = {
   destination_type?: string;
   export_region?: string;
   weight_kg?: string;
+  weight_per_meter_kg?: string;
 
   dye_shade_id?: string;
   dye_hex?: string;
   dye_label?: string;
+  dyeing_split_json?: string;
   dyeing_cost_pkr?: string;
   dyeing_selected?: string;
 
@@ -139,6 +148,14 @@ type SelectedTailoringStyleSnapshot = {
   custom_note?: string | null;
 };
 
+type DyeSplit = {
+  length_m: number;
+  dye_shade_id: string;
+  dye_hex: string;
+  dye_label: string;
+  dyeing_cost_pkr: number;
+};
+
 const norm = (v: unknown) => (v == null ? "" : String(v).trim());
 
 function firstNonEmpty(...vals: Array<unknown>) {
@@ -173,6 +190,21 @@ function safePositiveNumber(v: unknown) {
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) return 0;
   return n;
+}
+
+function normalizeDyeSplits(v: unknown): DyeSplit[] {
+  const rows = safeJsonDecode<any[]>(v, []);
+  if (!Array.isArray(rows)) return [];
+
+  return rows
+    .map((row) => ({
+      length_m: safePositiveNumber(row?.length_m),
+      dye_shade_id: safeDecode(row?.dye_shade_id),
+      dye_hex: safeDecode(row?.dye_hex),
+      dye_label: safeDecode(row?.dye_label),
+      dyeing_cost_pkr: safePositiveNumber(row?.dyeing_cost_pkr),
+    }))
+    .filter((row) => row.length_m > 0 && (row.dye_hex || row.dye_shade_id));
 }
 
 function parseBoolParam(v: unknown): boolean | null {
@@ -458,25 +490,78 @@ export default function PaymentScreen() {
     const dyeShadeId = safeDecode(params.dye_shade_id);
     const dyeHex = safeDecode(params.dye_hex);
     const dyeLabel = safeDecode(params.dye_label);
-    const selectedVariantId = safeDecode(params.selected_variant_id);
-    const selectedVariantTitle = safeDecode(params.selected_variant_title);
-    const selectedVariantSize = safeDecode(params.selected_variant_size);
-    const selectedVariantColor = safeDecode(params.selected_variant_color);
-    const selectedVariantPricePkr = safePositiveNumber(
-      safeDecode(params.selected_variant_price_pkr),
-    );
-    const selectedVariantImagePath = safeDecode(
-      params.selected_variant_image_path,
-    );
-    const selectedVariantMode = safeDecode(
-      firstNonEmpty(params.selected_variant_mode, params.variant_mode),
+    const dyeingSplits = normalizeDyeSplits(params.dyeing_split_json);
+    const dyeingSplitCostPkr = Math.round(
+      dyeingSplits.reduce((sum, row) => sum + row.dyeing_cost_pkr, 0),
     );
     const selectedStitchedVariantSnapshot = safeJsonDecode<any>(
-      params.selected_stitched_variant_snapshot,
+      firstNonEmpty(
+        params.selected_stitched_variant_snapshot,
+        params.selected_variant_snapshot,
+      ),
       null,
     );
     const rawVariantSnapshot =
       selectedStitchedVariantSnapshot?.rawVariant ?? {};
+    const rawSizeSnapshot = selectedStitchedVariantSnapshot?.rawSize ?? {};
+    const selectedVariantMode = safeDecode(
+      firstNonEmpty(
+        params.selected_variant_mode,
+        params.variant_mode,
+        selectedStitchedVariantSnapshot?.variant_mode,
+        rawVariantSnapshot?.variant_mode,
+      ),
+    );
+    const selectedVariantId = safeDecode(
+      firstNonEmpty(
+        params.selected_variant_id,
+        selectedStitchedVariantSnapshot?.id,
+        rawVariantSnapshot?.id,
+      ),
+    );
+    const selectedVariantTitle = safeDecode(
+      firstNonEmpty(
+        params.selected_variant_title,
+        selectedStitchedVariantSnapshot?.title,
+        selectedStitchedVariantSnapshot?.label,
+        rawVariantSnapshot?.display_name,
+        rawVariantSnapshot?.label,
+      ),
+    );
+    const selectedVariantSize = safeDecode(
+      firstNonEmpty(
+        params.selected_variant_size,
+        selectedStitchedVariantSnapshot?.size,
+        rawSizeSnapshot?.size,
+      ),
+    );
+    const selectedVariantColor = safeDecode(
+      firstNonEmpty(
+        params.selected_variant_color,
+        selectedStitchedVariantSnapshot?.color,
+        rawVariantSnapshot?.name,
+        rawVariantSnapshot?.color,
+      ),
+    );
+    const selectedVariantPricePkr = safePositiveNumber(
+      firstNonEmpty(
+        safeDecode(params.selected_variant_price_pkr),
+        selectedStitchedVariantSnapshot?.pricePkr,
+        selectedStitchedVariantSnapshot?.price_pkr,
+        selectedStitchedVariantSnapshot?.total_price_pkr,
+      ),
+    );
+    const selectedVariantImagePath = safeDecode(
+      firstNonEmpty(
+        params.selected_variant_image_path,
+        Array.isArray(selectedStitchedVariantSnapshot?.image_paths)
+          ? selectedStitchedVariantSnapshot.image_paths[0]
+          : "",
+        Array.isArray(rawVariantSnapshot?.image_paths)
+          ? rawVariantSnapshot.image_paths[0]
+          : "",
+      ),
+    );
     const productCategoryRaw = norm(params.product_category);
     const isMadeOnOrder =
       productCategoryRaw === "stitched_ready" &&
@@ -488,10 +573,18 @@ export default function PaymentScreen() {
           "made_order_variants" ||
         Boolean(rawVariantSnapshot?.made_on_order) ||
         rawVariantSnapshot?.variant_mode === "made_order_variants");
+    const isSimpleReadyStitched =
+      productCategoryRaw === "stitched_ready" &&
+      !isMadeOnOrder &&
+      (selectedVariantMode === "simple_ready" ||
+        selectedStitchedVariantSnapshot?.variant_mode === "simple_ready" ||
+        rawVariantSnapshot?.variant_mode === "simple_ready" ||
+        selectedVariantId.split("::")[0] === "simple-ready");
 
     const dyeingSelected = parseBoolParam(params.dyeing_selected) === true;
     const dyeCostPkr = dyeingSelected
-      ? safePositiveNumber(safeDecode(params.dyeing_cost_pkr))
+      ? safePositiveNumber(safeDecode(params.dyeing_cost_pkr)) ||
+        dyeingSplitCostPkr
       : 0;
 
     const tailoringSelected =
@@ -573,6 +666,7 @@ export default function PaymentScreen() {
         firstNonEmpty(params.productName, params.product_name) || "Product",
       productCategory: productCategoryRaw,
       madeOnOrder: isMadeOnOrder,
+      isSimpleReadyStitched,
       selectedVariantMode,
       selectedStitchedVariantSnapshot,
       imageUrl: firstNonEmpty(params.imageUrl, params.image_url),
@@ -604,6 +698,7 @@ export default function PaymentScreen() {
       destinationType,
       exportRegion,
       weightKg: safePositiveNumber(params.weight_kg),
+      weightPerMeterKg: safePositiveNumber(params.weight_per_meter_kg),
 
       mode,
       selectedSize,
@@ -620,6 +715,7 @@ export default function PaymentScreen() {
       sizeLabel,
 
       dyeingSelected,
+      dyeingSplits,
       dyeShadeId,
       dyeHex,
       dyeLabel,
@@ -727,9 +823,10 @@ export default function PaymentScreen() {
       const exactMap: Record<string, string> = {};
       for (const [k, v] of data.exactPairs) exactMap[k] = v;
 
-      const selectedVariantIdForRpc = data.selectedVariantId
-        ? String(data.selectedVariantId).split("::")[0].trim()
-        : "";
+      const selectedVariantIdForRpc =
+        !data.isSimpleReadyStitched && data.selectedVariantId
+          ? String(data.selectedVariantId).split("::")[0].trim()
+          : "";
 
       const specSnapshot =
         pRow.spec && typeof pRow.spec === "object"
@@ -783,6 +880,10 @@ export default function PaymentScreen() {
           data.selectedVariantPricePkr || 0;
         (specSnapshot as any).selected_variant_image_path =
           data.selectedVariantImagePath || "";
+        if (data.selectedVariantMode) {
+          (specSnapshot as any).selected_variant_mode =
+            data.selectedVariantMode;
+        }
         if (data.madeOnOrder) {
           (specSnapshot as any).selected_variant_made_on_order = true;
           (specSnapshot as any).selected_variant_mode = "made_order_variants";
@@ -794,6 +895,20 @@ export default function PaymentScreen() {
         (specSnapshot as any).dye_hex = data.dyeHex || "";
         (specSnapshot as any).dye_label = data.dyeLabel || "";
         (specSnapshot as any).dyeing_cost_pkr = data.dyeCostPkr;
+        (specSnapshot as any).dyeing_cost_total_pkr = data.dyeCostPkr;
+        if (data.dyeingSplits.length) {
+          (specSnapshot as any).dyeing_splits = data.dyeingSplits;
+          (specSnapshot as any).dyeing_split_total_m =
+            Math.round(
+              data.dyeingSplits.reduce(
+                (sum, row) => sum + row.length_m,
+                0,
+              ) * 100,
+            ) / 100;
+        }
+        if (data.productCategory === "unstitched_dyeing") {
+          (specSnapshot as any).dyeing_pricing_unit = "per_meter";
+        }
       }
 
       if (data.tailoringSelected) {
@@ -854,6 +969,10 @@ export default function PaymentScreen() {
       (specSnapshot as any).postal_code = data.postalCode || "";
       (specSnapshot as any).country = data.country || "";
       (specSnapshot as any).delivery_weight_kg = data.weightKg || 0;
+      if (data.weightPerMeterKg > 0) {
+        (specSnapshot as any).weight_per_meter_kg = data.weightPerMeterKg;
+        (specSnapshot as any).shipping_weight_mode = "per_meter";
+      }
 
       const { data: rpcData, error: rpcError } = await (supabase as any).rpc(
         "create_order_atomic_single_unit",
@@ -879,7 +998,12 @@ export default function PaymentScreen() {
           p_delivery_pkr: data.deliveryCostPkr || 0,
           p_discount_pkr: 0,
           p_total_pkr: data.totalPkrSafe || null,
-          p_size_mode: data.mode === "exact" ? "exact" : "standard",
+          p_size_mode:
+            data.mode === "meter"
+              ? "meter"
+              : data.mode === "exact"
+                ? "exact"
+                : "standard",
           p_selected_size:
             data.mode === "exact"
               ? null
@@ -917,6 +1041,10 @@ export default function PaymentScreen() {
     categoryKey === "unstitched_plain" ||
     categoryKey === "unstitched_dyeing" ||
     categoryKey === "unstitched_dyeing_tailoring";
+  const isFabricByMeterPurchase =
+    categoryKey === "unstitched_plain" ||
+    categoryKey === "unstitched_dyeing" ||
+    data.mode === "meter";
   const isMadeOrderStitched =
     data.madeOnOrder ||
     (categoryKey === "stitched_ready" &&
@@ -952,11 +1080,11 @@ export default function PaymentScreen() {
 
   const selectedStitchedVariantTitle = isReadyToWearStitched
     ? cleanReadyToWearTitle(
-        data.selectedVariantTitle || "Selected variant",
+        data.selectedVariantTitle || "Selected style",
         data.selectedVariantSize || data.sizeLabel,
       )
     : data.selectedVariantTitle;
-  // Keep original image handling untouched: imageUrl already carries the correct selected variant image.
+  // Keep original image handling untouched: imageUrl already carries the correct selected style image.
   const productSummaryImageUrl = data.imageUrl;
   const productSummaryTitle = isReadyToWearStitched
     ? cleanReadyToWearTitle(
@@ -1021,7 +1149,7 @@ export default function PaymentScreen() {
                   <>
                     <View style={styles.productMetaInfo}>
                       <Text style={styles.productMetaLabel}>
-                        Selected variant
+                        Selected style
                       </Text>
                       <Text style={styles.productMetaValue}>
                         {selectedStitchedVariantTitle || "Not selected"}
@@ -1053,12 +1181,14 @@ export default function PaymentScreen() {
 
           {!isReadyToWearStitched ? (
             <PlainSection title="Customization">
-              <KVRow
-                label="Size"
-                value={
-                  data.mode === "exact" ? "Exact measurements" : data.sizeLabel
-                }
-              />
+              {!isFabricByMeterPurchase ? (
+                <KVRow
+                  label="Size"
+                  value={
+                    data.mode === "exact" ? "Exact measurements" : data.sizeLabel
+                  }
+                />
+              ) : null}
 
               {!isMadeOrderStitched &&
               (data.selectedVariantId ||
@@ -1067,28 +1197,28 @@ export default function PaymentScreen() {
                 data.selectedVariantColor) ? (
                 <View style={styles.customBlock}>
                   <KVRow
-                    label="Selected variant"
+                    label="Selected style"
                     value={
                       data.selectedVariantTitle ||
                       data.selectedVariantSize ||
-                      "Selected variant"
+                      "Selected style"
                     }
                   />
                   {!!data.selectedVariantSize && (
                     <KVRow
-                      label="Variant size"
+                      label="Style size"
                       value={data.selectedVariantSize}
                     />
                   )}
                   {!!data.selectedVariantColor && (
                     <KVRow
-                      label="Variant color"
+                      label="Style color"
                       value={data.selectedVariantColor}
                     />
                   )}
                   {data.selectedVariantPricePkr > 0 ? (
                     <KVRow
-                      label="Variant price"
+                      label="Style price"
                       value={formatMoney(
                         data.currency,
                         data.selectedVariantPricePkr,
@@ -1132,13 +1262,29 @@ export default function PaymentScreen() {
                         : ""
                     }
                   />
+                  <KVRow
+                    label="Total fabric cost"
+                    value={formatMoney(data.currency, data.fabricCostPkr)}
+                  />
                 </>
               ) : null}
 
               {data.dyeingSelected ? (
                 <View style={styles.customBlock}>
                   <View style={styles.kvRow}>
-                    <Text style={styles.kvLabel}>Dyeing color</Text>
+                    <View style={styles.kvLabelWithIcon}>
+                      <Text style={[styles.kvLabel, styles.kvLabelWithIconText]}>
+                        {data.dyeingSplits.length
+                          ? "Dye portions"
+                          : "Dyeing color"}
+                      </Text>
+                      <DyePaletteReferenceButton
+                        dyeSplits={data.dyeingSplits}
+                        dyeShadeId={data.dyeShadeId}
+                        dyeHex={data.dyeHex}
+                        dyeLabel={data.dyeLabel}
+                      />
+                    </View>
                     <View style={styles.colorPreviewRow}>
                       {!!data.dyeHex && (
                         <View
@@ -1153,6 +1299,25 @@ export default function PaymentScreen() {
                       </Text>
                     </View>
                   </View>
+                  {data.dyeingSplits.map((row, index) => (
+                    <View
+                      key={`${row.dye_shade_id}-${index}`}
+                      style={styles.dyeSplitSummaryRow}
+                    >
+                      {!!row.dye_hex && (
+                        <View
+                          style={[
+                            styles.dyeSwatchSmall,
+                            { backgroundColor: row.dye_hex },
+                          ]}
+                        />
+                      )}
+                      <Text style={styles.dyeSplitSummaryText}>
+                        {row.length_m} m
+                        {row.dye_label ? ` - Code ${row.dye_label}` : ""}
+                      </Text>
+                    </View>
+                  ))}
                 </View>
               ) : null}
 
@@ -1368,15 +1533,15 @@ export default function PaymentScreen() {
 }
 
 const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E2E8F0",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  mutedText: "#64748B",
-  white: "#FFFFFF",
+  bg: apColors.bg,
+  cardBg: apColors.card,
+  border: apColors.border,
+  borderSoft: apColors.borderSoft,
+  blue: apColors.blue,
+  blueSoft: apColors.blueSoft,
+  text: apColors.text,
+  mutedText: apColors.muted,
+  white: apColors.white,
 };
 
 const styles = StyleSheet.create({
@@ -1406,22 +1571,26 @@ const styles = StyleSheet.create({
   },
 
   title: {
+    fontFamily: apFontFamily,
     fontSize: 24,
     fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   pageSubtitle: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   card: {
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 20,
+    borderRadius: apRadii.card,
     padding: 16,
     gap: 12,
     backgroundColor: stylesVars.cardBg,
@@ -1437,16 +1606,20 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
+    fontFamily: apFontFamily,
     fontSize: 16,
     fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   sectionSubtitle: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 17,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   sectionDivider: {
@@ -1464,7 +1637,7 @@ const styles = StyleSheet.create({
   imageBox: {
     width: 96,
     height: 96,
-    borderRadius: 16,
+    borderRadius: apRadii.control,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: stylesVars.border,
@@ -1484,21 +1657,26 @@ const styles = StyleSheet.create({
   },
 
   imagePlaceholderText: {
+    fontFamily: apFontFamily,
     color: stylesVars.mutedText,
     fontSize: 12,
     fontWeight: "600",
+    letterSpacing: 0,
   },
 
   productMetaWrap: {
     flex: 1,
+    minWidth: 0,
     gap: 8,
   },
 
   productName: {
+    fontFamily: apFontFamily,
     fontSize: 16,
     lineHeight: 22,
     fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   productMetaInfo: {
@@ -1506,23 +1684,31 @@ const styles = StyleSheet.create({
   },
 
   productMetaLabel: {
+    fontFamily: apFontFamily,
     fontSize: 11,
     color: stylesVars.mutedText,
     fontWeight: "700",
     textTransform: "uppercase",
-    letterSpacing: 0.3,
+    letterSpacing: 0,
   },
 
   productMetaValue: {
+    fontFamily: apFontFamily,
     fontSize: 13,
+    lineHeight: 18,
     color: stylesVars.text,
     fontWeight: "700",
+    letterSpacing: 0,
+    flexShrink: 1,
+    flexWrap: "wrap",
   },
 
   heroPrice: {
+    fontFamily: apFontFamily,
     fontSize: 18,
     color: stylesVars.text,
     fontWeight: "800",
+    letterSpacing: 0,
   },
 
   kvRow: {
@@ -1534,19 +1720,35 @@ const styles = StyleSheet.create({
 
   kvLabel: {
     flex: 0.9,
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 19,
     color: stylesVars.mutedText,
     fontWeight: "600",
+    letterSpacing: 0,
+  },
+
+  kvLabelWithIcon: {
+    flex: 0.9,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  kvLabelWithIconText: {
+    flex: 1,
   },
 
   kvValue: {
     flex: 1.1,
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 19,
     color: stylesVars.text,
     fontWeight: "700",
     textAlign: "right",
+    letterSpacing: 0,
   },
 
   kvMuted: {
@@ -1561,27 +1763,35 @@ const styles = StyleSheet.create({
   },
 
   priceLabel: {
+    fontFamily: apFontFamily,
     fontSize: 14,
     color: stylesVars.mutedText,
     fontWeight: "600",
+    letterSpacing: 0,
   },
 
   priceValue: {
+    fontFamily: apFontFamily,
     fontSize: 14,
     color: stylesVars.text,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   priceLabelStrong: {
+    fontFamily: apFontFamily,
     fontSize: 16,
     color: stylesVars.text,
     fontWeight: "800",
+    letterSpacing: 0,
   },
 
   priceValueStrong: {
+    fontFamily: apFontFamily,
     fontSize: 18,
     color: stylesVars.text,
     fontWeight: "800",
+    letterSpacing: 0,
   },
 
   divider: {
@@ -1602,7 +1812,7 @@ const styles = StyleSheet.create({
     minHeight: 38,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: apRadii.control,
     backgroundColor: stylesVars.white,
     borderWidth: 1,
     borderColor: "#D7E3FF",
@@ -1611,9 +1821,11 @@ const styles = StyleSheet.create({
   },
 
   secondaryInlineText: {
+    fontFamily: apFontFamily,
     color: stylesVars.blue,
     fontSize: 12,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   customBlock: {
@@ -1630,15 +1842,39 @@ const styles = StyleSheet.create({
   dyeSwatch: {
     width: 34,
     height: 34,
-    borderRadius: 10,
+    borderRadius: apRadii.control,
     borderWidth: 1,
     borderColor: "#CBD5E1",
+  },
+
+  dyeSwatchSmall: {
+    width: 22,
+    height: 22,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+
+  dyeSplitSummaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  dyeSplitSummaryText: {
+    flex: 1,
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.text,
+    fontWeight: "700",
+    letterSpacing: 0,
   },
 
   tailoringImageWrap: {
     width: "100%",
     height: 160,
-    borderRadius: 14,
+    borderRadius: apRadii.card,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: stylesVars.border,
@@ -1653,51 +1889,59 @@ const styles = StyleSheet.create({
   noteBox: {
     borderWidth: 1,
     borderColor: stylesVars.borderSoft,
-    borderRadius: 14,
+    borderRadius: apRadii.card,
     padding: 12,
     backgroundColor: "#F8FAFC",
     gap: 6,
   },
 
   noteLabel: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.mutedText,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   noteText: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 19,
     color: stylesVars.text,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   previewBox: {
     borderWidth: 1,
     borderColor: stylesVars.borderSoft,
-    borderRadius: 14,
+    borderRadius: apRadii.card,
     padding: 12,
     backgroundColor: "#F8FAFC",
     gap: 4,
   },
 
   previewLabel: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.mutedText,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   previewText: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 19,
     color: stylesVars.text,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   paymentOptionCard: {
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 16,
+    borderRadius: apRadii.card,
     padding: 14,
     backgroundColor: stylesVars.cardBg,
     flexDirection: "row",
@@ -1713,7 +1957,7 @@ const styles = StyleSheet.create({
   radioOuter: {
     width: 20,
     height: 20,
-    borderRadius: 999,
+    borderRadius: apRadii.pill,
     borderWidth: 2,
     borderColor: "#CBD5E1",
     alignItems: "center",
@@ -1728,7 +1972,7 @@ const styles = StyleSheet.create({
   radioInner: {
     width: 8,
     height: 8,
-    borderRadius: 999,
+    borderRadius: apRadii.pill,
     backgroundColor: stylesVars.blue,
   },
 
@@ -1738,23 +1982,29 @@ const styles = StyleSheet.create({
   },
 
   paymentOptionTitle: {
+    fontFamily: apFontFamily,
     fontWeight: "800",
     fontSize: 14,
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   paymentOptionDesc: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   helper: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   backBtn: {
@@ -1762,7 +2012,7 @@ const styles = StyleSheet.create({
     minHeight: 38,
     paddingVertical: 8,
     paddingHorizontal: 14,
-    borderRadius: 999,
+    borderRadius: apRadii.pill,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: stylesVars.blueSoft,
@@ -1771,9 +2021,11 @@ const styles = StyleSheet.create({
   },
 
   backText: {
+    fontFamily: apFontFamily,
     color: stylesVars.blue,
     fontWeight: "800",
     fontSize: 12,
+    letterSpacing: 0,
   },
 
   footerBar: {
@@ -1781,7 +2033,7 @@ const styles = StyleSheet.create({
     left: 12,
     right: 12,
     bottom: 14,
-    borderRadius: 18,
+    borderRadius: apRadii.card,
     padding: 12,
     backgroundColor: stylesVars.white,
     borderWidth: 1,
@@ -1802,31 +2054,37 @@ const styles = StyleSheet.create({
   },
 
   footerTotalLabel: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.mutedText,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   footerTotalValue: {
+    fontFamily: apFontFamily,
     fontSize: 18,
     color: stylesVars.text,
     fontWeight: "800",
+    letterSpacing: 0,
   },
 
   footerCta: {
     minHeight: 48,
     minWidth: 152,
     paddingHorizontal: 18,
-    borderRadius: 14,
+    borderRadius: apRadii.control,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: stylesVars.blue,
   },
 
   footerCtaText: {
+    fontFamily: apFontFamily,
     color: stylesVars.white,
     fontWeight: "800",
     fontSize: 14,
+    letterSpacing: 0,
   },
 
   disabledBtn: {

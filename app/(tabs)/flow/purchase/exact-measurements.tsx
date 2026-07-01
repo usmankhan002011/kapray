@@ -12,8 +12,10 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import ExactMeasurementsModal from "./exact-measurements-modal";
 import type { ExactMeasurementSheetRow } from "./exact-measurements-sheet";
+import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 
 const STANDARD_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"] as const;
+const FABRIC_STOCK_EPSILON_M = 0.05;
 
 type Unit = "cm" | "in";
 type StandardSize = (typeof STANDARD_SIZES)[number];
@@ -231,6 +233,12 @@ function safePositiveNumber(v: unknown) {
   return n;
 }
 
+function hasEnoughFabricForLength(availableM: number, requiredM: number) {
+  if (requiredM <= 0) return false;
+  if (availableM <= 0) return false;
+  return availableM + FABRIC_STOCK_EPSILON_M >= requiredM;
+}
+
 function prettyCategory(v: string) {
   return v.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -429,6 +437,7 @@ export default function ExactMeasurementsScreen() {
     product_code?: string;
     product_category?: string;
     price_per_meter_pkr?: string;
+    available_fabric_m?: string;
     stitched_total_pkr?: string;
     currency?: string;
     imageUrl?: string;
@@ -498,6 +507,11 @@ export default function ExactMeasurementsScreen() {
   const pricePerMeterPkr = useMemo(
     () => safePositiveNumber(params.price_per_meter_pkr),
     [params.price_per_meter_pkr],
+  );
+
+  const availableFabricM = useMemo(
+    () => safePositiveNumber(params.available_fabric_m),
+    [params.available_fabric_m],
   );
 
   const stitchedTotalPkr = useMemo(
@@ -658,6 +672,11 @@ export default function ExactMeasurementsScreen() {
     return Math.round(finalFabricLengthM * pricePerMeterPkr);
   }, [finalFabricLengthM, isUnstitched, pricePerMeterPkr]);
 
+  const fabricLengthExceedsStock =
+    isUnstitched &&
+    finalFabricLengthM > 0 &&
+    !hasEnoughFabricForLength(availableFabricM, finalFabricLengthM);
+
   const includedDimensionList = useMemo<ExactMeasurementSheetRow[]>(() => {
     const standardRows = (Object.keys(MEASURE_LABELS) as MeasureKey[])
       .map((key, index) => ({
@@ -679,7 +698,14 @@ export default function ExactMeasurementsScreen() {
   }, [customRows, measures]);
 
   const onSave = () => {
-    if (!exactHasAny || invalidCore || invalidCustom) return;
+    if (
+      !exactHasAny ||
+      invalidCore ||
+      invalidCustom ||
+      fabricLengthExceedsStock
+    ) {
+      return;
+    }
 
     router.replace({
       pathname: nextAfterSave as any,
@@ -980,7 +1006,14 @@ export default function ExactMeasurementsScreen() {
           )}
         </View>
 
-        <Pressable onPress={onSave} style={styles.primaryBtn}>
+        <Pressable
+          onPress={onSave}
+          disabled={fabricLengthExceedsStock}
+          style={[
+            styles.primaryBtn,
+            fabricLengthExceedsStock ? styles.primaryBtnDisabled : null,
+          ]}
+        >
           <Text style={styles.primaryText}>Save exact measurements</Text>
         </Pressable>
 
@@ -999,6 +1032,12 @@ export default function ExactMeasurementsScreen() {
         {invalidCustom ? (
           <Text style={styles.validation}>
             Each custom dimension needs both a label and a valid positive value.
+          </Text>
+        ) : null}
+
+        {fabricLengthExceedsStock ? (
+          <Text style={styles.validation}>
+            Not enough fabric for this measurement.
           </Text>
         ) : null}
 
@@ -1127,7 +1166,7 @@ function CustomRow({
           style={styles.input}
         />
 
-        <TextInput
+        <FastNumberInput
           value={value}
           onChangeText={onValueChange}
           placeholder={`Value${unitSuffix}`}
@@ -1390,6 +1429,10 @@ const styles = StyleSheet.create({
     backgroundColor: stylesVars.blue,
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  primaryBtnDisabled: {
+    opacity: 0.5,
   },
 
   primaryText: {

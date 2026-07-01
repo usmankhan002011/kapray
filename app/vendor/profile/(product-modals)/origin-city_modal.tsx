@@ -1,16 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Dimensions,
   FlatList,
   Image,
   Pressable,
   StyleSheet,
   Text,
-  View
+  View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { getOriginCities, OriginCityItem } from "@/utils/supabase/originCity";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
+import { apColors, apStyles } from "@/components/product/addProductStyles";
+import { getOriginCities, OriginCityItem } from "@/utils/supabase/originCity";
 
 const ORIGIN_CITY_LOCAL_IMAGES: Record<string, any> = {
   bahawalpur: require("@/assets/origin-images/Bahawalpur.jpg"),
@@ -20,16 +20,12 @@ const ORIGIN_CITY_LOCAL_IMAGES: Record<string, any> = {
   lahore: require("@/assets/origin-images/Lahore.jpg"),
   multan: require("@/assets/origin-images/Multan.jpg"),
   peshawar: require("@/assets/origin-images/Peshawar.jpg"),
-  rawalpindi: require("@/assets/origin-images/Rawalpindi.jpg")
+  rawalpindi: require("@/assets/origin-images/Rawalpindi.jpg"),
 };
 
 const GRID_GAP = 8;
 const H_PADDING = 12;
-
-// Responsive sizing to fit better on screen (still scrolls)
-const SCREEN_W = Dimensions.get("window").width;
-const CARD_W = (SCREEN_W - H_PADDING * 2 - GRID_GAP) / 2;
-const IMAGE_H = Math.max(92, Math.round(CARD_W * 0.62));
+const IMAGE_H = 96;
 
 function safeStr(v: any) {
   return String(v ?? "").trim();
@@ -52,9 +48,8 @@ export default function ProductOriginCityModal() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Local selection inside modal (apply to draft only on Done)
   const [selected, setSelected] = useState<string[]>(
-    Array.isArray(draft.spec.originCityIds) ? draft.spec.originCityIds : []
+    Array.isArray(draft.spec.originCityIds) ? draft.spec.originCityIds : [],
   );
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
@@ -99,7 +94,7 @@ export default function ProductOriginCityModal() {
 
   function toggle(id: string) {
     setSelected((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
   }
 
@@ -123,40 +118,23 @@ export default function ProductOriginCityModal() {
 
   return (
     <View style={styles.screen}>
-      {/* HEADER */}
       <View style={styles.header}>
-        <Pressable
-          onPress={close}
-          style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
-        >
-          <Text style={styles.headerBtnText}>Close</Text>
-        </Pressable>
-
         <Text style={styles.headerTitle}>Origin</Text>
 
         <Pressable
-          onPress={onDone}
-          style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
+          onPress={close}
+          style={({ pressed }) => [
+            apStyles.linkBtn,
+            styles.closeButton,
+            pressed ? apStyles.pressed : null,
+          ]}
         >
-          <Text style={styles.headerBtnText}>Done</Text>
+          <Text style={apStyles.linkText}>Close</Text>
         </Pressable>
       </View>
 
-      <View style={styles.subHeader}>
-        <Text style={styles.subText}>Select one or more origin cities.</Text>
-
-        <Pressable
-          onPress={onClear}
-          style={({ pressed }) => [styles.clearBtn, pressed && styles.pressed]}
-        >
-          <Text style={styles.clearBtnText}>Clear</Text>
-        </Pressable>
-      </View>
-
-      {/* <Text style={styles.heading}>Select Origin City</Text> */}
-
-      {loading ? <Text style={styles.infoText}>Loading...</Text> : null}
-      {err ? <Text style={styles.infoText}>{err}</Text> : null}
+      {loading ? <Text style={styles.infoText}>Loading origins...</Text> : null}
+      {err ? <Text style={styles.errorText}>{err}</Text> : null}
 
       <FlatList
         data={items}
@@ -173,7 +151,11 @@ export default function ProductOriginCityModal() {
           return (
             <Pressable
               key={item.id}
-              style={[styles.card, isOn ? styles.cardSelected : null]}
+              style={({ pressed }) => [
+                styles.card,
+                isOn ? styles.cardSelected : null,
+                pressed ? apStyles.pressed : null,
+              ]}
               onPress={() => toggle(item.id)}
             >
               <View style={styles.imageWrap}>
@@ -185,48 +167,62 @@ export default function ProductOriginCityModal() {
                   />
                 ) : (
                   <View style={styles.noImage}>
-                    <Text style={styles.noImageText}>No Image</Text>
+                    <Text style={styles.noImageText}>No image</Text>
                   </View>
                 )}
               </View>
 
               <Text style={styles.label} numberOfLines={1}>
-                {item.name} {isOn ? "✓" : ""}
+                {item.name}
               </Text>
+
+              {isOn ? (
+                <View style={styles.selectedBadge}>
+                  <Text style={styles.selectedText}>Selected</Text>
+                </View>
+              ) : null}
             </Pressable>
           );
         }}
       />
+
+      <View style={styles.footer}>
+        <View>
+          <Text style={styles.footerLabel}>Selected</Text>
+          <Text style={styles.footerValue}>{selected.length}</Text>
+        </View>
+
+        <View style={styles.footerActions}>
+          <Pressable
+            onPress={onClear}
+            style={({ pressed }) => [
+              styles.clearBtn,
+              pressed ? apStyles.pressed : null,
+            ]}
+          >
+            <Text style={styles.clearBtnText}>Clear</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={onDone}
+            style={({ pressed }) => [
+              styles.doneBtn,
+              pressed ? apStyles.pressed : null,
+            ]}
+          >
+            <Text style={styles.doneText}>Done</Text>
+          </Pressable>
+        </View>
+      </View>
     </View>
   );
 }
 
-const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
-  placeholder: "#94A3B8",
-  danger: "#B91C1C",
-  dangerSoft: "#FEE2E2",
-  dangerBorder: "#FCA5A5",
-  overlayDark: "rgba(0,0,0,0.58)",
-  overlaySoft: "rgba(255,255,255,0.14)",
-  white: "#FFFFFF",
-  black: "#000000"
-};
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: stylesVars.bg
+    backgroundColor: apColors.bg,
   },
-
   header: {
     paddingHorizontal: 14,
     paddingTop: 14,
@@ -234,148 +230,156 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12
+    gap: 12,
   },
-
   headerTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: stylesVars.text
+    color: apColors.text,
   },
-
-  headerBtn: {
-    minHeight: 40,
+  closeButton: {
+    minHeight: 38,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: stylesVars.blueSoft,
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
-    alignItems: "center",
-    justifyContent: "center"
   },
-
-  headerBtnText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: stylesVars.blue
-  },
-
-  subHeader: {
-    paddingHorizontal: 14,
-    paddingBottom: 6,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10
-  },
-
-  subText: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
-    color: stylesVars.mutedText,
-    fontWeight: "500"
-  },
-
-  clearBtn: {
-    minHeight: 40,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-
-  clearBtnText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: stylesVars.text
-  },
-
-  heading: {
-    fontSize: 15,
-    fontWeight: "700",
-    marginBottom: 6,
-    color: stylesVars.text,
-    paddingHorizontal: 14,
-    paddingTop: 6
-  },
-
   infoText: {
     fontSize: 13,
     lineHeight: 18,
-    color: stylesVars.mutedText,
+    color: apColors.muted,
     fontWeight: "500",
-    marginBottom: 6,
-    paddingHorizontal: 14
+    paddingHorizontal: 14,
+    paddingBottom: 6,
   },
-
+  errorText: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: apColors.danger,
+    fontWeight: "600",
+    paddingHorizontal: 14,
+    paddingBottom: 6,
+  },
   listContent: {
     paddingHorizontal: H_PADDING,
-    paddingBottom: 16,
-    paddingTop: 2
+    paddingBottom: 106,
+    paddingTop: 2,
   },
-
   columnWrap: {
     gap: GRID_GAP,
-    marginBottom: GRID_GAP
+    marginBottom: GRID_GAP,
   },
-
   card: {
     flex: 1,
     borderWidth: 1,
-    borderColor: stylesVars.border,
-    borderRadius: 18,
+    borderColor: apColors.border,
+    borderRadius: 8,
     padding: 8,
-    backgroundColor: stylesVars.cardBg
+    backgroundColor: apColors.white,
+    position: "relative",
   },
-
   cardSelected: {
-    borderColor: stylesVars.blue,
-    borderWidth: 2,
-    backgroundColor: stylesVars.blueSoft
+    borderColor: apColors.blue,
+    backgroundColor: apColors.blueSoft,
   },
-
   imageWrap: {
     width: "100%",
     height: IMAGE_H,
-    borderRadius: 12,
+    borderRadius: 7,
     overflow: "hidden",
     backgroundColor: "#F1F5F9",
-    marginBottom: 8
+    marginBottom: 8,
   },
-
   image: {
     width: "100%",
-    height: IMAGE_H
+    height: IMAGE_H,
   },
-
   noImage: {
     width: "100%",
     height: IMAGE_H,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
-
   noImageText: {
-    color: stylesVars.mutedText,
+    color: apColors.muted,
     fontSize: 12,
-    fontWeight: "600"
+    fontWeight: "600",
   },
-
   label: {
     fontSize: 13,
     lineHeight: 18,
-    color: stylesVars.text,
+    color: apColors.text,
     textAlign: "center",
-    fontWeight: "700"
+    fontWeight: "700",
   },
-
-  pressed: {
-    opacity: 0.82
-  }
+  selectedBadge: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: apColors.blue,
+  },
+  selectedText: {
+    color: apColors.white,
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  footer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopWidth: 1,
+    borderTopColor: apColors.border,
+    backgroundColor: "rgba(248,250,252,0.98)",
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  footerLabel: {
+    color: apColors.muted,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  footerValue: {
+    color: apColors.text,
+    fontSize: 22,
+    fontWeight: "900",
+  },
+  footerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  clearBtn: {
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: apColors.border,
+    backgroundColor: apColors.white,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  clearBtnText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: apColors.text,
+  },
+  doneBtn: {
+    minHeight: 44,
+    paddingHorizontal: 22,
+    borderRadius: 8,
+    backgroundColor: apColors.blue,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  doneText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: apColors.white,
+  },
 });

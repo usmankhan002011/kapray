@@ -1,32 +1,32 @@
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  Dimensions,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text
-} from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { getWearStates, WearStateItem } from "@/utils/supabase/wearState";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearWearStates, toggleWearState } from "@/store/filtersSlice";
 import StandardFilterDisplay from "@/components/ui/StandardFilterDisplay";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+} from "@/components/product/addProductStyles";
 
 const GRID_GAP = 10;
-const H_PADDING = 12;
+const H_PADDING = 16;
 
-const SCREEN_W = Dimensions.get("window").width;
-const CARD_W = (SCREEN_W - H_PADDING * 2 - GRID_GAP) / 2;
-const CARD_H = Math.max(120, Math.round(CARD_W * 1.05));
-
-const CARD_COLORS: Record<string, { bg: string; text: string }> = {
-  "dupatta-included": { bg: "#FCE7F3", text: "#111" },
-  "trouser-included": { bg: "#E0F2FE", text: "#111" },
-  "blouse-included": { bg: "#DCFCE7", text: "#111" },
-  "one-piece": { bg: "#FEF3C7", text: "#111" },
-  "two-piece": { bg: "#EDE9FE", text: "#111" },
-  "three-piece": { bg: "#FFE4E6", text: "#111" }
-};
+const INCLUDED_CODE_ORDER = [
+  "dupatta-included",
+  "trouser-included",
+  "blouse-included",
+  "shawl-included",
+  "coat-included",
+  "inner-included",
+  "lining-included",
+  "one-piece",
+  "two-piece",
+  "three-piece",
+];
 
 export default function WearStateScreen() {
   const router = useRouter();
@@ -34,7 +34,6 @@ export default function WearStateScreen() {
   const dispatch = useAppDispatch();
 
   const selected = useAppSelector((s) => s.filters.wearStateIds);
-  const dressTypeId = useAppSelector((s) => s.filters.dressTypeId);
 
   const [items, setItems] = useState<WearStateItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -55,22 +54,11 @@ export default function WearStateScreen() {
         if (!alive) return;
 
         const list = (res ?? []) as WearStateItem[];
-
-        const order = [
-          "dupatta-included",
-          "trouser-included",
-          "blouse-included",
-          "one-piece",
-          "two-piece",
-          "three-piece"
-        ];
-
         const byCode = new Map(
-          list.map((x) => [String(x.code ?? "").toLowerCase(), x])
+          list.map((x) => [String(x.code ?? "").toLowerCase(), x]),
         );
 
-        const ordered = order
-          .map((code) => byCode.get(code))
+        const ordered = INCLUDED_CODE_ORDER.map((code) => byCode.get(code))
           .filter(Boolean) as WearStateItem[];
 
         const used = new Set(ordered.map((x) => x.id));
@@ -80,7 +68,7 @@ export default function WearStateScreen() {
       })
       .catch((e) => {
         if (!alive) return;
-        setErr(e?.message ?? "Failed to load wear states");
+        setErr(e?.message ?? "Failed to load includes");
         setItems([]);
       })
       .finally(() => {
@@ -95,15 +83,13 @@ export default function WearStateScreen() {
 
   return (
     <StandardFilterDisplay
-      title={`Wear State${dressTypeId ? "" : " (Dress type not set)"}`}
+      title="Includes"
       onBack={() => router.back()}
       onAny={() => dispatch(clearWearStates())}
       onNext={() =>
         fromResultsFilters ? router.back() : router.push("/price-band")
       }
     >
-      <Text style={styles.heading}>Select Wear State</Text>
-
       {loading ? <Text style={styles.infoText}>Loading...</Text> : null}
       {err ? <Text style={styles.infoText}>{err}</Text> : null}
 
@@ -116,27 +102,38 @@ export default function WearStateScreen() {
         columnWrapperStyle={styles.columnWrap}
         renderItem={({ item }) => {
           const isOn = selectedSet.has(item.id);
-          const code = String(item.code ?? "").toLowerCase();
-          const colors = CARD_COLORS[code] ?? { bg: "#F3F4F6", text: "#111" };
 
           return (
             <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: isOn }}
               key={item.id}
-              style={[
+              style={({ pressed }) => [
                 styles.card,
-                { backgroundColor: colors.bg, height: CARD_H },
-                isOn ? styles.cardSelected : null
+                isOn ? styles.cardSelected : null,
+                pressed ? styles.pressed : null,
               ]}
               onPress={() => dispatch(toggleWearState(item.id))}
             >
-              <Text style={[styles.label, { color: colors.text }]}>
+              <View style={[styles.iconBox, isOn ? styles.iconBoxOn : null]}>
+                <MaterialIcons
+                  name="checkroom"
+                  size={20}
+                  color={isOn ? apColors.blue : apColors.subText}
+                />
+              </View>
+
+              <Text
+                style={[styles.label, isOn ? styles.labelOn : null]}
+                numberOfLines={2}
+              >
                 {item.name}
               </Text>
 
               {isOn ? (
-                <Text style={[styles.selected, { color: colors.text }]}>
-                  ✓ Selected
-                </Text>
+                <View style={styles.check}>
+                  <MaterialIcons name="check" size={14} color={apColors.white} />
+                </View>
               ) : null}
             </Pressable>
           );
@@ -147,50 +144,83 @@ export default function WearStateScreen() {
 }
 
 const styles = StyleSheet.create({
-  heading: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 6,
-    color: "#111"
-  },
   infoText: {
-    color: "#111",
-    marginBottom: 6
+    marginHorizontal: H_PADDING,
+    marginBottom: 8,
+    fontSize: 13,
+    lineHeight: 18,
+    color: apColors.muted,
+    fontWeight: "500",
+    fontFamily: apFontFamily,
   },
 
   listContent: {
     paddingHorizontal: H_PADDING,
-    paddingBottom: 18,
-    paddingTop: 4
+    paddingBottom: 16,
   },
+
   columnWrap: {
     gap: GRID_GAP,
-    marginBottom: GRID_GAP
+    marginBottom: GRID_GAP,
   },
 
   card: {
     flex: 1,
+    minHeight: 110,
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    justifyContent: "center",
-    alignItems: "center"
+    borderColor: apColors.border,
+    borderRadius: apRadii.card,
+    padding: 12,
+    backgroundColor: apColors.white,
   },
+
   cardSelected: {
-    borderColor: "#111",
-    borderWidth: 2
+    borderColor: "#D7E3FF",
+    backgroundColor: apColors.blueSoft,
+  },
+
+  iconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: apRadii.control,
+    borderWidth: 1,
+    borderColor: apColors.border,
+    backgroundColor: apColors.white,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+  },
+
+  iconBoxOn: {
+    borderColor: "#D7E3FF",
+    backgroundColor: apColors.white,
   },
 
   label: {
-    fontSize: 15,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: "800",
-    textAlign: "center"
+    fontFamily: apFontFamily,
+    color: apColors.text,
   },
-  selected: {
-    marginTop: 6,
-    fontSize: 12,
-    fontWeight: "700"
-  }
+
+  labelOn: {
+    color: apColors.blue,
+  },
+
+  check: {
+    position: "absolute",
+    right: 10,
+    top: 10,
+    width: 22,
+    height: 22,
+    borderRadius: apRadii.pill,
+    backgroundColor: apColors.blue,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  pressed: {
+    opacity: 0.82,
+  },
 });

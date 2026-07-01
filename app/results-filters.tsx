@@ -1,6 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  BackHandler,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useRouter } from "expo-router";
+import { MaterialIcons } from "@expo/vector-icons";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+} from "@/components/product/addProductStyles";
+import { flattenWorkSubTypeNames } from "@/data/workSubTypes";
 import { useAppSelector } from "@/store/hooks";
 import { supabase } from "@/utils/supabase/client";
 
@@ -11,6 +25,7 @@ const TABLE_ORIGIN_CITIES = "origin_cities";
 const TABLE_WEAR_STATES = "wear_states";
 
 type NameRow = { id: any; name: string };
+type FilterIconName = React.ComponentProps<typeof MaterialIcons>["name"];
 
 const PRODUCT_CATEGORY_LABELS: Record<string, string> = {
   stitched_ready: "Ready-to-Wear",
@@ -19,8 +34,9 @@ const PRODUCT_CATEGORY_LABELS: Record<string, string> = {
 };
 
 function productCategorySummary(productCategoryIds: string[]) {
-  if (!Array.isArray(productCategoryIds) || !productCategoryIds.length)
+  if (!Array.isArray(productCategoryIds) || !productCategoryIds.length) {
     return "All";
+  }
 
   const names = productCategoryIds
     .map((id) => PRODUCT_CATEGORY_LABELS[String(id).trim()] ?? "")
@@ -62,11 +78,62 @@ function summary(names: string[]) {
 
 function priceSummary(minCostPkr: number | null, maxCostPkr: number | null) {
   if (minCostPkr === null && maxCostPkr === null) return "Any";
-  if (minCostPkr !== null && maxCostPkr === null)
+  if (minCostPkr !== null && maxCostPkr === null) {
     return `${formatPKR(minCostPkr)}+`;
-  if (minCostPkr === null && maxCostPkr !== null)
+  }
+  if (minCostPkr === null && maxCostPkr !== null) {
     return `Up to ${formatPKR(maxCostPkr)}`;
-  return `${formatPKR(minCostPkr as number)} – ${formatPKR(maxCostPkr as number)}`;
+  }
+  return `${formatPKR(minCostPkr as number)} - ${formatPKR(maxCostPkr as number)}`;
+}
+
+function FilterRow({
+  label,
+  value,
+  icon,
+  active,
+  onPress,
+}: {
+  label: string;
+  value: string;
+  icon: FilterIconName;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.row,
+        active ? styles.rowActive : null,
+        pressed ? styles.pressed : null,
+      ]}
+      onPress={onPress}
+    >
+      <View style={[styles.iconBox, active ? styles.iconBoxActive : null]}>
+        <MaterialIcons
+          name={icon}
+          size={18}
+          color={active ? stylesVars.blue : stylesVars.subText}
+        />
+      </View>
+
+      <View style={styles.left}>
+        <Text style={styles.label}>{label}</Text>
+        <Text
+          style={[styles.value, active ? styles.valueActive : null]}
+          numberOfLines={2}
+        >
+          {value}
+        </Text>
+      </View>
+
+      <MaterialIcons
+        name="chevron-right"
+        size={22}
+        color={active ? stylesVars.blue : stylesVars.subText}
+      />
+    </Pressable>
+  );
 }
 
 export default function ResultsFiltersModal() {
@@ -88,6 +155,7 @@ export default function ResultsFiltersModal() {
   const fabricTypeIds: string[] = filters?.fabricTypeIds ?? [];
   const colorShadeIds: string[] = filters?.colorShadeIds ?? [];
   const workTypeIds: string[] = filters?.workTypeIds ?? [];
+  const workSubTypeMap = filters?.workSubTypeMap ?? {};
   const workDensityIds: string[] = filters?.workDensityIds ?? [];
   const originCityIds: string[] = filters?.originCityIds ?? [];
   const wearStateIds: string[] = filters?.wearStateIds ?? [];
@@ -168,7 +236,9 @@ export default function ResultsFiltersModal() {
   const wearNames = idsToNames(wearStateIds, wearMap);
 
   const colorNames = (colorShadeIds ?? []).map(safeStr).filter(Boolean);
+  const workSubTypeNames = flattenWorkSubTypeNames(workSubTypeMap);
   const priceValue = priceSummary(minCostPkr, maxCostPkr);
+  const hasPrice = minCostPkr !== null || maxCostPkr !== null;
 
   function go(path: string) {
     router.push({
@@ -194,133 +264,125 @@ export default function ResultsFiltersModal() {
     <View style={styles.container}>
       <View style={styles.topRow}>
         <Text style={styles.title}>Filters</Text>
-        <Text style={styles.close} onPress={closeToResults}>
-          Close
-        </Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close filters"
+          style={({ pressed }) => [
+            styles.closeBtn,
+            pressed ? styles.pressed : null,
+          ]}
+          onPress={closeToResults}
+        >
+          <MaterialIcons name="close" size={18} color={stylesVars.blue} />
+        </Pressable>
       </View>
 
-      <Pressable
-        style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]}
-        onPress={() => go("/product-category")}
+      <ScrollView
+        style={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.list}
       >
-        <View style={styles.left}>
-          <Text style={styles.label}>Product Category</Text>
-          <Text style={styles.value} numberOfLines={2}>
-            {productCategorySummary(productCategoryIds)}
-          </Text>
-        </View>
-        <Text style={styles.arrow}>›</Text>
-      </Pressable>
+        <FilterRow
+          label="Category"
+          value={productCategorySummary(productCategoryIds)}
+          icon="category"
+          active={productCategoryIds.length > 0}
+          onPress={() => go("/product-category")}
+        />
 
-      <Pressable
-        style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]}
-        onPress={() => go("/fabric")}
-      >
-        <View style={styles.left}>
-          <Text style={styles.label}>Fabric</Text>
-          <Text style={styles.value} numberOfLines={2}>
-            {summary(fabricNames)}
-          </Text>
-        </View>
-        <Text style={styles.arrow}>›</Text>
-      </Pressable>
+        <FilterRow
+          label="Fabric"
+          value={summary(fabricNames)}
+          icon="texture"
+          active={fabricTypeIds.length > 0}
+          onPress={() => go("/fabric")}
+        />
 
-      <Pressable
-        style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]}
-        onPress={() => go("/color")}
-      >
-        <View style={styles.left}>
-          <Text style={styles.label}>Color</Text>
-          <Text style={styles.value} numberOfLines={2}>
-            {summary(colorNames)}
-          </Text>
-        </View>
-        <Text style={styles.arrow}>›</Text>
-      </Pressable>
+        <FilterRow
+          label="Color"
+          value={summary(colorNames)}
+          icon="palette"
+          active={colorNames.length > 0}
+          onPress={() => go("/color")}
+        />
 
-      <Pressable
-        style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]}
-        onPress={() => go("/work")}
-      >
-        <View style={styles.left}>
-          <Text style={styles.label}>Work</Text>
-          <Text style={styles.value} numberOfLines={2}>
-            {summary(workNames)}
-          </Text>
-        </View>
-        <Text style={styles.arrow}>›</Text>
-      </Pressable>
+        <FilterRow
+          label="Work"
+          value={
+            workSubTypeNames.length
+              ? summary(workSubTypeNames)
+              : summary(workNames)
+          }
+          icon="build"
+          active={workTypeIds.length > 0 || workSubTypeNames.length > 0}
+          onPress={() => go("/work")}
+        />
 
-      <Pressable
-        style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]}
-        onPress={() => go("/work-density")}
-      >
-        <View style={styles.left}>
-          <Text style={styles.label}>Work Density</Text>
-          <Text style={styles.value} numberOfLines={2}>
-            {summary(densityNames)}
-          </Text>
-        </View>
-        <Text style={styles.arrow}>›</Text>
-      </Pressable>
+        <FilterRow
+          label="Density"
+          value={summary(densityNames)}
+          icon="grain"
+          active={workDensityIds.length > 0}
+          onPress={() => go("/work-density")}
+        />
 
-      <Pressable
-        style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]}
-        onPress={() => go("/origin-city")}
-      >
-        <View style={styles.left}>
-          <Text style={styles.label}>Origin City</Text>
-          <Text style={styles.value} numberOfLines={2}>
-            {summary(originNames)}
-          </Text>
-        </View>
-        <Text style={styles.arrow}>›</Text>
-      </Pressable>
+        <FilterRow
+          label="Origin"
+          value={summary(originNames)}
+          icon="place"
+          active={originCityIds.length > 0}
+          onPress={() => go("/origin-city")}
+        />
 
-      <Pressable
-        style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]}
-        onPress={() => go("/wear-state")}
-      >
-        <View style={styles.left}>
-          <Text style={styles.label}>Wear State</Text>
-          <Text style={styles.value} numberOfLines={2}>
-            {summary(wearNames)}
-          </Text>
-        </View>
-        <Text style={styles.arrow}>›</Text>
-      </Pressable>
+        <FilterRow
+          label="Includes"
+          value={summary(wearNames)}
+          icon="check-circle-outline"
+          active={wearStateIds.length > 0}
+          onPress={() => go("/wear-state")}
+        />
 
-      <Pressable
-        style={({ pressed }) => [styles.row, pressed ? styles.pressed : null]}
-        onPress={() => go("/price-band")}
-      >
-        <View style={styles.left}>
-          <Text style={styles.label}>Price</Text>
-          <Text style={styles.value} numberOfLines={2}>
-            {priceValue}
-          </Text>
-        </View>
-        <Text style={styles.arrow}>›</Text>
-      </Pressable>
+        <FilterRow
+          label="Price"
+          value={priceValue}
+          icon="attach-money"
+          active={hasPrice}
+          onPress={() => go("/price-band")}
+        />
+      </ScrollView>
+
+      <View style={styles.footer}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Apply filters"
+          onPress={closeToResults}
+          style={({ pressed }) => [
+            styles.applyBtn,
+            pressed ? styles.pressed : null,
+          ]}
+        >
+          <Text style={styles.applyText}>Apply</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
 
 const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
+  bg: apColors.bg,
+  cardBg: apColors.card,
+  border: apColors.border,
+  borderSoft: apColors.borderSoft,
+  blue: apColors.blue,
+  blueSoft: apColors.blueSoft,
+  text: apColors.text,
+  subText: apColors.subText,
+  mutedText: apColors.muted,
   placeholder: "#94A3B8",
-  danger: "#B91C1C",
-  dangerSoft: "#FEE2E2",
-  dangerBorder: "#FCA5A5",
-  white: "#FFFFFF",
+  danger: apColors.danger,
+  dangerSoft: "#FEF2F2",
+  dangerBorder: "#FECACA",
+  white: apColors.white,
   black: "#000000",
 };
 
@@ -328,7 +390,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: stylesVars.bg,
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
 
   topRow: {
@@ -336,49 +399,76 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
-    paddingBottom: 10,
+    paddingBottom: 12,
   },
 
   title: {
     fontSize: 18,
     fontWeight: "700",
+    fontFamily: apFontFamily,
     color: stylesVars.text,
   },
 
-  close: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: stylesVars.blue,
+  closeBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: apRadii.control,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: stylesVars.white,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
-  note: {
-    marginBottom: 12,
-    fontSize: 12,
-    lineHeight: 18,
-    color: stylesVars.mutedText,
-    fontWeight: "500",
+  list: {
+    paddingBottom: 12,
+  },
+
+  scroll: {
+    flex: 1,
   },
 
   row: {
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 18,
-    padding: 14,
+    borderRadius: apRadii.card,
+    padding: 12,
     marginBottom: 10,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: 12,
     backgroundColor: stylesVars.cardBg,
+  },
+
+  rowActive: {
+    borderColor: "#D7E3FF",
+    backgroundColor: stylesVars.white,
+  },
+
+  iconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: apRadii.control,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    backgroundColor: stylesVars.white,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  iconBoxActive: {
+    borderColor: "#D7E3FF",
+    backgroundColor: stylesVars.blueSoft,
   },
 
   left: {
     flex: 1,
-    paddingRight: 10,
   },
 
   label: {
     fontSize: 13,
     fontWeight: "700",
+    fontFamily: apFontFamily,
     color: stylesVars.text,
   },
 
@@ -388,15 +478,38 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    fontFamily: apFontFamily,
   },
 
-  arrow: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: stylesVars.subText,
+  valueActive: {
+    color: stylesVars.blue,
+    fontWeight: "600",
   },
 
   pressed: {
     opacity: 0.82,
+  },
+
+  footer: {
+    borderTopWidth: 1,
+    borderTopColor: stylesVars.border,
+    paddingTop: 10,
+    paddingBottom: 16,
+    backgroundColor: stylesVars.bg,
+  },
+
+  applyBtn: {
+    minHeight: 48,
+    borderRadius: apRadii.control,
+    backgroundColor: stylesVars.blue,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  applyText: {
+    color: stylesVars.white,
+    fontSize: 14,
+    fontWeight: "800",
+    fontFamily: apFontFamily,
   },
 });

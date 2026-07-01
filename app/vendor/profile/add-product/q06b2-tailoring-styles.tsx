@@ -7,7 +7,6 @@ import {
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -17,6 +16,13 @@ import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { supabase } from "@/utils/supabase/client";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
+import FastNumberInput from "@/components/product/add-product/FastNumberInput";
+import {
+  AddProductFooter,
+  AddProductInput,
+  AddProductNotice,
+  AddProductScreen,
+} from "@/components/product/add-product/AddProductWizard";
 
 import {
   BLOUSE_NECK_PATTERNS,
@@ -70,6 +76,18 @@ function safeInt(v: any) {
 
 function safeStr(v: any) {
   return String(v ?? "").trim();
+}
+
+function sanitizeNumberText(input: string) {
+  const cleaned = input.replace(/[^\d.]/g, "");
+  const parts = cleaned.split(".");
+  if (parts.length <= 1) return cleaned;
+  return `${parts[0]}.${parts.slice(1).join("")}`;
+}
+
+function safeCostNumber(text: string) {
+  const n = Number(sanitizeNumberText(text) || "0");
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
 }
 
 function normalizeStringArray(v: unknown): string[] {
@@ -340,17 +358,18 @@ const MultiSelectGroup = ({
   items,
   selected,
   onToggle,
+  emptySelectionText,
 }: {
   title: string;
   items: string[];
   selected: string[];
   onToggle: (item: string) => void;
+  emptySelectionText?: string;
 }) => {
   if (!items.length) {
     return (
-      <Text style={[apStyles.metaHint, { marginTop: 8 }]}>
-        {title}:{" "}
-        <Text style={{ fontWeight: "700", color: apColors.text }}>—</Text>
+      <Text style={[apStyles.metaHint, { marginTop: 8, color: apColors.danger }]}>
+        {emptySelectionText || `${title}: not offered.`}
       </Text>
     );
   }
@@ -408,6 +427,12 @@ const MultiSelectGroup = ({
           );
         })}
       </View>
+
+      {!selected.length && emptySelectionText ? (
+        <Text style={[apStyles.metaHint, { marginTop: 6, color: apColors.danger }]}>
+          {emptySelectionText}
+        </Text>
+      ) : null}
     </View>
   );
 };
@@ -501,6 +526,7 @@ const TailoringPresetCard = memo(function TailoringPresetCard({
   pickPresetImages,
   makePresetPrimaryImage,
   removePresetImage,
+  canRemove,
 }: {
   preset: TailoringStylePreset;
   idx: number;
@@ -516,12 +542,23 @@ const TailoringPresetCard = memo(function TailoringPresetCard({
   pickPresetImages: (presetId: string) => Promise<void>;
   makePresetPrimaryImage: (presetId: string, index: number) => void;
   removePresetImage: (presetId: string, uri: string) => void;
+  canRemove: boolean;
 }) {
   const images = preset.images ?? [];
+  const [extraCostText, setExtraCostText] = useState(() => {
+    const n = safeCostNumber(String(preset.extra_cost_pkr ?? ""));
+    return n > 0 ? String(n) : "";
+  });
 
   const allowedNeck = preset.allowed_neck_variations ?? [];
   const allowedSleeve = preset.allowed_sleeve_variations ?? [];
   const allowedTrouser = preset.allowed_trouser_variations ?? [];
+
+  useEffect(() => {
+    const n = safeCostNumber(String(preset.extra_cost_pkr ?? ""));
+    const next = n > 0 ? String(n) : "";
+    setExtraCostText((prev) => (safeCostNumber(prev) === n ? prev : next));
+  }, [preset.extra_cost_pkr]);
 
   return (
     <View
@@ -552,35 +589,37 @@ const TailoringPresetCard = memo(function TailoringPresetCard({
           Style {idx + 1}
         </Text>
 
-        <Pressable
-          onPress={() => removePreset(preset.id)}
-          style={({ pressed }) => [
-            {
-              minHeight: 30,
-              paddingVertical: 6,
-              paddingHorizontal: 10,
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: "#F2C5C5",
-              backgroundColor: "#FFF4F4",
-            },
-            pressed ? apStyles.pressed : null,
-          ]}
-        >
-          <Text
-            style={{
-              fontSize: 11,
-              fontWeight: "700",
-              color: "#B42318",
-            }}
+        {canRemove ? (
+          <Pressable
+            onPress={() => removePreset(preset.id)}
+            style={({ pressed }) => [
+              {
+                minHeight: 30,
+                paddingVertical: 6,
+                paddingHorizontal: 10,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: "#F2C5C5",
+                backgroundColor: "#FFF4F4",
+              },
+              pressed ? apStyles.pressed : null,
+            ]}
           >
-            Remove
-          </Text>
-        </Pressable>
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: "700",
+                color: "#B42318",
+              }}
+            >
+              Remove
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <Text style={[apStyles.label, { marginTop: 12 }]}>Style title *</Text>
-      <TextInput
+      <AddProductInput
         value={preset.title}
         onChangeText={(t) =>
           updatePreset(preset.id, (prev) => ({ ...prev, title: t }))
@@ -592,7 +631,7 @@ const TailoringPresetCard = memo(function TailoringPresetCard({
       />
 
       <Text style={apStyles.label}>Style note</Text>
-      <TextInput
+      <AddProductInput
         value={preset.note ?? ""}
         onChangeText={(t) =>
           updatePreset(preset.id, (prev) => ({ ...prev, note: t }))
@@ -605,17 +644,15 @@ const TailoringPresetCard = memo(function TailoringPresetCard({
       />
 
       <Text style={apStyles.label}>Extra cost for this style (PKR)</Text>
-      <TextInput
-        value={String(Math.max(0, Number(preset.extra_cost_pkr ?? 0) || 0))}
-        onChangeText={(t) =>
+      <FastNumberInput
+        value={extraCostText}
+        onChangeText={(t) => {
+          setExtraCostText(t);
           updatePreset(preset.id, (prev) => ({
             ...prev,
-            extra_cost_pkr: Math.max(
-              0,
-              Number(t.replace(/[^\d.]/g, "") || "0"),
-            ),
-          }))
-        }
+            extra_cost_pkr: safeCostNumber(t),
+          }));
+        }}
         placeholder="e.g., 1500"
         placeholderTextColor={apColors.muted}
         style={apStyles.input}
@@ -623,77 +660,111 @@ const TailoringPresetCard = memo(function TailoringPresetCard({
         maxLength={12}
       />
 
-      <Text style={apStyles.label}>Style images *</Text>
-
-      <Pressable
-        onPress={() => pickPresetImages(preset.id)}
-        style={({ pressed }) => [
-          apStyles.primaryBtn,
-          { marginTop: 8 },
-          pressed ? apStyles.pressed : null,
-        ]}
+      <View
+        style={{
+          marginTop: 16,
+          paddingTop: 14,
+          borderTopWidth: 1,
+          borderTopColor: apColors.border,
+        }}
       >
-        <Text style={apStyles.primaryText}>
-          Pick Style Images {images.length ? `(${images.length})` : ""}
-        </Text>
-      </Pressable>
+        <Text style={apStyles.label}>Style images *</Text>
 
-      {images.length ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingTop: 10, gap: 10 }}
+        <Pressable
+          onPress={() => pickPresetImages(preset.id)}
+          style={({ pressed }) => [
+            apStyles.primaryBtn,
+            { marginTop: 10, marginBottom: images.length ? 4 : 0 },
+            pressed ? apStyles.pressed : null,
+          ]}
         >
-          {images.map((img, imgIdx) => {
-            const uri = safeStr(img.uri);
-            if (!uri) return null;
+          <Text style={apStyles.primaryText}>
+            Pick Style Images {images.length ? `(${images.length})` : ""}
+          </Text>
+        </Pressable>
 
-            const isPrimary = imgIdx === 0;
+        {images.length ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingTop: 12, paddingBottom: 4, gap: 12 }}
+          >
+            {images.map((img, imgIdx) => {
+              const uri = safeStr(img.uri);
+              if (!uri) return null;
 
-            return (
-              <View
-                key={`${preset.id}-${uri}-${imgIdx}`}
-                style={{
-                  width: 76,
-                  height: 76,
-                  borderRadius: 12,
-                  overflow: "hidden",
-                  borderWidth: 1,
-                  borderColor: apColors.borderSoft,
-                  backgroundColor: "#f3f4f6",
-                }}
-              >
-                <Image source={{ uri }} style={{ width: 76, height: 76 }} />
+              const isPrimary = imgIdx === 0;
 
-                {isPrimary ? (
-                  <View
-                    style={{
-                      position: "absolute",
-                      left: 6,
-                      bottom: 6,
-                      paddingHorizontal: 8,
-                      paddingVertical: 4,
-                      borderRadius: 10,
-                      backgroundColor: "rgba(11,47,107,0.88)",
-                    }}
-                  >
-                    <Text
-                      style={{ color: "#fff", fontWeight: "900", fontSize: 10 }}
-                    >
-                      Banner
-                    </Text>
-                  </View>
-                ) : (
-                  <Pressable
-                    onPress={() => makePresetPrimaryImage(preset.id, imgIdx)}
-                    style={({ pressed }) => [
-                      {
+              return (
+                <View
+                  key={`${preset.id}-${uri}-${imgIdx}`}
+                  style={{
+                    width: 92,
+                    height: 92,
+                    borderRadius: 8,
+                    overflow: "hidden",
+                    borderWidth: 1,
+                    borderColor: apColors.borderSoft,
+                    backgroundColor: "#f3f4f6",
+                  }}
+                >
+                  <Image source={{ uri }} style={{ width: 92, height: 92 }} />
+
+                  {isPrimary ? (
+                    <View
+                      style={{
                         position: "absolute",
                         left: 6,
                         bottom: 6,
                         paddingHorizontal: 8,
                         paddingVertical: 4,
-                        borderRadius: 10,
+                        borderRadius: 8,
+                        backgroundColor: "rgba(11,47,107,0.88)",
+                      }}
+                    >
+                      <Text
+                        style={{ color: "#fff", fontWeight: "900", fontSize: 10 }}
+                      >
+                        Banner
+                      </Text>
+                    </View>
+                  ) : (
+                    <Pressable
+                      onPress={() => makePresetPrimaryImage(preset.id, imgIdx)}
+                      style={({ pressed }) => [
+                        {
+                          position: "absolute",
+                          left: 6,
+                          bottom: 6,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 8,
+                          backgroundColor: "rgba(0,0,0,0.55)",
+                        },
+                        pressed ? apStyles.pressed : null,
+                      ]}
+                      hitSlop={10}
+                    >
+                      <Text
+                        style={{ color: "#fff", fontWeight: "900", fontSize: 10 }}
+                      >
+                        Make Banner
+                      </Text>
+                    </Pressable>
+                  )}
+
+                  <Pressable
+                    onPress={() => removePresetImage(preset.id, uri)}
+                    style={({ pressed }) => [
+                      {
+                        position: "absolute",
+                        top: 6,
+                        right: 6,
+                        width: 22,
+                        height: 22,
+                        borderRadius: 999,
+                        alignItems: "center",
+                        justifyContent: "center",
                         backgroundColor: "rgba(0,0,0,0.55)",
                       },
                       pressed ? apStyles.pressed : null,
@@ -701,51 +772,27 @@ const TailoringPresetCard = memo(function TailoringPresetCard({
                     hitSlop={10}
                   >
                     <Text
-                      style={{ color: "#fff", fontWeight: "900", fontSize: 10 }}
+                      style={{ color: "#fff", fontWeight: "900", fontSize: 12 }}
                     >
-                      Make Banner
+                      X
                     </Text>
                   </Pressable>
-                )}
-
-                <Pressable
-                  onPress={() => removePresetImage(preset.id, uri)}
-                  style={({ pressed }) => [
-                    {
-                      position: "absolute",
-                      top: 6,
-                      right: 6,
-                      width: 22,
-                      height: 22,
-                      borderRadius: 999,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: "rgba(0,0,0,0.55)",
-                    },
-                    pressed ? apStyles.pressed : null,
-                  ]}
-                  hitSlop={10}
-                >
-                  <Text
-                    style={{ color: "#fff", fontWeight: "900", fontSize: 12 }}
-                  >
-                    ✕
-                  </Text>
-                </Pressable>
-              </View>
-            );
-          })}
-        </ScrollView>
-      ) : (
-        <Text style={[apStyles.metaHint, { marginTop: 8 }]}>
-          No style images selected yet.
-        </Text>
-      )}
+                </View>
+              );
+            })}
+          </ScrollView>
+        ) : (
+          <Text style={[apStyles.metaHint, { marginTop: 8 }]}>
+            No style images selected yet.
+          </Text>
+        )}
+      </View>
 
       <MultiSelectGroup
         title="Allowed neck variations"
         items={neckOptions}
         selected={allowedNeck}
+        emptySelectionText="No neck variations offered."
         onToggle={(item) =>
           updatePreset(preset.id, (prev) => {
             const next = normalizeStringArray(prev.allowed_neck_variations);
@@ -762,6 +809,7 @@ const TailoringPresetCard = memo(function TailoringPresetCard({
         title="Allowed sleeve variations"
         items={sleeveOptions}
         selected={allowedSleeve}
+        emptySelectionText="No sleeve variations offered."
         onToggle={(item) =>
           updatePreset(preset.id, (prev) => {
             const next = normalizeStringArray(prev.allowed_sleeve_variations);
@@ -779,6 +827,7 @@ const TailoringPresetCard = memo(function TailoringPresetCard({
           title="Allowed trouser variations"
           items={trouserOptions}
           selected={allowedTrouser}
+          emptySelectionText="No trouser variations offered."
           onToggle={(item) =>
             updatePreset(preset.id, (prev) => {
               const next = normalizeStringArray(
@@ -823,9 +872,16 @@ export default function Q06B2TailoringStyles() {
 
   const category = inferCategoryFromDraft(draft);
   const needsTailoring = category === "unstitched_dyeing_tailoring";
+  const initialIncludesTrouser = Boolean(
+    (draft?.spec as any)?.includes_trouser ??
+      (draft?.spec as any)?.has_trouser ??
+      (draft?.spec as any)?.product_has_trouser ??
+      false,
+  );
 
-  const [vendorOffersTailoring, setVendorOffersTailoring] =
-    useState<boolean>(false);
+  const [vendorOffersTailoring, setVendorOffersTailoring] = useState<
+    boolean | null
+  >(null);
   const [vendorTailoringOptions, setVendorTailoringOptions] =
     useState<VendorTailoringOptions>({
       blouse_neck: [],
@@ -834,13 +890,8 @@ export default function Q06B2TailoringStyles() {
     });
   const [vendorLoading, setVendorLoading] = useState<boolean>(false);
 
-  const [includesTrouser, setIncludesTrouser] = useState<boolean>(() =>
-    Boolean(
-      (draft?.spec as any)?.includes_trouser ??
-      (draft?.spec as any)?.has_trouser ??
-      (draft?.spec as any)?.product_has_trouser ??
-      false,
-    ),
+  const [includesTrouser, setIncludesTrouser] = useState<boolean>(
+    () => initialIncludesTrouser,
   );
 
   const neckOptions = useMemo(() => {
@@ -858,20 +909,19 @@ export default function Q06B2TailoringStyles() {
     return fromVendor.length ? fromVendor : [...TROUSER_STYLES];
   }, [vendorTailoringOptions.trouser]);
 
-  const [stylePresets, setStylePresets] = useState<TailoringStylePreset[]>(() =>
-    normalizeTailoringStylePresets(
+  const [stylePresets, setStylePresets] = useState<TailoringStylePreset[]>(() => {
+    const normalized = normalizeTailoringStylePresets(
       (draft?.spec as any)?.tailoring_style_presets,
-      Boolean(
-        (draft?.spec as any)?.includes_trouser ??
-        (draft?.spec as any)?.has_trouser ??
-        (draft?.spec as any)?.product_has_trouser ??
-        false,
-      ),
+      initialIncludesTrouser,
       [...BLOUSE_NECK_PATTERNS],
       [...BLOUSE_SLEEVE_PATTERNS],
       [...TROUSER_STYLES],
-    ),
-  );
+    );
+
+    return needsTailoring && !normalized.length
+      ? [createEmptyStylePreset(initialIncludesTrouser)]
+      : normalized;
+  });
 
   function patchSpec(patch: any) {
     if (typeof ctx.setSpec === "function") {
@@ -916,7 +966,7 @@ export default function Q06B2TailoringStyles() {
     }
 
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsMultipleSelection: true,
       quality: 0.9,
     });
@@ -975,8 +1025,17 @@ export default function Q06B2TailoringStyles() {
     let alive = true;
 
     async function loadVendor() {
+      if (!needsTailoring) {
+        if (alive) {
+          setVendorLoading(false);
+          setVendorOffersTailoring(false);
+        }
+        return;
+      }
+
       if (!vendorId) {
         if (alive) {
+          setVendorLoading(false);
           setVendorOffersTailoring(false);
           setVendorTailoringOptions({
             blouse_neck: [],
@@ -988,7 +1047,10 @@ export default function Q06B2TailoringStyles() {
       }
 
       try {
-        if (alive) setVendorLoading(true);
+        if (alive) {
+          setVendorLoading(true);
+          setVendorOffersTailoring(null);
+        }
 
         const { data, error } = await supabase
           .from("vendor")
@@ -1035,11 +1097,12 @@ export default function Q06B2TailoringStyles() {
     return () => {
       alive = false;
     };
-  }, [vendorId]);
+  }, [vendorId, needsTailoring]);
 
   useEffect(() => {
     if (!needsTailoring) {
       patchSpec({
+        has_tailoring_style_presets: false,
         includes_trouser: false,
         tailoring_style_presets: [],
       });
@@ -1047,6 +1110,7 @@ export default function Q06B2TailoringStyles() {
     }
 
     patchSpec({
+      has_tailoring_style_presets: true,
       includes_trouser: includesTrouser,
       tailoring_style_presets: normalizeTailoringStylePresets(
         stylePresets,
@@ -1065,10 +1129,15 @@ export default function Q06B2TailoringStyles() {
     trouserOptions,
   ]);
 
+  useEffect(() => {
+    if (!needsTailoring || stylePresets.length) return;
+    setStylePresets([createEmptyStylePreset(includesTrouser)]);
+  }, [needsTailoring, includesTrouser, stylePresets.length]);
+
   const canContinue = useMemo(() => {
     if (!vendorId) return false;
     if (!needsTailoring) return true;
-    if (!vendorOffersTailoring) return false;
+    if (vendorOffersTailoring !== true) return false;
 
     if (!stylePresets.length) return false;
 
@@ -1077,13 +1146,30 @@ export default function Q06B2TailoringStyles() {
       if (!Array.isArray(p.images) || p.images.length < 1) return false;
       return true;
     });
-  }, [
-    vendorId,
-    needsTailoring,
-    vendorOffersTailoring,
-    stylePresets,
-    includesTrouser,
-  ]);
+  }, [vendorId, needsTailoring, vendorOffersTailoring, stylePresets]);
+  const disabledHint = useMemo(() => {
+    if (!vendorId) return "Vendor not loaded.";
+    if (!needsTailoring) return "";
+    if (vendorOffersTailoring === null) {
+      return "Loading vendor tailoring settings.";
+    }
+    if (vendorOffersTailoring === false) {
+      return "Enable tailoring in your vendor profile first.";
+    }
+    if (!stylePresets.length) {
+      return "Add at least one tailoring style card.";
+    }
+
+    const missingTitle = stylePresets.some((p) => !safeStr(p.title));
+    if (missingTitle) return "Add a title for each tailoring style.";
+
+    const missingImage = stylePresets.some(
+      (p) => !Array.isArray(p.images) || p.images.length < 1,
+    );
+    if (missingImage) return "Add at least one image for each tailoring style.";
+
+    return "";
+  }, [vendorId, needsTailoring, vendorOffersTailoring, stylePresets]);
 
   function closeScreen() {
     if (returnTo) {
@@ -1107,7 +1193,7 @@ export default function Q06B2TailoringStyles() {
       return;
     }
 
-    if (!vendorOffersTailoring) {
+    if (vendorOffersTailoring !== true) {
       Alert.alert(
         "Tailoring not enabled",
         "You cannot continue because your vendor profile does not offer tailoring. Enable stitching / tailoring in your profile first.",
@@ -1150,6 +1236,7 @@ export default function Q06B2TailoringStyles() {
     }
 
     patchSpec({
+      has_tailoring_style_presets: true,
       includes_trouser: includesTrouser,
       tailoring_style_presets: cleaned,
     });
@@ -1163,44 +1250,35 @@ export default function Q06B2TailoringStyles() {
   }
 
   return (
-    <View style={apStyles.screen}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={apStyles.screen}
-        contentContainerStyle={apStyles.content}
-      >
-        <View style={apStyles.headerRow}>
-          <Text style={apStyles.title}>Tailoring Styles</Text>
-
-          <Pressable
-            onPress={closeScreen}
-            style={({ pressed }) => [
-              apStyles.linkBtn,
-              pressed ? apStyles.pressed : null,
-            ]}
-          >
-            <Text style={apStyles.linkText}>Close</Text>
-          </Pressable>
-        </View>
-
-        <View style={apStyles.card}>
-          {vendorLoading ? (
+    <AddProductScreen
+      title="Tailoring Styles"
+      onBack={closeScreen}
+      footer={
+        <AddProductFooter
+          onPrimaryPress={onContinue}
+          primaryDisabled={!canContinue}
+          disabledHint={disabledHint}
+        />
+      }
+    >
+      <View style={apStyles.card}>
+          {vendorLoading || vendorOffersTailoring === null ? (
             <View style={apStyles.loadingRow}>
               <ActivityIndicator />
-              <Text style={apStyles.loadingText}>Loading vendor settings…</Text>
+              <Text style={apStyles.loadingText}>Loading vendor settings...</Text>
             </View>
           ) : null}
 
-          {!vendorOffersTailoring ? (
+          {vendorOffersTailoring === false ? (
             <View
               style={{
                 marginTop: 4,
                 marginBottom: 12,
                 padding: 12,
-                borderRadius: 14,
-                backgroundColor: apColors.blueSoft,
+                borderRadius: 12,
+                backgroundColor: apColors.warningSoft,
                 borderWidth: 1,
-                borderColor: "#D7E3FF",
+                borderColor: "#FED7AA",
               }}
             >
               <Text
@@ -1218,7 +1296,7 @@ export default function Q06B2TailoringStyles() {
                 product category.
               </Text>
             </View>
-          ) : (
+          ) : vendorOffersTailoring === true ? (
             <View
               style={{
                 marginTop: 4,
@@ -1230,6 +1308,10 @@ export default function Q06B2TailoringStyles() {
                 borderColor: "#D7E3FF",
               }}
             >
+              <AddProductNotice title="At least one style required">
+                Add a title and image so buyers can see the style before ordering.
+              </AddProductNotice>
+
               <BinaryToggle
                 label="Does this product include trouser?"
                 value={includesTrouser}
@@ -1278,18 +1360,17 @@ export default function Q06B2TailoringStyles() {
                         pickPresetImages={pickPresetImages}
                         makePresetPrimaryImage={makePresetPrimaryImage}
                         removePresetImage={removePresetImage}
+                        canRemove={stylePresets.length > 1}
                       />
                     )}
                   />
 
                   <View style={{ marginTop: 14 }}>
-                    {/* count label */}
                     <Text style={[apStyles.metaHint, { marginBottom: 6 }]}>
                       {stylePresets.length}{" "}
                       {stylePresets.length === 1 ? "style" : "styles"} added
                     </Text>
 
-                    {/* smaller secondary button */}
                     <Pressable
                       onPress={addPreset}
                       style={({ pressed }) => [
@@ -1305,21 +1386,8 @@ export default function Q06B2TailoringStyles() {
                 </>
               )}
             </View>
-          )}
-
-          <Pressable
-            style={({ pressed }) => [
-              apStyles.primaryBtn,
-              !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null,
-            ]}
-            onPress={onContinue}
-            disabled={!canContinue}
-          >
-            <Text style={apStyles.primaryText}>Continue</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </View>
+          ) : null}
+      </View>
+    </AddProductScreen>
   );
 }

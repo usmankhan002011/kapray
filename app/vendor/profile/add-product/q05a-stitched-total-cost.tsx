@@ -1,16 +1,19 @@
 import React, { useMemo, useRef, useState } from "react";
 import {
   Alert,
-  Pressable,
-  ScrollView,
   Text,
-  TextInput,
+  type TextInput,
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
+import FastNumberInput from "@/components/product/add-product/FastNumberInput";
+import {
+  AddProductFooter,
+  AddProductScreen,
+} from "@/components/product/add-product/AddProductWizard";
 
 function sanitizeNumber(input: string) {
   const cleaned = input.replace(/[^\d.]/g, "");
@@ -48,6 +51,11 @@ export default function Q05AStitchedTotalCost() {
     const n = Number(text);
     return Number.isFinite(n) && n > 0;
   }, [vendorId, text]);
+  const disabledHint = !vendorId
+    ? "Vendor not loaded."
+    : !canContinue
+      ? "Enter the stitched product base cost."
+      : "";
 
   function patchPrice(patch: any) {
     if (typeof ctx.setPrice === "function") {
@@ -100,37 +108,28 @@ export default function Q05AStitchedTotalCost() {
       return;
     }
 
-    router.push("/vendor/profile/add-product/q06a-sizes" as any);
+    router.push("/vendor/profile/add-product/q06c-shipping" as any);
   }
 
   return (
-    <View style={apStyles.screen}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={apStyles.screen}
-        contentContainerStyle={apStyles.content}
-      >
-        <View style={apStyles.headerRow}>
-          <Text style={apStyles.title}>Total cost</Text>
+    <AddProductScreen
+      title="Total cost"
+      onBack={() => router.back()}
+      footer={
+        <AddProductFooter
+          onPrimaryPress={onContinue}
+          primaryDisabled={!canContinue}
+          disabledHint={disabledHint}
+        />
+      }
+    >
+      <View style={apStyles.card}>
+        <Text style={apStyles.label}>Total cost (PKR) *</Text>
 
-          <Pressable
-            onPress={() => router.back()}
-            style={({ pressed }) => [
-              apStyles.linkBtn,
-              pressed ? apStyles.pressed : null,
-            ]}
-          >
-            <Text style={apStyles.linkText}>Close</Text>
-          </Pressable>
-        </View>
-
-        <View style={apStyles.card}>
-          <Text style={apStyles.label}>Total cost (PKR) *</Text>
-
-          <TextInput
+          <FastNumberInput
             ref={inputRef}
             value={text}
-            onChangeText={(t) => setText(sanitizeNumber(t))}
+            onChangeText={setText}
             placeholder="e.g., 25000"
             placeholderTextColor={apColors.muted}
             style={apStyles.input}
@@ -139,19 +138,7 @@ export default function Q05AStitchedTotalCost() {
             returnKeyType="done"
           />
 
-          <Pressable
-            style={({ pressed }) => [
-              apStyles.primaryBtn,
-              !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null,
-            ]}
-            onPress={onContinue}
-            disabled={!canContinue}
-          >
-            <Text style={apStyles.primaryText}>Continue</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </View>
+      </View>
+    </AddProductScreen>
   );
 }

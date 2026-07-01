@@ -472,7 +472,7 @@ export default function AddProductScreen() {
     }
 
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsMultipleSelection: true,
       // ✅ UNLIMITED: remove selectionLimit + no slice cap
       quality: 0.9
@@ -498,7 +498,7 @@ export default function AddProductScreen() {
     }
 
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      mediaTypes: ["videos"],
       allowsMultipleSelection: true,
       // ✅ UNLIMITED: remove selectionLimit + no slice cap
       quality: 1

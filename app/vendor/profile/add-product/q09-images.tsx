@@ -1,10 +1,17 @@
 import React, { useMemo } from "react";
-import { Alert, Image, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
+import {
+  AddProductCard,
+  AddProductField,
+  AddProductFooter,
+  AddProductPrimaryButton,
+  AddProductScreen,
+} from "@/components/product/add-product/AddProductWizard";
 
 function safeInt(v: any) {
   const n = Number(v);
@@ -35,6 +42,11 @@ export default function Q09Images() {
     if (!vendorId) return false;
     return imageCount >= 1;
   }, [vendorId, imageCount]);
+  const disabledHint = !vendorId
+    ? "Vendor not loaded."
+    : imageCount < 1
+      ? "Pick at least one product image."
+      : "";
 
   async function pickImages() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -44,7 +56,7 @@ export default function Q09Images() {
     }
 
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsMultipleSelection: true,
       quality: 0.9
     });
@@ -99,36 +111,35 @@ export default function Q09Images() {
   }
 
   return (
-    <View style={apStyles.screen}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={apStyles.screen}
-        contentContainerStyle={apStyles.content}
-      >
-        <View style={apStyles.headerRow}>
-          <Text style={apStyles.title}>Images</Text>
-
-          <Pressable
-            onPress={() => router.back()}
-            style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
-          >
-            <Text style={apStyles.linkText}>Close</Text>
-          </Pressable>
-        </View>
-
-        <View style={apStyles.card}>
-          <Text style={apStyles.label}>Pick at least 1 image *</Text>
-          <Text style={apStyles.metaHint}>First image will be used as Banner / Title Image.</Text>
-
-          <Pressable
-            style={({ pressed }) => [apStyles.primaryBtn, pressed ? apStyles.pressed : null]}
+    <AddProductScreen
+      title="Images"
+      onBack={() => router.back()}
+      footer={
+        <AddProductFooter
+          onPrimaryPress={onContinue}
+          primaryDisabled={!canContinue}
+          disabledHint={disabledHint}
+        />
+      }
+    >
+      <AddProductCard>
+        <AddProductField
+          label="Pick at least 1 image"
+          required
+          hint="First image will be used as Banner / Title Image."
+          style={{ marginTop: 0 }}
+        >
+          <AddProductPrimaryButton
+            label={`Pick Images ${imageCount ? `(${imageCount})` : ""}`}
             onPress={pickImages}
-          >
-            <Text style={apStyles.primaryText}>Pick Images {imageCount ? `(${imageCount})` : ""}</Text>
-          </Pressable>
+          />
 
           {pickedImages.length ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingTop: 10, gap: 10 }}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.imageStrip}
+            >
               {pickedImages.map((a: any, idx: number) => {
                 const uri = safeStr(a?.uri);
                 if (!uri) return null;
@@ -138,72 +149,36 @@ export default function Q09Images() {
                 return (
                   <View
                     key={`${uri}-${idx}`}
-                    style={{
-                      width: 76,
-                      height: 76,
-                      borderRadius: 12,
-                      overflow: "hidden",
-                      borderWidth: 1,
-                      borderColor: apColors.borderSoft,
-                      backgroundColor: "#f3f4f6"
-                    }}
+                    style={styles.imageTile}
                   >
-                    <Image source={{ uri }} style={{ width: 76, height: 76 }} />
+                    <Image source={{ uri }} style={styles.imageThumb} />
 
                     {isPrimary ? (
-                      <View
-                        style={{
-                          position: "absolute",
-                          left: 6,
-                          bottom: 6,
-                          paddingHorizontal: 8,
-                          paddingVertical: 4,
-                          borderRadius: 10,
-                          backgroundColor: "rgba(11,47,107,0.88)"
-                        }}
-                      >
-                        <Text style={{ color: "#fff", fontWeight: "900", fontSize: 10 }}>Banner</Text>
+                      <View style={styles.bannerBadge}>
+                        <Text style={styles.tileText}>Banner</Text>
                       </View>
                     ) : (
                       <Pressable
                         onPress={() => makePrimary(idx)}
                         style={({ pressed }) => [
-                          {
-                            position: "absolute",
-                            left: 6,
-                            bottom: 6,
-                            paddingHorizontal: 8,
-                            paddingVertical: 4,
-                            borderRadius: 10,
-                            backgroundColor: "rgba(0,0,0,0.55)"
-                          },
+                          styles.makeBannerBadge,
                           pressed ? apStyles.pressed : null
                         ]}
                         hitSlop={10}
                       >
-                        <Text style={{ color: "#fff", fontWeight: "900", fontSize: 10 }}>Make Banner</Text>
+                        <Text style={styles.tileText}>Make Banner</Text>
                       </Pressable>
                     )}
 
                     <Pressable
                       onPress={() => removeImage(uri)}
                       style={({ pressed }) => [
-                        {
-                          position: "absolute",
-                          top: 6,
-                          right: 6,
-                          width: 22,
-                          height: 22,
-                          borderRadius: 999,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          backgroundColor: "rgba(0,0,0,0.55)"
-                        },
+                        styles.removeBtn,
                         pressed ? apStyles.pressed : null
                       ]}
                       hitSlop={10}
                     >
-                      <Text style={{ color: "#fff", fontWeight: "900", fontSize: 12 }}>✕</Text>
+                      <Text style={styles.removeText}>X</Text>
                     </Pressable>
                   </View>
                 );
@@ -212,20 +187,67 @@ export default function Q09Images() {
           ) : (
             <Text style={apStyles.metaHint}>No images selected yet.</Text>
           )}
-
-          <Pressable
-            style={({ pressed }) => [
-              apStyles.primaryBtn,
-              !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null
-            ]}
-            onPress={onContinue}
-            disabled={!canContinue}
-          >
-            <Text style={apStyles.primaryText}>Continue</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </View>
+        </AddProductField>
+      </AddProductCard>
+    </AddProductScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  imageStrip: {
+    paddingTop: 10,
+    gap: 10,
+  },
+  imageTile: {
+    width: 84,
+    height: 84,
+    borderRadius: 8,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: apColors.borderSoft,
+    backgroundColor: "#f3f4f6",
+  },
+  imageThumb: {
+    width: 84,
+    height: 84,
+  },
+  bannerBadge: {
+    position: "absolute",
+    left: 6,
+    bottom: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: "rgba(11,47,107,0.88)",
+  },
+  makeBannerBadge: {
+    position: "absolute",
+    left: 6,
+    bottom: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  tileText: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 10,
+  },
+  removeBtn: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  removeText: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 12,
+  },
+});

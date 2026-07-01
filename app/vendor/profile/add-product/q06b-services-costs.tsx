@@ -2,18 +2,24 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Pressable,
-  ScrollView,
   Text,
-  TextInput,
+  type TextInput,
   View,
 } from "react-native";
-import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { supabase } from "@/utils/supabase/client";
-import { apColors, apStyles } from "@/components/product/addProductStyles";
+import { apStyles } from "@/components/product/addProductStyles";
+import {
+  AddProductInput,
+  AddProductCard,
+  AddProductField,
+  AddProductFooter,
+  AddProductNotice,
+  AddProductScreen,
+} from "@/components/product/add-product/AddProductWizard";
 
 type ProductCategory =
   | "unstitched_plain"
@@ -72,6 +78,7 @@ export default function Q06BServicesCosts() {
 
   const dyeingRef = useRef<TextInput>(null);
   const tailoringRef = useRef<TextInput>(null);
+  const turnaroundRef = useRef<TextInput>(null);
 
   const vendorIdRaw =
     useAppSelector((s: any) => s?.vendorSlice?.vendor?.id ?? null) ??
@@ -82,38 +89,43 @@ export default function Q06BServicesCosts() {
   const { draft } = ctx;
 
   const category = inferCategoryFromDraft(draft);
-
   const needsDyeing =
     category === "unstitched_dyeing" ||
     category === "unstitched_dyeing_tailoring";
   const needsTailoring = category === "unstitched_dyeing_tailoring";
+  const dyeingIsPerMeter = category === "unstitched_dyeing";
 
-  const [vendorOffersTailoring, setVendorOffersTailoring] =
-    useState<boolean>(false);
-  const [vendorLoading, setVendorLoading] = useState<boolean>(false);
+  const [vendorOffersTailoring, setVendorOffersTailoring] = useState<
+    boolean | null
+  >(needsTailoring ? null : false);
+  const [vendorLoading, setVendorLoading] = useState(false);
 
-  const [dyeingCost, setDyeingCost] = useState<string>(() => {
+  const initialDyeingCost = useMemo(() => {
     const fromPrice = safeNumOrZero(
       (draft?.price as any)?.dyeing_cost_pkr ?? 0,
     );
     if (fromPrice > 0) return String(fromPrice);
     const fromSpec = safeNumOrZero((draft?.spec as any)?.dyeing_cost_pkr ?? 0);
     return fromSpec > 0 ? String(fromSpec) : "";
-  });
+  }, [draft?.price, draft?.spec]);
 
-  const [tailoringCost, setTailoringCost] = useState<string>(() => {
+  const initialTailoringCost = useMemo(() => {
     const fromPrice = safeNumOrZero(
       (draft?.price as any)?.tailoring_cost_pkr ?? 0,
     );
     return fromPrice > 0 ? String(fromPrice) : "";
-  });
+  }, [draft?.price]);
 
-  const [turnaroundDays, setTurnaroundDays] = useState<string>(() => {
+  const initialTurnaroundDays = useMemo(() => {
     const fromSpec = safeNumOrZero(
       (draft?.spec as any)?.tailoring_turnaround_days ?? 0,
     );
     return fromSpec > 0 ? String(fromSpec) : "";
-  });
+  }, [draft?.spec]);
+
+  const dyeingCostRef = useRef(initialDyeingCost);
+  const tailoringCostRef = useRef(initialTailoringCost);
+  const turnaroundDaysRef = useRef(initialTurnaroundDays);
 
   function patchSpec(patch: any) {
     if (typeof ctx.setSpec === "function") {
@@ -148,14 +160,22 @@ export default function Q06BServicesCosts() {
   useEffect(() => {
     let alive = true;
 
-    async function loadVendor() {
+    async function loadVendorTailoring() {
+      if (!needsTailoring) {
+        setVendorLoading(false);
+        setVendorOffersTailoring(false);
+        return;
+      }
+
       if (!vendorId) {
-        if (alive) setVendorOffersTailoring(false);
+        setVendorLoading(false);
+        setVendorOffersTailoring(false);
         return;
       }
 
       try {
-        if (alive) setVendorLoading(true);
+        setVendorLoading(true);
+        setVendorOffersTailoring(null);
 
         const { data, error } = await supabase
           .from("vendor")
@@ -164,27 +184,22 @@ export default function Q06BServicesCosts() {
           .single();
 
         if (!alive) return;
-
-        if (error) {
-          setVendorOffersTailoring(false);
-          return;
-        }
-
-        setVendorOffersTailoring(Boolean((data as any)?.offers_tailoring));
+        setVendorOffersTailoring(
+          error ? false : Boolean((data as any)?.offers_tailoring),
+        );
       } catch {
-        if (!alive) return;
-        setVendorOffersTailoring(false);
+        if (alive) setVendorOffersTailoring(false);
       } finally {
         if (alive) setVendorLoading(false);
       }
     }
 
-    loadVendor();
+    loadVendorTailoring();
 
     return () => {
       alive = false;
     };
-  }, [vendorId]);
+  }, [vendorId, needsTailoring]);
 
   useEffect(() => {
     if (category === "unstitched_plain" || category === "stitched_ready") {
@@ -218,32 +233,17 @@ export default function Q06BServicesCosts() {
 
   const canContinue = useMemo(() => {
     if (!vendorId) return false;
-
-    if (needsDyeing) {
-      const d = Number(dyeingCost);
-      if (!Number.isFinite(d) || d <= 0) return false;
-    }
-
-    if (needsTailoring) {
-      if (!vendorOffersTailoring) return false;
-
-      const t = Number(tailoringCost);
-      if (!Number.isFinite(t) || t <= 0) return false;
-
-      const days = turnaroundDays === "" ? 0 : Number(turnaroundDays);
-      if (!Number.isFinite(days) || days < 0) return false;
-    }
-
+    if (needsTailoring) return vendorOffersTailoring === true;
     return true;
-  }, [
-    vendorId,
-    needsDyeing,
-    dyeingCost,
-    needsTailoring,
-    vendorOffersTailoring,
-    tailoringCost,
-    turnaroundDays,
-  ]);
+  }, [vendorId, needsTailoring, vendorOffersTailoring]);
+
+  const disabledHint = !vendorId
+    ? "Vendor not loaded."
+    : needsTailoring && vendorOffersTailoring === null
+        ? "Loading vendor tailoring settings."
+        : needsTailoring && vendorOffersTailoring === false
+          ? "Enable tailoring in your vendor profile first."
+          : "";
 
   function closeScreen() {
     if (returnTo) {
@@ -262,7 +262,7 @@ export default function Q06BServicesCosts() {
       return;
     }
 
-    if (needsTailoring && !vendorOffersTailoring) {
+    if (needsTailoring && vendorOffersTailoring !== true) {
       Alert.alert(
         "Tailoring not enabled",
         "You cannot continue because your vendor profile does not offer tailoring. Enable stitching / tailoring in your profile first.",
@@ -271,7 +271,7 @@ export default function Q06BServicesCosts() {
     }
 
     if (needsDyeing) {
-      const d = Number(sanitizeNumber(dyeingCost) || "0");
+      const d = Number(sanitizeNumber(dyeingCostRef.current) || "0");
       if (!Number.isFinite(d) || d <= 0) {
         Alert.alert(
           "Invalid dyeing cost",
@@ -280,11 +280,14 @@ export default function Q06BServicesCosts() {
         return;
       }
       patchPrice({ dyeing_cost_pkr: d });
-      patchSpec({ dyeing_cost_pkr: d });
+      patchSpec({
+        dyeing_cost_pkr: d,
+        dyeing_pricing_unit: dyeingIsPerMeter ? "per_meter" : "per_order",
+      });
     }
 
     if (needsTailoring) {
-      const t = Number(sanitizeNumber(tailoringCost) || "0");
+      const t = Number(sanitizeNumber(tailoringCostRef.current) || "0");
       if (!Number.isFinite(t) || t <= 0) {
         Alert.alert(
           "Invalid tailoring cost",
@@ -293,10 +296,8 @@ export default function Q06BServicesCosts() {
         return;
       }
 
-      const days =
-        turnaroundDays === ""
-          ? 0
-          : Number(sanitizeNumber(turnaroundDays) || "0");
+      const turnaroundText = sanitizeNumber(turnaroundDaysRef.current);
+      const days = turnaroundText === "" ? 0 : Number(turnaroundText || "0");
       if (!Number.isFinite(days) || days < 0) {
         Alert.alert("Invalid turnaround", "Turnaround days must be 0 or more.");
         return;
@@ -331,134 +332,104 @@ export default function Q06BServicesCosts() {
           dyeingRef.current?.focus();
           return;
         }
-        if (needsTailoring) {
-          tailoringRef.current?.focus();
-        }
+        if (needsTailoring) tailoringRef.current?.focus();
       }, 100);
       return () => clearTimeout(timer);
     }, [needsDyeing, needsTailoring]),
   );
 
   return (
-    <View style={apStyles.screen}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={apStyles.screen}
-        contentContainerStyle={apStyles.content}
-      >
-        <View style={apStyles.headerRow}>
-          <Text style={apStyles.title}>Services & Costs</Text>
+    <AddProductScreen
+      title="Services & Costs"
+      onBack={closeScreen}
+      footer={
+        <AddProductFooter
+          onPrimaryPress={onContinue}
+          primaryDisabled={!canContinue}
+          disabledHint={disabledHint}
+        />
+      }
+    >
+      <AddProductCard>
+        {vendorLoading || (needsTailoring && vendorOffersTailoring === null) ? (
+          <View style={[apStyles.loadingRow, { marginBottom: 12 }]}>
+            <ActivityIndicator />
+            <Text style={apStyles.loadingText}>Loading vendor settings...</Text>
+          </View>
+        ) : null}
 
-          <Pressable
-            onPress={closeScreen}
-            style={({ pressed }) => [
-              apStyles.linkBtn,
-              pressed ? apStyles.pressed : null,
-            ]}
+        {needsDyeing ? (
+          <AddProductField
+            label={
+              dyeingIsPerMeter
+                ? "Dyeing cost per meter (PKR)"
+                : "Dyeing cost (PKR)"
+            }
+            required
+            style={{ marginTop: 0 }}
           >
-            <Text style={apStyles.linkText}>Close</Text>
-          </Pressable>
-        </View>
+            <AddProductInput
+              ref={dyeingRef}
+              defaultValue={initialDyeingCost}
+              textValueRef={dyeingCostRef}
+              sanitizeText={sanitizeNumber}
+              placeholder="e.g., 800"
+              keyboardType="decimal-pad"
+              maxLength={12}
+              returnKeyType={needsTailoring ? "next" : "done"}
+              onSubmitEditing={() => {
+                if (needsTailoring) tailoringRef.current?.focus();
+              }}
+            />
+          </AddProductField>
+        ) : null}
 
-        <View style={apStyles.card}>
-          {vendorLoading ? (
-            <View style={apStyles.loadingRow}>
-              <ActivityIndicator />
-              <Text style={apStyles.loadingText}>Loading vendor settings…</Text>
-            </View>
-          ) : null}
+        {needsTailoring ? (
+          <>
+            {vendorOffersTailoring === false ? (
+              <AddProductNotice
+                title="Tailoring is not enabled in vendor profile"
+                tone="warning"
+              >
+                Enable stitching / tailoring in vendor profile before using this product category.
+              </AddProductNotice>
+            ) : null}
 
-          {needsDyeing ? (
-            <>
-              <Text style={apStyles.label}>Dyeing cost (PKR) *</Text>
-              <TextInput
-                ref={dyeingRef}
-                value={dyeingCost}
-                onChangeText={(t) => setDyeingCost(sanitizeNumber(t))}
-                placeholder="e.g., 800"
-                placeholderTextColor={apColors.muted}
-                style={apStyles.input}
-                keyboardType="decimal-pad"
-                maxLength={12}
-                returnKeyType={needsTailoring ? "next" : "done"}
-                onSubmitEditing={() => {
-                  if (needsTailoring) tailoringRef.current?.focus();
-                }}
-              />
-            </>
-          ) : null}
-
-          {needsTailoring ? (
-            <>
-              {!vendorOffersTailoring ? (
-                <View
-                  style={{
-                    marginTop: 4,
-                    marginBottom: 12,
-                    padding: 12,
-                    borderRadius: 14,
-                    backgroundColor: apColors.blueSoft,
-                    borderWidth: 1,
-                    borderColor: "#D7E3FF",
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      fontWeight: "700",
-                      color: apColors.text,
-                      marginBottom: 4,
-                    }}
-                  >
-                    Tailoring is not enabled in vendor profile
-                  </Text>
-                  <Text style={apStyles.metaHint}>
-                    Enable stitching / tailoring in vendor profile before using
-                    this product category.
-                  </Text>
-                </View>
-              ) : null}
-
-              <Text style={apStyles.label}>Tailoring cost (PKR) *</Text>
-              <TextInput
+            <AddProductField
+              label="Tailoring cost (PKR)"
+              required
+              style={{
+                marginTop: needsDyeing || vendorOffersTailoring === false ? 14 : 0,
+              }}
+            >
+              <AddProductInput
                 ref={tailoringRef}
-                value={tailoringCost}
-                onChangeText={(t) => setTailoringCost(sanitizeNumber(t))}
+                defaultValue={initialTailoringCost}
+                textValueRef={tailoringCostRef}
+                sanitizeText={sanitizeNumber}
                 placeholder="e.g., 2500"
-                placeholderTextColor={apColors.muted}
-                style={apStyles.input}
                 keyboardType="decimal-pad"
                 maxLength={12}
                 returnKeyType="next"
+                onSubmitEditing={() => turnaroundRef.current?.focus()}
               />
+            </AddProductField>
 
-              <Text style={apStyles.label}>Tailoring turnaround (days)</Text>
-              <TextInput
-                value={turnaroundDays}
-                onChangeText={(t) => setTurnaroundDays(sanitizeNumber(t))}
+            <AddProductField label="Tailoring turnaround (days)">
+              <AddProductInput
+                ref={turnaroundRef}
+                defaultValue={initialTurnaroundDays}
+                textValueRef={turnaroundDaysRef}
+                sanitizeText={sanitizeNumber}
                 placeholder="e.g., 12"
-                placeholderTextColor={apColors.muted}
-                style={apStyles.input}
                 keyboardType="number-pad"
                 maxLength={3}
                 returnKeyType="done"
               />
-            </>
-          ) : null}
-
-          <Pressable
-            style={({ pressed }) => [
-              apStyles.primaryBtn,
-              !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null,
-            ]}
-            onPress={onContinue}
-            disabled={!canContinue}
-          >
-            <Text style={apStyles.primaryText}>Continue</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </View>
+            </AddProductField>
+          </>
+        ) : null}
+      </AddProductCard>
+    </AddProductScreen>
   );
 }

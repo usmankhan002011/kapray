@@ -2,15 +2,23 @@ import React, { useMemo, useRef, useState } from "react";
 import {
   Alert,
   Pressable,
-  ScrollView,
+  StyleSheet,
   Text,
-  TextInput,
+  type TextInput,
   View,
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
+import {
+  AddProductCard,
+  AddProductField,
+  AddProductFooter,
+  AddProductInput,
+  AddProductSecondaryButton,
+  AddProductScreen,
+} from "@/components/product/add-product/AddProductWizard";
 
 function safeInt(v: any) {
   const n = Number(v);
@@ -75,8 +83,6 @@ export default function Q12MoreDescription() {
 
   const category = safeStr((draft?.spec as any)?.product_category ?? "");
   const needsTailoring = category === "unstitched_dyeing_tailoring";
-  const madeOnOrder = Boolean((draft?.spec as any)?.made_on_order ?? false);
-  const isMadeOrderStitched = category === "stitched_ready" && madeOnOrder;
 
   function patchSpec(patch: any) {
     if (typeof ctx.setSpec === "function") {
@@ -103,6 +109,7 @@ export default function Q12MoreDescription() {
   );
 
   const canContinue = useMemo(() => Boolean(vendorId), [vendorId]);
+  const disabledHint = !vendorId ? "Vendor not loaded." : "";
 
   useFocusEffect(
     React.useCallback(() => {
@@ -168,9 +175,8 @@ export default function Q12MoreDescription() {
   );
 
   function onChangeText(next: string) {
-    const cleaned = safeStr(next);
-    setText(cleaned);
-    patchSpec({ more_description: cleaned });
+    setText(next);
+    patchSpec({ more_description: next });
   }
 
   function removeSentence(sentence: string) {
@@ -234,14 +240,7 @@ export default function Q12MoreDescription() {
 
     if (needsTailoring) {
       router.push(
-        "/vendor/profile/add-product/q06b2-tailoring-style-choice" as any,
-      );
-      return;
-    }
-
-    if (isMadeOrderStitched) {
-      router.push(
-        "/vendor/profile/add-product/q06b4-made-order-variant-choice" as any,
+        "/vendor/profile/add-product/q06b2-tailoring-styles" as any,
       );
       return;
     }
@@ -250,116 +249,163 @@ export default function Q12MoreDescription() {
   }
 
   return (
-    <View style={apStyles.screen}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={apStyles.screen}
-        contentContainerStyle={apStyles.content}
-      >
-        <View style={apStyles.headerRow}>
-          <Text style={apStyles.title}>More description</Text>
-
-          <Pressable
-            onPress={closeScreen}
-            style={({ pressed }) => [
-              apStyles.linkBtn,
-              pressed ? apStyles.pressed : null,
-            ]}
-          >
-            <Text style={apStyles.linkText}>Close</Text>
-          </Pressable>
+    <AddProductScreen
+      title="More description"
+      onBack={closeScreen}
+      footer={
+        <AddProductFooter
+          onPrimaryPress={onContinue}
+          primaryDisabled={!canContinue}
+          disabledHint={disabledHint}
+        />
+      }
+    >
+      <AddProductCard>
+        <View style={styles.builderTop}>
+          <Text style={apStyles.label}>Builder</Text>
+          <AddProductSecondaryButton
+            label="Open"
+            onPress={openBuilder}
+            style={styles.openBuilderButton}
+          />
         </View>
 
-        <View style={apStyles.card}>
-          <Text style={apStyles.label}>Build Description</Text>
+        {selectedSentences.length ? (
+          <View style={styles.builderBlock}>
+            <View style={styles.builderHeader}>
+              <Text style={styles.builderCount}>
+                {selectedSentences.length} added
+              </Text>
 
-          <Pressable
-            onPress={openBuilder}
-            style={({ pressed }) => [
-              apStyles.secondaryBtn,
-              pressed ? apStyles.pressed : null,
-            ]}
-          >
-            <Text style={apStyles.secondaryText}>Open Builder</Text>
-          </Pressable>
-
-          {selectedSentences.length ? (
-            <View style={{ marginTop: 6 }}>
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  marginTop: 10,
-                }}
+              <Pressable
+                onPress={clearAllBuilder}
+                style={({ pressed }) => [
+                  styles.clearButton,
+                  pressed ? apStyles.pressed : null,
+                ]}
               >
-                <Text style={apStyles.metaHint}>
-                  Tap ✕ to remove a builder sentence.
-                </Text>
+                <Text style={styles.clearText}>Clear</Text>
+              </Pressable>
+            </View>
+
+            {selectedSentences.map((sentence) => (
+              <View
+                key={sentence}
+                style={styles.sentenceRow}
+              >
+                <Text style={styles.sentenceText}>{sentence}</Text>
 
                 <Pressable
-                  onPress={clearAllBuilder}
+                  onPress={() => removeSentence(sentence)}
                   style={({ pressed }) => [
-                    apStyles.linkBtn,
+                    styles.removeSentenceBtn,
                     pressed ? apStyles.pressed : null,
                   ]}
+                  hitSlop={8}
                 >
-                  <Text style={apStyles.linkText}>Clear builder list</Text>
+                  <Text style={styles.removeSentenceText}>X</Text>
                 </Pressable>
               </View>
+            ))}
+          </View>
+        ) : null}
 
-              {selectedSentences.map((sentence) => (
-                <View
-                  key={sentence}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "flex-start",
-                    marginTop: 12,
-                    padding: 10,
-                    backgroundColor: "#FFF5F5",
-                    borderRadius: 8,
-                  }}
-                >
-                  <Pressable
-                    onPress={() => removeSentence(sentence)}
-                    style={{ marginRight: 8 }}
-                  >
-                    <Text style={{ color: "red", fontWeight: "bold" }}>✕</Text>
-                  </Pressable>
-
-                  <Text style={{ flex: 1 }}>{sentence}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
-
-          <Text style={[apStyles.label, { marginTop: 20 }]}>
-            More description (optional)
-          </Text>
-
-          <TextInput
+        <AddProductField label="Details" style={styles.detailsField}>
+          <AddProductInput
             ref={inputRef}
             value={text}
             onChangeText={onChangeText}
-            placeholder="Write additional details…"
+            placeholder="Optional details"
             placeholderTextColor={apColors.muted}
-            style={[apStyles.input, { minHeight: 120, marginTop: 10 }]}
+            style={[apStyles.input, styles.descriptionInput]}
             multiline
+            textAlignVertical="top"
             maxLength={800}
           />
-
-          <Pressable
-            style={({ pressed }) => [
-              apStyles.primaryBtn,
-              !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null,
-            ]}
-            onPress={onContinue}
-            disabled={!canContinue}
-          >
-            <Text style={apStyles.primaryText}>Continue</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </View>
+        </AddProductField>
+      </AddProductCard>
+    </AddProductScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  builderTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  openBuilderButton: {
+    minHeight: 40,
+    marginTop: 0,
+    paddingHorizontal: 16,
+  },
+  builderBlock: {
+    marginTop: 14,
+  },
+  builderHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    marginBottom: 2,
+  },
+  builderCount: {
+    color: apColors.muted,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  clearButton: {
+    minHeight: 34,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    justifyContent: "center",
+    backgroundColor: apColors.blueSoft,
+  },
+  clearText: {
+    color: apColors.blue,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  sentenceRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingLeft: 12,
+    paddingRight: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: "#F8FAFF",
+  },
+  sentenceText: {
+    flex: 1,
+    color: apColors.text,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "500",
+  },
+  removeSentenceBtn: {
+    marginLeft: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: apColors.white,
+  },
+  removeSentenceText: {
+    color: apColors.danger,
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  detailsField: {
+    marginTop: 18,
+  },
+  descriptionInput: {
+    minHeight: 132,
+    marginTop: 10,
+    lineHeight: 20,
+  },
+});

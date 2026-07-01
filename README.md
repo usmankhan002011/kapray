@@ -13,7 +13,7 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 2. Start the app
 
    ```bash
-   npx expo start
+   npm run start
    ```
 
 In the output, you'll find options to open the app in a
@@ -51,7 +51,7 @@ Join our community of developers creating universal apps.
 
 ---
 
-npx expo run:android
+npm run android
 
 ---
 
@@ -554,3 +554,17 @@ C:\DEV\kapray\kapray\app\vendor\profile\add-product\q05a-stitched-total-cost.tsx
 C:\DEV\kapray\kapray\app\vendor\profile\add-product\review.tsx
 C:\DEV\kapray\kapray\app\vendor\profile\add-product\submit.tsx
 C:\DEV\kapray\kapray\components\product\view-product\ViewProduct.screen.tsx
+
+---
+
+Windows file association / launcher issue.
+
+Use the project scripts instead of launching Expo through npx:
+
+                                                                              npm run start
+
+For Android:
+
+                                                                            npm run android
+
+                                                                            npx.cmd expo start

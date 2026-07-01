@@ -7,11 +7,12 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
+import { AddProductInput } from "@/components/product/add-product/AddProductWizard";
+import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 import {
   buildMadeOrderVariantDisplayName,
   type MadeOrderVariant,
@@ -84,7 +85,9 @@ export default function MadeOrderVariantEditor({
   onRemove,
 }: Props) {
   const variantNo = safeInt(variant?.variant_no) || index + 1;
-  const label = safeStr(variant?.label) || `Variant ${variantNo}`;
+  const label =
+    safeStr(variant?.label).replace(/^Variant\b/i, "Style") ||
+    `Style ${variantNo}`;
   const name = safeStr(variant?.name);
   const images = useMemo(() => normalizeImages(variant?.images), [variant]);
 
@@ -102,7 +105,9 @@ export default function MadeOrderVariantEditor({
       ...variant,
       id: safeStr(variant?.id) || `made-order-variant-${nextVariantNo}`,
       variant_no: nextVariantNo,
-      label: safeStr(variant?.label) || `Variant ${nextVariantNo}`,
+      label:
+        safeStr(variant?.label).replace(/^Variant\b/i, "Style") ||
+        `Style ${nextVariantNo}`,
       name: nextName,
       display_name: nextName
         ? buildMadeOrderVariantDisplayName(nextVariantNo, nextName)
@@ -133,13 +138,13 @@ export default function MadeOrderVariantEditor({
       if (!permission.granted) {
         Alert.alert(
           "Permission needed",
-          "Please allow photo access to add variant images.",
+          "Please allow photo access to add style images.",
         );
         return;
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ["images"],
         allowsMultipleSelection: true,
         quality: 0.85,
       });
@@ -215,7 +220,7 @@ export default function MadeOrderVariantEditor({
 
       <View style={styles.fieldBlock}>
         <Text style={apStyles.label}>COLOR / DESIGN NAME *</Text>
-        <TextInput
+        <AddProductInput
           value={name}
           onChangeText={(text) => patch({ name: text })}
           placeholder="e.g., Black, Ivory Gold, Maroon Design"
@@ -228,7 +233,7 @@ export default function MadeOrderVariantEditor({
       <View style={styles.twoColRow}>
         <View style={styles.twoColItem}>
           <Text style={apStyles.label}>ADDITIONAL PRICE</Text>
-          <TextInput
+          <FastNumberInput
             value={String(safeInt(variant?.additional_price_pkr) || 0)}
             onChangeText={(text) =>
               patch({ additional_price_pkr: safeInt(sanitizeNumberText(text)) })
@@ -244,7 +249,7 @@ export default function MadeOrderVariantEditor({
 
         <View style={styles.twoColItem}>
           <Text style={apStyles.label}>ESTIMATED DAYS *</Text>
-          <TextInput
+          <FastNumberInput
             value={String(safeInt(variant?.estimated_days) || 0)}
             onChangeText={(text) =>
               patch({ estimated_days: safeInt(sanitizeNumberText(text)) })
@@ -255,12 +260,12 @@ export default function MadeOrderVariantEditor({
             keyboardType="number-pad"
             maxLength={4}
           />
-          <Text style={styles.helper}>Making time for this variant.</Text>
+          <Text style={styles.helper}>Making time for this style.</Text>
         </View>
       </View>
 
       <View style={styles.fieldBlock}>
-        <Text style={apStyles.label}>VARIANT IMAGES *</Text>
+        <Text style={apStyles.label}>STYLE IMAGES *</Text>
 
         <Pressable
           onPress={pickImages}
@@ -308,7 +313,7 @@ export default function MadeOrderVariantEditor({
         ) : (
           <View style={styles.emptyImageBox}>
             <Text style={styles.emptyImageText}>
-              No variant images selected
+              No style images selected
             </Text>
           </View>
         )}

@@ -1,9 +1,15 @@
-import React, { useMemo, useRef, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import React, { useMemo, useRef } from "react";
+import { Alert, type TextInput } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
-import { apColors, apStyles } from "@/components/product/addProductStyles";
+import {
+  AddProductCard,
+  AddProductField,
+  AddProductFooter,
+  AddProductInput,
+  AddProductScreen,
+} from "@/components/product/add-product/AddProductWizard";
 
 function sanitizeNumber(input: string) {
   const cleaned = input.replace(/[^\d.]/g, "");
@@ -33,13 +39,16 @@ export default function Q05BUnstitchedCostPerMeter() {
   const ctx = useProductDraft() as any;
   const { draft, setPricePerMeter, setPriceMode } = ctx;
 
-  const [text, setText] = useState<string>(String(draft?.price?.cost_pkr_per_meter ?? ""));
+  const initialText = useMemo(() => {
+    const existing = draft?.price?.cost_pkr_per_meter;
+    return existing == null ? "" : String(existing);
+  }, [draft?.price?.cost_pkr_per_meter]);
+  const textRef = useRef(initialText);
 
   const canContinue = useMemo(() => {
-    if (!vendorId) return false;
-    const n = Number(text);
-    return Number.isFinite(n) && n > 0;
-  }, [vendorId, text]);
+    return Boolean(vendorId);
+  }, [vendorId]);
+  const disabledHint = !vendorId ? "Vendor not loaded." : "";
 
   useFocusEffect(
     React.useCallback(() => {
@@ -64,8 +73,9 @@ export default function Q05BUnstitchedCostPerMeter() {
       return;
     }
 
-    const n = Number(sanitizeNumber(text) || "0");
-    if (!Number.isFinite(n) || n <= 0) {
+    const cleaned = sanitizeNumber(textRef.current);
+    const n = Number(cleaned);
+    if (!cleaned || !Number.isFinite(n) || n <= 0) {
       Alert.alert("Invalid cost", "Please enter a valid cost per meter (PKR).");
       return;
     }
@@ -82,51 +92,31 @@ export default function Q05BUnstitchedCostPerMeter() {
   }
 
   return (
-    <View style={apStyles.screen}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={apStyles.screen}
-        contentContainerStyle={apStyles.content}
-      >
-        <View style={apStyles.headerRow}>
-          <Text style={apStyles.title}>Cost per meter</Text>
-
-          <Pressable
-            onPress={closeScreen}
-            style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
-          >
-            <Text style={apStyles.linkText}>Close</Text>
-          </Pressable>
-        </View>
-
-        <View style={apStyles.card}>
-          <Text style={apStyles.label}>Cost per meter (PKR) *</Text>
-
-          <TextInput
+    <AddProductScreen
+      title="Cost per meter"
+      onBack={closeScreen}
+      footer={
+        <AddProductFooter
+          onPrimaryPress={onContinue}
+          primaryDisabled={!canContinue}
+          disabledHint={disabledHint}
+        />
+      }
+    >
+      <AddProductCard>
+        <AddProductField label="Cost per meter (PKR)" required style={{ marginTop: 0 }}>
+          <AddProductInput
             ref={inputRef}
-            value={text}
-            onChangeText={(t) => setText(sanitizeNumber(t))}
+            defaultValue={initialText}
             placeholder="e.g., 1800"
-            placeholderTextColor={apColors.muted}
-            style={apStyles.input}
+            textValueRef={textRef}
+            sanitizeText={sanitizeNumber}
             keyboardType="decimal-pad"
             maxLength={12}
             returnKeyType="done"
           />
-
-          <Pressable
-            style={({ pressed }) => [
-              apStyles.primaryBtn,
-              !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null,
-            ]}
-            onPress={onContinue}
-            disabled={!canContinue}
-          >
-            <Text style={apStyles.primaryText}>Continue</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </View>
+        </AddProductField>
+      </AddProductCard>
+    </AddProductScreen>
   );
 }

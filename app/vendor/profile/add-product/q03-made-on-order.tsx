@@ -1,9 +1,13 @@
 import React, { useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
-import { apColors, apStyles } from "@/components/product/addProductStyles";
+import { apStyles } from "@/components/product/addProductStyles";
+import {
+  AddProductFooter,
+  AddProductScreen,
+} from "@/components/product/add-product/AddProductWizard";
 
 function safeInt(v: any) {
   const n = Number(v);
@@ -47,6 +51,7 @@ export default function Q03MadeOnOrder() {
   }
 
   const canContinue = useMemo(() => Boolean(vendorId), [vendorId]);
+  const disabledHint = !vendorId ? "Vendor not loaded." : "";
 
   function setYes() {
     setMadeOnOrder(true);
@@ -83,8 +88,8 @@ export default function Q03MadeOnOrder() {
     if (isStitchedReady && !madeOnOrder) {
       router.push(
         returnTo
-          ? (`/vendor/profile/add-product/q04-inventory?returnTo=${encodeURIComponent(returnTo)}` as any)
-          : ("/vendor/profile/add-product/q04-inventory" as any),
+          ? (`/vendor/profile/add-product/q05a-stitched-total-cost?returnTo=${encodeURIComponent(returnTo)}` as any)
+          : ("/vendor/profile/add-product/q05a-stitched-total-cost" as any),
       );
       return;
     }
@@ -96,31 +101,20 @@ export default function Q03MadeOnOrder() {
     );
   }
 
-  const category = safeStr((draft?.spec as any)?.product_category ?? "");
-
   return (
-    <View style={apStyles.screen}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={apStyles.screen}
-        contentContainerStyle={apStyles.content}
-      >
-        <View style={apStyles.headerRow}>
-          <Text style={apStyles.title}>Made on order</Text>
-
-          <Pressable
-            onPress={() => router.back()}
-            style={({ pressed }) => [
-              apStyles.linkBtn,
-              pressed ? apStyles.pressed : null,
-            ]}
-          >
-            <Text style={apStyles.linkText}>Close</Text>
-          </Pressable>
-        </View>
-
-        <View style={apStyles.card}>
-          <Text style={apStyles.label}>MADE ON ORDER?</Text>
+    <AddProductScreen
+      title="Made on order"
+      onBack={() => router.back()}
+      footer={
+        <AddProductFooter
+          onPrimaryPress={goNext}
+          primaryDisabled={!canContinue}
+          disabledHint={disabledHint}
+        />
+      }
+    >
+      <View style={apStyles.card}>
+        <Text style={apStyles.label}>Made on order?</Text>
 
           {/* YES */}
           <Pressable
@@ -137,7 +131,7 @@ export default function Q03MadeOnOrder() {
                 madeOnOrder ? apStyles.segmentTextOn : null,
               ]}
             >
-              {madeOnOrder ? "✓  Yes" : "Yes"}
+              {madeOnOrder ? "Selected - Yes" : "Yes"}
             </Text>
           </Pressable>
 
@@ -157,7 +151,7 @@ export default function Q03MadeOnOrder() {
                 !madeOnOrder ? apStyles.segmentTextOn : null,
               ]}
             >
-              {!madeOnOrder ? "✓  No" : "No"}
+              {!madeOnOrder ? "Selected - No" : "No"}
             </Text>
           </Pressable>
 
@@ -167,28 +161,7 @@ export default function Q03MadeOnOrder() {
               : "Set inventory quantity in the next step."}
           </Text>
 
-          {/* {category ? (
-            <Text style={apStyles.metaHint}>
-              Category:{" "}
-              <Text style={{ fontWeight: "900", color: apColors.text }}>
-                {category}
-              </Text>
-            </Text>
-          ) : null} */}
-
-          <Pressable
-            style={({ pressed }) => [
-              apStyles.primaryBtn,
-              !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null,
-            ]}
-            onPress={goNext}
-            disabled={!canContinue}
-          >
-            <Text style={apStyles.primaryText}>Continue</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </View>
+      </View>
+    </AddProductScreen>
   );
 }

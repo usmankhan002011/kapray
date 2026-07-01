@@ -16,6 +16,12 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { useAppSelector } from "@/store/hooks";
+import DyePaletteReferenceButton from "@/components/product/DyePaletteReferenceButton";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+} from "@/components/product/addProductStyles";
 import ExactMeasurementsModal from "../(tabs)/flow/purchase/exact-measurements-modal";
 import type { ExactMeasurementSheetRow } from "../(tabs)/flow/purchase/exact-measurements-sheet";
 
@@ -64,6 +70,14 @@ type OrderRow = {
   } | null;
 };
 
+type DyeSplit = {
+  length_m: number;
+  dye_shade_id: string;
+  dye_hex: string;
+  dye_label: string;
+  dyeing_cost_pkr: number | null;
+};
+
 function money(currency: string, v: any) {
   if (v == null || v === "") return `${currency} —`;
   const n = typeof v === "number" ? v : Number(v);
@@ -78,6 +92,13 @@ function safeText(v: any) {
 
 function norm(v: unknown) {
   return (v == null ? "" : String(v)).trim().toLowerCase();
+}
+
+const EMPTY_TEXT = safeText("");
+
+function cleanValue(v: any) {
+  const t = String(v ?? "").trim();
+  return t && t !== EMPTY_TEXT ? t : "";
 }
 
 function boolish(v: any): boolean {
@@ -95,6 +116,20 @@ function numOrNull(v: any): number | null {
   const n = Number(v);
   if (!Number.isFinite(n)) return null;
   return n;
+}
+
+function normalizeDyeSplits(v: any): DyeSplit[] {
+  const rows = Array.isArray(v) ? v : [];
+
+  return rows
+    .map((row) => ({
+      length_m: numOrNull(row?.length_m) ?? 0,
+      dye_shade_id: cleanValue(row?.dye_shade_id),
+      dye_hex: cleanValue(row?.dye_hex),
+      dye_label: cleanValue(row?.dye_label),
+      dyeing_cost_pkr: numOrNull(row?.dyeing_cost_pkr),
+    }))
+    .filter((row) => row.length_m > 0 && (row.dye_hex || row.dye_shade_id));
 }
 
 function isUnstitchedFromSpec(spec: any): boolean {
@@ -882,14 +917,20 @@ export default function OrderDetailScreen() {
     return hex !== "—" ? hex : "";
   }, [order, spec]);
 
+  const dyeSplits = useMemo(() => {
+    if (!order) return [];
+    return normalizeDyeSplits(spec?.dyeing_splits);
+  }, [order, spec]);
+
   const dyeSelected = useMemo(() => {
     if (!order) return false;
     return (
       boolish(spec?.dyeing_selected) ||
+      dyeSplits.length > 0 ||
       !!dyeHex ||
       safeText(spec?.dye_label ?? "") !== "—"
     );
-  }, [order, spec, dyeHex]);
+  }, [order, spec, dyeHex, dyeSplits]);
 
   const dyeCostPkr = useMemo(() => {
     if (!order) return null;
@@ -1263,7 +1304,7 @@ export default function OrderDetailScreen() {
             </SectionCard>
 
             {selectedStitchedVariant ? (
-              <SectionCard title="Selected Variant">
+              <SectionCard title="Selected Style">
                 <View style={styles.variantRow}>
                   {selectedStitchedVariant.imageUrl ? (
                     <View style={styles.variantImageWrap}>
@@ -1277,7 +1318,7 @@ export default function OrderDetailScreen() {
 
                   <View style={styles.variantInfoWrap}>
                     <Text style={styles.variantTitle} numberOfLines={2}>
-                      {selectedStitchedVariant.title || "Selected variant"}
+                      {selectedStitchedVariant.title || "Selected style"}
                     </Text>
                     {!isMadeOrderStitchedOrder ? (
                       <KVRow
@@ -1318,7 +1359,7 @@ export default function OrderDetailScreen() {
 
                 {!!selectedStitchedVariant.note && (
                   <View style={styles.noteBox}>
-                    <Text style={styles.noteLabel}>Variant note</Text>
+                    <Text style={styles.noteLabel}>Style note</Text>
                     <Text style={styles.noteText}>
                       {selectedStitchedVariant.note}
                     </Text>
@@ -1374,13 +1415,31 @@ export default function OrderDetailScreen() {
                           : ""
                       }
                     />
+                    <KVRow
+                      label="Total fabric cost"
+                      value={
+                        fabricCostPkr != null
+                          ? money(order.currency, fabricCostPkr)
+                          : ""
+                      }
+                    />
                   </>
                 ) : null}
 
                 {dyeSelected ? (
                   <View style={styles.customBlock}>
                     <View style={styles.kvRow}>
-                      <Text style={styles.kvLabel}>Dyeing color</Text>
+                      <View style={styles.kvLabelWithIcon}>
+                        <Text style={[styles.kvLabel, styles.kvLabelWithIconText]}>
+                          {dyeSplits.length ? "Dye portions" : "Dyeing color"}
+                        </Text>
+                        <DyePaletteReferenceButton
+                          dyeSplits={dyeSplits}
+                          dyeShadeId={cleanValue(spec?.dye_shade_id)}
+                          dyeHex={dyeHex}
+                          dyeLabel={cleanValue(spec?.dye_label)}
+                        />
+                      </View>
                       <View style={styles.colorPreviewRow}>
                         {!!dyeHex && (
                           <View
@@ -1397,6 +1456,25 @@ export default function OrderDetailScreen() {
                         </Text>
                       </View>
                     </View>
+                    {dyeSplits.map((row, index) => (
+                      <View
+                        key={`${row.dye_shade_id}-${index}`}
+                        style={styles.dyeSplitSummaryRow}
+                      >
+                        {!!row.dye_hex && (
+                          <View
+                            style={[
+                              styles.dyeSwatchSmall,
+                              { backgroundColor: row.dye_hex },
+                            ]}
+                          />
+                        )}
+                        <Text style={styles.dyeSplitSummaryText}>
+                          {row.length_m} m
+                          {row.dye_label ? ` - Code ${row.dye_label}` : ""}
+                        </Text>
+                      </View>
+                    ))}
                   </View>
                 ) : null}
 
@@ -1728,21 +1806,21 @@ export default function OrderDetailScreen() {
 }
 
 const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E2E8F0",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  mutedText: "#64748B",
+  bg: apColors.bg,
+  cardBg: apColors.card,
+  border: apColors.border,
+  borderSoft: apColors.borderSoft,
+  blue: apColors.blue,
+  blueSoft: apColors.blueSoft,
+  text: apColors.text,
+  mutedText: apColors.muted,
   placeholder: "#94A3B8",
-  danger: "#B91C1C",
+  danger: apColors.danger,
   dangerSoft: "#FEE2E2",
   dangerBorder: "#FCA5A5",
-  success: "#166534",
-  successSoft: "#DCFCE7",
-  white: "#FFFFFF",
+  success: apColors.success,
+  successSoft: apColors.successSoft,
+  white: apColors.white,
 };
 
 const styles = StyleSheet.create({
@@ -1762,16 +1840,18 @@ const styles = StyleSheet.create({
   },
 
   pageTitle: {
+    fontFamily: apFontFamily,
     fontSize: 20,
     fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   backBtn: {
     minHeight: 36,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 999,
+    borderRadius: apRadii.pill,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
     borderColor: "#D7E3FF",
@@ -1780,9 +1860,11 @@ const styles = StyleSheet.create({
   },
 
   backText: {
+    fontFamily: apFontFamily,
     fontWeight: "800",
     fontSize: 12,
     color: stylesVars.blue,
+    letterSpacing: 0,
   },
 
   pressed: {
@@ -1801,9 +1883,11 @@ const styles = StyleSheet.create({
   },
 
   loadingText: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     color: stylesVars.mutedText,
     fontWeight: "600",
+    letterSpacing: 0,
   },
 
   empty: {
@@ -1811,9 +1895,11 @@ const styles = StyleSheet.create({
   },
 
   emptyTitle: {
+    fontFamily: apFontFamily,
     fontSize: 16,
     fontWeight: "700",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   container: {
@@ -1824,7 +1910,7 @@ const styles = StyleSheet.create({
   headerCard: {
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 20,
+    borderRadius: apRadii.card,
     padding: 16,
     backgroundColor: stylesVars.cardBg,
   },
@@ -1847,22 +1933,26 @@ const styles = StyleSheet.create({
   },
 
   orderNo: {
+    fontFamily: apFontFamily,
     fontSize: 18,
     fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   headerSubtext: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 17,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   statusPill: {
     paddingVertical: 7,
     paddingHorizontal: 12,
-    borderRadius: 999,
+    borderRadius: apRadii.pill,
   },
 
   statusPillRed: {
@@ -1878,15 +1968,17 @@ const styles = StyleSheet.create({
   },
 
   statusPillText: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   card: {
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 20,
+    borderRadius: apRadii.card,
     padding: 16,
     gap: 12,
     backgroundColor: stylesVars.cardBg,
@@ -1897,16 +1989,20 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
+    fontFamily: apFontFamily,
     fontSize: 16,
     fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   sectionSubtitle: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 17,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   productRow: {
@@ -1918,7 +2014,7 @@ const styles = StyleSheet.create({
   imageBox: {
     width: 96,
     height: 96,
-    borderRadius: 16,
+    borderRadius: apRadii.control,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: stylesVars.border,
@@ -1938,29 +2034,36 @@ const styles = StyleSheet.create({
   },
 
   imagePlaceholderText: {
+    fontFamily: apFontFamily,
     color: stylesVars.mutedText,
     fontSize: 12,
     fontWeight: "600",
+    letterSpacing: 0,
   },
 
   productMetaWrap: {
     flex: 1,
+    minWidth: 0,
     gap: 8,
   },
 
   productName: {
+    fontFamily: apFontFamily,
     fontSize: 16,
     lineHeight: 22,
     fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   productVendorName: {
     marginTop: -2,
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   productMetaInfo: {
@@ -1968,23 +2071,31 @@ const styles = StyleSheet.create({
   },
 
   productMetaLabel: {
+    fontFamily: apFontFamily,
     fontSize: 11,
     color: stylesVars.mutedText,
     fontWeight: "700",
     textTransform: "uppercase",
-    letterSpacing: 0.3,
+    letterSpacing: 0,
   },
 
   productMetaValue: {
+    fontFamily: apFontFamily,
     fontSize: 13,
+    lineHeight: 18,
     color: stylesVars.text,
     fontWeight: "700",
+    letterSpacing: 0,
+    flexShrink: 1,
+    flexWrap: "wrap",
   },
 
   heroPrice: {
+    fontFamily: apFontFamily,
     fontSize: 18,
     color: stylesVars.text,
     fontWeight: "800",
+    letterSpacing: 0,
   },
 
   kvRow: {
@@ -1996,19 +2107,35 @@ const styles = StyleSheet.create({
 
   kvLabel: {
     flex: 0.9,
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 19,
     color: stylesVars.mutedText,
     fontWeight: "600",
+    letterSpacing: 0,
+  },
+
+  kvLabelWithIcon: {
+    flex: 0.9,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  kvLabelWithIconText: {
+    flex: 1,
   },
 
   kvValue: {
     flex: 1.1,
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 19,
     color: stylesVars.text,
     fontWeight: "700",
     textAlign: "right",
+    letterSpacing: 0,
   },
 
   kvMuted: {
@@ -2027,7 +2154,7 @@ const styles = StyleSheet.create({
     minHeight: 38,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: apRadii.control,
     backgroundColor: stylesVars.white,
     borderWidth: 1,
     borderColor: "#D7E3FF",
@@ -2036,9 +2163,11 @@ const styles = StyleSheet.create({
   },
 
   secondaryInlineText: {
+    fontFamily: apFontFamily,
     color: stylesVars.blue,
     fontSize: 12,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   customBlock: {
@@ -2055,9 +2184,33 @@ const styles = StyleSheet.create({
   dyeSwatch: {
     width: 34,
     height: 34,
-    borderRadius: 10,
+    borderRadius: apRadii.control,
     borderWidth: 1,
     borderColor: "#CBD5E1",
+  },
+
+  dyeSwatchSmall: {
+    width: 22,
+    height: 22,
+    borderRadius: apRadii.control,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+
+  dyeSplitSummaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  dyeSplitSummaryText: {
+    flex: 1,
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.text,
+    fontWeight: "700",
+    letterSpacing: 0,
   },
 
   variantRow: {
@@ -2069,7 +2222,7 @@ const styles = StyleSheet.create({
   variantImageWrap: {
     width: 112,
     height: 132,
-    borderRadius: 16,
+    borderRadius: apRadii.card,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: stylesVars.border,
@@ -2083,20 +2236,23 @@ const styles = StyleSheet.create({
 
   variantInfoWrap: {
     flex: 1,
+    minWidth: 0,
     gap: 8,
   },
 
   variantTitle: {
+    fontFamily: apFontFamily,
     fontSize: 15,
     lineHeight: 21,
     fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   tailoringImageWrap: {
     width: "100%",
     height: 160,
-    borderRadius: 14,
+    borderRadius: apRadii.card,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: stylesVars.border,
@@ -2111,52 +2267,62 @@ const styles = StyleSheet.create({
   noteBox: {
     borderWidth: 1,
     borderColor: stylesVars.borderSoft,
-    borderRadius: 14,
+    borderRadius: apRadii.card,
     padding: 12,
     backgroundColor: "#F8FAFC",
     gap: 6,
   },
 
   noteLabel: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.mutedText,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   noteText: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 19,
     color: stylesVars.text,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   previewBox: {
     borderWidth: 1,
     borderColor: stylesVars.borderSoft,
-    borderRadius: 14,
+    borderRadius: apRadii.card,
     padding: 12,
     backgroundColor: "#F8FAFC",
     gap: 4,
   },
 
   previewLabel: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.mutedText,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   previewText: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 19,
     color: stylesVars.text,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   helper: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   priceRow: {
@@ -2167,27 +2333,35 @@ const styles = StyleSheet.create({
   },
 
   priceLabel: {
+    fontFamily: apFontFamily,
     fontSize: 14,
     color: stylesVars.mutedText,
     fontWeight: "600",
+    letterSpacing: 0,
   },
 
   priceValue: {
+    fontFamily: apFontFamily,
     fontSize: 14,
     color: stylesVars.text,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   priceLabelStrong: {
+    fontFamily: apFontFamily,
     fontSize: 16,
     color: stylesVars.text,
     fontWeight: "800",
+    letterSpacing: 0,
   },
 
   priceValueStrong: {
+    fontFamily: apFontFamily,
     fontSize: 18,
     color: stylesVars.text,
     fontWeight: "800",
+    letterSpacing: 0,
   },
 
   divider: {
@@ -2200,15 +2374,17 @@ const styles = StyleSheet.create({
     minHeight: 48,
     backgroundColor: stylesVars.blue,
     paddingVertical: 12,
-    borderRadius: 14,
+    borderRadius: apRadii.control,
     alignItems: "center",
     justifyContent: "center",
   },
 
   primaryText: {
+    fontFamily: apFontFamily,
     color: stylesVars.white,
     fontWeight: "800",
     fontSize: 14,
+    letterSpacing: 0,
   },
 
   secondaryBtn: {
@@ -2216,7 +2392,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D7E3FF",
     paddingVertical: 12,
-    borderRadius: 14,
+    borderRadius: apRadii.control,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: stylesVars.blueSoft,
@@ -2224,9 +2400,11 @@ const styles = StyleSheet.create({
   },
 
   secondaryText: {
+    fontFamily: apFontFamily,
     color: stylesVars.blue,
     fontWeight: "800",
     fontSize: 14,
+    letterSpacing: 0,
   },
 
   modalBackdrop: {
@@ -2238,43 +2416,51 @@ const styles = StyleSheet.create({
   modalCard: {
     backgroundColor: stylesVars.cardBg,
     padding: 16,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    borderTopLeftRadius: apRadii.card,
+    borderTopRightRadius: apRadii.card,
     borderWidth: 1,
     borderColor: stylesVars.border,
     gap: 10,
   },
 
   modalTitle: {
+    fontFamily: apFontFamily,
     fontSize: 16,
     fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   modalSub: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   fieldLabel: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     color: stylesVars.text,
     fontWeight: "800",
     marginTop: 2,
+    letterSpacing: 0,
   },
 
   input: {
     borderWidth: 1,
     borderColor: stylesVars.borderSoft,
-    borderRadius: 12,
+    borderRadius: apRadii.control,
     paddingHorizontal: 12,
     paddingVertical: 10,
+    fontFamily: apFontFamily,
     fontSize: 14,
     color: stylesVars.text,
     fontWeight: "500",
     backgroundColor: stylesVars.white,
+    letterSpacing: 0,
   },
 
   modalBtns: {

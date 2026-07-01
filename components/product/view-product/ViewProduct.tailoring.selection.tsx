@@ -170,6 +170,14 @@ export default function ViewProductTailoringSelection({
     return withDefault;
   }, [selectedPreset, tailoringIncludesTrouser]);
 
+  const hasStyleVariationOptions = useMemo(() => {
+    return (
+      activeNeckOptions.length > 0 ||
+      activeSleeveOptions.length > 0 ||
+      activeTrouserOptions.length > 0
+    );
+  }, [activeNeckOptions, activeSleeveOptions, activeTrouserOptions]);
+
   const resolvedSelectedPresetImage = useMemo(() => {
     const arr = resolvePresetImageUrls(selectedPreset, resolvePublicUrl);
     return arr[0] || null;
@@ -216,22 +224,31 @@ export default function ViewProductTailoringSelection({
       return;
     }
 
+    const noChangeValue = "no change in selected style";
+    const notOfferedValue = "not offered";
+    const noStyleVariationSelection =
+      buyerWantsStyleVariations === false || !hasStyleVariationOptions;
+
     onChange({
       presetId: selectedPreset.id || null,
       title: selectedPreset.title || "",
       imageUrl: resolvedSelectedPresetImage || "",
       extraCostPkr: safeInt0(selectedPreset.extra_cost_pkr),
-      neck:
-        buyerWantsStyleVariations === false
-          ? "no change in selected style"
+      neck: !activeNeckOptions.length
+        ? notOfferedValue
+        : noStyleVariationSelection
+          ? noChangeValue
           : selectedNeckStyle || "",
-      sleeve:
-        buyerWantsStyleVariations === false
-          ? "no change in selected style"
+      sleeve: !activeSleeveOptions.length
+        ? notOfferedValue
+        : noStyleVariationSelection
+          ? noChangeValue
           : selectedSleeveStyle || "",
       trouser: tailoringIncludesTrouser
-        ? buyerWantsStyleVariations === false
-          ? "no change in selected style"
+        ? !activeTrouserOptions.length
+          ? notOfferedValue
+          : noStyleVariationSelection
+            ? noChangeValue
           : selectedTrouserStyle || ""
         : "",
       note: customTailoringNote.trim(),
@@ -240,7 +257,11 @@ export default function ViewProductTailoringSelection({
     buyerWantsTailoring,
     buyerWantsStyleVariations,
     customTailoringNote,
+    hasStyleVariationOptions,
     onChange,
+    activeNeckOptions.length,
+    activeSleeveOptions.length,
+    activeTrouserOptions.length,
     resolvedSelectedPresetImage,
     selectedNeckStyle,
     selectedPreset,
@@ -329,7 +350,7 @@ export default function ViewProductTailoringSelection({
   return (
     <View style={{ marginTop: 12 }}>
       <Text style={[styles.label, { color: stylesVars.blue }]}>
-        Do you want stitching?
+        Do you want tailoring?
       </Text>
       <View style={{ marginTop: 10 }}>
         <View style={{ flexDirection: "row", gap: 12, flexWrap: "wrap" }}>
@@ -337,8 +358,8 @@ export default function ViewProductTailoringSelection({
             onPress={() => {
               if (!tailoringEligible) {
                 Alert.alert(
-                  "Stitching not available",
-                  "This product is not eligible for stitching.",
+                  "Tailoring not available",
+                  "This product is not eligible for tailoring.",
                 );
                 return;
               }
@@ -400,7 +421,7 @@ export default function ViewProductTailoringSelection({
       </View>
       {!tailoringEligible ? (
         <Text style={[styles.meta, { marginTop: 6 }]}>
-          Stitching is not available for this product.
+          Tailoring is not available for this product.
         </Text>
       ) : null}
 
@@ -410,6 +431,9 @@ export default function ViewProductTailoringSelection({
             <>
               <Text style={[styles.label, { color: stylesVars.blue }]}>
                 Select a tailoring style
+              </Text>
+              <Text style={[styles.meta, { marginTop: 4 }]}>
+                Tap card to view
               </Text>
 
               <View
@@ -421,7 +445,7 @@ export default function ViewProductTailoringSelection({
                   rowGap: 12,
                 }}
               >
-                {tailoringStylePresets.map((preset) => {
+                {tailoringStylePresets.map((preset, index) => {
                   const presetImages = resolvePresetImageUrls(
                     preset,
                     resolvePublicUrl,
@@ -430,16 +454,23 @@ export default function ViewProductTailoringSelection({
                   const extraCost = safeInt0(preset.extra_cost_pkr);
 
                   return (
-                    <View
+                    <Pressable
                       key={preset.id}
-                      style={{
-                        width: "48.2%",
-                        borderRadius: 16,
-                        borderWidth: 1,
-                        borderColor: isSelected ? stylesVars.blue : "#D7E3FF",
-                        backgroundColor: isSelected ? "#DCEBFF" : "#FFFFFF",
-                        overflow: "hidden",
+                      onPress={() => {
+                        setPreviewImageIndex(0);
+                        setPreviewPresetId(preset.id || "");
                       }}
+                      style={({ pressed }) => [
+                        {
+                          width: "48.2%",
+                          borderRadius: 16,
+                          borderWidth: 1,
+                          borderColor: isSelected ? stylesVars.blue : "#D7E3FF",
+                          backgroundColor: isSelected ? "#DCEBFF" : "#FFFFFF",
+                          overflow: "hidden",
+                        },
+                        pressed ? styles.pressed : null,
+                      ]}
                     >
                       {presetImages.length ? (
                         <ScrollView
@@ -453,119 +484,86 @@ export default function ViewProductTailoringSelection({
                           }}
                         >
                           {presetImages.map((uri, imgIndex) => (
-                            <Pressable
+                            <View
                               key={`${uri}-${imgIndex}`}
-                              onPress={() => {
-                                setSelectedTailoringStyleId(preset.id);
-                                setPreviewImageIndex(imgIndex);
-                                setPreviewPresetId(preset.id || "");
+                              style={{
+                                width: 128,
+                                height: 180,
+                                borderRadius: 14,
+                                overflow: "hidden",
+                                backgroundColor: "#EEF2F7",
+                                borderWidth: 1,
+                                borderColor: "#E2E8F0",
                               }}
-                              style={({ pressed }) => [
-                                {
-                                  width: 128,
-                                  height: 180,
-                                  borderRadius: 14,
-                                  overflow: "hidden",
-                                  backgroundColor: "#EEF2F7",
-                                  borderWidth: 1,
-                                  borderColor: "#E2E8F0",
-                                },
-                                pressed ? styles.pressed : null,
-                              ]}
                             >
                               <Image
                                 source={{ uri }}
                                 style={{ width: "100%", height: "100%" }}
                                 resizeMode="contain"
                               />
-                            </Pressable>
+                            </View>
                           ))}
                         </ScrollView>
                       ) : (
-                        <Pressable
-                          onPress={() => setSelectedTailoringStyleId(preset.id)}
-                          style={({ pressed }) => [
-                            pressed ? styles.pressed : null,
-                          ]}
+                        <View
+                          style={{
+                            width: "100%",
+                            height: 120,
+                            backgroundColor: "#EEF2F7",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
                         >
-                          <View
-                            style={{
-                              width: "100%",
-                              height: 120,
-                              backgroundColor: "#EEF2F7",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                          >
-                            <Text style={styles.meta}>No image</Text>
-                          </View>
-                        </Pressable>
+                          <Text style={styles.meta}>No image</Text>
+                        </View>
                       )}
-
-                      {presetImages.length > 1 ? (
-                        <Text
-                          style={[
-                            styles.meta,
-                            {
-                              paddingHorizontal: 10,
-                              paddingBottom: 2,
-                              fontSize: 10,
-                              color: stylesVars.blue,
-                              fontWeight: "700",
-                            },
-                          ]}
-                        >
-                          Swipe images • tap to enlarge
-                        </Text>
-                      ) : null}
 
                       <View
                         style={{
                           padding: 10,
-                          minHeight: 124,
+                          minHeight: 112,
                           justifyContent: "space-between",
                         }}
                       >
                         <View>
-                          <View
+                          <Text
                             style={{
-                              flexDirection: "row",
-                              justifyContent: "space-between",
-                              alignItems: "flex-start",
-                              gap: 8,
+                              fontSize: 13,
+                              lineHeight: 18,
+                              fontWeight: "900",
+                              color: stylesVars.text,
                             }}
+                            numberOfLines={1}
                           >
-                            <Text
-                              style={{
-                                fontSize: 13,
-                                fontWeight: "700",
-                                color: stylesVars.text,
-                                flex: 1,
-                              }}
-                              numberOfLines={2}
-                            >
-                              {preset.title || "Untitled style"}
-                            </Text>
-                          </View>
+                            Style {index + 1}
+                          </Text>
 
-                          {preset.note ? (
-                            <Text
-                              style={[styles.meta, { marginTop: 6 }]}
-                              numberOfLines={2}
-                            >
-                              {preset.note}
-                            </Text>
-                          ) : null}
+                          <Text
+                            style={{
+                              marginTop: 3,
+                              fontSize: 12,
+                              lineHeight: 17,
+                              fontWeight: "700",
+                              color: stylesVars.mutedText,
+                            }}
+                            numberOfLines={2}
+                          >
+                            {preset.title || "Untitled style"}
+                          </Text>
 
                           {extraCost > 0 ? (
                             <Text
-                              style={[styles.meta, { marginTop: 8 }]}
-                              numberOfLines={2}
+                              style={[
+                                styles.meta,
+                                {
+                                  marginTop: 6,
+                                  color: stylesVars.text,
+                                  fontWeight: "800",
+                                },
+                              ]}
+                              numberOfLines={1}
                             >
-                              Additional tailoring cost for this style:{" "}
-                              <Text style={styles.specValue}>
-                                PKR {extraCost}
-                              </Text>
+                              + PKR {extraCost.toLocaleString()}
                             </Text>
                           ) : null}
                         </View>
@@ -573,7 +571,7 @@ export default function ViewProductTailoringSelection({
                         <View
                           style={{
                             flexDirection: "row",
-                            justifyContent: "space-between",
+                            justifyContent: "center",
                             alignItems: "center",
                             gap: 6,
                             marginTop: 8,
@@ -585,9 +583,9 @@ export default function ViewProductTailoringSelection({
                             }
                             style={({ pressed }) => [
                               {
-                                flex: 1,
                                 minHeight: 28,
-                                paddingHorizontal: 6,
+                                minWidth: 86,
+                                paddingHorizontal: 12,
                                 paddingVertical: 5,
                                 borderRadius: 10,
                                 backgroundColor: stylesVars.blue,
@@ -605,45 +603,12 @@ export default function ViewProductTailoringSelection({
                               }}
                               numberOfLines={1}
                             >
-                              Select
-                            </Text>
-                          </Pressable>
-
-                          <Pressable
-                            onPress={() => {
-                              setPreviewImageIndex(0);
-                              setPreviewPresetId(preset.id || "");
-                            }}
-                            style={({ pressed }) => [
-                              {
-                                flex: 1,
-                                minHeight: 28,
-                                paddingHorizontal: 6,
-                                paddingVertical: 5,
-                                borderRadius: 10,
-                                borderWidth: 1,
-                                borderColor: "#D7E3FF",
-                                backgroundColor: "#FFFFFF",
-                                alignItems: "center",
-                                justifyContent: "center",
-                              },
-                              pressed ? styles.pressed : null,
-                            ]}
-                          >
-                            <Text
-                              style={{
-                                color: stylesVars.text,
-                                fontSize: 10,
-                                fontWeight: "700",
-                              }}
-                              numberOfLines={1}
-                            >
-                              View Card
+                              {isSelected ? "Selected" : "Select"}
                             </Text>
                           </Pressable>
                         </View>
                       </View>
-                    </View>
+                    </Pressable>
                   );
                 })}
               </View>
@@ -659,157 +624,183 @@ export default function ViewProductTailoringSelection({
                     borderColor: "#D7E3FF",
                   }}
                 >
-                  <Text style={[styles.label, { color: stylesVars.blue }]}>
-                    Do you want style variations?
-                  </Text>
-
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      gap: 10,
-                      marginTop: 8,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <SelectPill
-                      label="Yes"
-                      selected={buyerWantsStyleVariations === true}
-                      onPress={() => setBuyerWantsStyleVariations(true)}
-                    />
-
-                    <SelectPill
-                      label="No"
-                      selected={buyerWantsStyleVariations === false}
-                      onPress={() => setBuyerWantsStyleVariations(false)}
-                    />
-                  </View>
-
-                  {buyerWantsStyleVariations === true ? (
+                  {!hasStyleVariationOptions ? (
+                    <Text style={[styles.meta, { color: stylesVars.danger || "#B42318" }]}>
+                      No style variations offered for this style.
+                    </Text>
+                  ) : (
                     <>
-                      <Text
-                        style={[
-                          styles.label,
-                          { color: stylesVars.blue, marginTop: 10 },
-                        ]}
-                      >
-                        Select style variations
+                      <Text style={[styles.label, { color: stylesVars.blue }]}>
+                        Do you want style variations?
                       </Text>
 
                       <View
                         style={{
                           flexDirection: "row",
-                          justifyContent: "space-between",
-                          alignItems: "flex-start",
-                          gap: 6,
-                          marginTop: 6,
+                          gap: 10,
+                          marginTop: 8,
+                          flexWrap: "wrap",
                         }}
                       >
-                        <View style={{ width: "48.5%" }}>
-                          <Text
-                            style={[
-                              styles.meta,
-                              {
-                                marginTop: 0,
-                                fontSize: 11,
-                                color: stylesVars.blue,
-                              },
-                            ]}
-                          >
-                            Neck variations
-                          </Text>
-                          <View
-                            style={{
-                              flexDirection: "row",
-                              flexWrap: "wrap",
-                              gap: 3,
-                              marginTop: 4,
-                            }}
-                          >
-                            {activeNeckOptions.map((item) => (
-                              <SelectPill
-                                key={`neck-${item}`}
-                                label={item}
-                                selected={selectedNeckStyle === item}
-                                onPress={() => setSelectedNeckStyle(item)}
-                              />
-                            ))}
-                          </View>
-                        </View>
+                        <SelectPill
+                          label="Yes"
+                          selected={buyerWantsStyleVariations === true}
+                          onPress={() => setBuyerWantsStyleVariations(true)}
+                        />
 
-                        <View style={{ width: "48.5%" }}>
-                          <Text
-                            style={[
-                              styles.meta,
-                              {
-                                marginTop: 0,
-                                fontSize: 11,
-                                color: stylesVars.blue,
-                              },
-                            ]}
-                          >
-                            Sleeve variations
-                          </Text>
-                          <View
-                            style={{
-                              flexDirection: "row",
-                              flexWrap: "wrap",
-                              gap: 3,
-                              marginTop: 4,
-                            }}
-                          >
-                            {activeSleeveOptions.map((item) => (
-                              <SelectPill
-                                key={`sleeve-${item}`}
-                                label={item}
-                                selected={selectedSleeveStyle === item}
-                                onPress={() => setSelectedSleeveStyle(item)}
-                              />
-                            ))}
-                          </View>
-                        </View>
+                        <SelectPill
+                          label="No"
+                          selected={buyerWantsStyleVariations === false}
+                          onPress={() => setBuyerWantsStyleVariations(false)}
+                        />
                       </View>
 
-                      {tailoringIncludesTrouser ? (
-                        <View style={{ marginTop: 6 }}>
+                      {buyerWantsStyleVariations === true ? (
+                        <>
                           <Text
                             style={[
-                              styles.meta,
-                              {
-                                marginTop: 0,
-                                fontSize: 11,
-                                color: stylesVars.blue,
-                              },
+                              styles.label,
+                              { color: stylesVars.blue, marginTop: 10 },
                             ]}
                           >
-                            Trouser variations
+                            Select style variations
                           </Text>
+
                           <View
                             style={{
                               flexDirection: "row",
-                              flexWrap: "wrap",
-                              gap: 3,
-                              marginTop: 4,
+                              justifyContent: "space-between",
+                              alignItems: "flex-start",
+                              gap: 6,
+                              marginTop: 6,
                             }}
                           >
-                            {activeTrouserOptions.map((item) => (
-                              <SelectPill
-                                key={`trouser-${item}`}
-                                label={item}
-                                selected={selectedTrouserStyle === item}
-                                onPress={() => setSelectedTrouserStyle(item)}
-                              />
-                            ))}
+                            <View style={{ width: "48.5%" }}>
+                              <Text
+                                style={[
+                                  styles.meta,
+                                  {
+                                    marginTop: 0,
+                                    fontSize: 11,
+                                    color: stylesVars.blue,
+                                  },
+                                ]}
+                              >
+                                Neck variations
+                              </Text>
+                              {activeNeckOptions.length ? (
+                                <View
+                                  style={{
+                                    flexDirection: "row",
+                                    flexWrap: "wrap",
+                                    gap: 3,
+                                    marginTop: 4,
+                                  }}
+                                >
+                                  {activeNeckOptions.map((item) => (
+                                    <SelectPill
+                                      key={`neck-${item}`}
+                                      label={item}
+                                      selected={selectedNeckStyle === item}
+                                      onPress={() => setSelectedNeckStyle(item)}
+                                    />
+                                  ))}
+                                </View>
+                              ) : (
+                                <Text style={[styles.meta, { color: stylesVars.danger || "#B42318" }]}>
+                                  No neck variations offered.
+                                </Text>
+                              )}
+                            </View>
+
+                            <View style={{ width: "48.5%" }}>
+                              <Text
+                                style={[
+                                  styles.meta,
+                                  {
+                                    marginTop: 0,
+                                    fontSize: 11,
+                                    color: stylesVars.blue,
+                                  },
+                                ]}
+                              >
+                                Sleeve variations
+                              </Text>
+                              {activeSleeveOptions.length ? (
+                                <View
+                                  style={{
+                                    flexDirection: "row",
+                                    flexWrap: "wrap",
+                                    gap: 3,
+                                    marginTop: 4,
+                                  }}
+                                >
+                                  {activeSleeveOptions.map((item) => (
+                                    <SelectPill
+                                      key={`sleeve-${item}`}
+                                      label={item}
+                                      selected={selectedSleeveStyle === item}
+                                      onPress={() => setSelectedSleeveStyle(item)}
+                                    />
+                                  ))}
+                                </View>
+                              ) : (
+                                <Text style={[styles.meta, { color: stylesVars.danger || "#B42318" }]}>
+                                  No sleeve variations offered.
+                                </Text>
+                              )}
+                            </View>
                           </View>
-                        </View>
+
+                          {tailoringIncludesTrouser ? (
+                            <View style={{ marginTop: 6 }}>
+                              <Text
+                                style={[
+                                  styles.meta,
+                                  {
+                                    marginTop: 0,
+                                    fontSize: 11,
+                                    color: stylesVars.blue,
+                                  },
+                                ]}
+                              >
+                                Trouser variations
+                              </Text>
+                              {activeTrouserOptions.length ? (
+                                <View
+                                  style={{
+                                    flexDirection: "row",
+                                    flexWrap: "wrap",
+                                    gap: 3,
+                                    marginTop: 4,
+                                  }}
+                                >
+                                  {activeTrouserOptions.map((item) => (
+                                    <SelectPill
+                                      key={`trouser-${item}`}
+                                      label={item}
+                                      selected={selectedTrouserStyle === item}
+                                      onPress={() => setSelectedTrouserStyle(item)}
+                                    />
+                                  ))}
+                                </View>
+                              ) : (
+                                <Text style={[styles.meta, { color: stylesVars.danger || "#B42318" }]}>
+                                  No trouser variations offered.
+                                </Text>
+                              )}
+                            </View>
+                          ) : null}
+                        </>
+                      ) : null}
+
+                      {buyerWantsStyleVariations === false ? (
+                        <Text style={[styles.meta, { marginTop: 10 }]}>
+                          No change in the selected style.
+                        </Text>
                       ) : null}
                     </>
-                  ) : null}
-
-                  {buyerWantsStyleVariations === false ? (
-                    <Text style={[styles.meta, { marginTop: 10 }]}>
-                      No change in the selected style.
-                    </Text>
-                  ) : null}
+                  )}
                 </View>
               ) : (
                 <Text style={[styles.meta, { marginTop: 10 }]}>
@@ -1008,7 +999,7 @@ export default function ViewProductTailoringSelection({
                 <View
                   style={{
                     flexDirection: "row",
-                    justifyContent: "space-between",
+                    justifyContent: "flex-start",
                     alignItems: "flex-start",
                     gap: 12,
                   }}
@@ -1023,34 +1014,6 @@ export default function ViewProductTailoringSelection({
                   >
                     {previewPreset?.title || "Untitled style"}
                   </Text>
-
-                  <Pressable
-                    onPress={() => setPreviewPresetId("")}
-                    style={({ pressed }) => [
-                      {
-                        minHeight: 34,
-                        paddingHorizontal: 12,
-                        paddingVertical: 8,
-                        borderRadius: 10,
-                        borderWidth: 1,
-                        borderColor: "#D7E3FF",
-                        backgroundColor: "#FFFFFF",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      },
-                      pressed ? styles.pressed : null,
-                    ]}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: "700",
-                        color: stylesVars.text,
-                      }}
-                    >
-                      Close
-                    </Text>
-                  </Pressable>
                 </View>
 
                 {previewPresetImages.length ? (
@@ -1120,6 +1083,34 @@ export default function ViewProductTailoringSelection({
                       }}
                     >
                       Select
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => setPreviewPresetId("")}
+                    style={({ pressed }) => [
+                      {
+                        minHeight: 34,
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: "#D7E3FF",
+                        backgroundColor: "#FFFFFF",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      },
+                      pressed ? styles.pressed : null,
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: "700",
+                        color: stylesVars.text,
+                      }}
+                    >
+                      Close
                     </Text>
                   </Pressable>
                 </View>

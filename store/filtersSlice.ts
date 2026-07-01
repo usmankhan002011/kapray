@@ -14,6 +14,7 @@ export type FiltersState = {
   fabricTypeIds: Multi;
   colorShadeIds: Multi;
   workTypeIds: Multi;
+  workSubTypeMap: Record<string, string[]>;
   workDensityIds: Multi;
   originCityIds: Multi;
   wearStateIds: Multi;
@@ -45,6 +46,7 @@ const initialState: FiltersState = {
   fabricTypeIds: [],
   colorShadeIds: [],
   workTypeIds: [],
+  workSubTypeMap: {},
   workDensityIds: [],
   originCityIds: [],
   wearStateIds: [],
@@ -117,6 +119,7 @@ const filtersSlice = createSlice({
       state.fabricTypeIds = [];
       state.colorShadeIds = [];
       state.workTypeIds = [];
+      state.workSubTypeMap = {};
       state.workDensityIds = [];
       state.originCityIds = [];
       state.wearStateIds = [];
@@ -135,6 +138,7 @@ const filtersSlice = createSlice({
       state.fabricTypeIds = [];
       state.colorShadeIds = [];
       state.workTypeIds = [];
+      state.workSubTypeMap = {};
       state.workDensityIds = [];
       state.originCityIds = [];
       state.wearStateIds = [];
@@ -160,9 +164,43 @@ const filtersSlice = createSlice({
 
     clearWorkTypes: (state) => {
       state.workTypeIds = [];
+      state.workSubTypeMap = {};
     },
     toggleWorkType: (state, action: PayloadAction<string>) => {
       state.workTypeIds = toggleId(state.workTypeIds, action.payload);
+    },
+    setWorkSubTypesForParent: (
+      state,
+      action: PayloadAction<{
+        parentId: string;
+        parentCode: string;
+        subTypeCodes: string[];
+      }>,
+    ) => {
+      const parentId = String(action.payload?.parentId ?? "").trim();
+      const parentCode = String(action.payload?.parentCode ?? "")
+        .trim()
+        .toLowerCase();
+      const subTypeCodes = Array.from(
+        new Set(
+          (action.payload?.subTypeCodes ?? [])
+            .map((x) => String(x ?? "").trim())
+            .filter(Boolean),
+        ),
+      );
+
+      if (!parentId || !parentCode) return;
+
+      if (subTypeCodes.length) {
+        state.workSubTypeMap[parentCode] = subTypeCodes;
+        if (!state.workTypeIds.includes(parentId)) {
+          state.workTypeIds.push(parentId);
+        }
+        return;
+      }
+
+      delete state.workSubTypeMap[parentCode];
+      state.workTypeIds = state.workTypeIds.filter((x) => x !== parentId);
     },
 
     clearWorkDensities: (state) => {
@@ -269,6 +307,7 @@ export const {
 
   clearWorkTypes,
   toggleWorkType,
+  setWorkSubTypesForParent,
 
   clearWorkDensities,
   toggleWorkDensity,

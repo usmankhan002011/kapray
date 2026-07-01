@@ -5,7 +5,6 @@ import {
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
@@ -18,6 +17,8 @@ import {
   ReadyVariantSize,
 } from "@/utils/kapray/productVariants";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
+import { AddProductInput } from "@/components/product/add-product/AddProductWizard";
+import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 
 type Props = {
   variant: ReadyVariant;
@@ -91,7 +92,7 @@ export default function ReadyVariantEditor({
     }
 
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsMultipleSelection: true,
       quality: 0.9,
     });
@@ -166,7 +167,7 @@ export default function ReadyVariantEditor({
       </View>
 
       <Text style={apStyles.label}>Color / design name *</Text>
-      <TextInput
+      <AddProductInput
         value={variant.name}
         onChangeText={updateName}
         placeholder="e.g., Black, Ivory Gold, Design A"
@@ -175,7 +176,7 @@ export default function ReadyVariantEditor({
       />
 
       <Text style={apStyles.label}>Additional price, if any</Text>
-      <TextInput
+      <FastNumberInput
         value={String(variant.additional_price_pkr || "")}
         onChangeText={updateExtra}
         placeholder="0"
@@ -188,7 +189,7 @@ export default function ReadyVariantEditor({
         Final price: Rs {finalPrice.toLocaleString()}
       </Text>
 
-      <Text style={apStyles.label}>Variant images *</Text>
+      <Text style={apStyles.label}>Style images *</Text>
 
       <Pressable
         onPress={pickVariantImages}
@@ -199,7 +200,7 @@ export default function ReadyVariantEditor({
         ]}
       >
         <Text style={apStyles.primaryText}>
-          Pick Variant Images {images.length ? `(${images.length})` : ""}
+          Pick Style Images {images.length ? `(${images.length})` : ""}
         </Text>
       </Pressable>
 
@@ -303,7 +304,7 @@ export default function ReadyVariantEditor({
         </ScrollView>
       ) : (
         <Text style={[apStyles.metaHint, { marginTop: 8 }]}>
-          No variant images selected yet.
+          No style images selected yet.
         </Text>
       )}
 
@@ -328,7 +329,7 @@ export default function ReadyVariantEditor({
             </Pressable>
 
             {selected ? (
-              <TextInput
+              <FastNumberInput
                 value={String(selected.qty || "")}
                 onChangeText={(t) => updateQty(size, t)}
                 placeholder={`Qty for ${size}`}

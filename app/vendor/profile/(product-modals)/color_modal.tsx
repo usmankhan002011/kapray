@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
+import { apColors, apRadii, apStyles } from "@/components/product/addProductStyles";
 
 type ColorShadeItem = {
   id: string;
@@ -17,10 +18,10 @@ const COLOR_SHADES: ColorShadeItem[] = [
   { id: "golden", name: "Golden", hex: "#D4AF37" },
   { id: "silver", name: "Silver", hex: "#C0C0C0" },
   { id: "white", name: "White", hex: "#FFFFFF" },
-  { id: "black", name: "Black", hex: "#000000" }
+  { id: "black", name: "Black", hex: "#000000" },
 ];
 
-const GRID_GAP = 8;
+const GRID_GAP = 10;
 const H_PADDING = 12;
 
 function safeStr(v: any) {
@@ -35,7 +36,7 @@ export default function ProductColorModal() {
   const { draft, setColorShadeIds } = useProductDraft();
 
   const [selected, setSelected] = useState<string[]>(
-    Array.isArray(draft.spec.colorShadeIds) ? draft.spec.colorShadeIds : []
+    Array.isArray(draft.spec.colorShadeIds) ? draft.spec.colorShadeIds : [],
   );
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
@@ -56,7 +57,7 @@ export default function ProductColorModal() {
 
   function toggle(id: string) {
     setSelected((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
   }
 
@@ -73,44 +74,30 @@ export default function ProductColorModal() {
       .filter(Boolean);
 
     (draft.spec as any).colorShadeNames = pickedNames;
-
     setColorShadeIds(selected);
     closeToAddProduct();
   }
 
   return (
     <View style={styles.screen}>
-      {/* HEADER */}
       <View style={styles.header}>
-        <Pressable
-          onPress={closeToAddProduct}
-          style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
-        >
-          <Text style={styles.headerBtnText}>Close</Text>
-        </Pressable>
-
         <Text style={styles.headerTitle}>Color</Text>
 
         <Pressable
-          onPress={onDone}
-          style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
+          onPress={closeToAddProduct}
+          style={({ pressed }) => [
+            apStyles.linkBtn,
+            styles.closeButton,
+            pressed ? apStyles.pressed : null,
+          ]}
         >
-          <Text style={styles.headerBtnText}>Done</Text>
+          <Text style={apStyles.linkText}>Close</Text>
         </Pressable>
       </View>
 
-      <View style={styles.subHeader}>
-        <Text style={styles.subText}>Select one or more color shades.</Text>
-
-        <Pressable
-          onPress={onClear}
-          style={({ pressed }) => [styles.clearBtn, pressed && styles.pressed]}
-        >
-          <Text style={styles.clearBtnText}>Clear</Text>
-        </Pressable>
-      </View>
-
-      {/* <Text style={styles.heading}>Select Color Shades</Text> */}
+      <Text style={styles.helperText}>
+        Base colors help buyers find dresses by color.
+      </Text>
 
       <FlatList
         data={COLOR_SHADES}
@@ -125,48 +112,76 @@ export default function ProductColorModal() {
           return (
             <Pressable
               key={item.id}
-              style={[styles.card, isOn ? styles.cardSelected : null]}
+              style={({ pressed }) => [
+                styles.card,
+                isOn ? styles.cardSelected : null,
+                pressed ? apStyles.pressed : null,
+              ]}
               onPress={() => toggle(item.id)}
             >
               <View style={styles.swatchWrap}>
-                <View style={[styles.swatch, { backgroundColor: item.hex }]} />
+                <View
+                  style={[
+                    styles.swatch,
+                    { backgroundColor: item.hex },
+                    item.id === "white" ? styles.whiteSwatch : null,
+                  ]}
+                />
               </View>
 
-              <Text style={styles.label} numberOfLines={1}>
-                {item.name} {isOn ? "✓" : ""}
+              <Text
+                style={[styles.label, isOn ? styles.labelOn : null]}
+                numberOfLines={1}
+              >
+                {item.name}
               </Text>
+
+              {isOn ? (
+                <View style={styles.selectedBadge}>
+                  <Text style={styles.selectedText}>Selected</Text>
+                </View>
+              ) : null}
             </Pressable>
           );
         }}
       />
+
+      <View style={styles.footer}>
+        <View>
+          <Text style={styles.footerLabel}>Selected</Text>
+          <Text style={styles.footerValue}>{selected.length}</Text>
+        </View>
+
+        <View style={styles.footerActions}>
+          <Pressable
+            onPress={onClear}
+            style={({ pressed }) => [
+              styles.clearBtn,
+              pressed ? apStyles.pressed : null,
+            ]}
+          >
+            <Text style={styles.clearBtnText}>Clear</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={onDone}
+            style={({ pressed }) => [
+              styles.doneBtn,
+              pressed ? apStyles.pressed : null,
+            ]}
+          >
+            <Text style={styles.doneText}>Done</Text>
+          </Pressable>
+        </View>
+      </View>
     </View>
   );
 }
 
-const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
-  placeholder: "#94A3B8",
-  danger: "#B91C1C",
-  dangerSoft: "#FEE2E2",
-  dangerBorder: "#FCA5A5",
-  overlayDark: "rgba(0,0,0,0.58)",
-  overlaySoft: "rgba(255,255,255,0.14)",
-  white: "#FFFFFF",
-  black: "#000000"
-};
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: stylesVars.bg
+    backgroundColor: apColors.bg,
   },
 
   header: {
@@ -176,126 +191,166 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12
+    gap: 12,
   },
 
   headerTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: stylesVars.text
+    color: apColors.text,
   },
 
-  headerBtn: {
-    minHeight: 40,
+  closeButton: {
+    minHeight: 38,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: stylesVars.blueSoft,
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
-    alignItems: "center",
-    justifyContent: "center"
   },
 
-  headerBtnText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: stylesVars.blue
-  },
-
-  subHeader: {
+  helperText: {
     paddingHorizontal: 14,
-    paddingBottom: 6,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10
-  },
-
-  subText: {
-    flex: 1,
+    paddingBottom: 8,
     fontSize: 13,
     lineHeight: 18,
-    color: stylesVars.mutedText,
-    fontWeight: "500"
-  },
-
-  clearBtn: {
-    minHeight: 40,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-
-  clearBtnText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: stylesVars.text
-  },
-
-  heading: {
-    fontSize: 15,
-    fontWeight: "700",
-    marginBottom: 6,
-    color: stylesVars.text,
-    paddingHorizontal: 14,
-    paddingTop: 6
+    color: apColors.muted,
+    fontWeight: "500",
   },
 
   listContent: {
     paddingHorizontal: H_PADDING,
-    paddingBottom: 12,
-    paddingTop: 2
+    paddingBottom: 106,
+    paddingTop: 2,
   },
 
   columnWrap: {
     gap: GRID_GAP,
-    marginBottom: GRID_GAP
+    marginBottom: GRID_GAP,
   },
 
   card: {
     flex: 1,
     borderWidth: 1,
-    borderColor: stylesVars.border,
-    borderRadius: 18,
+    borderColor: apColors.border,
+    borderRadius: apRadii.card,
     padding: 8,
-    backgroundColor: stylesVars.cardBg
+    backgroundColor: apColors.white,
+    position: "relative",
   },
 
   cardSelected: {
-    borderColor: stylesVars.blue,
-    borderWidth: 2,
-    backgroundColor: stylesVars.blueSoft
+    borderColor: "#D7E3FF",
+    backgroundColor: apColors.blueSoft,
   },
 
   swatchWrap: {
     width: "100%",
-    height: 96,
-    borderRadius: 12,
+    height: 92,
+    borderRadius: apRadii.card,
     overflow: "hidden",
     backgroundColor: "#F1F5F9",
-    marginBottom: 8
+    marginBottom: 8,
   },
 
   swatch: {
     width: "100%",
-    height: 96
+    height: 92,
+  },
+
+  whiteSwatch: {
+    borderWidth: 1,
+    borderColor: apColors.border,
   },
 
   label: {
     fontSize: 13,
     lineHeight: 18,
-    color: stylesVars.text,
+    color: apColors.text,
     textAlign: "center",
-    fontWeight: "700"
+    fontWeight: "700",
   },
 
-  pressed: {
-    opacity: 0.82
-  }
+  labelOn: {
+    color: apColors.blue,
+  },
+
+  selectedBadge: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    borderRadius: apRadii.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: apColors.blue,
+  },
+
+  selectedText: {
+    color: apColors.white,
+    fontSize: 10,
+    fontWeight: "800",
+  },
+
+  footer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopWidth: 1,
+    borderTopColor: apColors.border,
+    backgroundColor: "rgba(248,250,252,0.98)",
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  footerLabel: {
+    color: apColors.muted,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+
+  footerValue: {
+    color: apColors.text,
+    fontSize: 22,
+    fontWeight: "900",
+  },
+
+  footerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  clearBtn: {
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderRadius: apRadii.card,
+    borderWidth: 1,
+    borderColor: apColors.border,
+    backgroundColor: apColors.white,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  clearBtnText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: apColors.text,
+  },
+
+  doneBtn: {
+    minHeight: 44,
+    paddingHorizontal: 22,
+    borderRadius: apRadii.card,
+    backgroundColor: apColors.blue,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  doneText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: apColors.white,
+  },
 });

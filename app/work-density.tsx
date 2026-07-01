@@ -1,33 +1,34 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Dimensions,
   FlatList,
   Image,
   Pressable,
   StyleSheet,
   Text,
-  View
+  View,
 } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { getWorkDensities, WorkDensityItem } from "@/utils/supabase/workDensity";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearWorkDensities, toggleWorkDensity } from "@/store/filtersSlice";
 import StandardFilterDisplay from "@/components/ui/StandardFilterDisplay";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+} from "@/components/product/addProductStyles";
 
 const WORK_DENSITY_LOCAL_IMAGES: Record<string, any> = {
   light: require("@/assets/work-density-images/light.png"),
   medium: require("@/assets/work-density-images/medium.jpg"),
   heavy: require("@/assets/work-density-images/heavy.jpg"),
-  "extra-heavy": require("@/assets/work-density-images/extra-heavy.jpg")
+  "extra-heavy": require("@/assets/work-density-images/extra-heavy.jpg"),
 };
 
-const GRID_GAP = 8;
-const H_PADDING = 12;
-
-// Responsive sizing so cards feel bigger and fill the screen
-const SCREEN_W = Dimensions.get("window").width;
-const CARD_W = (SCREEN_W - H_PADDING * 2 - GRID_GAP) / 2;
-const IMAGE_H = Math.round(CARD_W * 1.35); // increase/decrease this multiplier if needed
+const GRID_GAP = 10;
+const H_PADDING = 16;
+const IMAGE_H = 132;
 
 export default function WorkDensityScreen() {
   const router = useRouter();
@@ -35,7 +36,6 @@ export default function WorkDensityScreen() {
   const dispatch = useAppDispatch();
 
   const selected = useAppSelector((s) => s.filters.workDensityIds);
-  const dressTypeId = useAppSelector((s) => s.filters.dressTypeId);
 
   const [items, setItems] = useState<WorkDensityItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -72,15 +72,13 @@ export default function WorkDensityScreen() {
 
   return (
     <StandardFilterDisplay
-      title={`Work Density${dressTypeId ? "" : " (Dress type not set)"}`}
+      title="Density"
       onBack={() => router.back()}
       onAny={() => dispatch(clearWorkDensities())}
       onNext={() =>
         fromResultsFilters ? router.back() : router.push("/origin-city")
       }
     >
-      <Text style={styles.heading}>Select Work Density</Text>
-
       {loading ? <Text style={styles.infoText}>Loading...</Text> : null}
       {err ? <Text style={styles.infoText}>{err}</Text> : null}
 
@@ -98,8 +96,14 @@ export default function WorkDensityScreen() {
 
           return (
             <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: isOn }}
               key={item.id}
-              style={[styles.card, isOn ? styles.cardSelected : null]}
+              style={({ pressed }) => [
+                styles.card,
+                isOn ? styles.cardSelected : null,
+                pressed ? styles.pressed : null,
+              ]}
               onPress={() => dispatch(toggleWorkDensity(item.id))}
             >
               <View style={styles.imageWrap}>
@@ -109,12 +113,25 @@ export default function WorkDensityScreen() {
                     style={styles.image}
                     resizeMode="cover"
                   />
-                ) : null}
+                ) : (
+                  <View style={styles.noImage}>
+                    <Text style={styles.noImageText}>No image</Text>
+                  </View>
+                )}
               </View>
 
-              <Text style={styles.label} numberOfLines={1}>
-                {item.name} {isOn ? "✓" : ""}
+              <Text
+                style={[styles.label, isOn ? styles.labelOn : null]}
+                numberOfLines={1}
+              >
+                {item.name}
               </Text>
+
+              {isOn ? (
+                <View style={styles.check}>
+                  <MaterialIcons name="check" size={14} color={apColors.white} />
+                </View>
+              ) : null}
             </Pressable>
           );
         }}
@@ -124,55 +141,95 @@ export default function WorkDensityScreen() {
 }
 
 const styles = StyleSheet.create({
-  heading: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 6,
-    color: "#111"
-  },
   infoText: {
-    color: "#111",
-    marginBottom: 6
+    marginHorizontal: H_PADDING,
+    marginBottom: 8,
+    fontSize: 13,
+    lineHeight: 18,
+    color: apColors.muted,
+    fontWeight: "500",
+    fontFamily: apFontFamily,
   },
 
   listContent: {
     paddingHorizontal: H_PADDING,
     paddingBottom: 16,
-    paddingTop: 4
   },
+
   columnWrap: {
     gap: GRID_GAP,
-    marginBottom: GRID_GAP
+    marginBottom: GRID_GAP,
   },
 
   card: {
     flex: 1,
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 12,
-    padding: 8
+    borderColor: apColors.border,
+    borderRadius: apRadii.card,
+    padding: 8,
+    backgroundColor: apColors.white,
   },
+
   cardSelected: {
-    borderColor: "#111"
+    borderColor: "#D7E3FF",
+    backgroundColor: apColors.blueSoft,
   },
 
   imageWrap: {
     width: "100%",
     height: IMAGE_H,
-    borderRadius: 10,
+    borderRadius: apRadii.card,
     overflow: "hidden",
-    backgroundColor: "#eee",
-    marginBottom: 8
+    backgroundColor: "#F1F5F9",
+    marginBottom: 8,
   },
+
   image: {
     width: "100%",
-    height: IMAGE_H
+    height: IMAGE_H,
+  },
+
+  noImage: {
+    width: "100%",
+    height: IMAGE_H,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
+  },
+
+  noImageText: {
+    fontSize: 12,
+    fontWeight: "700",
+    fontFamily: apFontFamily,
+    color: apColors.muted,
   },
 
   label: {
-    fontSize: 14,
-    color: "#111",
+    fontSize: 13,
+    lineHeight: 18,
+    color: apColors.text,
     textAlign: "center",
-    fontWeight: "600"
-  }
+    fontWeight: "700",
+    fontFamily: apFontFamily,
+  },
+
+  labelOn: {
+    color: apColors.blue,
+  },
+
+  check: {
+    position: "absolute",
+    right: 10,
+    top: 10,
+    width: 22,
+    height: 22,
+    borderRadius: apRadii.pill,
+    backgroundColor: apColors.blue,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  pressed: {
+    opacity: 0.82,
+  },
 });

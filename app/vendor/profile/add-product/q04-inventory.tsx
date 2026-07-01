@@ -1,9 +1,15 @@
-import React, { useMemo, useRef, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import React, { useMemo, useRef } from "react";
+import { Alert, type TextInput } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
-import { apColors, apStyles } from "@/components/product/addProductStyles";
+import {
+  AddProductCard,
+  AddProductField,
+  AddProductFooter,
+  AddProductInput,
+  AddProductScreen,
+} from "@/components/product/add-product/AddProductWizard";
 
 type ProductCategory =
   | "unstitched_plain"
@@ -26,6 +32,10 @@ function safeInt(v: any) {
 
 function safeStr(v: any) {
   return String(v ?? "").trim();
+}
+
+function roundMeter(n: number) {
+  return Math.round(n * 100) / 100;
 }
 
 function inferCategoryFromDraft(draft: any): ProductCategory {
@@ -69,20 +79,22 @@ export default function Q04Inventory() {
 
   const madeOnOrder = Boolean((draft?.spec as any)?.made_on_order ?? false);
   const category = inferCategoryFromDraft(draft);
+  const isUnstitched = category !== "stitched_ready";
 
-  const [qtyText, setQtyText] = useState<string>(
-    String(madeOnOrder ? 0 : (draft?.inventory_qty ?? 0))
-  );
+  const initialQtyText = useMemo(() => {
+    if (madeOnOrder) return "0";
+    const existingQty = Number(draft?.inventory_qty);
+    return Number.isFinite(existingQty) && existingQty > 0
+      ? String(roundMeter(existingQty))
+      : "";
+  }, [draft?.inventory_qty, madeOnOrder]);
+  const qtyTextRef = useRef(initialQtyText);
 
   const canContinue = useMemo(() => {
-    if (!vendorId) return false;
-    if (madeOnOrder) return true;
+    return Boolean(vendorId);
+  }, [vendorId]);
+  const disabledHint = !vendorId ? "Vendor not loaded." : "";
 
-    const q = Number(qtyText);
-    return Number.isFinite(q) && q >= 0;
-  }, [vendorId, madeOnOrder, qtyText]);
-
-  // ✅ Auto focus when screen becomes active (only if editable)
   useFocusEffect(
     React.useCallback(() => {
       if (madeOnOrder) return;
@@ -98,6 +110,20 @@ export default function Q04Inventory() {
     return "/vendor/profile/add-product/q05b-unstitched-cost-per-meter";
   }
 
+  function patchSpec(patch: any) {
+    if (typeof ctx.setSpec === "function") {
+      ctx.setSpec((prev: any) => ({ ...(prev ?? {}), ...patch }));
+      return;
+    }
+
+    if (typeof ctx.setDraft === "function") {
+      ctx.setDraft((prev: any) => ({
+        ...prev,
+        spec: { ...(prev?.spec ?? {}), ...patch },
+      }));
+    }
+  }
+
   function onContinue() {
     if (!vendorId) {
       Alert.alert("Vendor not loaded", "Please ensure vendorSlice has vendor.id.");
@@ -105,12 +131,25 @@ export default function Q04Inventory() {
     }
 
     if (!madeOnOrder) {
-      const q = Number(sanitizeNumber(qtyText) || "0");
-      if (!Number.isFinite(q) || q < 0) {
-        Alert.alert("Invalid quantity", "Please enter a valid inventory quantity (0 or more).");
+      const cleanedQty = sanitizeNumber(qtyTextRef.current);
+      const q = Number(cleanedQty);
+      if (!cleanedQty || !Number.isFinite(q) || q < 0) {
+        Alert.alert(
+          "Invalid quantity",
+          isUnstitched
+            ? "Please enter valid available fabric length in meters."
+            : "Please enter a valid inventory quantity (0 or more).",
+        );
         return;
       }
-      setInventoryQty?.(Math.trunc(q));
+      const nextQty = isUnstitched ? roundMeter(q) : Math.trunc(q);
+      setInventoryQty?.(nextQty);
+      if (isUnstitched) {
+        patchSpec({
+          inventory_unit: "m",
+          inventory_length_m: nextQty,
+        });
+      }
     } else {
       setInventoryQty?.(0);
     }
@@ -124,62 +163,48 @@ export default function Q04Inventory() {
   }
 
   return (
-    <View style={apStyles.screen}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={apStyles.screen}
-        contentContainerStyle={apStyles.content}
-      >
-        <View style={apStyles.headerRow}>
-          <Text style={apStyles.title}>Inventory</Text>
-
-          <Pressable
-            onPress={() => router.back()}
-            style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
-          >
-            <Text style={apStyles.linkText}>Close</Text>
-          </Pressable>
-        </View>
-
-        <View style={apStyles.card}>
-          <Text style={apStyles.label}>Inventory quantity *</Text>
-
-          {madeOnOrder ? (
-            <Text style={apStyles.metaHint}>Made on order. Inventory will be set as 0.</Text>
-          ) : (
-            <Text style={apStyles.metaHint}>Enter how many pieces are available.</Text>
-          )}
-
-          <TextInput
+    <AddProductScreen
+      title="Inventory"
+      onBack={() => router.back()}
+      footer={
+        <AddProductFooter
+          onPrimaryPress={onContinue}
+          primaryDisabled={!canContinue}
+          disabledHint={disabledHint}
+        />
+      }
+    >
+      <AddProductCard>
+        <AddProductField
+          label={
+            isUnstitched
+              ? "Available fabric length (meters)"
+              : "Inventory quantity"
+          }
+          required
+          hint={
+            madeOnOrder
+              ? "Made on order. Inventory will be set as 0."
+              : isUnstitched
+                ? "Enter total fabric available in meters."
+                : "Enter how many pieces are available."
+          }
+          style={{ marginTop: 0 }}
+        >
+          <AddProductInput
             ref={inputRef}
-            value={String(madeOnOrder ? 0 : qtyText)}
-            onChangeText={(t) => setQtyText(sanitizeNumber(t))}
+            defaultValue={madeOnOrder ? "0" : initialQtyText}
             placeholder="e.g., 10"
-            placeholderTextColor={apColors.muted}
-            style={[apStyles.input, madeOnOrder ? { opacity: 0.55 } : null]}
-            keyboardType="number-pad"
+            style={madeOnOrder ? { opacity: 0.55 } : null}
+            textValueRef={qtyTextRef}
+            sanitizeText={sanitizeNumber}
+            keyboardType={isUnstitched ? "decimal-pad" : "number-pad"}
             maxLength={10}
             editable={!madeOnOrder}
             returnKeyType="done"
           />
-
-          {/* <Text style={apStyles.metaHint}>
-            Category: <Text style={{ fontWeight: "900", color: apColors.text }}>{category}</Text>
-          </Text> */}
-
-          <Pressable
-            style={({ pressed }) => [
-              apStyles.primaryBtn,
-              !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null
-            ]}
-            onPress={onContinue}
-            disabled={!canContinue}
-          >
-            <Text style={apStyles.primaryText}>Continue</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </View>
+        </AddProductField>
+      </AddProductCard>
+    </AddProductScreen>
   );
 }

@@ -1,31 +1,73 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Dimensions,
   FlatList,
   Pressable,
   StyleSheet,
   Text,
-  View
+  View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { getWearStates, WearStateItem } from "@/utils/supabase/wearState";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
+import { apColors, apStyles } from "@/components/product/addProductStyles";
+import { getWearStates, WearStateItem } from "@/utils/supabase/wearState";
 
-const GRID_GAP = 10;
+const GRID_GAP = 8;
 const H_PADDING = 12;
 
-const SCREEN_W = Dimensions.get("window").width;
-const CARD_W = (SCREEN_W - H_PADDING * 2 - GRID_GAP) / 2;
-const CARD_H = Math.max(120, Math.round(CARD_W * 1.05));
-
-const CARD_COLORS: Record<string, { bg: string; text: string }> = {
-  "dupatta-included": { bg: "#FCE7F3", text: "#111" },
-  "trouser-included": { bg: "#E0F2FE", text: "#111" },
-  "blouse-included": { bg: "#DCFCE7", text: "#111" },
-  "one-piece": { bg: "#FEF3C7", text: "#111" },
-  "two-piece": { bg: "#EDE9FE", text: "#111" },
-  "three-piece": { bg: "#FFE4E6", text: "#111" }
+const CARD_COLORS: Record<string, string> = {
+  "dupatta-included": "#F8FBFF",
+  "trouser-included": "#F5FAFF",
+  "shawl-included": "#F3F8FF",
+  "blouse-included": "#F2F6FF",
+  "choli-included": "#F0F5FF",
+  "koti-included": "#EEF4FF",
+  "jacket-included": "#F1F7FA",
+  "small-coat-included": "#F4F8F4",
+  "coat-included": "#F8FAF1",
+  "cape-included": "#FAF7F1",
+  "overlay-included": "#FAF5F6",
+  "inner-included": "#F8F5FA",
+  "lining-included": "#F5F6FA",
+  "scarf-included": "#F5FAF8",
+  "hijab-included": "#F4F9FB",
+  "gharara-included": "#FBF8F2",
+  "sharara-included": "#FAF6F2",
+  "lehenga-included": "#F8F4FA",
+  "skirt-included": "#F5F2FA",
+  "petticoat-included": "#F2F5FA",
 };
+
+const INCLUDED_CODE_ORDER = [
+  "dupatta-included",
+  "trouser-included",
+  "shawl-included",
+  "blouse-included",
+  "choli-included",
+  "koti-included",
+  "jacket-included",
+  "small-coat-included",
+  "coat-included",
+  "cape-included",
+  "overlay-included",
+  "inner-included",
+  "lining-included",
+  "scarf-included",
+  "hijab-included",
+  "gharara-included",
+  "sharara-included",
+  "lehenga-included",
+  "skirt-included",
+  "petticoat-included",
+];
+
+const FALLBACK_COLORS = [
+  "#F8FBFF",
+  "#F3F8FF",
+  "#EEF4FF",
+  "#F5FAF8",
+  "#FAF7F1",
+  "#F8F5FA",
+];
 
 function safeStr(v: any) {
   return String(v ?? "").trim();
@@ -35,6 +77,28 @@ function pickFirstString(v: unknown): string | null {
   if (typeof v === "string") return v.trim() || null;
   if (Array.isArray(v) && typeof v[0] === "string") return v[0].trim() || null;
   return null;
+}
+
+function codeOf(item: WearStateItem) {
+  return String(item.code ?? "").toLowerCase().trim();
+}
+
+function sortIncludedItems(list: WearStateItem[]) {
+  const included = list.filter((item) => codeOf(item).endsWith("-included"));
+  const byCode = new Map(included.map((item) => [codeOf(item), item]));
+
+  const ordered = INCLUDED_CODE_ORDER.map((code) => byCode.get(code)).filter(
+    Boolean,
+  ) as WearStateItem[];
+
+  const used = new Set(ordered.map((item) => item.id));
+  const rest = included.filter((item) => !used.has(item.id));
+
+  return [...ordered, ...rest];
+}
+
+function cardColorFor(code: string, index: number) {
+  return CARD_COLORS[code] ?? FALLBACK_COLORS[index % FALLBACK_COLORS.length];
 }
 
 export default function ProductWearStateModal() {
@@ -48,9 +112,8 @@ export default function ProductWearStateModal() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Local selection inside modal (apply to draft only on Done)
   const [selected, setSelected] = useState<string[]>(
-    Array.isArray(draft.spec.wearStateIds) ? draft.spec.wearStateIds : []
+    Array.isArray(draft.spec.wearStateIds) ? draft.spec.wearStateIds : [],
   );
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
@@ -70,33 +133,15 @@ export default function ProductWearStateModal() {
       .then((res) => {
         if (!alive) return;
 
-        const list = (res ?? []) as WearStateItem[];
+        const included = sortIncludedItems((res ?? []) as WearStateItem[]);
+        const availableIds = new Set(included.map((item) => String(item.id)));
 
-        const order = [
-          "dupatta-included",
-          "trouser-included",
-          "blouse-included",
-          "one-piece",
-          "two-piece",
-          "three-piece"
-        ];
-
-        const byCode = new Map(
-          list.map((x) => [String(x.code ?? "").toLowerCase(), x])
-        );
-
-        const ordered = order
-          .map((code) => byCode.get(code))
-          .filter(Boolean) as WearStateItem[];
-
-        const used = new Set(ordered.map((x) => x.id));
-        const rest = list.filter((x) => !used.has(x.id));
-
-        setItems([...ordered, ...rest]);
+        setItems(included);
+        setSelected((prev) => prev.filter((id) => availableIds.has(String(id))));
       })
       .catch((e) => {
         if (!alive) return;
-        setErr(e?.message ?? "Failed to load wear states");
+        setErr(e?.message ?? "Failed to load included items");
         setItems([]);
       })
       .finally(() => {
@@ -119,7 +164,7 @@ export default function ProductWearStateModal() {
 
   function toggle(id: string) {
     setSelected((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
   }
 
@@ -144,36 +189,22 @@ export default function ProductWearStateModal() {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
+        <Text style={styles.headerTitle}>Includes</Text>
+
         <Pressable
           onPress={close}
-          style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            apStyles.linkBtn,
+            styles.closeButton,
+            pressed ? apStyles.pressed : null,
+          ]}
         >
-          <Text style={styles.headerBtnText}>Close</Text>
-        </Pressable>
-
-        <Text style={styles.headerTitle}>Wear State</Text>
-
-        <Pressable
-          onPress={onDone}
-          style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
-        >
-          <Text style={styles.headerBtnText}>Done</Text>
+          <Text style={apStyles.linkText}>Close</Text>
         </Pressable>
       </View>
 
-      <View style={styles.subHeader}>
-        <Text style={styles.subText}>Select one or more wear states.</Text>
-
-        <Pressable
-          onPress={onClear}
-          style={({ pressed }) => [styles.clearBtn, pressed && styles.pressed]}
-        >
-          <Text style={styles.clearBtnText}>Clear</Text>
-        </Pressable>
-      </View>
-
-      {loading ? <Text style={styles.infoText}>Loading...</Text> : null}
-      {err ? <Text style={styles.infoText}>{err}</Text> : null}
+      {loading ? <Text style={styles.infoText}>Loading items...</Text> : null}
+      {err ? <Text style={styles.errorText}>{err}</Text> : null}
 
       <FlatList
         data={items}
@@ -182,64 +213,78 @@ export default function ProductWearStateModal() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         columnWrapperStyle={styles.columnWrap}
-        renderItem={({ item }) => {
+        ListEmptyComponent={
+          !loading && !err ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No items found.</Text>
+            </View>
+          ) : null
+        }
+        renderItem={({ item, index }) => {
           const isOn = selectedSet.has(item.id);
           const code = String(item.code ?? "").toLowerCase();
-          const colors = CARD_COLORS[code] ?? { bg: "#F3F4F6", text: "#111" };
+          const bg = cardColorFor(code, index);
 
           return (
             <Pressable
               key={item.id}
-              style={[
+              style={({ pressed }) => [
                 styles.card,
-                { backgroundColor: colors.bg, height: CARD_H },
-                isOn ? styles.cardSelected : null
+                { backgroundColor: bg },
+                isOn ? styles.cardSelected : null,
+                pressed ? apStyles.pressed : null,
               ]}
               onPress={() => toggle(item.id)}
             >
-              <Text style={[styles.label, { color: colors.text }]}>
-                {item.name}
-              </Text>
+              <Text style={styles.label}>{item.name}</Text>
 
               {isOn ? (
-                <Text style={[styles.selected, { color: colors.text }]}>
-                  ✓ Selected
-                </Text>
+                <View style={styles.selectedBadge}>
+                  <Text style={styles.selectedText}>Selected</Text>
+                </View>
               ) : null}
             </Pressable>
           );
         }}
       />
+
+      <View style={styles.footer}>
+        <View>
+          <Text style={styles.footerLabel}>Selected</Text>
+          <Text style={styles.footerValue}>{selected.length}</Text>
+        </View>
+
+        <View style={styles.footerActions}>
+          <Pressable
+            onPress={onClear}
+            style={({ pressed }) => [
+              styles.clearBtn,
+              pressed ? apStyles.pressed : null,
+            ]}
+          >
+            <Text style={styles.clearBtnText}>Clear</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={onDone}
+            style={({ pressed }) => [
+              styles.doneBtn,
+              pressed ? apStyles.pressed : null,
+            ]}
+          >
+            <Text style={styles.doneText}>Done</Text>
+          </Pressable>
+        </View>
+      </View>
     </View>
   );
 }
 
-const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
-  placeholder: "#94A3B8",
-  danger: "#B91C1C",
-  dangerSoft: "#FEE2E2",
-  dangerBorder: "#FCA5A5",
-  overlayDark: "rgba(0,0,0,0.58)",
-  overlaySoft: "rgba(255,255,255,0.14)",
-  white: "#FFFFFF",
-  black: "#000000"
-};
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: stylesVars.bg
+    backgroundColor: apColors.bg,
   },
-
   header: {
     paddingHorizontal: 14,
     paddingTop: 14,
@@ -247,129 +292,150 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12
+    gap: 12,
   },
-
   headerTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: stylesVars.text
+    color: apColors.text,
   },
-
-  headerBtn: {
-    minHeight: 40,
+  closeButton: {
+    minHeight: 38,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: stylesVars.blueSoft,
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
-    alignItems: "center",
-    justifyContent: "center"
   },
-
-  headerBtnText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: stylesVars.blue
-  },
-
-  subHeader: {
-    paddingHorizontal: 14,
-    paddingBottom: 6,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10
-  },
-
-  subText: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
-    color: stylesVars.mutedText,
-    fontWeight: "500"
-  },
-
-  clearBtn: {
-    minHeight: 40,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-
-  clearBtnText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: stylesVars.text
-  },
-
-  heading: {
-    fontSize: 15,
-    fontWeight: "700",
-    marginBottom: 6,
-    color: stylesVars.text,
-    paddingHorizontal: 14,
-    paddingTop: 6
-  },
-
   infoText: {
     fontSize: 13,
     lineHeight: 18,
-    color: stylesVars.mutedText,
+    color: apColors.muted,
     fontWeight: "500",
-    marginBottom: 6,
-    paddingHorizontal: 14
+    paddingHorizontal: 14,
+    paddingBottom: 6,
   },
-
+  errorText: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: apColors.danger,
+    fontWeight: "600",
+    paddingHorizontal: 14,
+    paddingBottom: 6,
+  },
   listContent: {
     paddingHorizontal: H_PADDING,
-    paddingBottom: 18,
-    paddingTop: 4
+    paddingBottom: 106,
+    paddingTop: 2,
   },
-
   columnWrap: {
     gap: GRID_GAP,
-    marginBottom: GRID_GAP
+    marginBottom: GRID_GAP,
   },
-
   card: {
     flex: 1,
+    minHeight: 66,
     borderWidth: 1,
-    borderColor: stylesVars.border,
-    borderRadius: 18,
-    paddingHorizontal: 10,
+    borderColor: apColors.border,
+    borderRadius: 8,
+    paddingHorizontal: 8,
     paddingVertical: 10,
     justifyContent: "center",
-    alignItems: "center"
+    alignItems: "center",
+    position: "relative",
   },
-
   cardSelected: {
-    borderColor: stylesVars.blue,
-    borderWidth: 2,
-    backgroundColor: stylesVars.blueSoft
+    borderColor: apColors.blue,
   },
-
   label: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: "700",
-    textAlign: "center"
-  },
-
-  selected: {
-    marginTop: 6,
     fontSize: 12,
-    lineHeight: 18,
-    fontWeight: "700"
+    lineHeight: 16,
+    fontWeight: "800",
+    color: apColors.text,
+    textAlign: "center",
   },
-
-  pressed: {
-    opacity: 0.82
-  }
+  selectedBadge: {
+    position: "absolute",
+    top: 5,
+    right: 5,
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: apColors.blue,
+  },
+  selectedText: {
+    color: apColors.white,
+    fontSize: 9,
+    fontWeight: "800",
+  },
+  emptyState: {
+    minHeight: 120,
+    borderWidth: 1,
+    borderColor: apColors.border,
+    borderRadius: 8,
+    backgroundColor: apColors.white,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+  },
+  emptyText: {
+    color: apColors.muted,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  footer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopWidth: 1,
+    borderTopColor: apColors.border,
+    backgroundColor: "rgba(248,250,252,0.98)",
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  footerLabel: {
+    color: apColors.muted,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  footerValue: {
+    color: apColors.text,
+    fontSize: 22,
+    fontWeight: "900",
+  },
+  footerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  clearBtn: {
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: apColors.border,
+    backgroundColor: apColors.white,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  clearBtnText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: apColors.text,
+  },
+  doneBtn: {
+    minHeight: 44,
+    paddingHorizontal: 22,
+    borderRadius: 8,
+    backgroundColor: apColors.blue,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  doneText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: apColors.white,
+  },
 });

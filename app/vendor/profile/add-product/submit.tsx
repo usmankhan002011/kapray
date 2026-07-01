@@ -3,9 +3,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -16,10 +13,20 @@ import * as VideoThumbnails from "expo-video-thumbnails";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { supabase } from "@/utils/supabase/client";
+import {
+  AddProductCard,
+  AddProductFooter,
+  AddProductNotice,
+  AddProductScreen,
+} from "@/components/product/add-product/AddProductWizard";
+import { apStyles } from "@/components/product/addProductStyles";
 
 import {
   normalizeReadyVariants,
+  normalizeSimpleReadyInventory,
+  sumSimpleReadyInventory,
   sumReadyVariantQty,
+  validateSimpleReadyInventory,
   validateReadyVariants,
   normalizeMadeOrderVariants,
   validateMadeOrderVariants,
@@ -78,6 +85,10 @@ function safeNumOrZero(v: any) {
   const n = Number(v);
   if (!Number.isFinite(n)) return 0;
   return n;
+}
+
+function roundMeter(n: number) {
+  return Math.round(n * 100) / 100;
 }
 
 function normalizePresetArray(v: unknown): TailoringStylePreset[] {
@@ -590,11 +601,23 @@ export default function AddProductSubmitScreen() {
     productCategory === "unstitched_dyeing_tailoring";
   const needsTailoring = productCategory === "unstitched_dyeing_tailoring";
   const isUnstitched = productCategory !== "stitched_ready";
+  const requiresSizeLengthMap = isUnstitched;
+  const isFabricByMeter =
+    productCategory === "unstitched_plain" ||
+    productCategory === "unstitched_dyeing";
 
   const hasReadyVariants =
     productCategory === "stitched_ready" &&
     !madeOnOrder &&
     safeStr((draft.spec as any)?.variant_mode) === "ready_variants";
+
+  const hasMadeOrderVariants =
+    productCategory === "stitched_ready" &&
+    madeOnOrder &&
+    safeStr((draft.spec as any)?.variant_mode) === "made_order_variants";
+
+  const isSimpleReady =
+    productCategory === "stitched_ready" && !madeOnOrder && !hasReadyVariants;
 
   const readyVariants = useMemo(
     () => normalizeReadyVariants((draft.price as any)?.variants),
@@ -604,6 +627,25 @@ export default function AddProductSubmitScreen() {
   const readyVariantQty = useMemo(
     () => sumReadyVariantQty(readyVariants),
     [readyVariants],
+  );
+
+  const simpleReadyInventory = useMemo(
+    () => {
+      const fromPrice = normalizeSimpleReadyInventory(
+        (draft.price as any)?.simple_ready_inventory,
+      );
+      if (fromPrice.length) return fromPrice;
+
+      return normalizeSimpleReadyInventory(
+        (draft.spec as any)?.simple_ready_inventory,
+      );
+    },
+    [draft.price, draft.spec],
+  );
+
+  const simpleReadyQty = useMemo(
+    () => sumSimpleReadyInventory(simpleReadyInventory),
+    [simpleReadyInventory],
   );
 
   const madeOrderVariants = useMemo(
@@ -622,7 +664,13 @@ export default function AddProductSubmitScreen() {
   );
 
   const sizeLengthMap = (draft.spec as any)?.size_length_m ?? {};
-  const weightKg = safeNumOrZero((draft.spec as any)?.weight_kg ?? 0);
+  const weightKg = safeNumOrZero(
+    isFabricByMeter
+      ? (draft.spec as any)?.weight_per_meter_kg ??
+          (draft.spec as any)?.weight_kg ??
+          0
+      : (draft.spec as any)?.weight_kg ?? 0,
+  );
   const packageCm = (draft.spec as any)?.package_cm ?? {};
 
   const includesTrouser = Boolean(
@@ -645,7 +693,7 @@ export default function AddProductSubmitScreen() {
       const n = Number((draft.price as any)?.cost_pkr_total ?? 0);
       if (!Number.isFinite(n) || n <= 0) return false;
 
-      if (madeOnOrder) {
+      if (hasMadeOrderVariants) {
         const variantError = validateMadeOrderVariants(madeOrderVariants);
         if (variantError) return false;
       }
@@ -654,11 +702,18 @@ export default function AddProductSubmitScreen() {
         const variantError = validateReadyVariants(readyVariants);
         if (variantError) return false;
       }
+
+      if (isSimpleReady) {
+        const inventoryError = validateSimpleReadyInventory(
+          simpleReadyInventory,
+        );
+        if (inventoryError) return false;
+      }
     } else {
       const n = Number((draft.price as any)?.cost_pkr_per_meter ?? 0);
       if (!Number.isFinite(n) || n <= 0) return false;
 
-      if (!hasValidSizeLengthMap(sizeLengthMap)) return false;
+      if (requiresSizeLengthMap && !hasValidSizeLengthMap(sizeLengthMap)) return false;
 
       if (needsDyeing) {
         const d = Number(dyeingCostPkr ?? 0);
@@ -691,7 +746,7 @@ export default function AddProductSubmitScreen() {
     if ((draft.media.images ?? []).length < 1) return false;
     if ((draft.spec.dressTypeIds ?? []).length < 1) return false;
 
-    if (!madeOnOrder && !hasReadyVariants) {
+    if (isUnstitched) {
       const q = Number(draft.inventory_qty ?? 0);
       if (!Number.isFinite(q) || q < 0) return false;
     }
@@ -708,12 +763,16 @@ export default function AddProductSubmitScreen() {
     madeOnOrder,
     productCategory,
     hasReadyVariants,
+    hasMadeOrderVariants,
+    isSimpleReady,
+    simpleReadyInventory,
     readyVariants,
     readyVariantQty,
     madeOrderVariants,
     needsDyeing,
     dyeingCostPkr,
     needsTailoring,
+    requiresSizeLengthMap,
     vendorOffersTailoring,
     tailoringCostPkr,
     tailoringTurnaroundDays,
@@ -723,6 +782,13 @@ export default function AddProductSubmitScreen() {
     tailoringStylePresets,
     includesTrouser,
   ]);
+  const saveHint = saving
+    ? "Saving product..."
+    : !vendorId
+      ? "Vendor not loaded."
+      : !canSave
+        ? "Complete missing items in Review before saving."
+        : "";
 
   async function saveProduct() {
     if (saving) return;
@@ -747,10 +813,10 @@ export default function AddProductSubmitScreen() {
         return;
       }
 
-      if (madeOnOrder) {
+      if (hasMadeOrderVariants) {
         const variantError = validateMadeOrderVariants(madeOrderVariants);
         if (variantError) {
-          Alert.alert("Invalid variants", variantError);
+          Alert.alert("Invalid styles", variantError);
           return;
         }
       }
@@ -758,7 +824,17 @@ export default function AddProductSubmitScreen() {
       if (hasReadyVariants) {
         const variantError = validateReadyVariants(readyVariants);
         if (variantError) {
-          Alert.alert("Incomplete ready variants", variantError);
+          Alert.alert("Incomplete ready styles", variantError);
+          return;
+        }
+      }
+
+      if (isSimpleReady) {
+        const inventoryError = validateSimpleReadyInventory(
+          simpleReadyInventory,
+        );
+        if (inventoryError) {
+          Alert.alert("Invalid size inventory", inventoryError);
           return;
         }
       }
@@ -769,10 +845,10 @@ export default function AddProductSubmitScreen() {
         return;
       }
 
-      if (!hasValidSizeLengthMap(sizeLengthMap)) {
+      if (requiresSizeLengthMap && !hasValidSizeLengthMap(sizeLengthMap)) {
         Alert.alert(
           "Missing size lengths",
-          "For unstitched products, please enter fabric length in meters for at least one size.",
+          "For unstitched products, please enter fabric length in meters by size.",
         );
         return;
       }
@@ -861,7 +937,7 @@ export default function AddProductSubmitScreen() {
       return;
     }
 
-    if (!madeOnOrder && !hasReadyVariants) {
+    if (isUnstitched) {
       const q = Number(draft.inventory_qty ?? 0);
       if (!Number.isFinite(q) || q < 0) {
         Alert.alert("Invalid inventory", "Inventory must be 0 or more.");
@@ -872,8 +948,8 @@ export default function AddProductSubmitScreen() {
     if (!madeOnOrder && hasReadyVariants) {
       if (!Number.isFinite(readyVariantQty) || readyVariantQty <= 0) {
         Alert.alert(
-          "Invalid variant stock",
-          "Total stock across ready variants must be more than 0.",
+          "Invalid style stock",
+          "Total stock across ready styles must be more than 0.",
         );
         return;
       }
@@ -886,6 +962,8 @@ export default function AddProductSubmitScreen() {
         ? 0
         : hasReadyVariants
           ? readyVariantQty
+          : isSimpleReady
+            ? simpleReadyQty
           : Number(draft.inventory_qty ?? 0);
 
       const finalCategory: ProductCategory = productCategory;
@@ -921,7 +999,9 @@ export default function AddProductSubmitScreen() {
         made_on_order: Boolean(madeOnOrder),
 
         inventory_qty: Number.isFinite(inventoryQty)
-          ? Math.trunc(inventoryQty)
+          ? isUnstitched
+            ? roundMeter(inventoryQty)
+            : Math.trunc(inventoryQty)
           : 0,
 
         spec: {
@@ -930,11 +1010,13 @@ export default function AddProductSubmitScreen() {
           more_description: safeStr(moreDescription),
 
           product_category: finalCategory,
-          variant_mode: madeOnOrder
+          variant_mode: hasMadeOrderVariants
             ? "made_order_variants"
             : safeStr((draft.spec as any)?.variant_mode ?? ""),
 
           dyeing_enabled: unstitchedDyeingEnabled,
+          dyeing_pricing_unit:
+            finalCategory === "unstitched_dyeing" ? "per_meter" : "per_order",
           tailoring_enabled: unstitchedTailoringEnabled,
           tailoring_turnaround_days: unstitchedTailoringTurnaround,
 
@@ -946,6 +1028,16 @@ export default function AddProductSubmitScreen() {
             : [],
 
           weight_kg: Number(weightKg),
+          weight_per_meter_kg:
+            finalCategory === "unstitched_plain" ||
+            finalCategory === "unstitched_dyeing"
+              ? Number(weightKg)
+              : null,
+          shipping_weight_mode:
+            finalCategory === "unstitched_plain" ||
+            finalCategory === "unstitched_dyeing"
+              ? "per_meter"
+              : "per_order",
           package_cm: {
             length: Number(packageCm?.length ?? 0),
             width: Number(packageCm?.width ?? 0),
@@ -953,7 +1045,17 @@ export default function AddProductSubmitScreen() {
           },
           ...(isUnstitched
             ? {
-                size_length_m: sizeLengthMap,
+                inventory_unit: "m",
+                inventory_length_m: Number.isFinite(inventoryQty)
+                  ? roundMeter(inventoryQty)
+                  : 0,
+                fabric_purchase_mode:
+                  finalCategory === "unstitched_dyeing_tailoring"
+                    ? "dress_length"
+                    : "by_meter",
+                ...(requiresSizeLengthMap
+                  ? { size_length_m: sizeLengthMap }
+                  : {}),
               }
             : {}),
         },
@@ -962,12 +1064,21 @@ export default function AddProductSubmitScreen() {
           ...(draft.price ?? {}),
           mode: finalPriceMode,
 
-          // Keep local picked variant images out of the DB insert.
+          available_sizes: isSimpleReady
+            ? simpleReadyInventory.map((row) => row.size)
+            : (draft.price as any)?.available_sizes ?? [],
+          simple_ready_inventory: isSimpleReady
+            ? simpleReadyInventory
+            : [],
+
+          // Keep local picked style images out of the DB insert.
           // Final uploaded storage paths are written in the update below.
           variants: [],
           made_order_variants: [],
 
           dyeing_cost_pkr: unstitchedDyeingCost,
+          dyeing_pricing_unit:
+            finalCategory === "unstitched_dyeing" ? "per_meter" : "per_order",
           tailoring_cost_pkr: unstitchedTailoringCost,
         },
 
@@ -1079,7 +1190,7 @@ export default function AddProductSubmitScreen() {
           })
         : [];
 
-      const uploadedMadeOrderVariants = madeOnOrder
+      const uploadedMadeOrderVariants = hasMadeOrderVariants
         ? await uploadMadeOrderVariantImages({
             vendorId,
             productCode: finalCode,
@@ -1095,7 +1206,7 @@ export default function AddProductSubmitScreen() {
 
       const finalSpec = {
         ...insertPayload.spec,
-        variant_mode: madeOnOrder
+        variant_mode: hasMadeOrderVariants
           ? "made_order_variants"
           : safeStr((draft.spec as any)?.variant_mode ?? ""),
         tailoring_style_presets: unstitchedTailoringEnabled
@@ -1106,7 +1217,9 @@ export default function AddProductSubmitScreen() {
       const finalPrice = {
         ...insertPayload.price,
         variants: hasReadyVariants ? uploadedReadyVariants : [],
-        made_order_variants: madeOnOrder ? uploadedMadeOrderVariants : [],
+        made_order_variants: hasMadeOrderVariants
+          ? uploadedMadeOrderVariants
+          : [],
       };
 
       const { error: updErr } = await supabase
@@ -1116,7 +1229,9 @@ export default function AddProductSubmitScreen() {
           spec: finalSpec,
           price: finalPrice,
           inventory_qty: Number.isFinite(inventoryQty)
-            ? Math.trunc(inventoryQty)
+            ? isUnstitched
+              ? roundMeter(inventoryQty)
+              : Math.trunc(inventoryQty)
             : 0,
           updated_at: new Date().toISOString(),
         })
@@ -1143,175 +1258,48 @@ export default function AddProductSubmitScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>Save Product</Text>
+    <AddProductScreen
+      title="Save Product"
+      onBack={() => router.back()}
+      backLabel="Back"
+      footer={
+        <AddProductFooter
+          primaryLabel={saving ? "Saving..." : "Save Product"}
+          primaryIcon={saving ? "hourglass-empty" : "save"}
+          onPrimaryPress={saveProduct}
+          primaryDisabled={!canSave || saving}
+          disabledHint={saveHint}
+        />
+      }
+    >
 
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.linkBtn,
-            pressed ? styles.pressed : null,
-          ]}
-        >
-          <Text style={styles.linkText}>Back</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Ready to save</Text>
+      <AddProductCard>
+        <Text style={apStyles.sectionTitle}>Ready to save</Text>
 
         {vendorLoading ? (
-          <View style={styles.inlineRow}>
+          <View style={apStyles.loadingRow}>
             <ActivityIndicator />
-            <Text style={styles.meta}>Loading vendor settings…</Text>
+            <Text style={apStyles.loadingText}>Loading vendor settings...</Text>
           </View>
         ) : null}
 
         {!vendorId ? (
-          <Text style={[styles.meta, { color: "#991B1B" }]}>
+          <AddProductNotice tone="warning">
             Vendor not loaded. Please ensure vendorSlice has vendor.id (bigint).
-          </Text>
+          </AddProductNotice>
         ) : null}
 
         {!canSave ? (
-          <Text style={styles.meta}>
-            Some required fields are missing. Go back to Review and complete the
-            missing steps.
-          </Text>
+          <AddProductNotice tone="warning">
+            Complete missing items in Review before saving.
+          </AddProductNotice>
         ) : (
-          <Text style={styles.meta}>
+          <Text style={apStyles.metaHint}>
             Save Product to create the product and upload media.
           </Text>
         )}
-      </View>
+      </AddProductCard>
 
-      <Pressable
-        style={({ pressed }) => [
-          styles.saveBtn,
-          !canSave || saving ? styles.saveBtnDisabled : null,
-          pressed ? styles.pressed : null,
-        ]}
-        onPress={saveProduct}
-        disabled={!canSave || saving}
-      >
-        {saving ? (
-          <View style={styles.inlineRow}>
-            <ActivityIndicator color="#fff" />
-            <Text style={styles.saveText}>Saving…</Text>
-          </View>
-        ) : (
-          <Text style={styles.saveText}>Save Product</Text>
-        )}
-      </Pressable>
-    </ScrollView>
+    </AddProductScreen>
   );
 }
-
-const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
-  placeholder: "#94A3B8",
-  white: "#FFFFFF",
-};
-
-const styles = StyleSheet.create({
-  content: {
-    padding: 16,
-    paddingBottom: 24,
-    backgroundColor: stylesVars.bg,
-  },
-
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: stylesVars.text,
-  },
-
-  card: {
-    marginTop: 14,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg,
-    padding: 18,
-  },
-
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: stylesVars.text,
-    marginBottom: 2,
-  },
-
-  meta: {
-    marginTop: 6,
-    fontSize: 13,
-    lineHeight: 18,
-    color: stylesVars.mutedText,
-    fontWeight: "500",
-  },
-
-  inlineRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginTop: 10,
-  },
-
-  linkBtn: {
-    minHeight: 40,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: stylesVars.blueSoft,
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  linkText: {
-    color: stylesVars.blue,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-
-  saveBtn: {
-    marginTop: 14,
-    minHeight: 48,
-    borderRadius: 14,
-    paddingVertical: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: stylesVars.blue,
-  },
-
-  saveBtnDisabled: {
-    opacity: 0.6,
-  },
-
-  saveText: {
-    color: stylesVars.white,
-    fontWeight: "700",
-    fontSize: 14,
-  },
-
-  pressed: {
-    opacity: 0.82,
-  },
-});

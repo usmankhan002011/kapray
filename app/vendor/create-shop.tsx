@@ -1,6 +1,7 @@
 // File: app/vendor/create-shop.tsx
 
 import * as Location from "expo-location";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
 import { VideoView, useVideoPlayer } from "expo-video";
 import * as VideoThumbnails from "expo-video-thumbnails";
@@ -30,6 +31,7 @@ import {
 import GradientInputCard from "@/components/Wizard/GradientInputCard";
 import VendorReviewSummary from "@/components/Wizard/VendorReviewSummary";
 import WizardScaffold from "@/components/Wizard/WizardScraffold";
+import { apColors, apRadii, apSpacing } from "@/components/product/addProductStyles";
 import { EXPORT_REGIONS } from "@/data/kapray/exportRegions";
 import {
   BLOUSE_NECK_PATTERNS,
@@ -71,6 +73,7 @@ const initialForm: VendorWizardData = {
   shopName: "",
   address: "",
   locationUrl: "",
+  offersDyeing: false,
   offersTailoring: false,
   exportsEnabled: false,
   exportRegions: [],
@@ -326,6 +329,7 @@ export default function CreateShopScreen() {
           shop_name: form.shopName.trim(),
           address: form.address.trim(),
           location_url: form.locationUrl.trim() || null,
+          offers_dyeing: Boolean(form.offersDyeing),
           offers_tailoring: Boolean(form.offersTailoring),
           exports_enabled: Boolean(form.exportsEnabled),
           export_regions: normalizedExportRegions,
@@ -359,6 +363,7 @@ export default function CreateShopScreen() {
           shop_name: form.shopName.trim(),
           address: form.address.trim(),
           location_url: form.locationUrl.trim() || null,
+          offers_dyeing: Boolean(form.offersDyeing),
           offers_tailoring: Boolean(form.offersTailoring),
           exports_enabled: Boolean(form.exportsEnabled),
           export_regions: normalizedExportRegions,
@@ -449,6 +454,7 @@ export default function CreateShopScreen() {
         shop_video_paths: videoPaths.length
           ? videoPaths
           : (selectedVendor?.shop_video_paths ?? null),
+        offers_dyeing: Boolean(form.offersDyeing),
         offers_tailoring: Boolean(form.offersTailoring),
         exports_enabled: Boolean(form.exportsEnabled),
         export_regions: normalizedExportRegions,
@@ -487,6 +493,7 @@ export default function CreateShopScreen() {
         shop_video_paths: videoPaths.length
           ? videoPaths
           : (selectedVendor?.shop_video_paths ?? null),
+        offers_dyeing: Boolean(form.offersDyeing),
         offers_tailoring: Boolean(form.offersTailoring),
         exports_enabled: Boolean(form.exportsEnabled),
         export_regions: normalizedExportRegions,
@@ -655,67 +662,87 @@ export default function CreateShopScreen() {
     switch (currentStep.id) {
       case "owner":
         return (
-          <GradientInputCard
-            ref={ownerRef}
-            placeholder="Enter owner name"
-            value={form.ownerName}
-            onChangeText={(v) => updateForm("ownerName", v)}
-            autoCapitalize="words"
-            returnKeyType="next"
-            onSubmitEditing={goNext}
-          />
+          <View>
+            <View style={styles.previewCard}>
+              <GradientInputCard
+                ref={ownerRef}
+                placeholder="Enter owner name"
+                value={form.ownerName}
+                onChangeText={(v) => updateForm("ownerName", v)}
+                autoCapitalize="words"
+                returnKeyType="next"
+                onSubmitEditing={goNext}
+              />
+            </View>
+          </View>
         );
 
       case "email":
         return (
-          <GradientInputCard
-            ref={emailRef}
-            placeholder="Enter email"
-            value={form.email}
-            onChangeText={(v) => updateForm("email", v)}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="next"
-            onSubmitEditing={goNext}
-          />
+          <View>
+            <View style={styles.previewCard}>
+              <GradientInputCard
+                ref={emailRef}
+                placeholder="Enter email"
+                value={form.email}
+                onChangeText={(v) => updateForm("email", v)}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="next"
+                onSubmitEditing={goNext}
+              />
+            </View>
+          </View>
         );
 
       case "mobile":
         return (
-          <GradientInputCard
-            ref={mobileRef}
-            placeholder="Enter mobile number"
-            value={form.mobile}
-            onChangeText={(v) => updateForm("mobile", v)}
-            keyboardType="phone-pad"
-            returnKeyType="next"
-            onSubmitEditing={goNext}
-          />
+          <View>
+            <View style={styles.previewCard}>
+              <GradientInputCard
+                ref={mobileRef}
+                placeholder="Enter mobile number"
+                value={form.mobile}
+                onChangeText={(v) => updateForm("mobile", v)}
+                keyboardType="phone-pad"
+                returnKeyType="next"
+                onSubmitEditing={goNext}
+              />
+            </View>
+          </View>
         );
 
       case "shop":
         return (
-          <GradientInputCard
-            ref={shopRef}
-            placeholder="Enter shop name"
-            value={form.shopName}
-            onChangeText={(v) => updateForm("shopName", v)}
-            autoCapitalize="words"
-            returnKeyType="next"
-            onSubmitEditing={goNext}
-          />
+          <View>
+            <View style={styles.previewCard}>
+              <GradientInputCard
+                ref={shopRef}
+                placeholder="Enter shop name"
+                value={form.shopName}
+                onChangeText={(v) => updateForm("shopName", v)}
+                autoCapitalize="words"
+                returnKeyType="next"
+                onSubmitEditing={goNext}
+              />
+            </View>
+          </View>
         );
 
       case "address":
         return (
-          <GradientInputCard
-            ref={addressRef}
-            placeholder="Enter full address"
-            value={form.address}
-            onChangeText={(v) => updateForm("address", v)}
-            multiline
-          />
+          <View>
+            <View style={styles.previewCard}>
+              <GradientInputCard
+                ref={addressRef}
+                placeholder="Enter full address"
+                value={form.address}
+                onChangeText={(v) => updateForm("address", v)}
+                multiline
+              />
+            </View>
+          </View>
         );
 
       case "location":
@@ -748,9 +775,18 @@ export default function CreateShopScreen() {
                   pressed && !locLoading ? styles.pressed : null,
                 ]}
               >
-                <Text style={styles.secondaryActionButtonText}>
-                  {locLoading ? "Getting location..." : "Use current location"}
-                </Text>
+                <View style={styles.secondaryActionContent}>
+                  <MaterialIcons
+                    name="my-location"
+                    size={18}
+                    color="#2563EB"
+                  />
+                  <Text style={styles.secondaryActionButtonText}>
+                    {locLoading
+                      ? "Getting location..."
+                      : "Use current location"}
+                  </Text>
+                </View>
               </Pressable>
             </View>
 
@@ -769,9 +805,67 @@ export default function CreateShopScreen() {
         return (
           <View>
             <View style={styles.previewCard}>
-              <Text style={styles.previewLabel}>
-                Does this shop offer tailoring?
-              </Text>
+              <Text style={styles.previewLabel}>Dyeing?</Text>
+
+              <View style={styles.choiceGrid}>
+                <Pressable
+                  onPress={() => updateForm("offersDyeing", true)}
+                  style={({ pressed }) => [
+                    styles.choiceCard,
+                    styles.choiceCardDyeing,
+                    form.offersDyeing && styles.choiceCardDyeingActive,
+                    pressed && styles.choiceCardPressed,
+                  ]}
+                >
+                  <View style={styles.choiceCardHeader}>
+                    <MaterialIcons
+                      name={form.offersDyeing ? "check-circle" : "circle"}
+                      size={16}
+                      color={form.offersDyeing ? "#FFFFFF" : "#3B82F6"}
+                    />
+                    <Text
+                      style={[
+                        styles.choiceCardTitle,
+                        styles.choiceCardTitleDyeing,
+                        form.offersDyeing && styles.choiceCardTitleActive,
+                      ]}
+                    >
+                      Yes
+                    </Text>
+                  </View>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => updateForm("offersDyeing", false)}
+                  style={({ pressed }) => [
+                    styles.choiceCard,
+                    styles.choiceCardDyeing,
+                    !form.offersDyeing && styles.choiceCardDyeingActive,
+                    pressed && styles.choiceCardPressed,
+                  ]}
+                >
+                  <View style={styles.choiceCardHeader}>
+                    <MaterialIcons
+                      name={!form.offersDyeing ? "check-circle" : "circle"}
+                      size={16}
+                      color={!form.offersDyeing ? "#FFFFFF" : "#3B82F6"}
+                    />
+                    <Text
+                      style={[
+                        styles.choiceCardTitle,
+                        styles.choiceCardTitleDyeing,
+                        !form.offersDyeing && styles.choiceCardTitleActive,
+                      ]}
+                    >
+                      No
+                    </Text>
+                  </View>
+                </Pressable>
+              </View>
+            </View>
+
+            <View style={styles.previewCard}>
+              <Text style={styles.previewLabel}>Tailoring?</Text>
 
               <View style={styles.choiceGrid}>
                 <Pressable
@@ -784,27 +878,27 @@ export default function CreateShopScreen() {
                   }
                   style={({ pressed }) => [
                     styles.choiceCard,
-                    form.offersTailoring && styles.choiceCardActive,
+                    styles.choiceCardYes,
+                    form.offersTailoring && styles.choiceCardYesActive,
                     pressed && styles.choiceCardPressed,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.choiceCardTitle,
-                      form.offersTailoring && styles.choiceCardTitleActive,
-                    ]}
-                  >
-                    Yes
-                  </Text>
-                  <Text
-                    style={[
-                      styles.choiceCardSubtitle,
-                      form.offersTailoring && styles.choiceCardSubtitleActive,
-                    ]}
-                  >
-                    This shop offers tailoring services for their unstitched
-                    products
-                  </Text>
+                  <View style={styles.choiceCardHeader}>
+                    <MaterialIcons
+                      name={form.offersTailoring ? "check-circle" : "circle"}
+                      size={16}
+                      color={form.offersTailoring ? "#FFFFFF" : "#2563EB"}
+                    />
+                    <Text
+                      style={[
+                        styles.choiceCardTitle,
+                        styles.choiceCardTitleYes,
+                        form.offersTailoring && styles.choiceCardTitleActive,
+                      ]}
+                    >
+                      Yes
+                    </Text>
+                  </View>
                 </Pressable>
 
                 <Pressable
@@ -817,58 +911,60 @@ export default function CreateShopScreen() {
                   }
                   style={({ pressed }) => [
                     styles.choiceCard,
-                    !form.offersTailoring && styles.choiceCardActive,
+                    styles.choiceCardYes,
+                    !form.offersTailoring && styles.choiceCardYesActive,
                     pressed && styles.choiceCardPressed,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.choiceCardTitle,
-                      !form.offersTailoring && styles.choiceCardTitleActive,
-                    ]}
-                  >
-                    No
-                  </Text>
-                  <Text
-                    style={[
-                      styles.choiceCardSubtitle,
-                      !form.offersTailoring && styles.choiceCardSubtitleActive,
-                    ]}
-                  >
-                    The shop only sells unstitched or ready-made items
-                  </Text>
+                  <View style={styles.choiceCardHeader}>
+                    <MaterialIcons
+                      name={!form.offersTailoring ? "check-circle" : "circle"}
+                      size={16}
+                      color={!form.offersTailoring ? "#FFFFFF" : "#2563EB"}
+                    />
+                    <Text
+                      style={[
+                        styles.choiceCardTitle,
+                        styles.choiceCardTitleYes,
+                        !form.offersTailoring && styles.choiceCardTitleActive,
+                      ]}
+                    >
+                      No
+                    </Text>
+                  </View>
                 </Pressable>
               </View>
             </View>
 
             <View style={styles.previewCard}>
-              <Text style={styles.previewLabel}>Do you export?</Text>
+              <Text style={styles.previewLabel}>Export?</Text>
 
               <View style={styles.choiceGrid}>
                 <Pressable
                   onPress={() => updateForm("exportsEnabled", true)}
                   style={({ pressed }) => [
                     styles.choiceCard,
-                    form.exportsEnabled && styles.choiceCardActive,
+                    styles.choiceCardExport,
+                    form.exportsEnabled && styles.choiceCardExportActive,
                     pressed && styles.choiceCardPressed,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.choiceCardTitle,
-                      form.exportsEnabled && styles.choiceCardTitleActive,
-                    ]}
-                  >
-                    Yes
-                  </Text>
-                  <Text
-                    style={[
-                      styles.choiceCardSubtitle,
-                      form.exportsEnabled && styles.choiceCardSubtitleActive,
-                    ]}
-                  >
-                    This shop exports internationally
-                  </Text>
+                  <View style={styles.choiceCardHeader}>
+                    <MaterialIcons
+                      name={form.exportsEnabled ? "check-circle" : "circle"}
+                      size={16}
+                      color={form.exportsEnabled ? "#FFFFFF" : "#1D4ED8"}
+                    />
+                    <Text
+                      style={[
+                        styles.choiceCardTitle,
+                        styles.choiceCardTitleExport,
+                        form.exportsEnabled && styles.choiceCardTitleActive,
+                      ]}
+                    >
+                      Yes
+                    </Text>
+                  </View>
                 </Pressable>
 
                 <Pressable
@@ -878,26 +974,27 @@ export default function CreateShopScreen() {
                   }}
                   style={({ pressed }) => [
                     styles.choiceCard,
-                    !form.exportsEnabled && styles.choiceCardActive,
+                    styles.choiceCardExport,
+                    !form.exportsEnabled && styles.choiceCardExportActive,
                     pressed && styles.choiceCardPressed,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.choiceCardTitle,
-                      !form.exportsEnabled && styles.choiceCardTitleActive,
-                    ]}
-                  >
-                    No
-                  </Text>
-                  <Text
-                    style={[
-                      styles.choiceCardSubtitle,
-                      !form.exportsEnabled && styles.choiceCardSubtitleActive,
-                    ]}
-                  >
-                    This shop only delivers locally
-                  </Text>
+                  <View style={styles.choiceCardHeader}>
+                    <MaterialIcons
+                      name={!form.exportsEnabled ? "check-circle" : "circle"}
+                      size={16}
+                      color={!form.exportsEnabled ? "#FFFFFF" : "#1D4ED8"}
+                    />
+                    <Text
+                      style={[
+                        styles.choiceCardTitle,
+                        styles.choiceCardTitleExport,
+                        !form.exportsEnabled && styles.choiceCardTitleActive,
+                      ]}
+                    >
+                      No
+                    </Text>
+                  </View>
                 </Pressable>
               </View>
 
@@ -940,7 +1037,12 @@ export default function CreateShopScreen() {
         return (
           <>
             <View style={styles.mediaCard}>
-              <Text style={styles.mediaTitle}>Vendor profile / logo</Text>
+              <View style={styles.mediaHeader}>
+                <View style={styles.mediaIconBadge}>
+                  <MaterialIcons name="storefront" size={18} color="#2563EB" />
+                </View>
+                <Text style={styles.mediaTitle}>Vendor profile / logo</Text>
+              </View>
 
               <Pressable
                 style={({ pressed }) => [
@@ -952,23 +1054,39 @@ export default function CreateShopScreen() {
                   updateForm("profile", picked[0] ?? null);
                 }}
               >
+                <MaterialIcons name="add-photo-alternate" size={18} color="#2563EB" />
                 <Text style={styles.uploadButtonText}>
                   {form.profile ? "Change image" : "Upload image"}
                 </Text>
               </Pressable>
 
-              {!!form.profile?.uri && (
+              {!!form.profile?.uri ? (
                 <Pressable onPress={() => openViewerAt([form.profile!.uri], 0)}>
-                  <Image
-                    source={{ uri: form.profile.uri }}
-                    style={styles.largePreviewImage}
-                  />
+                  <View style={styles.largePreviewWrap}>
+                    <Image
+                      source={{ uri: form.profile.uri }}
+                      style={styles.largePreviewImage}
+                    />
+                    <View style={styles.previewBadge}>
+                      <MaterialIcons name="open-in-full" size={14} color="#FFFFFF" />
+                    </View>
+                  </View>
                 </Pressable>
+              ) : (
+                <View style={styles.mediaEmptyBox}>
+                  <MaterialIcons name="image" size={22} color="#94A3B8" />
+                  <Text style={styles.mediaEmptyText}>No image selected</Text>
+                </View>
               )}
             </View>
 
             <View style={styles.mediaCard}>
-              <Text style={styles.mediaTitle}>Authority permission</Text>
+              <View style={styles.mediaHeader}>
+                <View style={styles.mediaIconBadge}>
+                  <MaterialIcons name="verified-user" size={18} color="#2563EB" />
+                </View>
+                <Text style={styles.mediaTitle}>Authority permission</Text>
+              </View>
 
               <Pressable
                 style={({ pressed }) => [
@@ -980,25 +1098,41 @@ export default function CreateShopScreen() {
                   updateForm("govPermission", picked[0] ?? null);
                 }}
               >
+                <MaterialIcons name="upload-file" size={18} color="#2563EB" />
                 <Text style={styles.uploadButtonText}>
                   {form.govPermission ? "Change image" : "Upload permission"}
                 </Text>
               </Pressable>
 
-              {!!form.govPermission?.uri && (
+              {!!form.govPermission?.uri ? (
                 <Pressable
                   onPress={() => openViewerAt([form.govPermission!.uri], 0)}
                 >
-                  <Image
-                    source={{ uri: form.govPermission.uri }}
-                    style={styles.largePreviewImage}
-                  />
+                  <View style={styles.largePreviewWrap}>
+                    <Image
+                      source={{ uri: form.govPermission.uri }}
+                      style={styles.largePreviewImage}
+                    />
+                    <View style={styles.previewBadge}>
+                      <MaterialIcons name="open-in-full" size={14} color="#FFFFFF" />
+                    </View>
+                  </View>
                 </Pressable>
+              ) : (
+                <View style={styles.mediaEmptyBox}>
+                  <MaterialIcons name="description" size={22} color="#94A3B8" />
+                  <Text style={styles.mediaEmptyText}>No permission selected</Text>
+                </View>
               )}
             </View>
 
             <View style={styles.mediaCard}>
-              <Text style={styles.mediaTitle}>Shop banner</Text>
+              <View style={styles.mediaHeader}>
+                <View style={styles.mediaIconBadge}>
+                  <MaterialIcons name="panorama" size={18} color="#2563EB" />
+                </View>
+                <Text style={styles.mediaTitle}>Shop banner</Text>
+              </View>
 
               <Pressable
                 style={({ pressed }) => [
@@ -1010,23 +1144,39 @@ export default function CreateShopScreen() {
                   updateForm("banner", picked[0] ?? null);
                 }}
               >
+                <MaterialIcons name="add-photo-alternate" size={18} color="#2563EB" />
                 <Text style={styles.uploadButtonText}>
                   {form.banner ? "Change banner" : "Upload banner"}
                 </Text>
               </Pressable>
 
-              {!!form.banner?.uri && (
+              {!!form.banner?.uri ? (
                 <Pressable onPress={() => openViewerAt([form.banner!.uri], 0)}>
-                  <Image
-                    source={{ uri: form.banner.uri }}
-                    style={styles.largePreviewImage}
-                  />
+                  <View style={styles.largePreviewWrap}>
+                    <Image
+                      source={{ uri: form.banner.uri }}
+                      style={styles.largePreviewImage}
+                    />
+                    <View style={styles.previewBadge}>
+                      <MaterialIcons name="open-in-full" size={14} color="#FFFFFF" />
+                    </View>
+                  </View>
                 </Pressable>
+              ) : (
+                <View style={styles.mediaEmptyBox}>
+                  <MaterialIcons name="image" size={22} color="#94A3B8" />
+                  <Text style={styles.mediaEmptyText}>No banner selected</Text>
+                </View>
               )}
             </View>
 
             <View style={styles.mediaCard}>
-              <Text style={styles.mediaTitle}>Shop photos</Text>
+              <View style={styles.mediaHeader}>
+                <View style={styles.mediaIconBadge}>
+                  <MaterialIcons name="photo-library" size={18} color="#2563EB" />
+                </View>
+                <Text style={styles.mediaTitle}>Shop photos</Text>
+              </View>
 
               <Pressable
                 style={({ pressed }) => [
@@ -1038,6 +1188,7 @@ export default function CreateShopScreen() {
                   updateForm("images", picked);
                 }}
               >
+                <MaterialIcons name="add-photo-alternate" size={18} color="#2563EB" />
                 <Text style={styles.uploadButtonText}>
                   {form.images.length
                     ? `${form.images.length} image${form.images.length > 1 ? "s" : ""} selected`
@@ -1045,24 +1196,35 @@ export default function CreateShopScreen() {
                 </Text>
               </Pressable>
 
-              {shopImageUris.length > 0 && (
+              {shopImageUris.length > 0 ? (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View style={styles.thumbRow}>
                     {shopImageUris.map((u, idx) => (
                       <Pressable
                         key={`${u}-${idx}`}
                         onPress={() => openViewerAt(shopImageUris, idx)}
+                        style={styles.thumbWrap}
                       >
                         <Image source={{ uri: u }} style={styles.thumb} />
                       </Pressable>
                     ))}
                   </View>
                 </ScrollView>
+              ) : (
+                <View style={styles.mediaEmptyBox}>
+                  <MaterialIcons name="collections" size={22} color="#94A3B8" />
+                  <Text style={styles.mediaEmptyText}>No photos selected</Text>
+                </View>
               )}
             </View>
 
             <View style={styles.mediaCard}>
-              <Text style={styles.mediaTitle}>Shop videos</Text>
+              <View style={styles.mediaHeader}>
+                <View style={styles.mediaIconBadge}>
+                  <MaterialIcons name="video-library" size={18} color="#2563EB" />
+                </View>
+                <Text style={styles.mediaTitle}>Shop videos</Text>
+              </View>
 
               <Pressable
                 style={({ pressed }) => [
@@ -1074,6 +1236,7 @@ export default function CreateShopScreen() {
                   updateForm("videos", picked);
                 }}
               >
+                <MaterialIcons name="video-library" size={18} color="#2563EB" />
                 <Text style={styles.uploadButtonText}>
                   {form.videos.length
                     ? `${form.videos.length} video${form.videos.length > 1 ? "s" : ""} selected`
@@ -1089,6 +1252,48 @@ export default function CreateShopScreen() {
                     allowsFullscreen
                     allowsPictureInPicture
                   />
+                </View>
+              )}
+
+              {shopVideoUris.length > 0 ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={styles.thumbRow}>
+                    {shopVideoUris.map((u, idx) => {
+                      const thumbUri = videoThumbByUri[u] ?? null;
+                      const selected = u === selectedVideoUri;
+
+                      return (
+                        <Pressable
+                          key={`${u}-${idx}`}
+                          onPress={() => setSelectedVideoUri(u)}
+                          style={[
+                            styles.thumbWrap,
+                            selected && styles.videoThumbActive,
+                          ]}
+                        >
+                          {thumbUri ? (
+                            <Image source={{ uri: thumbUri }} style={styles.thumb} />
+                          ) : (
+                            <View style={styles.videoPlaceholder}>
+                              <Text style={styles.videoPlaceholderText}>Video</Text>
+                            </View>
+                          )}
+                          <View style={styles.playBadge}>
+                            <MaterialIcons
+                              name="play-arrow"
+                              size={16}
+                              color="#FFFFFF"
+                            />
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              ) : (
+                <View style={styles.mediaEmptyBox}>
+                  <MaterialIcons name="video-library" size={22} color="#94A3B8" />
+                  <Text style={styles.mediaEmptyText}>No videos selected</Text>
                 </View>
               )}
             </View>
@@ -1237,46 +1442,80 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
   },
+  secondaryActionContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
   choiceGrid: {
     flexDirection: "row",
-    gap: 10,
+    gap: 5,
+    padding: 3,
+    borderRadius: 10,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
   choiceCard: {
     flex: 1,
-    minHeight: 140,
-    borderRadius: 999,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    backgroundColor: "#EEF4FF",
+    minHeight: 44,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: "#D7E3FF",
+    borderColor: "transparent",
     justifyContent: "center",
   },
-  choiceCardActive: {
+  choiceCardYes: {
+    backgroundColor: "#EEF4FF",
+    borderColor: "#D7E3FF",
+  },
+  choiceCardYesActive: {
     backgroundColor: "#2563EB",
     borderColor: "#2563EB",
+  },
+  choiceCardDyeing: {
+    backgroundColor: "#F3F7FF",
+    borderColor: "#DCE8FF",
+  },
+  choiceCardDyeingActive: {
+    backgroundColor: "#3B82F6",
+    borderColor: "#3B82F6",
+  },
+  choiceCardExport: {
+    backgroundColor: "#EAF1FF",
+    borderColor: "#C7D8FF",
+  },
+  choiceCardExportActive: {
+    backgroundColor: "#1D4ED8",
+    borderColor: "#1D4ED8",
+  },
+  choiceCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
   },
   choiceCardPressed: {
     opacity: 0.82,
   },
   choiceCardTitle: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "700",
     color: "#2563EB",
-    marginBottom: 4,
-    textAlign: "center",
+  },
+  choiceCardTitleYes: {
+    color: "#2563EB",
+  },
+  choiceCardTitleDyeing: {
+    color: "#3B82F6",
+  },
+  choiceCardTitleExport: {
+    color: "#1D4ED8",
   },
   choiceCardTitleActive: {
-    color: "#FFFFFF",
-  },
-  choiceCardSubtitle: {
-    fontSize: 10,
-    lineHeight: 14,
-    color: "#2563EB",
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  choiceCardSubtitleActive: {
     color: "#FFFFFF",
   },
   optionGroupTitle: {
@@ -1316,25 +1555,42 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   mediaCard: {
-    marginBottom: 20,
-    padding: 18,
-    borderRadius: 18,
-    backgroundColor: "#FFFFFF",
+    marginBottom: apSpacing.blockGap,
+    padding: 14,
+    borderRadius: apRadii.card,
+    backgroundColor: apColors.card,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: apColors.border,
+  },
+  mediaHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 12,
+  },
+  mediaIconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: apRadii.control,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: apColors.blueSoft,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
   },
   mediaTitle: {
     fontSize: 15,
     fontWeight: "700",
     color: "#0F172A",
-    marginBottom: 12,
   },
   uploadButton: {
-    minHeight: 48,
-    borderRadius: 12,
+    minHeight: 46,
+    borderRadius: apRadii.control,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EEF4FF",
+    flexDirection: "row",
+    gap: 8,
+    backgroundColor: apColors.blueSoft,
     borderWidth: 1,
     borderColor: "#D7E3FF",
   },
@@ -1346,58 +1602,87 @@ const styles = StyleSheet.create({
   thumbRow: {
     flexDirection: "row",
     gap: 10,
-    marginTop: 14,
+    paddingTop: 12,
+    paddingRight: 4,
   },
   thumb: {
-    width: 88,
-    height: 88,
-    borderRadius: 12,
+    width: "100%",
+    height: "100%",
+  },
+  largePreviewWrap: {
+    marginTop: 12,
+    height: 180,
+    borderRadius: apRadii.card,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: apColors.border,
+    backgroundColor: "#F1F5F9",
   },
   largePreviewImage: {
     width: "100%",
-    height: 190,
-    borderRadius: 16,
-    marginTop: 14,
+    height: "100%",
+  },
+  previewBadge: {
+    position: "absolute",
+    right: 10,
+    bottom: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 999,
+    backgroundColor: "rgba(15,23,42,0.72)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   thumbWrap: {
-    width: 92,
-    height: 92,
-    borderRadius: 16,
+    width: 84,
+    height: 84,
+    borderRadius: apRadii.card,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-    backgroundColor: "rgba(255,255,255,0.12)",
+    borderColor: apColors.border,
+    backgroundColor: "#F1F5F9",
   },
-  emptyText: {
+  mediaEmptyBox: {
     marginTop: 12,
-    color: "rgba(255,255,255,0.68)",
+    minHeight: 104,
+    borderRadius: apRadii.card,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: "#F8FAFF",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  mediaEmptyText: {
+    color: apColors.muted,
     fontSize: 13,
     fontWeight: "700",
   },
   videoBox: {
-    marginTop: 14,
-    borderRadius: 18,
+    marginTop: 12,
+    borderRadius: apRadii.card,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
+    borderColor: apColors.border,
+    backgroundColor: "#020617",
   },
   video: {
     width: "100%",
-    height: 220,
+    height: 190,
   },
   videoThumbActive: {
     borderWidth: 2,
-    borderColor: "#FFFFFF",
+    borderColor: apColors.blue,
   },
   videoPlaceholder: {
     width: "100%",
     height: "100%",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "#E2E8F0",
   },
   videoPlaceholderText: {
-    color: "#FFFFFF",
+    color: apColors.subText,
     fontSize: 12,
     fontWeight: "900",
   },
@@ -1408,14 +1693,9 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 999,
-    backgroundColor: "rgba(0,0,0,0.58)",
+    backgroundColor: "rgba(15,23,42,0.72)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  playBadgeText: {
-    color: "#FFFFFF",
-    fontWeight: "900",
-    fontSize: 12,
   },
   pressed: {
     opacity: 0.82,

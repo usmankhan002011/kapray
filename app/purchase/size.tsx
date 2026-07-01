@@ -1,6 +1,21 @@
-import React, { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+} from "@/components/product/addProductStyles";
+import { generateDyePalette } from "@/utils/kapray/dyePalette";
 import ExactMeasurementsModal from "../(tabs)/flow/purchase/exact-measurements-modal";
 import type { ExactMeasurementSheetRow } from "../(tabs)/flow/purchase/exact-measurements-sheet";
 
@@ -8,21 +23,42 @@ const STANDARD_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"] as const;
 
 type Unit = "cm" | "in";
 
+type DyeSplit = {
+  id: string;
+  lengthText: string;
+  dyeShadeId: string;
+  dyeHex: string;
+  dyeLabel: string;
+};
+
+type CleanDyeSplit = {
+  length_m: number;
+  dye_shade_id: string;
+  dye_hex: string;
+  dye_label: string;
+  dyeing_cost_pkr: number;
+};
+
+const DYE_SPLIT_TOLERANCE_M = 0.01;
+const FABRIC_STOCK_EPSILON_M = 0.05;
+const SIZE_SELECT_NAV_DELAY_MS = 120;
+const UNSTITCHED_SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
+
 const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
+  bg: apColors.bg,
+  cardBg: apColors.card,
+  border: apColors.border,
+  borderSoft: apColors.borderSoft,
+  blue: apColors.blue,
+  blueSoft: apColors.blueSoft,
+  text: apColors.text,
+  subText: apColors.subText,
+  mutedText: apColors.muted,
   placeholder: "#94A3B8",
-  danger: "#B91C1C",
-  white: "#FFFFFF",
-  green: "#065F46",
-  greenSoft: "#ECFDF5",
+  danger: apColors.danger,
+  white: apColors.white,
+  green: apColors.success,
+  greenSoft: apColors.successSoft,
 };
 
 function norm(v: unknown) {
@@ -55,6 +91,59 @@ function safePositiveNumber(v: unknown) {
   return n;
 }
 
+function sanitizeNumber(input: string) {
+  const cleaned = input.replace(/[^\d.]/g, "");
+  const parts = cleaned.split(".");
+  if (parts.length <= 1) return cleaned;
+  return `${parts[0]}.${parts.slice(1).join("")}`;
+}
+
+function roundMeter(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
+function roundCm(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
+function normalizePackageCm(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const length = safePositiveNumber(row.length);
+  const width = safePositiveNumber(row.width);
+  const height = safePositiveNumber(row.height);
+  if (!(length > 0 && width > 0 && height > 0)) return null;
+  return { length, width, height };
+}
+
+function encodePackageCmForMeterPurchase(value: unknown, meterLength: number) {
+  const packageCm = normalizePackageCm(
+    safeJsonDecode<Record<string, unknown> | null>(value, null),
+  );
+  if (!packageCm || !(meterLength > 0)) return norm(value);
+
+  return encodeURIComponent(
+    JSON.stringify({
+      length: roundCm(packageCm.length),
+      width: roundCm(packageCm.width),
+      height: roundCm(packageCm.height * meterLength),
+    }),
+  );
+}
+
+function getShadeColumnIndex(id: string) {
+  const match = /^shade_(\d+)_\d+$/i.exec(id);
+  return match ? Number(match[1]) : 0;
+}
+
+function getShadeCode(id: string) {
+  const match = /^shade_(\d+)_(\d+)$/i.exec(id);
+  if (!match) return "";
+  const column = String(Number(match[1]) + 1).padStart(2, "0");
+  const row = String(Number(match[2]) + 1).padStart(2, "0");
+  return `Dye-C${column}-R${row}`;
+}
+
 function prettyCategory(v: string) {
   return v.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -81,6 +170,12 @@ function getFabricLengthFromSize(
   return safePositiveNumber(sizeMap?.[size]);
 }
 
+function hasEnoughFabricForLength(availableM: number, requiredM: number) {
+  if (requiredM <= 0) return false;
+  if (availableM <= 0) return false;
+  return availableM + FABRIC_STOCK_EPSILON_M >= requiredM;
+}
+
 export default function SizeScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
@@ -96,6 +191,8 @@ export default function SizeScreen() {
     variant_mode?: string;
 
     price_per_meter_pkr?: string;
+    available_fabric_m?: string;
+    fabric_purchase_mode?: string;
     stitched_total_pkr?: string;
     currency?: string;
     imageUrl?: string;
@@ -107,6 +204,7 @@ export default function SizeScreen() {
     dye_shade_id?: string;
     dye_hex?: string;
     dye_label?: string;
+    dyeing_split_json?: string;
     dyeing_cost_pkr?: string;
 
     tailoring_cost_pkr?: string;
@@ -127,6 +225,7 @@ export default function SizeScreen() {
     exports_enabled?: string;
     export_regions?: string;
     weight_kg?: string;
+    weight_per_meter_kg?: string;
     package_cm?: string;
 
     selected_variant_id?: string;
@@ -184,6 +283,79 @@ export default function SizeScreen() {
   }>();
 
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const [sizeGuideOpen, setSizeGuideOpen] = useState(false);
+  const [zoomColorHex, setZoomColorHex] = useState("");
+  const [pendingStandardSize, setPendingStandardSize] = useState("");
+  const [pendingExactOpen, setPendingExactOpen] = useState(false);
+  const standardNavTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const exactNavTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const dyePalette = useMemo(
+    () =>
+      generateDyePalette().map((shade) => ({
+        id: String(shade.id),
+        hex: String(shade.hex),
+        label: getShadeCode(String(shade.id)),
+      })),
+    [],
+  );
+
+  const fallbackDyeOption = useMemo(
+    () =>
+      dyePalette[0] ?? {
+        id: "shade_0_0",
+        hex: "#F2BDBD",
+        label: "Dye-C01-R01",
+      },
+    [dyePalette],
+  );
+
+  const dyePaletteColumns = useMemo(() => {
+    const columns: Array<typeof dyePalette> = [];
+    dyePalette.forEach((shade) => {
+      const index = getShadeColumnIndex(shade.id);
+      if (!columns[index]) columns[index] = [];
+      columns[index].push(shade);
+    });
+    return columns.filter(Boolean);
+  }, [dyePalette]);
+
+  const [dyeSplits, setDyeSplits] = useState<DyeSplit[]>(() => {
+    const existingSplits = safeJsonDecode<CleanDyeSplit[]>(
+      params.dyeing_split_json,
+      [],
+    );
+    if (Array.isArray(existingSplits) && existingSplits.length) {
+      return existingSplits.map((row, index) => {
+        const shadeId = safeDecode(row?.dye_shade_id) || fallbackDyeOption.id;
+        return {
+          id: `split_${index + 1}`,
+          lengthText:
+            safePositiveNumber(row?.length_m) > 0
+              ? String(safePositiveNumber(row.length_m))
+              : "",
+          dyeShadeId: shadeId,
+          dyeHex: safeDecode(row?.dye_hex) || fallbackDyeOption.hex,
+          dyeLabel:
+            safeDecode(row?.dye_label) || getShadeCode(shadeId) || "",
+        };
+      });
+    }
+
+    const shadeId = safeDecode(params.dye_shade_id) || fallbackDyeOption.id;
+    return [
+      {
+        id: "split_1",
+        lengthText: "",
+        dyeShadeId: shadeId,
+        dyeHex: safeDecode(params.dye_hex) || fallbackDyeOption.hex,
+        dyeLabel:
+          safeDecode(params.dye_label) || getShadeCode(shadeId) || "",
+      },
+    ];
+  });
 
   const returnTo = useMemo(
     () => (params.returnTo ? String(params.returnTo) : "/purchase/place-order"),
@@ -208,6 +380,31 @@ export default function SizeScreen() {
     () => isUnstitchedCategory(productCategory),
     [productCategory],
   );
+  const isFabricByMeterPurchase = useMemo(
+    () =>
+      productCategory === "unstitched_plain" ||
+      productCategory === "unstitched_dyeing" ||
+      norm(params.fabric_purchase_mode) === "by_meter",
+    [params.fabric_purchase_mode, productCategory],
+  );
+  const [fabricLengthText, setFabricLengthText] = useState(() => {
+    const existing = safePositiveNumber(
+      safeDecode(params.selected_fabric_length_m) ||
+        params.selected_fabric_length_m,
+    );
+    return existing > 0 ? String(existing) : "";
+  });
+  const fabricLengthInputRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    if (!isFabricByMeterPurchase) return;
+
+    const focusTimer = setTimeout(() => {
+      fabricLengthInputRef.current?.focus();
+    }, 250);
+
+    return () => clearTimeout(focusTimer);
+  }, [isFabricByMeterPurchase]);
 
   const selectedVariantSnapshot = useMemo(
     () => safeJsonDecode<any>(params.selected_stitched_variant_snapshot, null),
@@ -247,6 +444,141 @@ export default function SizeScreen() {
     [params.price_per_meter_pkr],
   );
 
+  const availableFabricM = useMemo(
+    () => safePositiveNumber(params.available_fabric_m),
+    [params.available_fabric_m],
+  );
+
+  const selectedMeterLength = useMemo(() => {
+    const n = Number(sanitizeNumber(fabricLengthText));
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    return roundMeter(n);
+  }, [fabricLengthText]);
+
+  const selectedMeterFabricCost = useMemo(
+    () => Math.round(selectedMeterLength * pricePerMeterPkr),
+    [pricePerMeterPkr, selectedMeterLength],
+  );
+
+  const dyeingSelected = useMemo(
+    () => isTruthyParam(params.dyeing_selected),
+    [params.dyeing_selected],
+  );
+
+  const dyeingRatePkr = useMemo(
+    () => safePositiveNumber(safeDecode(params.dyeing_cost_pkr)),
+    [params.dyeing_cost_pkr],
+  );
+
+  const selectedMeterDyeingCost = useMemo(
+    () => Math.round(selectedMeterLength * dyeingRatePkr),
+    [dyeingRatePkr, selectedMeterLength],
+  );
+
+  const requiresDyeSplits =
+    isFabricByMeterPurchase &&
+    productCategory === "unstitched_dyeing" &&
+    dyeingSelected;
+
+  const dyeSplitRows = useMemo<CleanDyeSplit[]>(
+    () => {
+      const lastIndex = dyeSplits.length - 1;
+      const assignedBeforeLast = roundMeter(
+        dyeSplits.reduce((sum, row, index) => {
+          if (index === lastIndex) return sum;
+          const n = Number(sanitizeNumber(row.lengthText));
+          return sum + (Number.isFinite(n) && n > 0 ? n : 0);
+        }, 0),
+      );
+
+      return dyeSplits.map((row, index) => {
+        const rawLengthM =
+          index === lastIndex
+            ? Math.max(0, roundMeter(selectedMeterLength - assignedBeforeLast))
+            : roundMeter(Number(sanitizeNumber(row.lengthText)));
+        const safeLengthM =
+          Number.isFinite(rawLengthM) && rawLengthM > 0 ? rawLengthM : 0;
+        const dyeShadeId = row.dyeShadeId || fallbackDyeOption.id;
+        const dyeHex = row.dyeHex || fallbackDyeOption.hex;
+        const dyeLabel =
+          row.dyeLabel || getShadeCode(dyeShadeId) || fallbackDyeOption.label;
+
+        return {
+          length_m: safeLengthM,
+          dye_shade_id: dyeShadeId,
+          dye_hex: dyeHex,
+          dye_label: dyeLabel,
+          dyeing_cost_pkr: Math.round(safeLengthM * dyeingRatePkr),
+        };
+      });
+    },
+    [dyeSplits, dyeingRatePkr, fallbackDyeOption, selectedMeterLength],
+  );
+
+  const dyeSplitTotalM = useMemo(
+    () => roundMeter(dyeSplitRows.reduce((sum, row) => sum + row.length_m, 0)),
+    [dyeSplitRows],
+  );
+
+  const dyeSplitTotalCostPkr = useMemo(
+    () =>
+      Math.round(
+        dyeSplitRows.reduce((sum, row) => sum + row.dyeing_cost_pkr, 0),
+      ),
+    [dyeSplitRows],
+  );
+
+  const dyeSplitBalanceM = useMemo(
+    () => roundMeter(selectedMeterLength - dyeSplitTotalM),
+    [dyeSplitTotalM, selectedMeterLength],
+  );
+
+  const dyeSplitsValid =
+    !requiresDyeSplits ||
+    (selectedMeterLength > 0 &&
+      dyeSplitRows.length > 0 &&
+      dyeSplitRows.every(
+        (row) => row.length_m > 0 && row.dye_shade_id && row.dye_hex,
+      ) &&
+      Math.abs(dyeSplitTotalM - selectedMeterLength) <=
+        DYE_SPLIT_TOLERANCE_M);
+
+  const meterDyeingCostPkr = requiresDyeSplits
+    ? dyeSplitTotalCostPkr
+    : selectedMeterDyeingCost;
+
+  const weightPerMeterKg = useMemo(
+    () =>
+      safePositiveNumber(params.weight_per_meter_kg) ||
+      safePositiveNumber(params.weight_kg),
+    [params.weight_kg, params.weight_per_meter_kg],
+  );
+
+  const selectedMeterShippingWeightKg = useMemo(
+    () => roundMeter(selectedMeterLength * weightPerMeterKg),
+    [selectedMeterLength, weightPerMeterKg],
+  );
+
+  const selectedMeterPackageCmParam = useMemo(
+    () => encodePackageCmForMeterPurchase(params.package_cm, selectedMeterLength),
+    [params.package_cm, selectedMeterLength],
+  );
+
+  const canContinueMeter =
+    selectedMeterLength > 0 &&
+    pricePerMeterPkr > 0 &&
+    (availableFabricM <= 0 || selectedMeterLength <= availableFabricM) &&
+    dyeSplitsValid;
+
+  const dyeStageInstruction = useMemo(() => {
+    if (!requiresDyeSplits) return "";
+    if (selectedMeterLength <= 0) return "Add total fabric length.";
+    if (dyeSplitBalanceM < -DYE_SPLIT_TOLERANCE_M) {
+      return `Reduce colour lengths by ${Math.abs(dyeSplitBalanceM)} m. Last colour fills remaining length.`;
+    }
+    return "Select colours and enter lengths. Last colour fills remaining length.";
+  }, [dyeSplitBalanceM, requiresDyeSplits, selectedMeterLength]);
+
   const stitchedTotalPkr = useMemo(
     () => safePositiveNumber(params.stitched_total_pkr),
     [params.stitched_total_pkr],
@@ -257,19 +589,45 @@ export default function SizeScreen() {
     [params.size_length_m],
   );
 
-  const availableUnstitchedSizes = useMemo(() => {
-    const order = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
-    return order.filter(
-      (size) => getFabricLengthFromSize(size, sizeLengthMap) > 0,
-    );
+  const mappedUnstitchedSizeRows = useMemo(() => {
+    return UNSTITCHED_SIZE_ORDER.map((size) => ({
+      size,
+      lengthM: getFabricLengthFromSize(size, sizeLengthMap),
+    })).filter((row) => row.lengthM > 0);
   }, [sizeLengthMap]);
+
+  const availableUnstitchedSizes = useMemo(
+    () => mappedUnstitchedSizeRows.map((row) => row.size),
+    [mappedUnstitchedSizeRows],
+  );
+
+  const selectableUnstitchedSizes = useMemo(
+    () =>
+      mappedUnstitchedSizeRows
+        .filter((row) =>
+          hasEnoughFabricForLength(availableFabricM, row.lengthM),
+        )
+        .map((row) => row.size),
+    [availableFabricM, mappedUnstitchedSizeRows],
+  );
+
+  const hasAnySelectableUnstitchedSize = selectableUnstitchedSizes.length > 0;
+
+  const sizeGuideRows = useMemo(
+    () =>
+      mappedUnstitchedSizeRows.map((row) => ({
+        size: row.size,
+        lengthM: row.lengthM,
+      })),
+    [mappedUnstitchedSizeRows],
+  );
 
   const unit = useMemo<Unit>(() => {
     const u = norm(params.unit).toLowerCase();
     return u === "in" ? "in" : "cm";
   }, [params.unit]);
 
-  const selectedStandardSize = useMemo(
+  const routeSelectedStandardSize = useMemo(
     () =>
       safeDecode(
         params.selected_unstitched_size ||
@@ -286,6 +644,19 @@ export default function SizeScreen() {
       params.selectedSize,
     ],
   );
+  const selectedStandardSize =
+    pendingStandardSize || routeSelectedStandardSize;
+
+  useEffect(() => {
+    return () => {
+      if (standardNavTimerRef.current) {
+        clearTimeout(standardNavTimerRef.current);
+      }
+      if (exactNavTimerRef.current) {
+        clearTimeout(exactNavTimerRef.current);
+      }
+    };
+  }, []);
 
   const selectedStandardFabricLength = useMemo(
     () =>
@@ -453,10 +824,18 @@ export default function SizeScreen() {
     const fabricLengthM = isUnstitched
       ? getFabricLengthFromSize(size, sizeLengthMap)
       : 0;
+    if (
+      isUnstitched &&
+      !hasEnoughFabricForLength(availableFabricM, fabricLengthM)
+    ) {
+      return;
+    }
+
     const fabricCostPkr = isUnstitched ? pricePerMeterPkr * fabricLengthM : 0;
     const encodedSize = encodeURIComponent(size);
+    setPendingStandardSize(size);
 
-    goPlaceOrder({
+    const nextParams = {
       mode: "standard",
       selectedSize: encodedSize,
       selected_size: encodedSize,
@@ -496,6 +875,154 @@ export default function SizeScreen() {
       custom_value_3: "",
       custom_label_4: "",
       custom_value_4: "",
+    };
+
+    if (standardNavTimerRef.current) {
+      clearTimeout(standardNavTimerRef.current);
+    }
+
+    standardNavTimerRef.current = setTimeout(() => {
+      goPlaceOrder(nextParams);
+    }, SIZE_SELECT_NAV_DELAY_MS);
+  };
+
+  const onContinueMeter = () => {
+    if (!canContinueMeter) return;
+
+    const cleanDyeSplits = requiresDyeSplits
+      ? dyeSplitRows.filter((row) => row.length_m > 0)
+      : [];
+    const firstDyeSplit = cleanDyeSplits[0] ?? null;
+
+    goPlaceOrder({
+      mode: "meter",
+      selectedSize: "",
+      selected_size: "",
+      selected_variant_size: "",
+      selected_stitched_size: "",
+      selected_unstitched_size: "",
+      selected_fabric_length_m: encodeURIComponent(String(selectedMeterLength)),
+      fabric_cost_pkr: String(selectedMeterFabricCost),
+      dyeing_split_json: cleanDyeSplits.length
+        ? encodeURIComponent(JSON.stringify(cleanDyeSplits))
+        : "",
+      dye_shade_id: firstDyeSplit?.dye_shade_id
+        ? encodeURIComponent(firstDyeSplit.dye_shade_id)
+        : norm(params.dye_shade_id),
+      dye_hex: firstDyeSplit?.dye_hex
+        ? encodeURIComponent(firstDyeSplit.dye_hex)
+        : norm(params.dye_hex),
+      dye_label: firstDyeSplit?.dye_label
+        ? encodeURIComponent(firstDyeSplit.dye_label)
+        : firstDyeSplit?.dye_shade_id
+          ? encodeURIComponent(getShadeCode(firstDyeSplit.dye_shade_id))
+          : norm(params.dye_label),
+      dyeing_cost_pkr: dyeingSelected
+        ? encodeURIComponent(String(meterDyeingCostPkr))
+        : norm(params.dyeing_cost_pkr),
+      weight_kg:
+        selectedMeterShippingWeightKg > 0
+          ? String(selectedMeterShippingWeightKg)
+          : "",
+      weight_per_meter_kg:
+        weightPerMeterKg > 0 ? String(weightPerMeterKg) : "",
+      package_cm: selectedMeterPackageCmParam,
+
+      m1: "",
+      m2: "",
+      m3: "",
+      m4: "",
+      m5: "",
+      m6: "",
+      m7: "",
+      m8: "",
+      m9: "",
+      m10: "",
+      m11: "",
+      m12: "",
+      m13: "",
+      m14: "",
+      m15: "",
+      m16: "",
+      m17: "",
+
+      custom_label_1: "",
+      custom_value_1: "",
+      custom_label_2: "",
+      custom_value_2: "",
+      custom_label_3: "",
+      custom_value_3: "",
+      custom_label_4: "",
+      custom_value_4: "",
+    });
+  };
+
+  const removeDyeSplit = (id: string) => {
+    setDyeSplits((rows) =>
+      rows.length > 1 ? rows.filter((row) => row.id !== id) : rows,
+    );
+  };
+
+  const updateDyeSplitLength = (id: string, value: string) => {
+    setDyeSplits((rows) =>
+      rows.map((row) =>
+        row.id === id ? { ...row, lengthText: sanitizeNumber(value) } : row,
+      ),
+    );
+  };
+
+  const toggleDyeSplitShade = (shade: {
+    id: string;
+    hex: string;
+    label: string;
+  }) => {
+    setDyeSplits((rows) => {
+      const existingIndex = rows.findIndex(
+        (row) => row.dyeShadeId === shade.id,
+      );
+      if (existingIndex >= 0) {
+        return rows.length > 1
+          ? rows.filter((_, index) => index !== existingIndex)
+          : rows;
+      }
+
+      const lastIndex = rows.length - 1;
+      const assignedBeforeLast = roundMeter(
+        rows.reduce((sum, row, index) => {
+          if (index === lastIndex) return sum;
+          const n = Number(sanitizeNumber(row.lengthText));
+          return sum + (Number.isFinite(n) && n > 0 ? n : 0);
+        }, 0),
+      );
+      const previousRemainingLength = Math.max(
+        0,
+        roundMeter(selectedMeterLength - assignedBeforeLast),
+      );
+      const rowsBeforeNewLast =
+        rows.length > 1
+          ? rows.map((row, index) =>
+              index === lastIndex
+                ? {
+                    ...row,
+                    lengthText:
+                      previousRemainingLength > 0
+                        ? String(previousRemainingLength)
+                        : "",
+                  }
+                : row,
+            )
+          : rows.map((row) => ({ ...row, lengthText: "" }));
+
+      return [
+        ...rowsBeforeNewLast,
+        {
+          id: `split_${Date.now()}_${Math.round(Math.random() * 100000)}`,
+          lengthText: "",
+          dyeShadeId: shade.id,
+          dyeHex: shade.hex,
+          dyeLabel: shade.label || getShadeCode(shade.id),
+        },
+      ];
     });
   };
 
@@ -511,6 +1038,19 @@ export default function SizeScreen() {
     });
   };
 
+  const onPressExactToggle = () => {
+    setPendingExactOpen(true);
+
+    if (exactNavTimerRef.current) {
+      clearTimeout(exactNavTimerRef.current);
+    }
+
+    exactNavTimerRef.current = setTimeout(() => {
+      setPendingExactOpen(false);
+      openExactMeasurements();
+    }, SIZE_SELECT_NAV_DELAY_MS);
+  };
+
   return (
     <>
       <ScrollView
@@ -518,7 +1058,13 @@ export default function SizeScreen() {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.title}>Select Size</Text>
+        <Text style={styles.title}>
+          {requiresDyeSplits
+            ? "Select dye colors and length"
+            : isFabricByMeterPurchase
+              ? "Select Fabric Length"
+              : "Select Size"}
+        </Text>
 
         {!!productCategory ? (
           <View style={styles.summaryCard}>
@@ -536,16 +1082,25 @@ export default function SizeScreen() {
                   </Text>
                 </Text>
 
-                {availableUnstitchedSizes.length ? (
+                {isFabricByMeterPurchase ? (
                   <Text style={styles.summaryText}>
-                    Available mapped sizes:{" "}
+                    Available fabric:{" "}
                     <Text style={styles.summaryStrong}>
-                      {availableUnstitchedSizes.join(", ")}
+                      {availableFabricM > 0 ? `${availableFabricM} m` : "Not available"}
+                    </Text>
+                  </Text>
+                ) : availableUnstitchedSizes.length ? (
+                  <Text style={styles.summaryText}>
+                    Available sizes:{" "}
+                    <Text style={styles.summaryStrong}>
+                      {selectableUnstitchedSizes.length
+                        ? selectableUnstitchedSizes.join(", ")
+                        : "Not available"}
                     </Text>
                   </Text>
                 ) : (
                   <Text style={styles.summaryText}>
-                    Available mapped sizes:{" "}
+                    Available sizes:{" "}
                     <Text style={styles.summaryStrong}>Not available</Text>
                   </Text>
                 )}
@@ -561,6 +1116,230 @@ export default function SizeScreen() {
           </View>
         ) : null}
 
+        {isFabricByMeterPurchase ? (
+          <View style={styles.sectionCard}>
+            <View style={styles.fabricLengthHeader}>
+              <Text style={styles.sectionTitle}>
+                {requiresDyeSplits ? "Total fabric length" : "Fabric length"}
+              </Text>
+              {sizeGuideRows.length ? (
+                <Pressable
+                  onPress={() => setSizeGuideOpen(true)}
+                  style={styles.iconButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Size guide"
+                >
+                  <MaterialIcons
+                    name="straighten"
+                    size={18}
+                    color={stylesVars.blue}
+                  />
+                </Pressable>
+              ) : null}
+            </View>
+            <TextInput
+              ref={fabricLengthInputRef}
+              value={fabricLengthText}
+              onChangeText={(next) => setFabricLengthText(sanitizeNumber(next))}
+              placeholder="e.g., 2.5"
+              placeholderTextColor={stylesVars.placeholder}
+              style={styles.input}
+              keyboardType="decimal-pad"
+              maxLength={8}
+            />
+
+            <View style={styles.costCard}>
+              <Text style={styles.costLine}>
+                Rate:{" "}
+                <Text style={styles.costStrong}>
+                  PKR {pricePerMeterPkr || 0} / meter
+                </Text>
+              </Text>
+              <Text style={styles.costLine}>
+                {requiresDyeSplits ? "Total fabric length" : "Fabric length"}:{" "}
+                <Text style={styles.costStrong}>
+                  {selectedMeterLength || 0} m
+                </Text>
+              </Text>
+              <Text style={styles.costLine}>
+                Total fabric cost:{" "}
+                <Text style={styles.costStrong}>
+                  PKR {selectedMeterFabricCost || 0}
+                </Text>
+              </Text>
+              {dyeingSelected ? (
+                <Text style={styles.costLine}>
+                  Dyeing:{" "}
+                  <Text style={styles.costStrong}>
+                    PKR {meterDyeingCostPkr || 0}
+                  </Text>
+                </Text>
+              ) : null}
+              {weightPerMeterKg > 0 ? (
+                <Text style={styles.costLine}>
+                  Shipping weight:{" "}
+                  <Text style={styles.costStrong}>
+                    {selectedMeterShippingWeightKg || 0} kg
+                  </Text>
+                </Text>
+              ) : null}
+            </View>
+
+            {availableFabricM > 0 && selectedMeterLength > availableFabricM ? (
+              <Text style={styles.validation}>
+                Enter fabric length within available stock.
+              </Text>
+            ) : null}
+
+            {requiresDyeSplits ? (
+              <View style={styles.dyeSplitBox}>
+                <View style={styles.dyeSplitHeaderRow}>
+                  <Text style={styles.dyeSplitTitle}>Dye portions</Text>
+                  <Text style={styles.dyeSplitMeta}>
+                    {dyeSplitTotalM || 0} / {selectedMeterLength || 0} m
+                  </Text>
+                </View>
+
+                <View style={styles.dyePalettePanel}>
+                  <Text style={styles.dyePaletteTitle}>Colors</Text>
+                  <View style={styles.dyePaletteGridFrame}>
+                    <View style={styles.dyePaletteRowLabels}>
+                      <Text style={styles.dyePaletteAxisLabel}>R</Text>
+                      {(dyePaletteColumns[0] ?? []).map((shade, rowIndex) => (
+                        <Text
+                          key={`dye_row_${shade.id}`}
+                          style={styles.dyePaletteRowLabel}
+                        >
+                          {String(rowIndex + 1).padStart(2, "0")}
+                        </Text>
+                      ))}
+                    </View>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.dyePaletteScroll}
+                      contentContainerStyle={styles.dyePaletteGrid}
+                    >
+                      {dyePaletteColumns.map((column, columnIndex) => (
+                        <View key={`dye_column_wrap_${columnIndex}`}>
+                          <Text style={styles.dyePaletteColumnLabel}>
+                            C{String(columnIndex + 1).padStart(2, "0")}
+                          </Text>
+                          <View
+                            key={`dye_column_${columnIndex}`}
+                            style={styles.dyePaletteColumn}
+                          >
+                            {column.map((shade) => {
+                              const isOn = dyeSplits.some(
+                                (row) => row.dyeShadeId === shade.id,
+                              );
+
+                              return (
+                                <Pressable
+                                  key={shade.id}
+                                  onPress={() => toggleDyeSplitShade(shade)}
+                                  style={[
+                                    styles.dyePaletteSwatch,
+                                    { backgroundColor: shade.hex },
+                                    isOn ? styles.dyePaletteSwatchOn : null,
+                                  ]}
+                                />
+                              );
+                            })}
+                          </View>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  </View>
+                  <Text style={styles.dyeCaution}>
+                    Custom dyed items are final sale. Shade may vary slightly due to fabric and dye batch.
+                  </Text>
+                </View>
+
+                {dyeSplits.map((row, index) => {
+                  const isRemainingRow = index === dyeSplits.length - 1;
+                  const remainingLengthM = dyeSplitRows[index]?.length_m ?? 0;
+
+                  return (
+                    <View key={row.id} style={styles.dyeSplitRow}>
+                      <TextInput
+                        value={
+                          isRemainingRow
+                            ? remainingLengthM > 0
+                              ? String(remainingLengthM)
+                              : ""
+                            : row.lengthText
+                        }
+                        onChangeText={(next) =>
+                          updateDyeSplitLength(row.id, next)
+                        }
+                        placeholder={isRemainingRow ? "" : "Meters"}
+                        placeholderTextColor={stylesVars.placeholder}
+                        style={[
+                          styles.input,
+                          styles.dyeSplitLengthInput,
+                          isRemainingRow ? styles.inputReadOnly : null,
+                        ]}
+                        keyboardType="decimal-pad"
+                        maxLength={8}
+                        editable={!isRemainingRow}
+                      />
+
+                      <Pressable
+                        onPress={() => {
+                          if (row.dyeHex) setZoomColorHex(row.dyeHex);
+                        }}
+                        style={styles.dyeSelectedColor}
+                      >
+                        <View
+                          style={[
+                            styles.dyeColorSwatch,
+                            { backgroundColor: row.dyeHex || "#FFFFFF" },
+                          ]}
+                        />
+                        <Text style={styles.dyeCodeText}>
+                          {row.dyeLabel || getShadeCode(row.dyeShadeId)}
+                        </Text>
+                      </Pressable>
+
+                      {dyeSplits.length > 1 ? (
+                        <Pressable
+                          onPress={() => removeDyeSplit(row.id)}
+                          style={styles.dyeRemoveBtn}
+                        >
+                          <Text style={styles.dyeRemoveText}>Remove</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  );
+                })}
+
+              </View>
+            ) : null}
+
+            {requiresDyeSplits && dyeStageInstruction ? (
+              <Text style={styles.validation}>{dyeStageInstruction}</Text>
+            ) : null}
+
+            <Pressable
+              onPress={onContinueMeter}
+              disabled={!canContinueMeter}
+              style={[
+                styles.primaryInlineBtn,
+                !canContinueMeter ? styles.disabledBtn : null,
+              ]}
+            >
+              <Text style={styles.primaryInlineText}>Continue</Text>
+            </Pressable>
+
+            {selectedMeterLength <= 0 ? (
+              <Text style={styles.bottomInstruction}>
+                Fill fabric length to purchase.
+              </Text>
+            ) : null}
+          </View>
+        ) : (
+          <>
         <View style={styles.toggleRow}>
           <Pressable
             onPress={() => {}}
@@ -571,8 +1350,21 @@ export default function SizeScreen() {
             </Text>
           </Pressable>
 
-          <Pressable onPress={openExactMeasurements} style={styles.toggleBtn}>
-            <Text style={styles.toggleText}>Exact</Text>
+          <Pressable
+            onPress={onPressExactToggle}
+            style={[
+              styles.toggleBtn,
+              pendingExactOpen ? styles.toggleActive : null,
+            ]}
+          >
+            <Text
+              style={[
+                styles.toggleText,
+                pendingExactOpen ? styles.toggleTextActive : null,
+              ]}
+            >
+              Exact
+            </Text>
           </Pressable>
         </View>
 
@@ -583,15 +1375,26 @@ export default function SizeScreen() {
             {(isUnstitched ? availableUnstitchedSizes : STANDARD_SIZES).map(
               (s) => {
                 const isOn = selectedStandardSize === s;
+                const disabled =
+                  isUnstitched && !selectableUnstitchedSizes.includes(s);
 
                 return (
                   <Pressable
                     key={s}
                     onPress={() => onSelectStandard(s)}
-                    style={[styles.sizePill, isOn ? styles.sizePillOn : null]}
+                    disabled={disabled}
+                    style={[
+                      styles.sizePill,
+                      isOn ? styles.sizePillOn : null,
+                      disabled ? styles.sizePillDisabled : null,
+                    ]}
                   >
                     <Text
-                      style={[styles.sizeText, isOn ? styles.sizeTextOn : null]}
+                      style={[
+                        styles.sizeText,
+                        isOn ? styles.sizeTextOn : null,
+                        disabled ? styles.sizeTextDisabled : null,
+                      ]}
                     >
                       {s}
                     </Text>
@@ -604,6 +1407,14 @@ export default function SizeScreen() {
           {isUnstitched && !availableUnstitchedSizes.length ? (
             <Text style={styles.validation}>
               Size-length map is missing for this unstitched product.
+            </Text>
+          ) : null}
+
+          {isUnstitched &&
+          availableUnstitchedSizes.length > 0 &&
+          !hasAnySelectableUnstitchedSize ? (
+            <Text style={styles.validation}>
+              Available fabric is below the smallest offered size.
             </Text>
           ) : null}
 
@@ -711,11 +1522,70 @@ export default function SizeScreen() {
             </View>
           </View>
         ) : null}
+          </>
+        )}
 
         <Pressable onPress={() => router.back()} style={styles.closeBtn}>
           <Text style={styles.link}>Close</Text>
         </Pressable>
       </ScrollView>
+
+      <Modal
+        visible={sizeGuideOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSizeGuideOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Size guide for this product</Text>
+              <Pressable
+                onPress={() => setSizeGuideOpen(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Text style={styles.link}>Close</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalList}
+            >
+              {sizeGuideRows.map((row) => (
+                <View key={row.size} style={styles.guideRow}>
+                  <View>
+                    <Text style={styles.guideSize}>{row.size}</Text>
+                    <Text style={styles.guideLength}>{row.lengthM} m</Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={!!zoomColorHex}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setZoomColorHex("")}
+      >
+        <Pressable
+          onPress={() => setZoomColorHex("")}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.colorZoomCard}>
+            <View
+              style={[
+                styles.colorZoomSwatch,
+                { backgroundColor: zoomColorHex || "#FFFFFF" },
+              ]}
+            />
+            <Text style={styles.link}>Close</Text>
+          </View>
+        </Pressable>
+      </Modal>
 
       <ExactMeasurementsModal
         visible={summaryOpen}
@@ -754,31 +1624,37 @@ const styles = StyleSheet.create({
   },
 
   title: {
+    fontFamily: apFontFamily,
     fontSize: 18,
     fontWeight: "700",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   summaryCard: {
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 16,
+    borderRadius: apRadii.card,
     padding: 14,
     backgroundColor: stylesVars.cardBg,
     gap: 6,
   },
 
   summaryText: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   summaryStrong: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.text,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   toggleRow: {
@@ -794,7 +1670,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: "#D7E3FF",
-    borderRadius: 999,
+    borderRadius: apRadii.pill,
     backgroundColor: stylesVars.blueSoft,
     alignItems: "center",
     justifyContent: "center",
@@ -806,9 +1682,11 @@ const styles = StyleSheet.create({
   },
 
   toggleText: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     fontWeight: "700",
     color: stylesVars.blue,
+    letterSpacing: 0,
   },
 
   toggleTextActive: {
@@ -818,23 +1696,65 @@ const styles = StyleSheet.create({
   sectionCard: {
     borderWidth: 1,
     borderColor: stylesVars.border,
-    borderRadius: 16,
+    borderRadius: apRadii.card,
     padding: 14,
     backgroundColor: stylesVars.cardBg,
     gap: 10,
   },
 
   sectionTitle: {
+    fontFamily: apFontFamily,
     fontSize: 14,
     fontWeight: "700",
     color: stylesVars.text,
+    letterSpacing: 0,
+  },
+
+  fabricLengthHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+
+  iconButton: {
+    width: 34,
+    height: 34,
+    borderRadius: apRadii.pill,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: stylesVars.blueSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  input: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: stylesVars.borderSoft,
+    borderRadius: apRadii.control,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: stylesVars.white,
+    color: stylesVars.text,
+    fontFamily: apFontFamily,
+    fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: 0,
+  },
+
+  inputReadOnly: {
+    backgroundColor: "#F1F5F9",
+    color: stylesVars.mutedText,
   },
 
   helper: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   sizeGrid: {
@@ -848,7 +1768,7 @@ const styles = StyleSheet.create({
     minHeight: 34,
     paddingVertical: 7,
     paddingHorizontal: 10,
-    borderRadius: 999,
+    borderRadius: apRadii.pill,
     borderWidth: 1,
     borderColor: "#D7E3FF",
     backgroundColor: stylesVars.blueSoft,
@@ -861,59 +1781,250 @@ const styles = StyleSheet.create({
     backgroundColor: stylesVars.blue,
   },
 
+  sizePillDisabled: {
+    borderColor: stylesVars.border,
+    backgroundColor: "#F1F5F9",
+    opacity: 0.55,
+  },
+
   sizeText: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     fontWeight: "700",
     color: stylesVars.blue,
+    letterSpacing: 0,
   },
 
   sizeTextOn: {
     color: stylesVars.white,
   },
 
+  sizeTextDisabled: {
+    color: stylesVars.mutedText,
+  },
+
   costCard: {
     marginTop: 4,
     borderWidth: 1,
     borderColor: "#D7E3FF",
-    borderRadius: 14,
+    borderRadius: apRadii.card,
     padding: 12,
     backgroundColor: stylesVars.blueSoft,
     gap: 4,
   },
 
   costLine: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   costStrong: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.text,
     fontWeight: "700",
+    letterSpacing: 0,
+  },
+
+  dyeSplitBox: {
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    borderRadius: apRadii.card,
+    padding: 12,
+    backgroundColor: "#F8FAFC",
+    gap: 10,
+  },
+
+  dyeSplitHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+
+  dyeSplitTitle: {
+    fontFamily: apFontFamily,
+    fontSize: 13,
+    color: stylesVars.text,
+    fontWeight: "800",
+    letterSpacing: 0,
+  },
+
+  dyeSplitMeta: {
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    color: stylesVars.mutedText,
+    fontWeight: "700",
+    letterSpacing: 0,
+  },
+
+  dyePalettePanel: {
+    gap: 8,
+  },
+
+  dyePaletteTitle: {
+    fontSize: 12,
+    color: stylesVars.mutedText,
+    fontWeight: "800",
+  },
+
+  dyeCaution: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: stylesVars.mutedText,
+    fontWeight: "500",
+  },
+
+  dyePaletteGridFrame: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 5,
+  },
+
+  dyePaletteScroll: {
+    flex: 1,
+  },
+
+  dyePaletteGrid: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 5,
+  },
+
+  dyePaletteAxisLabel: {
+    height: 18,
+    fontSize: 9,
+    color: stylesVars.mutedText,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+
+  dyePaletteColumnLabel: {
+    height: 18,
+    fontSize: 9,
+    color: stylesVars.mutedText,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+
+  dyePaletteRowLabels: {
+    alignItems: "center",
+  },
+
+  dyePaletteRowLabel: {
+    width: 18,
+    height: 26,
+    fontSize: 8,
+    lineHeight: 26,
+    color: stylesVars.mutedText,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+
+  dyePaletteSwatch: {
+    width: 28,
+    height: 26,
+    borderWidth: 0,
+  },
+
+  dyePaletteSwatchOn: {
+    borderWidth: 2,
+    borderColor: stylesVars.blue,
+  },
+
+  dyePaletteColumn: {
+    borderRadius: 8,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(15,23,42,0.12)",
+  },
+
+  dyeSplitRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+
+  dyeSplitLengthInput: {
+    width: 96,
+  },
+
+  dyeSelectedColor: {
+    minHeight: 60,
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 150,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    backgroundColor: stylesVars.white,
+  },
+
+  dyeCodeText: {
+    flex: 1,
+    fontSize: 10,
+    color: stylesVars.text,
+    fontWeight: "800",
+  },
+
+  dyeColorSwatch: {
+    width: 58,
+    height: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+
+  dyeRemoveBtn: {
+    minHeight: 34,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    backgroundColor: "#FFF7F7",
+  },
+
+  dyeRemoveText: {
+    fontSize: 12,
+    color: stylesVars.danger,
+    fontWeight: "800",
   },
 
   exactSummaryCard: {
     borderWidth: 1,
     borderColor: "#A7F3D0",
-    borderRadius: 16,
+    borderRadius: apRadii.card,
     padding: 14,
     backgroundColor: stylesVars.greenSoft,
     gap: 6,
   },
 
   resultLine: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.subText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   resultStrong: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.text,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   exactActionsRow: {
@@ -927,23 +2038,29 @@ const styles = StyleSheet.create({
     minHeight: 38,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: apRadii.control,
     backgroundColor: stylesVars.blue,
     alignItems: "center",
     justifyContent: "center",
   },
 
+  disabledBtn: {
+    opacity: 0.5,
+  },
+
   primaryInlineText: {
+    fontFamily: apFontFamily,
     color: stylesVars.white,
     fontSize: 12,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   secondaryInlineBtn: {
     minHeight: 38,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: apRadii.control,
     backgroundColor: stylesVars.white,
     borderWidth: 1,
     borderColor: "#D7E3FF",
@@ -952,16 +2069,122 @@ const styles = StyleSheet.create({
   },
 
   secondaryInlineText: {
+    fontFamily: apFontFamily,
     color: stylesVars.blue,
     fontSize: 12,
     fontWeight: "700",
+    letterSpacing: 0,
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15,23,42,0.42)",
+    justifyContent: "center",
+    padding: 18,
+  },
+
+  modalCard: {
+    maxHeight: "76%",
+    borderRadius: apRadii.card,
+    backgroundColor: stylesVars.cardBg,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    padding: 14,
+  },
+
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: stylesVars.text,
+  },
+
+  modalCloseBtn: {
+    minHeight: 34,
+    paddingHorizontal: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  modalScroll: {
+    marginTop: 10,
+  },
+
+  modalList: {
+    gap: 8,
+    paddingBottom: 2,
+  },
+
+  colorZoomCard: {
+    width: "82%",
+    maxWidth: 360,
+    borderRadius: 18,
+    backgroundColor: stylesVars.cardBg,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    padding: 14,
+    gap: 12,
+    alignSelf: "center",
+    alignItems: "center",
+  },
+
+  colorZoomSwatch: {
+    width: "100%",
+    aspectRatio: 1.35,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+
+  guideRow: {
+    minHeight: 54,
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    borderRadius: 12,
+    backgroundColor: stylesVars.bg,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+
+  guideSize: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: stylesVars.text,
+  },
+
+  guideLength: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: "600",
+    color: stylesVars.mutedText,
   },
 
   validation: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.danger,
     fontWeight: "500",
+    letterSpacing: 0,
+  },
+
+  bottomInstruction: {
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.danger,
+    fontWeight: "800",
+    letterSpacing: 0,
   },
 
   closeBtn: {
@@ -969,7 +2192,7 @@ const styles = StyleSheet.create({
     minHeight: 36,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 999,
+    borderRadius: apRadii.pill,
     backgroundColor: stylesVars.blueSoft,
     borderWidth: 1,
     borderColor: "#D7E3FF",
@@ -978,8 +2201,10 @@ const styles = StyleSheet.create({
   },
 
   link: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.blue,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 });

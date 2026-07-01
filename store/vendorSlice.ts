@@ -34,6 +34,7 @@ export type VendorState = {
   shop_image_paths: string[] | null;
   shop_video_paths: string[] | null;
 
+  offers_dyeing: boolean | null;
   offers_tailoring: boolean | null;
   exports_enabled: boolean | null;
   export_regions: string[];
@@ -82,6 +83,7 @@ const initialState: VendorState = {
   shop_image_paths: null,
   shop_video_paths: null,
 
+  offers_dyeing: false,
   offers_tailoring: null,
   exports_enabled: false,
   export_regions: [],

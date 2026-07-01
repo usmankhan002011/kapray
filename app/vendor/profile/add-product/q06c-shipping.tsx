@@ -1,11 +1,34 @@
 import React, { useMemo, useRef, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, StyleSheet, Text, type TextInput, View } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apStyles, apColors } from "@/components/product/addProductStyles";
 import { getDeliveryCost } from "@/utils/kapray/delivery";
 import { EXPORT_REGIONS } from "@/data/kapray/exportRegions";
+import {
+  INLAND_COURIER_SLABS,
+  INTERNATIONAL_COURIER_SLABS,
+} from "@/data/kapray/courierSlabs";
+import {
+  AddProductCard,
+  AddProductChip,
+  AddProductField,
+  AddProductInput,
+  AddProductPrimaryButton,
+  AddProductScreen,
+  AddProductSecondaryButton,
+} from "@/components/product/add-product/AddProductWizard";
+
+type DimensionUnit = "cm" | "in";
+type ProductCategory =
+  | "unstitched_plain"
+  | "unstitched_dyeing"
+  | "unstitched_dyeing_tailoring"
+  | "stitched_ready";
+
+const CM_PER_INCH = 2.54;
+const EXPORT_REFERENCE_SLABS = INTERNATIONAL_COURIER_SLABS.UK;
 
 function sanitizeNumber(input: string) {
   const cleaned = input.replace(/[^\d.]/g, "");
@@ -20,12 +43,127 @@ function safeInt(v: any) {
   return Math.trunc(n);
 }
 
+function safeStr(v: any) {
+  return String(v ?? "").trim();
+}
+
+function inferCategoryFromDraft(draft: any): ProductCategory {
+  const spec = draft?.spec ?? {};
+  const price = draft?.price ?? {};
+  const fromSpec = safeStr((spec as any)?.product_category ?? "");
+
+  if (
+    fromSpec === "unstitched_plain" ||
+    fromSpec === "unstitched_dyeing" ||
+    fromSpec === "unstitched_dyeing_tailoring" ||
+    fromSpec === "stitched_ready"
+  ) {
+    return fromSpec as ProductCategory;
+  }
+
+  const mode = safeStr(price?.mode ?? "");
+  if (mode === "stitched_total") return "stitched_ready";
+
+  const dye = Boolean(spec?.dyeing_enabled);
+  const tail = Boolean(spec?.tailoring_enabled);
+
+  if (tail) return "unstitched_dyeing_tailoring";
+  if (dye) return "unstitched_dyeing";
+  return "unstitched_plain";
+}
+
+function initialPositiveNumberText(v: any) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? String(v) : "";
+}
+
+function formatDimensionNumber(n: number) {
+  if (!Number.isFinite(n) || n <= 0) return "";
+  const rounded = Math.round(n * 100) / 100;
+  return String(rounded)
+    .replace(/(\.\d*?)0+$/, "$1")
+    .replace(/\.$/, "");
+}
+
+function positiveNumberFromText(text: string) {
+  const n = Number(sanitizeNumber(text));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function dimensionToCm(text: string, unit: DimensionUnit) {
+  const n = positiveNumberFromText(text);
+  if (n <= 0) return 0;
+  return unit === "in" ? n * CM_PER_INCH : n;
+}
+
+function getInitialDimensionUnit(spec: any): DimensionUnit {
+  return spec?.package_dimension_unit === "in" ? "in" : "cm";
+}
+
+function initialDimensionText(spec: any, key: "length" | "width" | "height", unit: DimensionUnit) {
+  if (unit === "in") {
+    const fromIn = Number(spec?.package_in?.[key]);
+    if (Number.isFinite(fromIn) && fromIn > 0) return formatDimensionNumber(fromIn);
+
+    const fromCm = Number(spec?.package_cm?.[key]);
+    return Number.isFinite(fromCm) && fromCm > 0
+      ? formatDimensionNumber(fromCm / CM_PER_INCH)
+      : "";
+  }
+
+  return initialPositiveNumberText(spec?.package_cm?.[key]);
+}
+
+function convertDimensionText(text: string, from: DimensionUnit, to: DimensionUnit) {
+  if (from === to) return text;
+  const n = positiveNumberFromText(text);
+  if (n <= 0) return "";
+  return formatDimensionNumber(from === "in" ? n * CM_PER_INCH : n / CM_PER_INCH);
+}
+
+function formatKg(n: number) {
+  return String(n).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+}
+
+function buildSlabGuidance(
+  label: string,
+  slabs: Array<{ upToKg: number }>,
+  weightKg: number,
+) {
+  if (!Number.isFinite(weightKg) || weightKg <= 0 || !slabs.length) return "";
+
+  const currentIndex = slabs.findIndex((slab) => weightKg <= slab.upToKg);
+  const weightText = formatKg(weightKg);
+
+  if (currentIndex < 0) {
+    const last = slabs[slabs.length - 1];
+    const lastLimit = formatKg(last.upToKg);
+    return `${label}: ${weightText} kg is above ${lastLimit} kg, so overweight charges apply. Bring chargeable weight to ${lastLimit} kg or below.`;
+  }
+
+  const current = slabs[currentIndex];
+  const previous = currentIndex > 0 ? slabs[currentIndex - 1] : null;
+  const next = slabs[currentIndex + 1] ?? null;
+  const currentLimit = formatKg(current.upToKg);
+
+  if (previous) {
+    const previousLimit = formatKg(previous.upToKg);
+    return `${label}: ${weightText} kg will be charged as ${currentLimit} kg. Bring chargeable weight to ${previousLimit} kg or below for the lower slab.`;
+  }
+
+  return `${label}: ${weightText} kg will be charged as ${currentLimit} kg${next ? `. Above ${currentLimit} kg moves to ${formatKg(next.upToKg)} kg slab` : ""}.`;
+}
+
 export default function Q06CShipping() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const returnTo = typeof params?.returnTo === "string" ? params.returnTo : "";
 
   const weightRef = useRef<TextInput>(null);
+  const lengthRef = useRef<TextInput>(null);
+  const widthRef = useRef<TextInput>(null);
+  const heightRef = useRef<TextInput>(null);
+  const previewCalculatedRef = useRef(false);
 
   const vendorIdRaw =
     useAppSelector((s: any) => s?.vendorSlice?.vendor?.id ?? null) ??
@@ -35,6 +173,9 @@ export default function Q06CShipping() {
 
   const ctx = useProductDraft() as any;
   const { draft } = ctx;
+  const category = inferCategoryFromDraft(draft);
+  const isFabricByMeter =
+    category === "unstitched_plain" || category === "unstitched_dyeing";
 
   function patchSpec(patch: any) {
     if (typeof ctx.setSpec === "function") {
@@ -53,36 +194,78 @@ export default function Q06CShipping() {
     draft.spec = { ...(draft?.spec ?? {}), ...patch };
   }
 
-  const [weight, setWeight] = useState<string>(String(draft?.spec?.weight_kg ?? ""));
-  const [length, setLength] = useState<string>(String(draft?.spec?.package_cm?.length ?? ""));
-  const [width, setWidth] = useState<string>(String(draft?.spec?.package_cm?.width ?? ""));
-  const [height, setHeight] = useState<string>(String(draft?.spec?.package_cm?.height ?? ""));
+  const initialWeightText = useMemo(
+    () =>
+      initialPositiveNumberText(
+        isFabricByMeter
+          ? draft?.spec?.weight_per_meter_kg ?? draft?.spec?.weight_kg
+          : draft?.spec?.weight_kg,
+      ),
+    [
+      draft?.spec?.weight_kg,
+      draft?.spec?.weight_per_meter_kg,
+      isFabricByMeter,
+    ],
+  );
+  const initialDimensionUnit = useMemo(
+    () => getInitialDimensionUnit(draft?.spec),
+    [draft?.spec],
+  );
+  const initialLengthText = useMemo(
+    () => initialDimensionText(draft?.spec, "length", initialDimensionUnit),
+    [draft?.spec, initialDimensionUnit],
+  );
+  const initialWidthText = useMemo(
+    () => initialDimensionText(draft?.spec, "width", initialDimensionUnit),
+    [draft?.spec, initialDimensionUnit],
+  );
+  const initialHeightText = useMemo(
+    () => initialDimensionText(draft?.spec, "height", initialDimensionUnit),
+    [draft?.spec, initialDimensionUnit],
+  );
+
+  const weightTextRef = useRef(initialWeightText);
+  const lengthTextRef = useRef(initialLengthText);
+  const widthTextRef = useRef(initialWidthText);
+  const heightTextRef = useRef(initialHeightText);
+
+  const [weight, setWeight] = useState<string>(initialWeightText);
+  const [dimensionUnit, setDimensionUnit] =
+    useState<DimensionUnit>(initialDimensionUnit);
+  const [length, setLength] = useState<string>(initialLengthText);
+  const [width, setWidth] = useState<string>(initialWidthText);
+  const [height, setHeight] = useState<string>(initialHeightText);
+  const [hasCalculatedPreview, setHasCalculatedPreview] = useState(false);
 
   const canContinue = useMemo(() => {
-    if (!vendorId) return false;
+    return Boolean(vendorId);
+  }, [vendorId]);
+  const weightLabel = isFabricByMeter ? "Weight per meter (kg)" : "Weight (kg)";
+  const disabledHint = !vendorId ? "Vendor not loaded." : "";
 
-    const w = Number(weight);
-    const l = Number(length);
-    const wi = Number(width);
-    const h = Number(height);
+  function syncPreviewState() {
+    const nextWeight = weightTextRef.current;
+    const nextLength = lengthTextRef.current;
+    const nextWidth = widthTextRef.current;
+    const nextHeight = heightTextRef.current;
 
-    return (
-      Number.isFinite(w) &&
-      w > 0 &&
-      Number.isFinite(l) &&
-      l > 0 &&
-      Number.isFinite(wi) &&
-      wi > 0 &&
-      Number.isFinite(h) &&
-      h > 0
-    );
-  }, [vendorId, weight, length, width, height]);
+    setWeight((prev) => (prev === nextWeight ? prev : nextWeight));
+    setLength((prev) => (prev === nextLength ? prev : nextLength));
+    setWidth((prev) => (prev === nextWidth ? prev : nextWidth));
+    setHeight((prev) => (prev === nextHeight ? prev : nextHeight));
+  }
+
+  function markPreviewDirty() {
+    if (!previewCalculatedRef.current) return;
+    previewCalculatedRef.current = false;
+    setHasCalculatedPreview(false);
+  }
 
   const shippingPreview = useMemo(() => {
-    const actualWeightKg = Number(weight);
-    const rawLengthCm = Number(length);
-    const rawWidthCm = Number(width);
-    const rawHeightCm = Number(height);
+    const actualWeightKg = positiveNumberFromText(weight);
+    const rawLengthCm = dimensionToCm(length, dimensionUnit);
+    const rawWidthCm = dimensionToCm(width, dimensionUnit);
+    const rawHeightCm = dimensionToCm(height, dimensionUnit);
 
     const safeActualWeightKg =
       Number.isFinite(actualWeightKg) && actualWeightKg > 0 ? actualWeightKg : 0;
@@ -132,22 +315,46 @@ export default function Q06CShipping() {
           : null,
     }));
 
+    const slabGuidance =
+      roundedChargeableWeightKg > 0
+        ? [
+            buildSlabGuidance(
+              "Within Pakistan",
+              INLAND_COURIER_SLABS,
+              roundedChargeableWeightKg,
+            ),
+            buildSlabGuidance(
+              "Export",
+              EXPORT_REFERENCE_SLABS,
+              roundedChargeableWeightKg,
+            ),
+          ].filter(Boolean)
+        : [];
+
     const volumetricRatio =
       safeActualWeightKg > 0 ? dimensionalWeightKg / safeActualWeightKg : 0;
+    const dimensionalExceedsActual =
+      safeActualWeightKg > 0 && dimensionalWeightKg > safeActualWeightKg;
 
     const efficiencyLevel =
-      volumetricRatio >= 4 ? "red" : volumetricRatio >= 1.5 ? "yellow" : "green";
+      dimensionalExceedsActual
+        ? "red"
+        : volumetricRatio >= 1.5
+          ? "yellow"
+          : "green";
 
     const efficiencyLabel =
       efficiencyLevel === "red"
-        ? "Poor packaging efficiency"
+        ? "Dimensional weight higher"
         : efficiencyLevel === "yellow"
           ? "Average packaging efficiency"
           : "Good packaging efficiency";
 
     const warningText =
-      efficiencyLevel === "red"
-        ? "Volumetric weight is dominating strongly. Courier cost may be much higher than physical weight suggests."
+      dimensionalExceedsActual
+        ? "Review package size. Dimensional weight may push the parcel into the next slab and increase courier cost."
+        : efficiencyLevel === "red"
+          ? "Volumetric weight is dominating strongly. Courier cost may be much higher than physical weight suggests."
         : efficiencyLevel === "yellow"
           ? "Volumetric weight is affecting courier cost. Tighter packaging may reduce charges."
           : "";
@@ -188,7 +395,9 @@ export default function Q06CShipping() {
       roundedChargeableWeightKg,
       inlandAmountPkr,
       exportAmounts,
+      slabGuidance,
       volumetricRatio,
+      dimensionalExceedsActual,
       efficiencyLevel,
       efficiencyLabel,
       warningText,
@@ -196,7 +405,7 @@ export default function Q06CShipping() {
       suggestedChargeableWeightKg,
       suggestedHeightCm,
     };
-  }, [height, length, weight, width]);
+  }, [dimensionUnit, height, length, weight, width]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -215,20 +424,53 @@ export default function Q06CShipping() {
     router.back();
   }
 
-  function onContinue() {
+  function onChangeDimensionUnit(nextUnit: DimensionUnit) {
+    if (nextUnit === dimensionUnit) return;
+
+    const nextLength = convertDimensionText(
+      lengthTextRef.current,
+      dimensionUnit,
+      nextUnit,
+    );
+    const nextWidth = convertDimensionText(
+      widthTextRef.current,
+      dimensionUnit,
+      nextUnit,
+    );
+    const nextHeight = convertDimensionText(
+      heightTextRef.current,
+      dimensionUnit,
+      nextUnit,
+    );
+
+    lengthTextRef.current = nextLength;
+    widthTextRef.current = nextWidth;
+    heightTextRef.current = nextHeight;
+
+    setLength(nextLength);
+    setWidth(nextWidth);
+    setHeight(nextHeight);
+    setDimensionUnit(nextUnit);
+    markPreviewDirty();
+  }
+
+  function readValidShippingValues() {
     if (!vendorId) {
       Alert.alert("Vendor not loaded", "Please ensure vendorSlice has vendor.id.");
-      return;
+      return null;
     }
 
-    const w = Number(sanitizeNumber(weight));
-    const l = Number(sanitizeNumber(length));
-    const wi = Number(sanitizeNumber(width));
-    const h = Number(sanitizeNumber(height));
+    const w = positiveNumberFromText(weightTextRef.current);
+    const lengthInput = positiveNumberFromText(lengthTextRef.current);
+    const widthInput = positiveNumberFromText(widthTextRef.current);
+    const heightInput = positiveNumberFromText(heightTextRef.current);
+    const l = dimensionToCm(lengthTextRef.current, dimensionUnit);
+    const wi = dimensionToCm(widthTextRef.current, dimensionUnit);
+    const h = dimensionToCm(heightTextRef.current, dimensionUnit);
 
     if (!Number.isFinite(w) || w <= 0) {
       Alert.alert("Invalid weight", "Enter valid weight in kg.");
-      return;
+      return null;
     }
 
     if (
@@ -239,16 +481,49 @@ export default function Q06CShipping() {
       !Number.isFinite(h) ||
       h <= 0
     ) {
-      Alert.alert("Invalid dimensions", "Enter valid package dimensions in cm.");
+      Alert.alert("Invalid dimensions", "Enter valid package dimensions.");
+      return null;
+    }
+
+    return { h, heightInput, l, lengthInput, w, wi, widthInput };
+  }
+
+  function onCalculate() {
+    const values = readValidShippingValues();
+    if (!values) return;
+
+    syncPreviewState();
+    previewCalculatedRef.current = true;
+    setHasCalculatedPreview(true);
+  }
+
+  function onContinue() {
+    const values = readValidShippingValues();
+    if (!values) return;
+
+    if (!previewCalculatedRef.current || !hasCalculatedPreview) {
+      Alert.alert(
+        "Calculate shipping first",
+        "Press Calculate to review the actual, dimensional, and chargeable weight before continuing.",
+      );
       return;
     }
 
+    const { h, heightInput, l, lengthInput, w, wi, widthInput } = values;
+
     patchSpec({
       weight_kg: w,
+      weight_per_meter_kg: isFabricByMeter ? w : null,
+      shipping_weight_mode: isFabricByMeter ? "per_meter" : "per_order",
+      package_dimension_unit: dimensionUnit,
+      package_in:
+        dimensionUnit === "in"
+          ? { length: lengthInput, width: widthInput, height: heightInput }
+          : null,
       package_cm: {
-        length: l,
-        width: wi,
-        height: h,
+        length: Math.round(l * 100) / 100,
+        width: Math.round(wi * 100) / 100,
+        height: Math.round(h * 100) / 100,
       },
     });
 
@@ -282,225 +557,197 @@ export default function Q06CShipping() {
         : "#86EFAC";
 
   return (
-    <View style={apStyles.screen}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={apStyles.screen}
-        contentContainerStyle={apStyles.content}
-      >
-        <View style={apStyles.headerRow}>
-          <Text style={apStyles.title}>Shipping details</Text>
-
-          <Pressable
-            onPress={closeScreen}
-            style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
-          >
-            <Text style={apStyles.linkText}>Close</Text>
-          </Pressable>
-        </View>
-
-        <View style={apStyles.card}>
-          <Text style={apStyles.label}>Weight (kg) *</Text>
-          <TextInput
+    <AddProductScreen
+      title="Shipping details"
+      onBack={closeScreen}
+    >
+      <AddProductCard>
+        <AddProductField label={weightLabel} required style={{ marginTop: 0 }}>
+          <AddProductInput
             ref={weightRef}
-            value={weight}
-            onChangeText={(t) => setWeight(sanitizeNumber(t))}
+            defaultValue={weight}
+            onChangeText={markPreviewDirty}
             placeholder="e.g., 1.2"
-            placeholderTextColor={apColors.muted}
-            style={apStyles.input}
+            textValueRef={weightTextRef}
+            sanitizeText={sanitizeNumber}
             keyboardType="decimal-pad"
             maxLength={6}
+            returnKeyType="next"
           />
+        </AddProductField>
 
-          <Text
-            style={{
-              fontSize: 15,
-              fontWeight: "700",
-              color: apColors.text,
-              marginTop: 14,
-              marginBottom: 6,
-            }}
-          >
-            Package dimensions (cm)
-          </Text>
+        <AddProductField
+          label={
+            isFabricByMeter
+              ? "Package dimensions per meter"
+              : "Package dimensions"
+          }
+          hint={
+            isFabricByMeter
+              ? "Enter 1m packed size. Keep dimensional weight low; checkout multiplies by meters."
+              : undefined
+          }
+        >
+          <View style={styles.unitRow}>
+            <AddProductChip
+              label="cm"
+              selected={dimensionUnit === "cm"}
+              onPress={() => onChangeDimensionUnit("cm")}
+            />
+            <AddProductChip
+              label="in"
+              selected={dimensionUnit === "in"}
+              onPress={() => onChangeDimensionUnit("in")}
+            />
+          </View>
 
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              marginTop: 8,
-            }}
-          >
-            <View style={{ width: "32%" }}>
+          <View style={styles.dimensionRow}>
+            <View style={styles.dimensionField}>
               <Text style={apStyles.label}>Length</Text>
-              <TextInput
-                value={length}
-                onChangeText={(t) => setLength(sanitizeNumber(t))}
+              <AddProductInput
+                key={`length-${dimensionUnit}`}
+                ref={lengthRef}
+                defaultValue={length}
+                onChangeText={markPreviewDirty}
                 placeholder="L"
-                placeholderTextColor={apColors.muted}
-                style={apStyles.input}
+                textValueRef={lengthTextRef}
+                sanitizeText={sanitizeNumber}
                 keyboardType="decimal-pad"
+                returnKeyType="next"
               />
             </View>
 
-            <View style={{ width: "32%" }}>
+            <View style={styles.dimensionField}>
               <Text style={apStyles.label}>Width</Text>
-              <TextInput
-                value={width}
-                onChangeText={(t) => setWidth(sanitizeNumber(t))}
+              <AddProductInput
+                key={`width-${dimensionUnit}`}
+                ref={widthRef}
+                defaultValue={width}
+                onChangeText={markPreviewDirty}
                 placeholder="W"
-                placeholderTextColor={apColors.muted}
-                style={apStyles.input}
+                textValueRef={widthTextRef}
+                sanitizeText={sanitizeNumber}
                 keyboardType="decimal-pad"
+                returnKeyType="next"
               />
             </View>
 
-            <View style={{ width: "32%" }}>
+            <View style={styles.dimensionField}>
               <Text style={apStyles.label}>Height</Text>
-              <TextInput
-                value={height}
-                onChangeText={(t) => setHeight(sanitizeNumber(t))}
+              <AddProductInput
+                key={`height-${dimensionUnit}`}
+                ref={heightRef}
+                defaultValue={height}
+                onChangeText={markPreviewDirty}
                 placeholder="H"
-                placeholderTextColor={apColors.muted}
-                style={apStyles.input}
+                textValueRef={heightTextRef}
+                sanitizeText={sanitizeNumber}
                 keyboardType="decimal-pad"
+                returnKeyType="done"
               />
             </View>
           </View>
+        </AddProductField>
 
-          <View
-            style={{
-              marginTop: 12,
-              padding: 10,
-              borderWidth: 1,
-              borderColor: apColors.border,
-              borderRadius: 12,
-              backgroundColor: apColors.blueSoft,
-              gap: 4,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 10,
-                lineHeight: 14,
-                color: apColors.subText,
-                fontWeight: "600",
-              }}
-            >
-              Used for courier calculation (actual vs volumetric).
+        <AddProductSecondaryButton
+          label="Calculate"
+          onPress={onCalculate}
+          style={{ marginTop: 12 }}
+        />
+
+        {hasCalculatedPreview ? (
+          <View style={styles.preview}>
+            <Text style={styles.previewText}>
+              Courier uses higher of actual and dimensional weight.
             </Text>
 
             {!!shippingPreview.actualWeightKg && (
-              <Text
-                style={{
-                  fontSize: 10,
-                  lineHeight: 14,
-                  color: apColors.subText,
-                  fontWeight: "600",
-                }}
-              >
-                Actual Weight: {shippingPreview.actualWeightKg.toFixed(2)} kg
+              <Text style={styles.previewText}>
+                {isFabricByMeter ? "Weight per meter" : "Actual Weight"}:{" "}
+                {shippingPreview.actualWeightKg.toFixed(2)} kg
               </Text>
             )}
 
             {!!shippingPreview.lengthCm &&
               !!shippingPreview.widthCm &&
               !!shippingPreview.heightCm && (
-                <Text
-                  style={{
-                    fontSize: 10,
-                    lineHeight: 14,
-                    color: apColors.subText,
-                    fontWeight: "600",
-                  }}
-                >
-                  Rated Dimensions: {shippingPreview.lengthCm} × {shippingPreview.widthCm} ×{" "}
+                <Text style={styles.previewText}>
+                  Rated Dimensions: {shippingPreview.lengthCm} x {shippingPreview.widthCm} x{" "}
                   {shippingPreview.heightCm} cm
                 </Text>
               )}
 
             {!!shippingPreview.dimensionalWeightKg && (
               <Text
-                style={{
-                  fontSize: 10,
-                  lineHeight: 14,
-                  color: apColors.subText,
-                  fontWeight: "600",
-                }}
+                style={[
+                  styles.previewMetricText,
+                  shippingPreview.dimensionalExceedsActual
+                    ? styles.previewDangerText
+                    : null,
+                ]}
               >
-                Dimensional Weight: {shippingPreview.dimensionalWeightKg.toFixed(2)} kg
+                {isFabricByMeter
+                  ? "Dimensional Weight per meter"
+                  : "Dimensional Weight"}
+                : {shippingPreview.dimensionalWeightKg.toFixed(2)} kg
               </Text>
             )}
 
             {!!shippingPreview.roundedChargeableWeightKg && (
-              <Text
-                style={{
-                  fontSize: 10,
-                  lineHeight: 14,
-                  color: apColors.text,
-                  fontWeight: "800",
-                }}
-              >
-                Chargeable Weight: {shippingPreview.roundedChargeableWeightKg.toFixed(1)} kg
+              <Text style={styles.previewStrongText}>
+                {isFabricByMeter
+                  ? "Chargeable Weight per meter"
+                  : "Chargeable Weight"}
+                : {shippingPreview.roundedChargeableWeightKg.toFixed(1)} kg
               </Text>
             )}
+
+            {shippingPreview.slabGuidance.length ? (
+              <View style={styles.slabGuideBox}>
+                <Text style={styles.slabGuideTitle}>Slab guidance</Text>
+                {shippingPreview.slabGuidance.map((item) => (
+                  <Text key={item} style={styles.slabGuideText}>
+                    {item}
+                  </Text>
+                ))}
+                {isFabricByMeter ? (
+                  <Text style={styles.slabGuideNote}>
+                    Final order weight scales with meters purchased.
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
 
             {!!shippingPreview.roundedChargeableWeightKg && (
               <View
-                style={{
-                  marginTop: 4,
-                  paddingHorizontal: 8,
-                  paddingVertical: 7,
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: efficiencyBorder,
-                  backgroundColor: efficiencyBg,
-                  gap: 3,
-                }}
+                style={[
+                  styles.efficiencyBox,
+                  { borderColor: efficiencyBorder, backgroundColor: efficiencyBg },
+                ]}
               >
                 <Text
-                  style={{
-                    fontSize: 10,
-                    lineHeight: 14,
-                    color: efficiencyColor,
-                    fontWeight: "800",
-                  }}
+                  style={[styles.efficiencyTitle, { color: efficiencyColor }]}
                 >
                   Packaging Status: {shippingPreview.efficiencyLabel}
                 </Text>
 
                 {shippingPreview.warningText ? (
                   <Text
-                    style={{
-                      fontSize: 10,
-                      lineHeight: 14,
-                      color: efficiencyColor,
-                      fontWeight: "600",
-                    }}
+                    style={[styles.efficiencyText, { color: efficiencyColor }]}
                   >
-                    ⚠️ {shippingPreview.warningText}
+                    Warning: {shippingPreview.warningText}
                   </Text>
                 ) : (
                   <Text
-                    style={{
-                      fontSize: 10,
-                      lineHeight: 14,
-                      color: efficiencyColor,
-                      fontWeight: "600",
-                    }}
+                    style={[styles.efficiencyText, { color: efficiencyColor }]}
                   >
-                    ✓ Package size looks efficient for the entered physical weight.
+                    OK: Package size looks efficient for the entered physical weight.
                   </Text>
                 )}
 
                 {shippingPreview.suggestionText ? (
                   <Text
-                    style={{
-                      fontSize: 10,
-                      lineHeight: 14,
-                      color: efficiencyColor,
-                      fontWeight: "600",
-                    }}
+                    style={[styles.efficiencyText, { color: efficiencyColor }]}
                   >
                     Suggestion: {shippingPreview.suggestionText}
                   </Text>
@@ -509,41 +756,19 @@ export default function Q06CShipping() {
             )}
 
             {!!shippingPreview.inlandAmountPkr && (
-              <Text
-                style={{
-                  fontSize: 10,
-                  lineHeight: 14,
-                  color: apColors.text,
-                  fontWeight: "700",
-                  marginTop: 2,
-                }}
-              >
-                Inland Estimated Courier (avg Pakistan distance): PKR {shippingPreview.inlandAmountPkr}
+              <Text style={styles.previewAmountText}>
+                Within Pakistan Estimated Courier
+                {isFabricByMeter ? " per meter" : " (avg distance)"}: PKR{" "}
+                {shippingPreview.inlandAmountPkr}
               </Text>
             )}
 
-            <Text
-              style={{
-                fontSize: 10,
-                lineHeight: 14,
-                color: apColors.text,
-                fontWeight: "700",
-                marginTop: 4,
-              }}
-            >
+            <Text style={styles.previewHeadingText}>
               Export Estimated Courier:
             </Text>
 
             {shippingPreview.exportAmounts.map((item) => (
-              <Text
-                key={item.region}
-                style={{
-                  fontSize: 10,
-                  lineHeight: 14,
-                  color: apColors.subText,
-                  fontWeight: "600",
-                }}
-              >
+              <Text key={item.region} style={styles.previewText}>
                 {item.region}:{" "}
                 {item.amountPkr && Number(item.amountPkr) > 0
                   ? `PKR ${item.amountPkr}`
@@ -551,20 +776,134 @@ export default function Q06CShipping() {
               </Text>
             ))}
           </View>
+        ) : null}
 
-          <Pressable
-            style={({ pressed }) => [
-              apStyles.primaryBtn,
-              !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null,
+        <AddProductPrimaryButton
+          label="Continue"
+          onPress={onContinue}
+          disabled={!canContinue}
+          style={styles.continueButton}
+        />
+        {disabledHint ? (
+          <Text
+            style={[
+              apStyles.footerHint,
+              !canContinue ? apStyles.footerHintWarn : null,
             ]}
-            onPress={onContinue}
-            disabled={!canContinue}
           >
-            <Text style={apStyles.primaryText}>Continue</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </View>
+            {disabledHint}
+          </Text>
+        ) : null}
+      </AddProductCard>
+    </AddProductScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  unitRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+  },
+  dimensionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
+  dimensionField: {
+    width: "32%",
+  },
+  preview: {
+    marginTop: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    borderRadius: 8,
+    backgroundColor: apColors.successSoft,
+    gap: 4,
+  },
+  previewText: {
+    fontSize: 10,
+    lineHeight: 14,
+    color: apColors.subText,
+    fontWeight: "600",
+  },
+  previewMetricText: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: apColors.text,
+    fontWeight: "700",
+  },
+  previewDangerText: {
+    color: "#B91C1C",
+  },
+  previewStrongText: {
+    fontSize: 13,
+    lineHeight: 17,
+    color: apColors.text,
+    fontWeight: "800",
+  },
+  slabGuideBox: {
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+    backgroundColor: "#F0FDF4",
+    gap: 3,
+  },
+  slabGuideTitle: {
+    fontSize: 10,
+    lineHeight: 14,
+    color: apColors.success,
+    fontWeight: "800",
+  },
+  slabGuideText: {
+    fontSize: 10,
+    lineHeight: 14,
+    color: apColors.text,
+    fontWeight: "600",
+  },
+  slabGuideNote: {
+    fontSize: 10,
+    lineHeight: 14,
+    color: apColors.success,
+    fontWeight: "700",
+  },
+  previewAmountText: {
+    marginTop: 2,
+    fontSize: 10,
+    lineHeight: 14,
+    color: apColors.text,
+    fontWeight: "700",
+  },
+  previewHeadingText: {
+    marginTop: 4,
+    fontSize: 10,
+    lineHeight: 14,
+    color: apColors.text,
+    fontWeight: "700",
+  },
+  efficiencyBox: {
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 3,
+  },
+  efficiencyTitle: {
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: "800",
+  },
+  efficiencyText: {
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: "600",
+  },
+  continueButton: {
+    marginTop: 12,
+  },
+});

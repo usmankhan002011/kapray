@@ -1,9 +1,14 @@
-import React, { useMemo, useRef, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import React, { useMemo, useState } from "react";
+import { Alert, Pressable, Text, View } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
-import { apColors, apStyles } from "@/components/product/addProductStyles";
+import { apStyles } from "@/components/product/addProductStyles";
+import { READY_STANDARD_SIZES } from "@/data/kapray/productPieces";
+import {
+  AddProductFooter,
+  AddProductScreen,
+} from "@/components/product/add-product/AddProductWizard";
 
 function safeInt(v: any) {
   const n = Number(v);
@@ -20,8 +25,6 @@ function pickFirstString(v: unknown): string | null {
 export default function Q06ASizes() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const inputRef = useRef<TextInput>(null);
-
   const returnTo = pickFirstString((params as any)?.returnTo) ?? "";
 
   const vendorIdRaw =
@@ -32,11 +35,14 @@ export default function Q06ASizes() {
   const ctx = useProductDraft() as any;
   const { draft, setAvailableSizes } = ctx;
 
-  const initial = Array.isArray((draft?.price as any)?.available_sizes)
-    ? ((draft?.price as any)?.available_sizes as any[]).map((x) => String(x ?? "").trim()).filter(Boolean).join(", ")
-    : "";
-
-  const [text, setText] = useState<string>(initial);
+  const [selectedSizes, setSelectedSizes] = useState<string[]>(() =>
+    Array.isArray((draft?.price as any)?.available_sizes)
+      ? ((draft?.price as any)?.available_sizes as any[])
+          .map((x) => String(x ?? "").trim())
+          .filter(Boolean)
+      : [],
+  );
+  const sizeOptions = [...READY_STANDARD_SIZES, "All"];
 
   function patchPrice(patch: any) {
     if (typeof ctx.setPrice === "function") {
@@ -44,23 +50,19 @@ export default function Q06ASizes() {
       return;
     }
     if (typeof ctx.setDraft === "function") {
-      ctx.setDraft((prev: any) => ({ ...prev, price: { ...(prev?.price ?? {}), ...patch } }));
+      ctx.setDraft((prev: any) => ({
+        ...prev,
+        price: { ...(prev?.price ?? {}), ...patch },
+      }));
       return;
     }
     draft.price = { ...(draft?.price ?? {}), ...patch };
   }
 
   const canContinue = useMemo(() => Boolean(vendorId), [vendorId]);
-
-  // ✅ Auto focus when screen becomes active (same pattern as other steps)
-  useFocusEffect(
-    React.useCallback(() => {
-      const timer = setTimeout(() => {
-        inputRef.current?.focus();
-      }, 100);
-      return () => clearTimeout(timer);
-    }, [])
-  );
+  const disabledHint = !vendorId
+    ? "Vendor not loaded."
+    : "Select sizes if this product uses standard sizes.";
 
   function closeScreen() {
     if (returnTo) {
@@ -70,22 +72,28 @@ export default function Q06ASizes() {
     router.back();
   }
 
+  function toggleSize(size: string) {
+    setSelectedSizes((prev) => {
+      if (size === "All") return prev.includes("All") ? [] : ["All"];
+
+      const withoutAll = prev.filter((x) => x !== "All");
+      return withoutAll.includes(size)
+        ? withoutAll.filter((x) => x !== size)
+        : [...withoutAll, size];
+    });
+  }
+
   function onContinue() {
     if (!vendorId) {
-      Alert.alert("Vendor not loaded", "Please ensure vendorSlice has vendor.id.");
+      Alert.alert(
+        "Vendor not loaded",
+        "Please ensure vendorSlice has vendor.id.",
+      );
       return;
     }
 
-    const sizes = String(text ?? "")
-      .split(",")
-      .map((x) => x.trim())
-      .filter(Boolean);
-
-    // Prefer context helper if available (legacy used setAvailableSizes)
-    setAvailableSizes?.(sizes);
-
-    // Also persist into draft.price for safety/compat
-    patchPrice({ available_sizes: sizes });
+    setAvailableSizes?.(selectedSizes);
+    patchPrice({ available_sizes: selectedSizes });
 
     if (returnTo) {
       router.replace(returnTo as any);
@@ -96,54 +104,57 @@ export default function Q06ASizes() {
   }
 
   return (
-    <View style={apStyles.screen}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={apStyles.screen}
-        contentContainerStyle={apStyles.content}
-      >
-        <View style={apStyles.headerRow}>
-          <Text style={apStyles.title}>Sizes</Text>
+    <AddProductScreen
+      title="Sizes"
+      onBack={closeScreen}
+      footer={
+        <AddProductFooter
+          onPrimaryPress={onContinue}
+          primaryDisabled={!canContinue}
+          disabledHint={disabledHint}
+        />
+      }
+    >
+      <View style={apStyles.card}>
+        <Text style={apStyles.label}>Available sizes</Text>
+        <Text style={apStyles.metaHint}>
+          Tap every size this product can support. Use All when one selection
+          covers every standard size.
+        </Text>
 
-          <Pressable
-            onPress={closeScreen}
-            style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
-          >
-            <Text style={apStyles.linkText}>Close</Text>
-          </Pressable>
+        <View style={apStyles.chipWrap}>
+          {sizeOptions.map((size) => {
+            const selected = selectedSizes.includes(size);
+
+            return (
+              <Pressable
+                key={size}
+                onPress={() => toggleSize(size)}
+                style={({ pressed }) => [
+                  apStyles.sizeChip,
+                  selected ? apStyles.sizeChipOn : null,
+                  pressed ? apStyles.pressed : null,
+                ]}
+              >
+                <Text
+                  style={[
+                    apStyles.sizeChipText,
+                    selected ? apStyles.sizeChipTextOn : null,
+                  ]}
+                >
+                  {size}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
 
-        <View style={apStyles.card}>
-          <Text style={apStyles.label}>Available Sizes (comma separated)</Text>
-
-          <Text style={apStyles.metaHint}>
-            Example: XS, S, M, L, XL, XXL, All
-          </Text>
-
-          <TextInput
-            ref={inputRef}
-            value={text}
-            onChangeText={setText}
-            placeholder="e.g., XS, S, M, L, XL, XXL, All"
-            placeholderTextColor={apColors.muted}
-            style={apStyles.input}
-            maxLength={80}
-            returnKeyType="done"
-          />
-
-          <Pressable
-            style={({ pressed }) => [
-              apStyles.primaryBtn,
-              !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null
-            ]}
-            onPress={onContinue}
-            disabled={!canContinue}
-          >
-            <Text style={apStyles.primaryText}>Continue</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </View>
+        <Text style={apStyles.metaHint}>
+          {selectedSizes.length
+            ? `${selectedSizes.length} selected`
+            : "No size selected yet."}
+        </Text>
+      </View>
+    </AddProductScreen>
   );
 }

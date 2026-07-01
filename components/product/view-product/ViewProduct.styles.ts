@@ -1,22 +1,27 @@
 import { StyleSheet } from "react-native";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+} from "@/components/product/addProductStyles";
 
 export const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
+  bg: apColors.bg,
+  cardBg: apColors.card,
+  border: apColors.border,
+  borderSoft: apColors.borderSoft,
+  blue: apColors.blue,
+  blueSoft: apColors.blueSoft,
+  text: apColors.text,
+  subText: apColors.subText,
+  mutedText: apColors.muted,
   placeholder: "#94A3B8",
-  danger: "#B91C1C",
+  danger: apColors.danger,
   dangerSoft: "#FEE2E2",
   dangerBorder: "#FCA5A5",
   overlayDark: "rgba(0,0,0,0.58)",
   overlaySoft: "rgba(255,255,255,0.14)",
-  white: "#FFFFFF",
+  white: apColors.white,
   black: "#000000",
 };
 
@@ -35,16 +40,18 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
     },
 
     title: {
+      fontFamily: apFontFamily,
       fontSize: 18,
       fontWeight: "700",
       color: stylesVars.text,
+      letterSpacing: 0,
     },
 
     linkBtn: {
       minHeight: 40,
       paddingHorizontal: 12,
       paddingVertical: 8,
-      borderRadius: 12,
+      borderRadius: apRadii.control,
       backgroundColor: stylesVars.blueSoft,
       borderWidth: 1,
       borderColor: "#D7E3FF",
@@ -58,7 +65,7 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       minHeight: 40,
       paddingHorizontal: 12,
       paddingVertical: 8,
-      borderRadius: 12,
+      borderRadius: apRadii.control,
       backgroundColor: stylesVars.blueSoft,
       borderWidth: 1,
       borderColor: "#D7E3FF",
@@ -67,9 +74,11 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
     },
 
     linkText: {
+      fontFamily: apFontFamily,
       color: stylesVars.blue,
       fontSize: 13,
       fontWeight: "700",
+      letterSpacing: 0,
     },
 
     loadingRow: {
@@ -77,25 +86,41 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       flexDirection: "row",
       alignItems: "center",
       gap: 10,
+      borderRadius: apRadii.control,
+      borderWidth: 1,
+      borderColor: "#D7E3FF",
+      backgroundColor: stylesVars.blueSoft,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
     },
 
     loadingText: {
+      fontFamily: apFontFamily,
       fontSize: 12,
       color: stylesVars.mutedText,
       fontWeight: "600",
+      letterSpacing: 0,
     },
 
     warn: {
       marginTop: 10,
-      color: stylesVars.mutedText,
+      borderRadius: apRadii.control,
+      borderWidth: 1,
+      borderColor: stylesVars.dangerBorder,
+      backgroundColor: stylesVars.dangerSoft,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      color: stylesVars.danger,
+      fontFamily: apFontFamily,
       fontSize: 12,
       lineHeight: 17,
-      fontWeight: "500",
+      fontWeight: "700",
+      letterSpacing: 0,
     },
 
     card: {
       marginTop: 12,
-      borderRadius: 18,
+      borderRadius: apRadii.card,
       borderWidth: 1,
       borderColor: stylesVars.border,
       backgroundColor: stylesVars.cardBg,
@@ -103,23 +128,27 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
     },
 
     sectionTitle: {
-      fontSize: 13,
-      fontWeight: "700",
+      fontFamily: apFontFamily,
+      fontSize: 14,
+      fontWeight: "800",
       color: stylesVars.text,
       marginBottom: 2,
+      letterSpacing: 0,
     },
 
     meta: {
       marginTop: 6,
-      fontSize: 11,
-      lineHeight: 16,
+      fontFamily: apFontFamily,
+      fontSize: 13,
+      lineHeight: 18,
       color: stylesVars.mutedText,
-      fontWeight: "400",
+      fontWeight: "500",
+      letterSpacing: 0,
     },
 
     compactBlock: {
       marginTop: 12,
-      borderRadius: 18,
+      borderRadius: apRadii.card,
       borderWidth: 1,
       borderColor: stylesVars.border,
       backgroundColor: stylesVars.cardBg,
@@ -127,31 +156,270 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
     },
 
     compactLine: {
+      fontFamily: apFontFamily,
       fontSize: 13,
       fontWeight: "500",
       color: stylesVars.text,
       lineHeight: 18,
       marginTop: 3,
+      letterSpacing: 0,
+    },
+
+    summaryHeader: {
+      gap: 8,
+    },
+
+    summaryTitle: {
+      fontFamily: apFontFamily,
+      color: stylesVars.text,
+      fontSize: 17,
+      lineHeight: 23,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+
+    summaryCategoryLine: {
+      fontFamily: apFontFamily,
+      color: stylesVars.blue,
+      fontSize: 12,
+      lineHeight: 17,
+      fontWeight: "700",
+      letterSpacing: 0,
+    },
+
+    summaryGrid: {
+      marginTop: 12,
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+
+    summaryItem: {
+      flexGrow: 1,
+      flexBasis: "47%",
+      minHeight: 58,
+      borderRadius: apRadii.control,
+      borderWidth: 1,
+      borderColor: stylesVars.borderSoft,
+      backgroundColor: stylesVars.bg,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      justifyContent: "center",
+    },
+
+    summaryLabel: {
+      fontFamily: apFontFamily,
+      color: stylesVars.mutedText,
+      fontSize: 12,
+      lineHeight: 16,
+      fontWeight: "700",
+      letterSpacing: 0,
+    },
+
+    summaryValue: {
+      marginTop: 3,
+      fontFamily: apFontFamily,
+      color: stylesVars.text,
+      fontSize: 13,
+      lineHeight: 18,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+
+    summaryNote: {
+      marginTop: 10,
+      fontFamily: apFontFamily,
+      color: stylesVars.mutedText,
+      fontSize: 12,
+      lineHeight: 17,
+      fontWeight: "600",
+      letterSpacing: 0,
     },
 
     metaLine: {
       marginTop: 6,
-      fontSize: 11,
-      lineHeight: 16,
-      fontWeight: "400",
-      color: stylesVars.mutedText,
+      fontFamily: apFontFamily,
+      fontSize: 13,
+      lineHeight: 18,
+      fontWeight: "600",
+      color: stylesVars.text,
+      letterSpacing: 0,
     },
 
     label: {
-      fontSize: 13,
-      fontWeight: "400",
+      fontFamily: apFontFamily,
+      fontSize: 14,
+      fontWeight: "600",
       color: stylesVars.mutedText,
-      letterSpacing: 0.2,
+      letterSpacing: 0,
+    },
+
+    dataRow: {
+      marginTop: 8,
+      gap: 3,
+    },
+
+    dataLabel: {
+      fontFamily: apFontFamily,
+      fontSize: 13,
+      lineHeight: 18,
+      fontWeight: "700",
+      color: stylesVars.blue,
+      letterSpacing: 0,
+    },
+
+    dataValue: {
+      fontFamily: apFontFamily,
+      fontSize: 14,
+      lineHeight: 19,
+      fontWeight: "600",
+      color: stylesVars.text,
+      letterSpacing: 0,
+    },
+
+    dataMuted: {
+      fontFamily: apFontFamily,
+      fontSize: 12,
+      lineHeight: 17,
+      fontWeight: "500",
+      color: stylesVars.mutedText,
+      letterSpacing: 0,
+    },
+
+    dataGroup: {
+      marginTop: 10,
+      borderTopWidth: 1,
+      borderTopColor: stylesVars.borderSoft,
+      paddingTop: 10,
+      gap: 8,
+    },
+
+    actionPill: {
+      minHeight: 42,
+      borderRadius: apRadii.pill,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderWidth: 1,
+      borderColor: "#D7E3FF",
+      backgroundColor: stylesVars.white,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    actionPillOn: {
+      borderColor: stylesVars.blue,
+      backgroundColor: stylesVars.blue,
+    },
+
+    actionPillDisabled: {
+      opacity: 0.5,
+    },
+
+    actionPillText: {
+      fontFamily: apFontFamily,
+      fontSize: 12,
+      fontWeight: "900",
+      color: stylesVars.blue,
+      letterSpacing: 0,
+    },
+
+    actionPillTextOn: {
+      color: stylesVars.white,
+    },
+
+    actionLink: {
+      minHeight: 36,
+      paddingVertical: 8,
+      paddingRight: 8,
+      justifyContent: "center",
+    },
+
+    actionLinkText: {
+      fontFamily: apFontFamily,
+      fontSize: 12,
+      lineHeight: 17,
+      fontWeight: "800",
+      color: stylesVars.blue,
+      letterSpacing: 0,
+    },
+
+    emptyState: {
+      marginTop: 10,
+      borderRadius: apRadii.card,
+      borderWidth: 1,
+      borderColor: stylesVars.border,
+      backgroundColor: stylesVars.white,
+      padding: 14,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    emptyKicker: {
+      fontFamily: apFontFamily,
+      color: stylesVars.blue,
+      fontSize: 11,
+      lineHeight: 15,
+      fontWeight: "700",
+      letterSpacing: 0,
+    },
+
+    emptyTitle: {
+      marginTop: 5,
+      fontFamily: apFontFamily,
+      color: stylesVars.text,
+      fontSize: 13,
+      lineHeight: 18,
+      fontWeight: "800",
+      textAlign: "center",
+      letterSpacing: 0,
+    },
+
+    emptyText: {
+      marginTop: 4,
+      fontFamily: apFontFamily,
+      color: stylesVars.mutedText,
+      fontSize: 12,
+      lineHeight: 17,
+      fontWeight: "500",
+      textAlign: "center",
+      letterSpacing: 0,
+    },
+
+    loadingBox: {
+      marginTop: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      borderRadius: apRadii.control,
+      borderWidth: 1,
+      borderColor: "#D7E3FF",
+      backgroundColor: stylesVars.blueSoft,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+
+    warningBox: {
+      marginTop: 10,
+      borderRadius: apRadii.control,
+      borderWidth: 1,
+      borderColor: stylesVars.dangerBorder,
+      backgroundColor: stylesVars.dangerSoft,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+
+    warningText: {
+      fontFamily: apFontFamily,
+      color: stylesVars.danger,
+      fontSize: 12,
+      lineHeight: 17,
+      fontWeight: "700",
+      letterSpacing: 0,
     },
 
     mediaBlock: {
       marginTop: 14,
-      borderRadius: 18,
+      borderRadius: apRadii.card,
       borderWidth: 1,
       borderColor: stylesVars.border,
       backgroundColor: stylesVars.cardBg,
@@ -172,7 +440,7 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       marginTop: 10,
       width: "100%",
       height: 250,
-      borderRadius: 16,
+      borderRadius: apRadii.card,
       overflow: "hidden",
       borderWidth: 1,
       borderColor: stylesVars.border,
@@ -192,7 +460,7 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       top: 10,
       paddingHorizontal: 9,
       paddingVertical: 4,
-      borderRadius: 999,
+      borderRadius: apRadii.pill,
       backgroundColor: "rgba(0,0,0,0.58)",
     },
 
@@ -202,7 +470,7 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       bottom: 10,
       paddingHorizontal: 10,
       paddingVertical: 6,
-      borderRadius: 999,
+      borderRadius: apRadii.pill,
       backgroundColor: "rgba(0,0,0,0.45)",
     },
 
@@ -248,7 +516,7 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       minHeight: 36,
       paddingHorizontal: 12,
       paddingVertical: 8,
-      borderRadius: 999,
+      borderRadius: apRadii.pill,
       backgroundColor: stylesVars.blue,
       borderWidth: 1,
       borderColor: "rgba(255,255,255,0.18)",
@@ -257,9 +525,11 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
     },
 
     heroOpenViewerText: {
+      fontFamily: apFontFamily,
       color: stylesVars.white,
       fontWeight: "700",
       fontSize: 11,
+      letterSpacing: 0,
     },
 
     thumbRow: {
@@ -271,7 +541,7 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
     thumbWrap: {
       width: 88,
       height: 88,
-      borderRadius: 14,
+      borderRadius: apRadii.control,
       overflow: "hidden",
       borderWidth: 1,
       borderColor: stylesVars.border,
@@ -301,14 +571,16 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       top: 6,
       paddingHorizontal: 7,
       paddingVertical: 3,
-      borderRadius: 999,
+      borderRadius: apRadii.pill,
       backgroundColor: "rgba(0,0,0,0.58)",
     },
 
     bannerTagText: {
+      fontFamily: apFontFamily,
       color: stylesVars.white,
       fontSize: 9,
       fontWeight: "800",
+      letterSpacing: 0,
     },
 
     videoPage: {
@@ -318,7 +590,7 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
 
     videoBox: {
       height: 230,
-      borderRadius: 16,
+      borderRadius: apRadii.card,
       overflow: "hidden",
       backgroundColor: stylesVars.black,
       borderWidth: 1,
@@ -357,10 +629,55 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
     },
 
     videoPlaceholderText: {
+      fontFamily: apFontFamily,
       color: stylesVars.blue,
       fontWeight: "700",
       fontSize: 11,
       textAlign: "center",
+      letterSpacing: 0,
+    },
+
+    mediaEmptyBox: {
+      marginTop: 10,
+      minHeight: 118,
+      borderRadius: apRadii.card,
+      borderWidth: 1,
+      borderColor: "#D7E3FF",
+      backgroundColor: stylesVars.blueSoft,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 14,
+    },
+
+    mediaEmptyKicker: {
+      fontFamily: apFontFamily,
+      color: stylesVars.blue,
+      fontSize: 11,
+      lineHeight: 15,
+      fontWeight: "700",
+      letterSpacing: 0,
+    },
+
+    mediaEmptyTitle: {
+      marginTop: 5,
+      fontFamily: apFontFamily,
+      color: stylesVars.text,
+      fontSize: 13,
+      lineHeight: 18,
+      fontWeight: "800",
+      textAlign: "center",
+      letterSpacing: 0,
+    },
+
+    mediaEmptyText: {
+      marginTop: 4,
+      fontFamily: apFontFamily,
+      color: stylesVars.mutedText,
+      fontSize: 12,
+      lineHeight: 17,
+      fontWeight: "500",
+      textAlign: "center",
+      letterSpacing: 0,
     },
 
     playBadge: {
@@ -369,16 +686,18 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       bottom: 6,
       width: 26,
       height: 26,
-      borderRadius: 999,
+      borderRadius: apRadii.pill,
       backgroundColor: stylesVars.overlayDark,
       alignItems: "center",
       justifyContent: "center",
     },
 
     playBadgeText: {
+      fontFamily: apFontFamily,
       color: stylesVars.white,
       fontWeight: "700",
       fontSize: 11,
+      letterSpacing: 0,
     },
 
     videoControlsOverlay: {
@@ -394,30 +713,36 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
     videoControlPill: {
       paddingHorizontal: 14,
       paddingVertical: 10,
-      borderRadius: 999,
+      borderRadius: apRadii.pill,
       backgroundColor: "rgba(0,0,0,0.35)",
       borderWidth: 1,
       borderColor: "rgba(255,255,255,0.25)",
     },
 
     videoControlText: {
+      fontFamily: apFontFamily,
       color: stylesVars.white,
       fontWeight: "700",
       fontSize: 18,
+      letterSpacing: 0,
     },
 
     empty: {
       marginTop: 8,
+      fontFamily: apFontFamily,
       color: stylesVars.placeholder,
       fontSize: 13,
       fontWeight: "500",
+      letterSpacing: 0,
     },
 
     specTitle: {
       marginTop: 8,
-      fontSize: 12,
-      fontWeight: "500",
+      fontFamily: apFontFamily,
+      fontSize: 13,
+      fontWeight: "600",
       color: stylesVars.text,
+      letterSpacing: 0,
     },
 
     specRow: {
@@ -425,25 +750,35 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
     },
 
     specLabel: {
-      fontSize: 12,
-      fontWeight: "400",
+      fontFamily: apFontFamily,
+      fontSize: 13,
+      fontWeight: "700",
       color: stylesVars.mutedText,
+      letterSpacing: 0,
     },
 
     specValue: {
       marginTop: 3,
-      fontSize: 12,
-      lineHeight: 17,
+      fontFamily: apFontFamily,
+      fontSize: 13,
+      lineHeight: 18,
       color: stylesVars.text,
-      fontWeight: "500",
+      fontWeight: "600",
+      letterSpacing: 0,
+    },
+
+    specPlainValue: {
+      marginTop: 4,
     },
 
     moreDescText: {
       marginTop: 6,
-      fontSize: 13,
-      fontWeight: "500",
-      color: stylesVars.subText,
+      fontFamily: apFontFamily,
+      fontSize: 14,
+      fontWeight: "600",
+      color: stylesVars.text,
       lineHeight: 19,
+      letterSpacing: 0,
     },
 
     fabVendor: {
@@ -453,16 +788,18 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       zIndex: 30,
       paddingHorizontal: 12,
       paddingVertical: 10,
-      borderRadius: 999,
-      backgroundColor: stylesVars.dangerSoft,
+      borderRadius: apRadii.pill,
+      backgroundColor: stylesVars.blueSoft,
       borderWidth: 1,
-      borderColor: stylesVars.dangerBorder,
+      borderColor: "#D7E3FF",
     },
 
     fabVendorText: {
-      color: stylesVars.danger,
+      fontFamily: apFontFamily,
+      color: stylesVars.blue,
       fontWeight: "700",
       fontSize: 12,
+      letterSpacing: 0,
     },
 
     footer: {
@@ -480,26 +817,35 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       flexDirection: "row",
       alignItems: "center",
       gap: 12,
+      shadowColor: stylesVars.black,
+      shadowOffset: { width: 0, height: -3 },
+      shadowOpacity: 0.08,
+      shadowRadius: 10,
+      elevation: 10,
     },
 
     footerTitle: {
+      fontFamily: apFontFamily,
       fontSize: 13,
       fontWeight: "700",
       color: stylesVars.text,
+      letterSpacing: 0,
     },
 
     footerSub: {
       marginTop: 4,
+      fontFamily: apFontFamily,
       fontSize: 12,
       lineHeight: 17,
       fontWeight: "500",
       color: stylesVars.mutedText,
+      letterSpacing: 0,
     },
 
     footerBtn: {
       minHeight: 48,
       backgroundColor: stylesVars.blue,
-      borderRadius: 14,
+      borderRadius: apRadii.control,
       paddingVertical: 12,
       paddingHorizontal: 16,
       alignItems: "center",
@@ -511,9 +857,11 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
     },
 
     footerBtnText: {
+      fontFamily: apFontFamily,
       color: stylesVars.white,
       fontWeight: "700",
       fontSize: 13,
+      letterSpacing: 0,
     },
 
     viewerContainer: {
@@ -557,16 +905,18 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       right: 20,
       width: 44,
       height: 44,
-      borderRadius: 999,
+      borderRadius: apRadii.pill,
       backgroundColor: stylesVars.overlaySoft,
       alignItems: "center",
       justifyContent: "center",
     },
 
     closeText: {
+      fontFamily: apFontFamily,
       color: stylesVars.white,
       fontSize: 20,
       fontWeight: "900",
+      letterSpacing: 0,
     },
 
     indexCaption: {
@@ -576,13 +926,15 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
       backgroundColor: stylesVars.overlaySoft,
       paddingHorizontal: 12,
       paddingVertical: 8,
-      borderRadius: 999,
+      borderRadius: apRadii.pill,
     },
 
     indexText: {
+      fontFamily: apFontFamily,
       color: stylesVars.white,
       fontSize: 13,
       fontWeight: "800",
+      letterSpacing: 0,
     },
 
     pressed: {

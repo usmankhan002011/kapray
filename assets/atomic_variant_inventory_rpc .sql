@@ -3,8 +3,13 @@
 -- 1 order = 1 product unit.
 -- made_on_order products do not reduce stock.
 -- stitched_ready products with selected variant + size reduce that exact variant-size qty.
+-- unstitched products reduce products.inventory_qty by selected fabric meters, preserving decimals.
 -- all other stock-managed products reduce products.inventory_qty by 1.
 -- Product row is locked with FOR UPDATE to prevent overselling under simultaneous buyers.
+
+alter table public.products
+  alter column inventory_qty type numeric(12, 2)
+  using coalesce(inventory_qty, 0)::numeric;
 
 create or replace function public.create_order_atomic_single_unit(
   p_product_id bigint,
@@ -58,6 +63,7 @@ declare
   v_product_category text;
   v_selected_variant_id text := nullif(btrim(coalesce(p_selected_variant_id, '')), '');
   v_selected_variant_size text := nullif(btrim(coalesce(p_selected_variant_size, '')), '');
+  v_stock_deduction numeric := 1;
 begin
   select
     id,
@@ -204,13 +210,31 @@ begin
       where id = p_product_id;
 
     else
-      if v_product.inventory_qty < 1 then
+      if v_product_category in (
+        'unstitched_plain',
+        'unstitched_dyeing',
+        'unstitched_dyeing_tailoring'
+      ) then
+        v_stock_deduction := greatest(
+          0,
+          coalesce(nullif(p_spec_snapshot ->> 'selected_fabric_length_m', '')::numeric, 0)
+        );
+
+        if v_stock_deduction <= 0 then
+          return query select false, null::bigint, 'Fabric length is required';
+          return;
+        end if;
+      else
+        v_stock_deduction := 1;
+      end if;
+
+      if v_product.inventory_qty < v_stock_deduction then
         return query select false, null::bigint, 'Out of stock';
         return;
       end if;
 
       update public.products
-      set inventory_qty = inventory_qty - 1
+      set inventory_qty = greatest(0, round(inventory_qty - v_stock_deduction, 2))
       where id = p_product_id;
     end if;
   end if;

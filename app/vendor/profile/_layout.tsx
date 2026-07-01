@@ -23,6 +23,16 @@ export default function VendorProfileTabsLayout() {
           tabBarStyle: styles.tabBar,
         }}
       >
+        {/* SETTINGS TAB */}
+        <Tabs.Screen
+          name="settings"
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <CircleTab label="SETTINGS" focused={focused} />
+            ),
+          }}
+        />
+
         {/* PRODUCTS TAB */}
         <Tabs.Screen
           name="products"
@@ -43,19 +53,10 @@ export default function VendorProfileTabsLayout() {
           }}
         />
 
-        {/* SETTINGS TAB */}
-        <Tabs.Screen
-          name="settings"
-          options={{
-            tabBarIcon: ({ focused }) => (
-              <CircleTab label="SETTINGS" focused={focused} />
-            ),
-          }}
-        />
-
         {/* HIDE NON-TAB SCREENS */}
         <Tabs.Screen name="index" options={{ href: null }} />
         <Tabs.Screen name="update-product" options={{ href: null }} />
+        <Tabs.Screen name="product-sale" options={{ href: null }} />
         <Tabs.Screen name="view-profile" options={{ href: null }} />
         <Tabs.Screen name="add-product_legacy" options={{ href: null }} />
         <Tabs.Screen name="edit-vendor" options={{ href: null }} />

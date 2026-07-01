@@ -15,6 +15,7 @@ export type VendorWizardData = {
   shopName: string;
   address: string;
   locationUrl: string;
+  offersDyeing: boolean;
   offersTailoring: boolean;
 
   exportsEnabled: boolean;
@@ -82,18 +83,18 @@ export const STEPS: StepConfig[] = [
   },
   {
     id: "tailoring",
-    title: "Tailoring and export services",
-    subtitle: "Set tailoring capability, styles, and export regions.",
+    title: "Services",
+    subtitle: "Do you offer",
   },
   {
     id: "media",
-    title: "Add photos and videos",
-    subtitle: "Upload profile, shop banner, images, and videos.",
+    title: "Media",
+    subtitle: "Photos and videos.",
   },
   {
     id: "review",
-    title: "Review and submit",
-    subtitle: "Check everything once before creating the vendor.",
+    title: "Review",
+    subtitle: "Submit vendor.",
   },
 ];
 

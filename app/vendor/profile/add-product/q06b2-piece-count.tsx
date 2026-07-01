@@ -1,14 +1,26 @@
 import React from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { Pressable, Text, View } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+
 import { READY_PIECE_COUNTS } from "@/data/kapray/productPieces";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
-import { apColors, apStyles } from "@/components/product/addProductStyles";
+import { apStyles } from "@/components/product/addProductStyles";
+import {
+  AddProductFooter,
+  AddProductScreen,
+} from "@/components/product/add-product/AddProductWizard";
 
 export default function Q06B2PieceCount() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const returnTo = typeof params?.returnTo === "string" ? params.returnTo : "";
   const ctx = useProductDraft() as any;
   const pieceCount = Number(ctx.draft?.spec?.piece_count || 0);
+  const variantMode = String(
+    typeof params?.variantMode === "string"
+      ? params.variantMode
+      : (ctx.draft?.spec?.variant_mode ?? ""),
+  ).trim();
 
   function setSpec(patch: any) {
     if (typeof ctx.setSpec === "function") {
@@ -29,56 +41,59 @@ export default function Q06B2PieceCount() {
   }
 
   function next() {
-    router.push("/vendor/profile/add-product/q06b3-ready-variants" as any);
+    router.push({
+      pathname:
+        variantMode === "simple_ready"
+          ? ("/vendor/profile/add-product/q06b1-simple-ready-inventory" as any)
+          : ("/vendor/profile/add-product/q06b3-ready-variants" as any),
+      params: returnTo ? { returnTo } : {},
+    } as any);
   }
 
   return (
-    <View style={apStyles.screen}>
-      <ScrollView contentContainerStyle={apStyles.content}>
-        <View style={apStyles.headerRow}>
-          <Text style={apStyles.title}>Number of pieces</Text>
+    <AddProductScreen
+      title="Number of pieces"
+      onBack={() => router.back()}
+      backLabel="Back"
+      footer={
+        <AddProductFooter
+          onPrimaryPress={next}
+          primaryDisabled={!pieceCount}
+          disabledHint={!pieceCount ? "Select how many pieces are included." : ""}
+        />
+      }
+    >
+      <View style={apStyles.card}>
+        <Text style={apStyles.label}>How many pieces?</Text>
 
-          <Pressable onPress={() => router.back()} style={apStyles.linkBtn}>
-            <Text style={apStyles.linkText}>Back</Text>
-          </Pressable>
+        <View style={apStyles.segmentRow}>
+          {READY_PIECE_COUNTS.map((count) => {
+            const selected = pieceCount === count;
+
+            return (
+              <Pressable
+                key={count}
+                onPress={() => choose(count)}
+                style={({ pressed }) => [
+                  apStyles.segment,
+                  selected ? apStyles.segmentOn : null,
+                  pressed ? apStyles.pressed : null,
+                ]}
+              >
+                <Text
+                  style={[
+                    apStyles.segmentText,
+                    selected ? apStyles.segmentTextOn : null,
+                  ]}
+                >
+                  {selected ? "Selected - " : ""}
+                  {count} piece{count > 1 ? "s" : ""}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
-
-        <View style={apStyles.card}>
-          <Text style={apStyles.label}>How many pieces are included?</Text>
-
-          <Text style={{ color: apColors.muted, lineHeight: 20 }}>
-            Only select the number of pieces. Piece names are not required
-            because buyers can see them in product images and description.
-          </Text>
-
-          {READY_PIECE_COUNTS.map((count) => (
-            <Pressable
-              key={count}
-              onPress={() => choose(count)}
-              style={[
-                apStyles.secondaryBtn,
-                pieceCount === count ? { borderWidth: 2 } : null,
-              ]}
-            >
-              <Text style={apStyles.secondaryText}>
-                {pieceCount === count ? "✓ " : ""}
-                {count} piece{count > 1 ? "s" : ""}
-              </Text>
-            </Pressable>
-          ))}
-
-          <Pressable
-            style={[
-              apStyles.primaryBtn,
-              !pieceCount ? apStyles.primaryBtnDisabled : null,
-            ]}
-            disabled={!pieceCount}
-            onPress={next}
-          >
-            <Text style={apStyles.primaryText}>Continue</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </View>
+      </View>
+    </AddProductScreen>
   );
 }

@@ -48,6 +48,8 @@ import {
 const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
 const FOOTER_H = 86;
+const FABRIC_STOCK_EPSILON_M = 0.05;
+const UNSTITCHED_SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
 
 // persist buyer choices across dye modal round-trips
 const BUYER_TAILORING_CHOICE_CACHE = new Map<string, boolean>();
@@ -137,6 +139,14 @@ function safeDecode(v: string) {
   }
 }
 
+function getDyeShadeCode(id: string) {
+  const match = /^shade_(\d+)_(\d+)$/i.exec(String(id || ""));
+  if (!match) return "";
+  const column = String(Number(match[1]) + 1).padStart(2, "0");
+  const row = String(Number(match[2]) + 1).padStart(2, "0");
+  return `Dye-C${column}-R${row}`;
+}
+
 function cleanIdParam(v: string) {
   const s = String(v ?? "").trim();
   if (!s) return "";
@@ -196,6 +206,30 @@ function safePositiveNumber(v: unknown) {
   return n;
 }
 
+function formatStockQty(n: number) {
+  if (!Number.isFinite(n) || n <= 0) return "0";
+  return String(Math.round(n * 100) / 100)
+    .replace(/(\.\d*?)0+$/, "$1")
+    .replace(/\.$/, "");
+}
+
+function getSmallestMappedFabricLengthM(sizeMap: Record<string, unknown>) {
+  const lengths = UNSTITCHED_SIZE_ORDER.map((size) =>
+    safePositiveNumber(sizeMap?.[size]),
+  ).filter((n) => n > 0);
+
+  return lengths.length ? Math.min(...lengths) : 0;
+}
+
+function hasEnoughFabricForSmallestSize(
+  availableM: number,
+  sizeMap: Record<string, unknown>,
+) {
+  const smallestM = getSmallestMappedFabricLengthM(sizeMap);
+  if (smallestM <= 0) return availableM > 0;
+  return availableM + FABRIC_STOCK_EPSILON_M >= smallestM;
+}
+
 function isProductCategory(v: unknown): v is ProductCategory {
   return (
     v === "unstitched_plain" ||
@@ -217,6 +251,67 @@ function parseBoolParam(v: unknown): boolean | null {
   }
   if (s === "0" || s === "false" || s === "no" || s === "n" || s === "off") {
     return false;
+  }
+
+  return null;
+}
+
+function isTruthyFlag(v: unknown) {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v !== 0;
+  return parseBoolParam(v) === true;
+}
+
+function isUnstitchedCategory(category: ProductCategory | null) {
+  return (
+    category === "unstitched_plain" ||
+    category === "unstitched_dyeing" ||
+    category === "unstitched_dyeing_tailoring"
+  );
+}
+
+function resolveProductCategory(product: ProductRow | null): ProductCategory | null {
+  if (!product) return null;
+
+  const spec = (product as any)?.spec ?? {};
+  const price = (product as any)?.price ?? {};
+  const fromSpec = String(spec?.product_category ?? "").trim();
+  const fromDb = String((product as any)?.product_category ?? "").trim();
+  const exactCategories = [fromSpec, fromDb].filter(isProductCategory);
+  const priceMode = String(price?.mode ?? "").trim();
+  const isUnstitched =
+    exactCategories.some((category) => isUnstitchedCategory(category)) ||
+    fromDb === "unstitched" ||
+    priceMode.includes("unstitched");
+
+  if (isUnstitched) {
+    if (
+      exactCategories.includes("unstitched_dyeing_tailoring") ||
+      isTruthyFlag(spec?.tailoring_enabled) ||
+      isTruthyFlag(spec?.tailoring_selected)
+    ) {
+      return "unstitched_dyeing_tailoring";
+    }
+
+    if (
+      exactCategories.includes("unstitched_dyeing") ||
+      isTruthyFlag(spec?.dyeing_enabled) ||
+      isTruthyFlag(spec?.dyeing_selected) ||
+      safePositiveNumber(price?.dyeing_cost_pkr) > 0 ||
+      safePositiveNumber(spec?.dyeing_cost_pkr) > 0
+    ) {
+      return "unstitched_dyeing";
+    }
+
+    return "unstitched_plain";
+  }
+
+  if (
+    exactCategories.includes("stitched_ready") ||
+    priceMode === "stitched_total" ||
+    priceMode === "stitched_ready"
+  ) {
+    return "stitched_ready";
   }
 
   return null;
@@ -584,7 +679,9 @@ export default function ViewProductScreen() {
       setBuyerWantsDyeing(true);
       setSelectedDyeShadeId(String(cachedShade.id));
       setSelectedDyeHex(String(cachedShade.hex));
-      setSelectedDyeLabel(String(cachedShade.label));
+      setSelectedDyeLabel(
+        String(cachedShade.label || getDyeShadeCode(String(cachedShade.id))),
+      );
     }, [productId, productCode, setBuyerWantsDyeing]),
   );
 
@@ -618,6 +715,7 @@ export default function ViewProductScreen() {
       if (id) setSelectedDyeShadeId(id);
       if (hex) setSelectedDyeHex(hex);
       if (label) setSelectedDyeLabel(label);
+      else if (id) setSelectedDyeLabel(getDyeShadeCode(id));
       else if (hex) setSelectedDyeLabel(hex);
     }
   }, [params]);
@@ -932,10 +1030,12 @@ export default function ViewProductScreen() {
 
     return (
       <View style={styles.specRow}>
-        <Text style={[styles.specLabel, { color: stylesVars.blue }]}>
-          {title}:
+        <Text style={[styles.specLabel, { color: stylesVars.text }]}>
+          {title}
         </Text>
-        <Text style={styles.specValue}>{list.join(", ")}</Text>
+        <Text style={[styles.specValue, styles.specPlainValue]}>
+          {list.join(", ")}
+        </Text>
       </View>
     );
   };
@@ -964,7 +1064,7 @@ export default function ViewProductScreen() {
             borderRadius: 999,
             borderWidth: 1,
             borderColor: selected ? stylesVars.blue : "#D7E3FF",
-            backgroundColor: selected ? stylesVars.blue : "#EEF4FF",
+            backgroundColor: selected ? stylesVars.blue : "#FFFFFF",
             opacity: disabled ? 0.5 : 1,
           },
           pressed ? styles.pressed : null,
@@ -987,13 +1087,7 @@ export default function ViewProductScreen() {
   };
 
   const productCategory = useMemo<ProductCategory | null>(() => {
-    const fromDb = (product as any)?.product_category;
-    if (isProductCategory(fromDb)) return fromDb;
-
-    const fromSpec = (product as any)?.spec?.product_category;
-    if (isProductCategory(fromSpec)) return fromSpec;
-
-    return null;
+    return resolveProductCategory(product);
   }, [product]);
 
   const isStitchedReady = useMemo(() => {
@@ -1087,7 +1181,7 @@ export default function ViewProductScreen() {
     if (!product) return "—";
 
     if (isStitchedReady && selectedStitchedVariant?.stockQty != null) {
-      return String(selectedStitchedVariant.stockQty);
+      return `Qty ${selectedStitchedVariant.stockQty}`;
     }
 
     if (isStitchedReady && !selectedStitchedVariant) {
@@ -1102,8 +1196,19 @@ export default function ViewProductScreen() {
     const n = Number(raw);
     if (!Number.isFinite(n)) return "—";
 
-    return String(n);
-  }, [isMadeOnOrder, isStitchedReady, product, selectedStitchedVariant]);
+    const stockIsFabric = productCategory
+      ? productCategory !== "stitched_ready"
+      : !isStitchedReady;
+    return stockIsFabric
+      ? `Fabric ${formatStockQty(n)} m`
+      : `Qty ${formatStockQty(n)}`;
+  }, [
+    isMadeOnOrder,
+    isStitchedReady,
+    product,
+    productCategory,
+    selectedStitchedVariant,
+  ]);
 
   const isOutOfStock = useMemo(() => {
     if (!product) return false;
@@ -1120,8 +1225,22 @@ export default function ViewProductScreen() {
     const n = Number(raw);
     if (!Number.isFinite(n)) return false;
 
+    if (productCategory === "unstitched_dyeing_tailoring") {
+      const map = ((product as any)?.spec?.size_length_m ?? {}) as Record<
+        string,
+        unknown
+      >;
+      return !hasEnoughFabricForSmallestSize(n, map);
+    }
+
     return n <= 0;
-  }, [isMadeOnOrder, isStitchedReady, product, selectedStitchedVariant]);
+  }, [
+    isMadeOnOrder,
+    isStitchedReady,
+    product,
+    productCategory,
+    selectedStitchedVariant,
+  ]);
 
   const moreDescriptionText = useMemo(() => {
     const spec = (product as any)?.spec ?? {};
@@ -1142,7 +1261,7 @@ export default function ViewProductScreen() {
 
   // Buyer actions control purchase/footer/vendor-profile buttons.
   // Vendor self-view is a read-only preview: it can see offerings,
-  // but cannot select dyeing, tailoring, variants, or purchase.
+  // but cannot select dyeing, tailoring, styles, or purchase.
   const showBuyerActions = isBuyerRoute ? true : !isVendorSelf;
   const showVendorReadOnlyPreview = Boolean(product) && isVendorSelf;
   const showReadOnlyProductOfferings =
@@ -1152,6 +1271,19 @@ export default function ViewProductScreen() {
     if (productCategory) return productCategory !== "stitched_ready";
     return !isStitchedReady;
   }, [isStitchedReady, productCategory]);
+
+  const isUnstitchedPlain = productCategory === "unstitched_plain";
+  const usePlainReadOnlySummary =
+    productCategory === "unstitched_plain" ||
+    productCategory === "unstitched_dyeing" ||
+    productCategory === "unstitched_dyeing_tailoring";
+
+  const isFabricByMeterPurchase = useMemo(() => {
+    return (
+      productCategory === "unstitched_plain" ||
+      productCategory === "unstitched_dyeing"
+    );
+  }, [productCategory]);
 
   const showDyeing = useMemo(() => {
     if (!product || !isUnstitched) return false;
@@ -1298,6 +1430,18 @@ export default function ViewProductScreen() {
   const shippingWeightKg = useMemo(() => {
     const spec = (product as any)?.spec ?? {};
     const price = (product as any)?.price ?? {};
+    const isByMeter =
+      productCategory === "unstitched_plain" ||
+      productCategory === "unstitched_dyeing";
+
+    if (isByMeter) {
+      return (
+        safePositiveNumber(spec?.weight_per_meter_kg) ||
+        safePositiveNumber(spec?.weight_kg) ||
+        safePositiveNumber(price?.weight_per_meter_kg) ||
+        0
+      );
+    }
 
     return (
       safePositiveNumber(spec?.weight_kg) ||
@@ -1305,7 +1449,7 @@ export default function ViewProductScreen() {
       safePositiveNumber(price?.weight_kg) ||
       0
     );
-  }, [product]);
+  }, [product, productCategory]);
 
   const packageCm = useMemo(() => {
     const spec = (product as any)?.spec ?? {};
@@ -1326,16 +1470,23 @@ export default function ViewProductScreen() {
   }, [buyerWantsTailoring, setBuyerWantsTailoring, tailoringEligible]);
 
   const showTailoringSection = useMemo(() => {
-    return Boolean(product) && showBuyerActions && isUnstitched;
-  }, [isUnstitched, product, showBuyerActions]);
+    return (
+      Boolean(product) &&
+      showBuyerActions &&
+      productCategory === "unstitched_dyeing_tailoring"
+    );
+  }, [product, productCategory, showBuyerActions]);
 
   const showVendorDyeingPreview = useMemo(() => {
     return showVendorReadOnlyPreview && showDyeing;
   }, [showDyeing, showVendorReadOnlyPreview]);
 
   const showVendorTailoringPreview = useMemo(() => {
-    return showVendorReadOnlyPreview && isUnstitched;
-  }, [isUnstitched, showVendorReadOnlyPreview]);
+    return (
+      showVendorReadOnlyPreview &&
+      productCategory === "unstitched_dyeing_tailoring"
+    );
+  }, [productCategory, showVendorReadOnlyPreview]);
 
   const categoryText = useMemo(() => {
     if (productCategory === "stitched_ready" && isMadeOnOrder) {
@@ -1383,7 +1534,7 @@ export default function ViewProductScreen() {
         dyeing_selected: "1",
         dye_shade_id: selectedDyeShadeId || "",
         dye_hex: selectedDyeHex || "",
-        dye_label: selectedDyeLabel || "",
+        dye_label: selectedDyeLabel || getDyeShadeCode(selectedDyeShadeId),
       },
     });
   }, [
@@ -1407,8 +1558,10 @@ export default function ViewProductScreen() {
       .trim();
   }, [selectedStitchedVariant]);
 
-  const onPurchase = useCallback(() => {
+  const onPurchase = useCallback((options?: { forceDyeing?: boolean }) => {
     if (!product) return;
+
+    const wantsDyeing = options?.forceDyeing ?? buyerWantsDyeing;
 
     const selectedVariantMadeOnOrder =
       isMadeOnOrder ||
@@ -1426,11 +1579,11 @@ export default function ViewProductScreen() {
     if (isStitchedReady && !selectedStitchedVariant) {
       Alert.alert(
         selectedVariantMadeOnOrder
-          ? "Select variant"
-          : "Select variant and size",
+          ? "Select style"
+          : "Select style and size",
         selectedVariantMadeOnOrder
-          ? "Please select a made-on-order variant before continuing."
-          : "Please select a stitched ready-to-wear variant and size before continuing.",
+          ? "Please select a made-on-order style before continuing."
+          : "Please select a stitched ready-to-wear style and size before continuing.",
       );
       return;
     }
@@ -1498,6 +1651,13 @@ export default function ViewProductScreen() {
 
         price_per_meter_pkr:
           isUnstitched && pricePerMeterPkr > 0 ? String(pricePerMeterPkr) : "",
+        available_fabric_m:
+          isUnstitched && Number((product as any)?.inventory_qty ?? 0) > 0
+            ? String((product as any)?.inventory_qty ?? "")
+            : "",
+        fabric_purchase_mode: isFabricByMeterPurchase
+          ? "by_meter"
+          : "dress_length",
         stitched_total_pkr:
           !isUnstitched && stitchedTotalPkr > 0 ? String(stitchedTotalPkr) : "",
 
@@ -1590,21 +1750,23 @@ export default function ViewProductScreen() {
           : "",
 
         dyeing_available: showDyeing ? "1" : "0",
-        dyeing_selected: showDyeing && buyerWantsDyeing ? "1" : "0",
+        dyeing_selected: showDyeing && wantsDyeing ? "1" : "0",
         dye_shade_id:
-          buyerWantsDyeing && selectedDyeShadeId
+          wantsDyeing && selectedDyeShadeId
             ? encodeURIComponent(selectedDyeShadeId)
             : "",
         dye_hex:
-          buyerWantsDyeing && selectedDyeHex
+          wantsDyeing && selectedDyeHex
             ? encodeURIComponent(selectedDyeHex)
             : "",
         dye_label:
-          buyerWantsDyeing && selectedDyeLabel
-            ? encodeURIComponent(selectedDyeLabel)
+          wantsDyeing && (selectedDyeLabel || getDyeShadeCode(selectedDyeShadeId))
+            ? encodeURIComponent(
+                selectedDyeLabel || getDyeShadeCode(selectedDyeShadeId),
+              )
             : "",
         dyeing_cost_pkr:
-          showDyeing && buyerWantsDyeing
+          showDyeing && wantsDyeing
             ? encodeURIComponent(String(dyeingCostPkr))
             : "",
 
@@ -1687,7 +1849,14 @@ export default function ViewProductScreen() {
           ? encodeJsonParam(vendorExportRegions)
           : "",
 
-        weight_kg: shippingWeightKg > 0 ? String(shippingWeightKg) : "",
+        weight_kg:
+          !isFabricByMeterPurchase && shippingWeightKg > 0
+            ? String(shippingWeightKg)
+            : "",
+        weight_per_meter_kg:
+          isFabricByMeterPurchase && shippingWeightKg > 0
+            ? String(shippingWeightKg)
+            : "",
         package_cm: packageCm ? encodeJsonParam(packageCm) : "",
       },
     });
@@ -1697,6 +1866,7 @@ export default function ViewProductScreen() {
     dyeingCostPkr,
     hasAnySizeLengthMap,
     imageUrls,
+    isFabricByMeterPurchase,
     isMadeOnOrder,
     isStitchedReady,
     isUnstitched,
@@ -1743,13 +1913,33 @@ export default function ViewProductScreen() {
     isOutOfStock ||
     (isStitchedReady && !selectedStitchedVariant);
 
-  const CompactLine = ({ text }: { text: string | null }) => {
-    if (!text) return null;
+  const SummaryItem = ({
+    label,
+    value,
+  }: {
+    label: string;
+    value: string | null;
+  }) => {
+    if (!value) return null;
 
     return (
-      <Text style={styles.compactLine} numberOfLines={2}>
-        {text}
-      </Text>
+      <View style={styles.summaryItem}>
+        <Text style={styles.summaryLabel}>{label}</Text>
+        <Text style={styles.summaryValue} numberOfLines={2}>
+          {value}
+        </Text>
+      </View>
+    );
+  };
+
+  const DataItem = ({ label, value }: { label: string; value: string | null }) => {
+    if (!value) return null;
+
+    return (
+      <View style={styles.dataRow}>
+        <Text style={styles.dataLabel}>{label}</Text>
+        <Text style={styles.dataValue}>{value}</Text>
+      </View>
     );
   };
 
@@ -1766,16 +1956,23 @@ export default function ViewProductScreen() {
     const s = compactLineValue(inventoryText);
     if (!s) return null;
     if (s === "Made on order") return s;
-    return `In Stock: ${s}`;
+    if (s.startsWith("Fabric ")) {
+      return s.replace(/^Fabric\s+/, "");
+    }
+    if (s.startsWith("Qty ")) {
+      return s.replace(/^Qty\s+/, "");
+    }
+    return s;
   }, [inventoryText]);
 
   const priceLine = useMemo(() => compactLineValue(priceText), [priceText]);
 
   const sizesLine = useMemo(() => {
+    if (isFabricByMeterPurchase) return null;
     const s = compactLineValue(sizeText);
     if (!s) return null;
-    return `Sizes: ${s}`;
-  }, [sizeText]);
+    return s;
+  }, [isFabricByMeterPurchase, sizeText]);
 
   const uploadedDate = useMemo(
     () => formatDateOnly(product?.created_at),
@@ -1867,15 +2064,30 @@ export default function ViewProductScreen() {
         />
 
         <View style={styles.compactBlock}>
-          <CompactLine text={titleLine} />
-          <CompactLine text={categoryLine} />
+          <View style={styles.summaryHeader}>
+            <Text style={styles.summaryTitle} numberOfLines={2}>
+              {titleLine ?? "Product"}
+            </Text>
 
-          {!isStitchedReady ? (
-            <>
-              <CompactLine text={priceLine} />
-              <CompactLine text={sizesLine} />
-              <CompactLine text={inventoryLine} />
-            </>
+            {categoryLine ? (
+              <Text style={styles.summaryCategoryLine}>{categoryLine}</Text>
+            ) : null}
+          </View>
+
+          {!isStitchedReady && usePlainReadOnlySummary ? (
+            <View style={styles.dataGroup}>
+              <DataItem label="Price" value={priceLine} />
+              <DataItem label="Sizes" value={sizesLine} />
+              <DataItem label="Stock" value={inventoryLine} />
+            </View>
+          ) : null}
+
+          {!isStitchedReady && !usePlainReadOnlySummary ? (
+            <View style={styles.summaryGrid}>
+              <SummaryItem label="Price" value={priceLine} />
+              <SummaryItem label="Sizes" value={sizesLine} />
+              <SummaryItem label="Stock" value={inventoryLine} />
+            </View>
           ) : null}
 
           {!isStitchedReady &&
@@ -1913,14 +2125,13 @@ export default function ViewProductScreen() {
             </View>
           ) : null}
 
-          {isUnstitched ? (
-            <>
-              <CompactLine text={tailoringAvailabilityLine} />
-            </>
+          {isUnstitched && !isUnstitchedPlain ? (
+            <Text style={styles.summaryNote}>{tailoringAvailabilityLine}</Text>
           ) : null}
 
           {showReadOnlyProductOfferings &&
           isUnstitched &&
+          !isUnstitchedPlain &&
           !hasAnySizeLengthMap ? (
             <Text style={[styles.meta, { marginTop: 8 }]}>
               Size-length mapping not available.
@@ -2009,8 +2220,8 @@ export default function ViewProductScreen() {
           {safeText((product as any)?.spec?.more_description ?? "").trim() !==
           "—" ? (
             <View style={{ marginTop: 12 }}>
-              <Text style={[styles.specTitle, { color: stylesVars.blue }]}>
-                More Description
+              <Text style={[styles.specLabel, { color: stylesVars.text }]}>
+                Description
               </Text>
               <Text style={styles.moreDescText}>{moreDescriptionText}</Text>
             </View>
@@ -2076,6 +2287,10 @@ export default function ViewProductScreen() {
                 <Pressable
                   onPress={() => {
                     setBuyerWantsDyeing(true);
+                    if (isBuyerRoute && productCategory === "unstitched_dyeing") {
+                      onPurchase({ forceDyeing: true });
+                      return;
+                    }
                     onOpenDyeing();
                   }}
                   style={({ pressed }) => [
@@ -2102,6 +2317,7 @@ export default function ViewProductScreen() {
                     }}
                   >
                     Yes • +PKR {dyeingCostPkr}
+                    {isFabricByMeterPurchase ? " / meter" : ""}
                   </Text>
                 </Pressable>
 
@@ -2184,6 +2400,7 @@ export default function ViewProductScreen() {
             </Text>
             <Text style={styles.metaLine}>
               Dyeing Cost: PKR {dyeingCostPkr.toLocaleString()}
+              {isFabricByMeterPurchase ? " / meter" : ""}
             </Text>
             {/* <Text style={[styles.meta, { marginTop: 8 }]}>
               This is a vendor preview only. Buyer shade selection is disabled
@@ -2458,7 +2675,7 @@ export default function ViewProductScreen() {
                   <Text
                     style={[styles.sectionTitle, { color: stylesVars.blue }]}
                   >
-                    Selected Variant
+                    Selected Style
                   </Text>
 
                   <View
@@ -2530,7 +2747,7 @@ export default function ViewProductScreen() {
                       Base Cost: PKR {baseCost.toLocaleString()}
                     </Text>
                     <Text style={styles.metaLine}>
-                      Variant Additional Cost: PKR{" "}
+                      Style Additional Cost: PKR{" "}
                       {additionalCost.toLocaleString()}
                     </Text>
                     <Text

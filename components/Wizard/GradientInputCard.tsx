@@ -1,9 +1,19 @@
 // File: components/stupid/GradientInputCard.tsx
 
 import React, { forwardRef } from "react";
-import { StyleSheet, TextInput, TextInputProps, View } from "react-native";
+import { StyleSheet, TextInput, View } from "react-native";
 
-interface GradientInputCardProps extends TextInputProps {
+import {
+  apColors,
+  apInputTextStyle,
+  apRadii,
+} from "@/components/product/addProductStyles";
+import {
+  AppTextInput,
+  type AppTextInputProps,
+} from "@/components/ui/AppTextInput";
+
+interface GradientInputCardProps extends AppTextInputProps {
   children?: React.ReactNode;
 }
 
@@ -11,10 +21,10 @@ const GradientInputCard = forwardRef<TextInput, GradientInputCardProps>(
   ({ children, style, ...textInputProps }, ref) => {
     return (
       <View style={styles.card}>
-        <TextInput
+        <AppTextInput
           ref={ref}
           {...textInputProps}
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor={apColors.muted}
           style={[styles.input, style]}
         />
 
@@ -30,25 +40,17 @@ export default GradientInputCard;
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 16,
-
+    backgroundColor: apColors.card,
+    borderRadius: apRadii.card,
+    padding: 14,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-
-    elevation: 2,
+    borderColor: apColors.border,
   },
 
   input: {
-    height: 35,
-    fontSize: 17,
-    color: "#0F172A",
-    fontWeight: "500",
+    minHeight: 42,
+    fontSize: 15,
+    color: apColors.text,
+    ...apInputTextStyle,
   },
 });

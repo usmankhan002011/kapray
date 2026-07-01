@@ -1,12 +1,20 @@
 import React, { useMemo, useState } from "react";
-import { FlatList, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  FlatList,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
+import { apColors, apStyles } from "@/components/product/addProductStyles";
 import {
   flattenWorkSubTypeNames,
   getWorkSubTypes,
   isWorkParentCode,
-  WorkSubTypeItem
+  WorkSubTypeItem,
 } from "@/data/workSubTypes";
 
 const GRID_GAP = 8;
@@ -42,7 +50,9 @@ export default function WorkSubTypesModal() {
       : {};
 
   const initialSelected =
-    parentCode && Array.isArray(existingMap[parentCode]) ? existingMap[parentCode] : [];
+    parentCode && Array.isArray(existingMap[parentCode])
+      ? existingMap[parentCode]
+      : [];
 
   const [selected, setSelected] = useState<string[]>(initialSelected);
   const selectedSet = useMemo(() => new Set(selected), [selected]);
@@ -56,7 +66,9 @@ export default function WorkSubTypesModal() {
   }
 
   function toggle(code: string) {
-    setSelected((prev) => (prev.includes(code) ? prev.filter((x) => x !== code) : [...prev, code]));
+    setSelected((prev) =>
+      prev.includes(code) ? prev.filter((x) => x !== code) : [...prev, code],
+    );
   }
 
   function onClear() {
@@ -82,7 +94,9 @@ export default function WorkSubTypesModal() {
     (draft.spec as any).workSubTypeMap = nextMap;
     (draft.spec as any).workSubTypeNames = flatNames;
 
-    const currentIds = Array.isArray(draft?.spec?.workTypeIds) ? [...draft.spec.workTypeIds] : [];
+    const currentIds = Array.isArray(draft?.spec?.workTypeIds)
+      ? [...draft.spec.workTypeIds]
+      : [];
     const currentNames = Array.isArray((draft?.spec as any)?.workTypeNames)
       ? [...((draft.spec as any).workTypeNames as string[])]
       : [];
@@ -107,35 +121,26 @@ export default function WorkSubTypesModal() {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
+        <Text
+          numberOfLines={1}
+          style={styles.headerTitle}
+        >
+          {parentName || "Sub work"}
+        </Text>
+
         <Pressable
           onPress={close}
-          style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            apStyles.linkBtn,
+            styles.closeButton,
+            pressed ? apStyles.pressed : null,
+          ]}
         >
-          <Text style={styles.headerBtnText}>Close</Text>
-        </Pressable>
-
-        <Text style={styles.headerTitle}>{parentName || "Sub Work"}</Text>
-
-        <Pressable
-          onPress={onDone}
-          style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]}
-        >
-          <Text style={styles.headerBtnText}>Done</Text>
+          <Text style={apStyles.linkText}>Close</Text>
         </Pressable>
       </View>
 
-      <View style={styles.subHeader}>
-        <Text style={styles.subText}>Select one or more sub work types.</Text>
-
-        <Pressable
-          onPress={onClear}
-          style={({ pressed }) => [styles.clearBtn, pressed && styles.pressed]}
-        >
-          <Text style={styles.clearBtnText}>Clear</Text>
-        </Pressable>
-      </View>
-
-      {!parentCode ? <Text style={styles.infoText}>Invalid work type.</Text> : null}
+      {!parentCode ? <Text style={styles.errorText}>Invalid work type.</Text> : null}
 
       <FlatList
         data={items}
@@ -150,42 +155,72 @@ export default function WorkSubTypesModal() {
           return (
             <Pressable
               key={item.code}
-              style={[styles.card, isOn ? styles.cardSelected : null]}
+              style={({ pressed }) => [
+                styles.card,
+                isOn ? styles.cardSelected : null,
+                pressed ? apStyles.pressed : null,
+              ]}
               onPress={() => toggle(item.code)}
             >
               <View style={styles.imageWrap}>
-                <Image source={item.image} style={styles.image} resizeMode="cover" />
+                <Image
+                  source={item.image}
+                  style={styles.image}
+                  resizeMode="cover"
+                />
               </View>
 
-              <Text style={styles.label}>
-                {item.name} {isOn ? "✓" : ""}
+              <Text style={styles.label} numberOfLines={2}>
+                {item.name}
               </Text>
+
+              {isOn ? (
+                <View style={styles.selectedBadge}>
+                  <Text style={styles.selectedText}>Selected</Text>
+                </View>
+              ) : null}
             </Pressable>
           );
         }}
       />
+
+      <View style={styles.footer}>
+        <View>
+          <Text style={styles.footerLabel}>Selected</Text>
+          <Text style={styles.footerValue}>{selected.length}</Text>
+        </View>
+
+        <View style={styles.footerActions}>
+          <Pressable
+            onPress={onClear}
+            style={({ pressed }) => [
+              styles.clearBtn,
+              pressed ? apStyles.pressed : null,
+            ]}
+          >
+            <Text style={styles.clearBtnText}>Clear</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={onDone}
+            style={({ pressed }) => [
+              styles.doneBtn,
+              pressed ? apStyles.pressed : null,
+            ]}
+          >
+            <Text style={styles.doneText}>Done</Text>
+          </Pressable>
+        </View>
+      </View>
     </View>
   );
 }
 
-const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
-  white: "#FFFFFF"
-};
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: stylesVars.bg
+    backgroundColor: apColors.bg,
   },
-
   header: {
     paddingHorizontal: 14,
     paddingTop: 14,
@@ -193,126 +228,138 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12
+    gap: 12,
   },
-
   headerTitle: {
+    flex: 1,
     fontSize: 18,
     fontWeight: "700",
-    color: stylesVars.text
+    color: apColors.text,
   },
-
-  headerBtn: {
-    minHeight: 40,
+  closeButton: {
+    minHeight: 38,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: stylesVars.blueSoft,
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
-    alignItems: "center",
-    justifyContent: "center"
   },
-
-  headerBtnText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: stylesVars.blue
-  },
-
-  subHeader: {
+  errorText: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: apColors.danger,
+    fontWeight: "600",
     paddingHorizontal: 14,
     paddingBottom: 6,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10
   },
-
-  subText: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
-    color: stylesVars.mutedText,
-    fontWeight: "500"
-  },
-
-  clearBtn: {
-    minHeight: 40,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-
-  clearBtnText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: stylesVars.text
-  },
-
-  infoText: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: stylesVars.mutedText,
-    fontWeight: "500",
-    marginBottom: 6,
-    paddingHorizontal: 14
-  },
-
   listContent: {
     paddingHorizontal: H_PADDING,
-    paddingBottom: 12,
-    paddingTop: 2
+    paddingBottom: 106,
+    paddingTop: 2,
   },
-
   columnWrap: {
     gap: GRID_GAP,
-    marginBottom: GRID_GAP
+    marginBottom: GRID_GAP,
   },
-
   card: {
     flex: 1,
     borderWidth: 1,
-    borderColor: stylesVars.border,
-    borderRadius: 18,
+    borderColor: apColors.border,
+    borderRadius: 8,
     padding: 8,
-    backgroundColor: stylesVars.cardBg
+    backgroundColor: apColors.white,
+    position: "relative",
   },
-
   cardSelected: {
-    borderColor: stylesVars.blue,
-    borderWidth: 2,
-    backgroundColor: stylesVars.blueSoft
+    borderColor: apColors.blue,
+    backgroundColor: apColors.blueSoft,
   },
-
   imageWrap: {
     width: "100%",
     height: 96,
-    borderRadius: 12,
+    borderRadius: 7,
     overflow: "hidden",
     backgroundColor: "#F1F5F9",
-    marginBottom: 8
+    marginBottom: 8,
   },
-
   image: {
     width: "100%",
-    height: 96
+    height: 96,
   },
-
   label: {
     fontSize: 13,
     lineHeight: 18,
-    color: stylesVars.text,
+    color: apColors.text,
     textAlign: "center",
-    fontWeight: "700"
+    fontWeight: "700",
   },
-
-  pressed: {
-    opacity: 0.82
-  }
+  selectedBadge: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: apColors.blue,
+  },
+  selectedText: {
+    color: apColors.white,
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  footer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopWidth: 1,
+    borderTopColor: apColors.border,
+    backgroundColor: "rgba(248,250,252,0.98)",
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  footerLabel: {
+    color: apColors.muted,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  footerValue: {
+    color: apColors.text,
+    fontSize: 22,
+    fontWeight: "900",
+  },
+  footerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  clearBtn: {
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: apColors.border,
+    backgroundColor: apColors.white,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  clearBtnText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: apColors.text,
+  },
+  doneBtn: {
+    minHeight: 44,
+    paddingHorizontal: 22,
+    borderRadius: 8,
+    backgroundColor: apColors.blue,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  doneText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: apColors.white,
+  },
 });

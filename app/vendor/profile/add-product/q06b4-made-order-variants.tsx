@@ -1,10 +1,10 @@
 // app/vendor/profile/add-product/q06b4-made-order-variants.tsx
 import React, { useMemo } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
-import { apColors, apStyles } from "@/components/product/addProductStyles";
+import { apStyles } from "@/components/product/addProductStyles";
 import MadeOrderVariantEditor from "@/components/product/add-product/MadeOrderVariantEditor";
 import {
   makeMadeOrderVariant,
@@ -12,6 +12,10 @@ import {
   validateMadeOrderVariants,
   type MadeOrderVariant,
 } from "@/utils/kapray/productVariants";
+import {
+  AddProductFooter,
+  AddProductScreen,
+} from "@/components/product/add-product/AddProductWizard";
 
 function safeInt(v: any) {
   const n = Number(v);
@@ -27,7 +31,7 @@ function makeEditableMadeOrderVariant(variantNo: number): MadeOrderVariant {
   return {
     ...makeMadeOrderVariant(variantNo),
     variant_no: variantNo,
-    label: `Variant ${variantNo}`,
+    label: `Style ${variantNo}`,
     display_name: "",
     name: "",
   } as MadeOrderVariant;
@@ -42,7 +46,7 @@ function resequenceMadeOrderVariants(variants: MadeOrderVariant[]) {
       ...variant,
       id: safeStr(variant.id) || `made-order-variant-${variantNo}`,
       variant_no: variantNo,
-      label: `Variant ${variantNo}`,
+      label: `Style ${variantNo}`,
       display_name: name,
       name,
       additional_price_pkr: Math.max(
@@ -85,15 +89,25 @@ export default function Q06B4MadeOrderVariants() {
     [draft?.price],
   );
 
-  // Important: when the draft has no saved made-order variants yet, render one
-  // editable seed variant. Do not let makeMadeOrderVariant's default display_name
+  // Important: when the draft has no saved made-order styles yet, render one
+  // editable seed style. Do not let makeMadeOrderVariant's default display_name
   // duplicate the visible label in MadeOrderVariantEditor.
   const editableVariants = useMemo(
     () => (variants.length ? variants : [makeEditableMadeOrderVariant(1)]),
     [variants],
   );
 
-  const canContinue = Boolean(vendorId);
+  const disabledHint = useMemo(() => {
+    if (!vendorId) return "Vendor not loaded.";
+    if (productCategory !== "stitched_ready" || !madeOnOrder) {
+      return "Made-on-order styles are only for made-on-order stitched products.";
+    }
+    return (
+      validateMadeOrderVariants(resequenceMadeOrderVariants(editableVariants)) ||
+      ""
+    );
+  }, [editableVariants, madeOnOrder, productCategory, vendorId]);
+  const canContinue = !disabledHint;
 
   function patchSpec(patch: any) {
     if (typeof ctx.setSpec === "function") {
@@ -164,8 +178,8 @@ export default function Q06B4MadeOrderVariants() {
   function removeVariant(index: number) {
     if (editableVariants.length <= 1) {
       Alert.alert(
-        "One variant required",
-        "Please keep at least one made-on-order variant.",
+        "One style required",
+        "Please keep at least one made-on-order style.",
       );
       return;
     }
@@ -186,7 +200,7 @@ export default function Q06B4MadeOrderVariants() {
     if (productCategory !== "stitched_ready" || !madeOnOrder) {
       Alert.alert(
         "Wrong product flow",
-        "Made-on-order variants are only for stitched products marked as made on order.",
+        "Made-on-order styles are only for stitched products marked as made on order.",
       );
       return;
     }
@@ -195,7 +209,7 @@ export default function Q06B4MadeOrderVariants() {
     const error = validateMadeOrderVariants(finalVariants);
 
     if (error) {
-      Alert.alert("Incomplete variants", error);
+      Alert.alert("Incomplete styles", error);
       return;
     }
 
@@ -206,42 +220,34 @@ export default function Q06B4MadeOrderVariants() {
       return;
     }
 
-    router.push("/vendor/profile/add-product/review" as any);
+    router.push("/vendor/profile/add-product/q11-description" as any);
   }
 
   return (
-    <View style={apStyles.screen}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={apStyles.screen}
-        contentContainerStyle={apStyles.content}
-      >
-        <View style={apStyles.headerRow}>
-          <Text style={apStyles.title}>Made-on-order variants</Text>
-
-          <Pressable
-            onPress={() => router.back()}
-            style={({ pressed }) => [
-              apStyles.linkBtn,
-              pressed ? apStyles.pressed : null,
-            ]}
-          >
-            <Text style={apStyles.linkText}>Close</Text>
-          </Pressable>
-        </View>
+    <AddProductScreen
+      title="Made-on-order styles"
+      onBack={() => router.back()}
+      footer={
+        <AddProductFooter
+          onPrimaryPress={goNext}
+          primaryDisabled={!canContinue}
+          disabledHint={disabledHint}
+        />
+      }
+    >
 
         <View style={apStyles.card}>
-          <Text style={apStyles.label}>Add product variants</Text>
+          <Text style={apStyles.label}>Add product styles</Text>
 
           <Text style={apStyles.metaHint}>
-            Add variants when this made-on-order stitched product can be made in
+            Add styles when this made-on-order stitched product can be made in
             different colours, styles, or designs within the same product.
           </Text>
 
           <Text style={[apStyles.metaHint, { marginTop: 8 }]}>
-            Each variant may have its own name, reference images, additional
+            Each style may have its own name, reference images, additional
             price, and estimated making time. Buyers will choose one of these
-            variants before providing their sizing details.
+            styles before providing their sizing details.
           </Text>
         </View>
 
@@ -263,21 +269,8 @@ export default function Q06B4MadeOrderVariants() {
             pressed ? apStyles.pressed : null,
           ]}
         >
-          <Text style={apStyles.secondaryText}>+ Add Variant</Text>
+          <Text style={apStyles.secondaryText}>+ Add Style</Text>
         </Pressable>
-
-        <Pressable
-          style={({ pressed }) => [
-            apStyles.primaryBtn,
-            !canContinue ? apStyles.primaryBtnDisabled : null,
-            pressed ? apStyles.pressed : null,
-          ]}
-          onPress={goNext}
-          disabled={!canContinue}
-        >
-          <Text style={apStyles.primaryText}>Continue</Text>
-        </Pressable>
-      </ScrollView>
-    </View>
+    </AddProductScreen>
   );
 }

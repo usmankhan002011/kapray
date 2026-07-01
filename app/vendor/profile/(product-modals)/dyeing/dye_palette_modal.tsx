@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { View, ScrollView, Pressable, Text } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
-import { generateDyePalette } from "./palette";
+import { generateDyePalette } from "@/utils/kapray/dyePalette";
 
 type Shade = {
   id: string;
@@ -39,6 +39,19 @@ export function clearCachedDyeSelection(productId?: string | null, productCode?:
   BUYER_DYE_SELECTION_CACHE.delete(key);
 }
 
+function getShadeColumnIndex(shade: Shade) {
+  const match = /^shade_(\d+)_\d+$/i.exec(String(shade.id));
+  return match ? Number(match[1]) : 0;
+}
+
+function getShadeCode(shade: Shade) {
+  const match = /^shade_(\d+)_(\d+)$/i.exec(String(shade.id));
+  if (!match) return "";
+  const column = String(Number(match[1]) + 1).padStart(2, "0");
+  const row = String(Number(match[2]) + 1).padStart(2, "0");
+  return `Dye-C${column}-R${row}`;
+}
+
 function setCachedDyeSelection(
   productId: string | null | undefined,
   productCode: string | null | undefined,
@@ -51,6 +64,15 @@ function setCachedDyeSelection(
 
 export default function DyePaletteModal() {
   const shades = useMemo(() => generateDyePalette() as Shade[], []);
+  const shadeColumns = useMemo(() => {
+    const columns: Shade[][] = [];
+    shades.forEach((shade) => {
+      const index = getShadeColumnIndex(shade);
+      if (!columns[index]) columns[index] = [];
+      columns[index].push(shade);
+    });
+    return columns.filter(Boolean);
+  }, [shades]);
   const [selectedId, setSelectedId] = useState<string>("");
 
   const params = useLocalSearchParams<{
@@ -76,7 +98,7 @@ export default function DyePaletteModal() {
     setCachedDyeSelection(productId, productCode, {
       id: String(selectedShade.id),
       hex: String(selectedShade.hex),
-      label: String(selectedShade.label ?? selectedShade.id)
+      label: getShadeCode(selectedShade) || String(selectedShade.label ?? "")
     });
 
     router.back();
@@ -84,25 +106,103 @@ export default function DyePaletteModal() {
 
   return (
     <View style={{ flex: 1, backgroundColor: "#000" }}>
-      <ScrollView contentContainerStyle={{ padding: 0 }}>
-        {shades.map((shade) => {
-          const isOn = (selectedShade?.id ?? "") === String(shade.id);
-          return (
-            <Pressable
-              key={shade.id}
-              onPress={() => setSelectedId(String(shade.id))}
+      <View style={{ flex: 1, padding: 12 }}>
+        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+          <View style={{ alignItems: "center", flexShrink: 0 }}>
+            <Text
               style={{
-                height: 60,
-                backgroundColor: shade.hex,
-                borderWidth: isOn ? 3 : 0,
-                borderColor: "#FFF"
+                height: 18,
+                color: "#999",
+                fontSize: 9,
+                fontWeight: "900",
+                textAlign: "center"
               }}
-            />
-          );
-        })}
-      </ScrollView>
+            >
+              R
+            </Text>
+            {(shadeColumns[0] ?? []).map((shade, rowIndex) => (
+              <Text
+                key={`row_${shade.id}`}
+                style={{
+                  width: 20,
+                  height: 30,
+                  color: "#999",
+                  fontSize: 8,
+                  lineHeight: 30,
+                  fontWeight: "800",
+                  textAlign: "center"
+                }}
+              >
+                {String(rowIndex + 1).padStart(2, "0")}
+              </Text>
+            ))}
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ gap: 8 }}
+          >
+            {shadeColumns.map((column, columnIndex) => (
+              <View key={`column_wrap_${columnIndex}`}>
+                <Text
+                  style={{
+                    height: 18,
+                    color: "#999",
+                    fontSize: 9,
+                    fontWeight: "900",
+                    textAlign: "center"
+                  }}
+                >
+                  C{String(columnIndex + 1).padStart(2, "0")}
+                </Text>
+                <View
+                  key={`column_${columnIndex}`}
+                  style={{
+                    width: 48,
+                    borderRadius: 12,
+                    overflow: "hidden",
+                    backgroundColor: "#111"
+                  }}
+                >
+                  {column.map((shade) => {
+                    const isOn = (selectedShade?.id ?? "") === String(shade.id);
+                    return (
+                      <Pressable
+                        key={shade.id}
+                        onPress={() => setSelectedId(String(shade.id))}
+                        style={{
+                          height: 30,
+                          backgroundColor: shade.hex,
+                          borderWidth: isOn ? 3 : 0,
+                          borderColor: "#FFF"
+                        }}
+                      />
+                    );
+                  })}
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
 
       <View style={{ padding: 16, backgroundColor: "#000" }}>
+        {selectedShade ? (
+          <View
+            style={{
+              alignSelf: "center",
+              width: 96,
+              height: 54,
+              borderRadius: 14,
+              backgroundColor: selectedShade.hex,
+              borderWidth: 2,
+              borderColor: "#FFF",
+              marginBottom: 12
+            }}
+          />
+        ) : null}
+
         <Text
           style={{
             color: "#ccc",

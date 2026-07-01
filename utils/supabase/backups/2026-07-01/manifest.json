@@ -1,0 +1,206 @@
+{
+  "generated_at": "2026-07-01T06:37:12.544Z",
+  "project_url": "https://jdjifzchznxeuhzmgqwe.supabase.co",
+  "note": "Data exported through the app publishable key. RLS-protected rows not readable by that key would not be present.",
+  "tables": [
+    {
+      "name": "dress_types",
+      "rows": 10,
+      "columns": [
+        "id",
+        "code",
+        "name",
+        "is_active",
+        "sort_order",
+        "created_at"
+      ]
+    },
+    {
+      "name": "fabric_types",
+      "rows": 16,
+      "columns": [
+        "id",
+        "code",
+        "name",
+        "image_path",
+        "is_active",
+        "sort_order",
+        "created_at"
+      ]
+    },
+    {
+      "name": "origin_cities",
+      "rows": 8,
+      "columns": [
+        "id",
+        "name",
+        "code",
+        "created_at"
+      ]
+    },
+    {
+      "name": "work_types",
+      "rows": 8,
+      "columns": [
+        "id",
+        "name",
+        "code",
+        "created_at"
+      ]
+    },
+    {
+      "name": "work_densities",
+      "rows": 4,
+      "columns": [
+        "id",
+        "name",
+        "code",
+        "created_at"
+      ]
+    },
+    {
+      "name": "wear_states",
+      "rows": 23,
+      "columns": [
+        "id",
+        "name",
+        "code",
+        "created_at"
+      ]
+    },
+    {
+      "name": "price_bands",
+      "rows": 12,
+      "columns": [
+        "id",
+        "name",
+        "min_pkr",
+        "max_pkr",
+        "sort_order",
+        "created_at"
+      ]
+    },
+    {
+      "name": "price_buckets",
+      "rows": 6,
+      "columns": [
+        "id",
+        "label",
+        "min_pkr",
+        "max_pkr",
+        "sort_order",
+        "is_active",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    {
+      "name": "vendor",
+      "rows": 7,
+      "columns": [
+        "id",
+        "created_at",
+        "name",
+        "location",
+        "image",
+        "email",
+        "mobile",
+        "landline",
+        "shop_name",
+        "address",
+        "location_url",
+        "status",
+        "auth_user_id",
+        "owner_user_id",
+        "offers_dyeing",
+        "offers_tailoring",
+        "exports_enabled",
+        "export_regions",
+        "tailoring_options",
+        "profile_image_path",
+        "banner_path",
+        "certificate_paths",
+        "shop_image_paths",
+        "shop_video_paths"
+      ]
+    },
+    {
+      "name": "products",
+      "rows": 44,
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "vendor_id",
+        "vendor_seq",
+        "product_code",
+        "title",
+        "inventory_qty",
+        "made_on_order",
+        "product_category",
+        "spec",
+        "price",
+        "media"
+      ]
+    },
+    {
+      "name": "orders",
+      "rows": 82,
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "order_no",
+        "status",
+        "vendor_id",
+        "product_id",
+        "buyer_auth_user_id",
+        "buyer_name",
+        "buyer_mobile",
+        "buyer_email",
+        "delivery_address",
+        "city",
+        "postal_code",
+        "country",
+        "destination_type",
+        "export_region",
+        "notes",
+        "product_code_snapshot",
+        "title_snapshot",
+        "spec_snapshot",
+        "price_snapshot",
+        "media_snapshot",
+        "currency",
+        "subtotal_pkr",
+        "delivery_pkr",
+        "discount_pkr",
+        "total_pkr",
+        "size_mode",
+        "selected_size",
+        "exact_measurements",
+        "payment_ref",
+        "courier_name",
+        "tracking_number"
+      ]
+    },
+    {
+      "name": "vendor_reviews",
+      "rows": 1,
+      "columns": [
+        "id",
+        "created_at",
+        "updated_at",
+        "vendor_id",
+        "buyer_user_id",
+        "order_id",
+        "rating",
+        "comment",
+        "vendor_reply",
+        "vendor_reply_at",
+        "is_verified_purchase",
+        "is_public",
+        "is_hidden"
+      ]
+    }
+  ]
+}

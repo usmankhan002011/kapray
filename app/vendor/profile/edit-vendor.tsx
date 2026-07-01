@@ -611,9 +611,7 @@ export default function EditVendorScreen() {
     const isVideo = kind === "shop_video";
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: isVideo
-        ? ImagePicker.MediaTypeOptions.Videos
-        : ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: isVideo ? ["videos"] : ["images"],
       quality: !isVideo ? 0.9 : undefined,
       allowsEditing: false,
     });

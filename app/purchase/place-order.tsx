@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,8 +16,14 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSelector } from "react-redux";
+import {
+  apColors,
+  apFontFamily,
+  apRadii,
+} from "@/components/product/addProductStyles";
 import { supabase } from "@/utils/supabase/client";
 import { getDeliveryCost } from "@/utils/kapray/delivery";
+import DyePaletteReferenceButton from "@/components/product/DyePaletteReferenceButton";
 import ExactMeasurementsModal from "../(tabs)/flow/purchase/exact-measurements-modal";
 import type { ExactMeasurementSheetRow } from "../(tabs)/flow/purchase/exact-measurements-sheet";
 
@@ -95,6 +104,7 @@ type Params = {
   dye_shade_id?: string;
   dye_hex?: string;
   dye_label?: string;
+  dyeing_split_json?: string;
   dyeing_cost_pkr?: string;
   dyeing_selected?: string;
   dyeing_available?: string;
@@ -129,6 +139,7 @@ type Params = {
   exports_enabled?: string;
   export_regions?: string;
   weight_kg?: string;
+  weight_per_meter_kg?: string;
   package_cm?: string;
   unit?: string;
 };
@@ -192,6 +203,14 @@ type SelectedTailoringStyleSnapshot = {
   custom_note?: string | null;
 };
 
+type DyeSplit = {
+  length_m: number;
+  dye_shade_id: string;
+  dye_hex: string;
+  dye_label: string;
+  dyeing_cost_pkr: number;
+};
+
 const PAKISTAN_CITY_OPTIONS = [
   "Islamabad",
   "Rawalpindi",
@@ -206,6 +225,43 @@ const PAKISTAN_CITY_OPTIONS = [
 ];
 
 const norm = (v: unknown) => (v == null ? "" : String(v).trim());
+
+const AUTO_COUNTRY_BY_EXPORT_REGION: Record<string, string> = {
+  UK: "United Kingdom",
+  USA: "United States",
+  CANADA: "Canada",
+  KSA: "Saudi Arabia",
+  UAE: "United Arab Emirates",
+  AUSTRALIA: "Australia",
+};
+
+const MANUAL_COUNTRY_EXPORT_REGIONS = new Set(["EUROPE"]);
+
+function exportRegionKey(region: unknown) {
+  return norm(region).toUpperCase();
+}
+
+function countryForExportRegion(region: unknown) {
+  return AUTO_COUNTRY_BY_EXPORT_REGION[exportRegionKey(region)] ?? "";
+}
+
+function exportRegionNeedsCountry(region: unknown) {
+  return MANUAL_COUNTRY_EXPORT_REGIONS.has(exportRegionKey(region));
+}
+
+function isBlankOrAutoCountry(value: unknown) {
+  const country = norm(value).toLowerCase();
+  if (!country || country === "pakistan") return true;
+
+  const autoCountries = Object.values(AUTO_COUNTRY_BY_EXPORT_REGION).map((x) =>
+    x.toLowerCase(),
+  );
+  const autoRegionKeys = Object.keys(AUTO_COUNTRY_BY_EXPORT_REGION).map((x) =>
+    x.toLowerCase(),
+  );
+
+  return autoCountries.includes(country) || autoRegionKeys.includes(country);
+}
 
 function firstNonEmpty(...vals: Array<unknown>) {
   for (const v of vals) {
@@ -243,6 +299,7 @@ function normalizeSavedCheckoutAddress(
   const row = value as LastCheckoutAddress;
   const normalizedDestinationType =
     row.destinationType === "export" ? "export" : "inland";
+  const normalizedExportRegion = norm(row.exportRegion);
 
   const saved: LastCheckoutAddress = {
     buyerName: norm(row.buyerName),
@@ -253,9 +310,9 @@ function normalizeSavedCheckoutAddress(
     country:
       normalizedDestinationType === "inland"
         ? "Pakistan"
-        : norm(row.country) || "Pakistan",
+        : norm(row.country) || countryForExportRegion(normalizedExportRegion),
     destinationType: normalizedDestinationType,
-    exportRegion: norm(row.exportRegion),
+    exportRegion: normalizedExportRegion,
   };
 
   if (
@@ -274,6 +331,21 @@ function safePositiveNumber(v: unknown) {
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) return 0;
   return n;
+}
+
+function normalizeDyeSplits(v: unknown): DyeSplit[] {
+  const rows = safeJsonDecode<any[]>(v, []);
+  if (!Array.isArray(rows)) return [];
+
+  return rows
+    .map((row) => ({
+      length_m: safePositiveNumber(row?.length_m),
+      dye_shade_id: safeDecode(row?.dye_shade_id),
+      dye_hex: safeDecode(row?.dye_hex),
+      dye_label: safeDecode(row?.dye_label),
+      dyeing_cost_pkr: safePositiveNumber(row?.dyeing_cost_pkr),
+    }))
+    .filter((row) => row.length_m > 0 && (row.dye_hex || row.dye_shade_id));
 }
 
 function parseBoolParam(v: unknown): boolean | null {
@@ -318,6 +390,7 @@ function cleanReadyToWearTitle(title: string, selectedSize: string) {
 }
 
 function prettyCategory(v: string) {
+  if (v === "stitched_ready") return "Ready to wear";
   return v.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
@@ -681,6 +754,11 @@ export default function PlaceOrderScreen() {
         (selectedTailoringStyleSnapshot as any)?.extra_cost_pkr,
     );
 
+    const dyeingSplits = normalizeDyeSplits(params.dyeing_split_json);
+    const dyeingSplitCostPkr = Math.round(
+      dyeingSplits.reduce((sum, row) => sum + row.dyeing_cost_pkr, 0),
+    );
+
     return {
       productId,
       productCode,
@@ -707,9 +785,10 @@ export default function PlaceOrderScreen() {
       dyeShadeId: safeDecode(firstNonEmpty(params.dye_shade_id)),
       dyeHex: safeDecode(firstNonEmpty(params.dye_hex)),
       dyeLabel: safeDecode(firstNonEmpty(params.dye_label)),
-      dyeingCostPkr: safePositiveNumber(
-        safeDecode(firstNonEmpty(params.dyeing_cost_pkr)),
-      ),
+      dyeingSplits,
+      dyeingCostPkr:
+        safePositiveNumber(safeDecode(firstNonEmpty(params.dyeing_cost_pkr))) ||
+        dyeingSplitCostPkr,
       dyeingSelected: parseBoolParam(params.dyeing_selected),
       dyeingAvailable: parseBoolParam(params.dyeing_available),
 
@@ -914,6 +993,10 @@ export default function PlaceOrderScreen() {
       base.productCategory === "unstitched_plain" ||
       base.productCategory === "unstitched_dyeing" ||
       base.productCategory === "unstitched_dyeing_tailoring";
+    const isFabricByMeterPurchase =
+      base.productCategory === "unstitched_plain" ||
+      base.productCategory === "unstitched_dyeing" ||
+      base.mode === "meter";
 
     const categoryKey = base.productCategory.toLowerCase();
     const hasSelectedStitchedVariant = Boolean(
@@ -953,7 +1036,8 @@ export default function PlaceOrderScreen() {
 
     const hasDyeing =
       Boolean(base.dyeingSelected) &&
-      (Boolean(base.dyeHex) ||
+      (base.dyeingSplits.length > 0 ||
+        Boolean(base.dyeHex) ||
         Boolean(base.dyeShadeId) ||
         Boolean(base.dyeLabel));
 
@@ -978,6 +1062,7 @@ export default function PlaceOrderScreen() {
       exportsEnabled,
       exportRegions,
       isUnstitched,
+      isFabricByMeterPurchase,
       isReadyToWearStitched,
       isMadeOrderStitched,
       shouldShowSelectedStitchedVariant,
@@ -1065,11 +1150,45 @@ export default function PlaceOrderScreen() {
   }, [destinationType, country]);
 
   useEffect(() => {
+    if (destinationType !== "export") return;
+
+    const autoCountry = countryForExportRegion(exportRegion);
+    if (autoCountry) {
+      if (country !== autoCountry) setCountry(autoCountry);
+      return;
+    }
+
+    if (!exportRegion.trim()) {
+      if (country === "Pakistan") setCountry("");
+      return;
+    }
+
+    if (exportRegionNeedsCountry(exportRegion) && isBlankOrAutoCountry(country)) {
+      if (country) setCountry("");
+    }
+  }, [destinationType, exportRegion, country]);
+
+  useEffect(() => {
     if (destinationType !== "inland") return;
     if (city.trim()) return;
     const inferred = inferCityFromAddress(deliveryAddress);
     if (inferred) setCity(inferred);
   }, [deliveryAddress, destinationType, city]);
+
+  const onSelectExportRegion = useCallback((region: string) => {
+    setExportRegion(region);
+
+    const autoCountry = countryForExportRegion(region);
+    if (autoCountry) {
+      setCountry(autoCountry);
+      return;
+    }
+
+    if (exportRegionNeedsCountry(region)) {
+      setCountry((current) => (isBlankOrAutoCountry(current) ? "" : current));
+      Alert.alert("Country required", "Please enter country.");
+    }
+  }, []);
 
   const fullAddressPreview = useMemo(() => {
     return buildFullAddress({
@@ -1111,18 +1230,17 @@ export default function PlaceOrderScreen() {
   }, [subtotalBeforeDeliveryPkr, deliveryCostPkr]);
 
   const courierSummary = useMemo(() => {
-    if (!base.weightKg) return "Shipping weight is not available yet.";
+    if (!base.weightKg) return "Shipping weight unavailable.";
     if (destinationType === "export") {
-      if (!exportRegion.trim())
-        return "Select export region to calculate shipping.";
+      if (!exportRegion.trim()) return "Select export region.";
       return deliveryCostPkr > 0
         ? `Shipping ${formatMoney(base.currency, deliveryCostPkr)}`
-        : `Shipping could not be calculated for ${exportRegion}.`;
+        : `Shipping unavailable for ${exportRegion}.`;
     }
-    if (!city.trim()) return "Enter city to calculate shipping.";
+    if (!city.trim()) return "Enter city.";
     return deliveryCostPkr > 0
       ? `Shipping ${formatMoney(base.currency, deliveryCostPkr)}`
-      : `Shipping could not be calculated for ${city}.`;
+      : `Shipping unavailable for ${city}.`;
   }, [
     base.weightKg,
     city,
@@ -1131,6 +1249,9 @@ export default function PlaceOrderScreen() {
     exportRegion,
     base.currency,
   ]);
+
+  const exportRegionMissing =
+    destinationType === "export" && !exportRegion.trim();
 
   const canContinue =
     buyerName.trim().length >= 2 &&
@@ -1142,6 +1263,34 @@ export default function PlaceOrderScreen() {
       : country.trim().length >= 2 &&
         resolved.exportsEnabled &&
         exportRegion.trim().length >= 2);
+
+  const missingOrderInstruction = useMemo(() => {
+    const missing: string[] = [];
+
+    if (buyerName.trim().length < 2) missing.push("name");
+    if (buyerMobile.trim().replace(/\D/g, "").length < 10) {
+      missing.push("mobile");
+    }
+    if (deliveryAddress.trim().length < 10) missing.push("address");
+    if (city.trim().length < 2) missing.push("city");
+
+    if (destinationType === "export") {
+      if (country.trim().length < 2) missing.push("country");
+      if (!resolved.exportsEnabled) missing.push("export");
+      if (exportRegion.trim().length < 2) missing.push("region");
+    }
+
+    return missing.length ? `Fill ${missing.join(", ")}.` : "";
+  }, [
+    buyerMobile,
+    buyerName,
+    city,
+    country,
+    deliveryAddress,
+    destinationType,
+    exportRegion,
+    resolved.exportsEnabled,
+  ]);
 
   const goToPayment = async () => {
     const checkoutAddressToSave: LastCheckoutAddress = {
@@ -1183,6 +1332,9 @@ export default function PlaceOrderScreen() {
           ? "made_order_variants"
           : base.variantMode || "",
         selected_variant_snapshot: base.selectedVariantSnapshot
+          ? encodeURIComponent(JSON.stringify(base.selectedVariantSnapshot))
+          : "",
+        selected_stitched_variant_snapshot: base.selectedVariantSnapshot
           ? encodeURIComponent(JSON.stringify(base.selectedVariantSnapshot))
           : "",
 
@@ -1271,8 +1423,14 @@ export default function PlaceOrderScreen() {
           (destinationType === "inland" ? "Pakistan" : country).trim(),
         ),
         weight_kg: base.weightKg ? String(base.weightKg) : "",
+        weight_per_meter_kg: params.weight_per_meter_kg
+          ? String(params.weight_per_meter_kg)
+          : "",
 
         dyeing_selected: resolved.hasDyeing ? "1" : "0",
+        dyeing_split_json: base.dyeingSplits.length
+          ? encodeURIComponent(JSON.stringify(base.dyeingSplits))
+          : "",
         dye_shade_id: base.dyeShadeId
           ? encodeURIComponent(base.dyeShadeId)
           : "",
@@ -1342,10 +1500,21 @@ export default function PlaceOrderScreen() {
       ? prettyCategory(base.productCategory)
       : "—";
   const exportRegionsText = joinRegions(exportRegionList);
-  const displayCountry = destinationType === "inland" ? "Pakistan" : country;
+  const exportAutoCountry = countryForExportRegion(exportRegion);
+  const countryAutoFilled =
+    destinationType === "inland" ||
+    (destinationType === "export" && !!exportAutoCountry);
+  const countryNeedsManual =
+    destinationType === "export" && exportRegionNeedsCountry(exportRegion);
+  const countryMissing =
+    destinationType === "export" &&
+    countryNeedsManual &&
+    country.trim().length < 2;
+  const displayCountry =
+    destinationType === "inland" ? "Pakistan" : exportAutoCountry || country;
   const selectedReadyVariantTitle = resolved.shouldShowSelectedStitchedVariant
     ? cleanReadyToWearTitle(
-        base.selectedVariantTitle || "Selected variant",
+        base.selectedVariantTitle || "Selected style",
         resolved.isMadeOrderStitched
           ? ""
           : base.selectedVariantSize || base.sizeLabel,
@@ -1355,9 +1524,12 @@ export default function PlaceOrderScreen() {
   return (
     <SafeAreaView
       style={styles.safe}
-      edges={["top", "left", "right", "bottom"]}
+      edges={["top", "left", "right"]}
     >
-      <View style={styles.screen}>
+      <KeyboardAvoidingView
+        style={styles.screen}
+        behavior={Platform.select({ ios: "padding", android: "height" })}
+      >
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.container}
@@ -1366,15 +1538,13 @@ export default function PlaceOrderScreen() {
         >
           <View style={styles.pageHeader}>
             <Text style={styles.title}>Place Order</Text>
-            <Text style={styles.pageSubtitle}>
-              Review selections, add delivery details, then pay.
-            </Text>
+            <Text style={styles.pageSubtitle}>Review and pay.</Text>
           </View>
 
           {loadingProduct ? (
             <View style={styles.loadingRow}>
               <ActivityIndicator />
-              <Text style={styles.helper}>Loading product details…</Text>
+              <Text style={styles.helper}>Loading product…</Text>
             </View>
           ) : null}
 
@@ -1414,7 +1584,7 @@ export default function PlaceOrderScreen() {
                   <>
                     <View style={styles.productMetaInfo}>
                       <Text style={styles.productMetaLabel}>
-                        Selected variant
+                        Selected style
                       </Text>
                       <Text style={styles.productMetaValue}>
                         {selectedReadyVariantTitle || "Not selected"}
@@ -1437,7 +1607,7 @@ export default function PlaceOrderScreen() {
                     measurementRows.length ? (
                       <View style={styles.inlineActionRow}>
                         <Text style={styles.helper}>
-                          {measurementRows.length} dimensions saved
+                          {measurementRows.length} dimensions
                           {base.customDimensions.length
                             ? ` • ${base.customDimensions.length} custom`
                             : ""}
@@ -1448,7 +1618,7 @@ export default function PlaceOrderScreen() {
                           style={styles.secondaryInlineBtn}
                         >
                           <Text style={styles.secondaryInlineText}>
-                            View Exact Measurements
+                            View measurements
                           </Text>
                         </Pressable>
                       </View>
@@ -1469,30 +1639,32 @@ export default function PlaceOrderScreen() {
             <SectionCard title="Customization">
               {!resolved.isUnstitched ? (
                 <KVRow
-                  label="Selected variant"
+                  label="Selected style"
                   value={base.selectedVariantTitle || "Not selected"}
                 />
               ) : null}
 
-              <KVRow
-                label="Size"
-                value={
-                  base.mode === "exact"
-                    ? "Exact measurements"
-                    : resolved.isUnstitched
-                      ? base.selectedUnstitchedSize ||
-                        base.sizeLabel ||
-                        "Not selected"
-                      : base.selectedVariantSize ||
-                        base.sizeLabel ||
-                        "Not selected"
-                }
-              />
+              {!resolved.isFabricByMeterPurchase ? (
+                <KVRow
+                  label="Size"
+                  value={
+                    base.mode === "exact"
+                      ? "Exact measurements"
+                      : resolved.isUnstitched
+                        ? base.selectedUnstitchedSize ||
+                          base.sizeLabel ||
+                          "Not selected"
+                        : base.selectedVariantSize ||
+                          base.sizeLabel ||
+                          "Not selected"
+                  }
+                />
+              ) : null}
 
               {base.mode === "exact" && measurementRows.length ? (
                 <View style={styles.inlineActionRow}>
                   <Text style={styles.helper}>
-                    {measurementRows.length} dimensions saved
+                    {measurementRows.length} dimensions
                     {base.customDimensions.length
                       ? ` • ${base.customDimensions.length} custom`
                       : ""}
@@ -1503,16 +1675,17 @@ export default function PlaceOrderScreen() {
                     style={styles.secondaryInlineBtn}
                   >
                     <Text style={styles.secondaryInlineText}>
-                      View Exact Measurements
+                      View measurements
                     </Text>
                   </Pressable>
                 </View>
               ) : null}
 
               {resolved.isUnstitched ? (
-                <>
+                <View style={styles.customSection}>
+                  <Text style={styles.customSectionTitle}>Fabric</Text>
                   <KVRow
-                    label="Fabric length"
+                    label="Length"
                     value={`${base.selectedFabricLengthM || 0} m`}
                   />
                   <KVRow
@@ -1523,34 +1696,82 @@ export default function PlaceOrderScreen() {
                         : ""
                     }
                   />
-                </>
+                  <KVRow
+                    label="Total fabric cost"
+                    value={formatMoney(base.currency, base.fabricCostPkr)}
+                  />
+                </View>
               ) : null}
 
               {resolved.hasDyeing ? (
-                <View style={styles.customBlock}>
-                  <View style={styles.kvRow}>
-                    <Text style={styles.kvLabel}>Dyeing color</Text>
-                    <View style={styles.colorPreviewRow}>
+                <View style={styles.customSection}>
+                  <View style={styles.customSectionHeader}>
+                    <Text style={styles.customSectionTitle}>Dyeing</Text>
+                    <DyePaletteReferenceButton
+                      dyeSplits={base.dyeingSplits}
+                      dyeShadeId={base.dyeShadeId}
+                      dyeHex={base.dyeHex}
+                      dyeLabel={base.dyeLabel}
+                    />
+                  </View>
+
+                  <KVRow
+                    label="Cost"
+                    value={formatMoney(base.currency, base.dyeingCostPkr)}
+                  />
+
+                  {base.dyeingSplits.length ? (
+                    <View style={styles.dyePortionList}>
+                      {base.dyeingSplits.map((row, index) => (
+                        <View
+                          key={`${row.dye_shade_id}-${index}`}
+                          style={styles.dyePortionRow}
+                        >
+                          {!!row.dye_hex && (
+                            <View
+                              style={[
+                                styles.dyeSwatchSmall,
+                                { backgroundColor: row.dye_hex },
+                              ]}
+                            />
+                          )}
+                          <Text style={styles.dyePortionText}>
+                            {row.length_m} m
+                            {row.dye_label || row.dye_shade_id
+                              ? ` • Code ${row.dye_label || row.dye_shade_id}`
+                              : ""}
+                          </Text>
+                          <Text style={styles.dyePortionCost}>
+                            {formatMoney(base.currency, row.dyeing_cost_pkr)}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <View style={styles.dyePortionRow}>
                       {!!base.dyeHex && (
                         <View
                           style={[
-                            styles.dyeSwatch,
+                            styles.dyeSwatchSmall,
                             { backgroundColor: base.dyeHex },
                           ]}
                         />
                       )}
-                      <Text style={styles.helper}>
-                        {formatMoney(base.currency, base.dyeingCostPkr)}
+                      <Text style={styles.dyePortionText}>
+                        {base.dyeLabel || base.dyeShadeId
+                          ? `Code ${base.dyeLabel || base.dyeShadeId}`
+                          : "Selected color"}
                       </Text>
                     </View>
-                  </View>
+                  )}
                 </View>
               ) : null}
 
               {resolved.hasTailoring ? (
-                <View style={styles.customBlock}>
+                <View style={styles.customSection}>
+                  <Text style={styles.customSectionTitle}>Tailoring</Text>
                   <KVRow
-                    label="Tailoring"
+                    label="Cost"
                     value={`${formatMoney(base.currency, base.tailoringCostPkr)}${
                       base.tailoringTurnaroundDays
                         ? ` • ${base.tailoringTurnaroundDays} days`
@@ -1621,7 +1842,7 @@ export default function PlaceOrderScreen() {
 
                       {!!base.customTailoringNote && (
                         <View style={styles.noteBox}>
-                          <Text style={styles.noteLabel}>Buyer's Note</Text>
+                          <Text style={styles.noteLabel}>Note</Text>
                           <Text style={styles.noteText}>
                             {base.customTailoringNote}
                           </Text>
@@ -1639,7 +1860,7 @@ export default function PlaceOrderScreen() {
               <View style={styles.savedAddressBox}>
                 <View style={styles.savedAddressHeader}>
                   <Text style={styles.savedAddressTitle}>
-                    Saved delivery details
+                    Saved address
                   </Text>
                   <Pressable
                     onPress={clearSavedCheckoutAddress}
@@ -1653,16 +1874,16 @@ export default function PlaceOrderScreen() {
                 </View>
                 <Text style={styles.savedAddressText}>
                   {savedAddressLoaded
-                    ? "Your last checkout address has been filled automatically."
-                    : "Checking saved delivery details…"}
+                    ? "Saved address filled."
+                    : "Checking saved address…"}
                 </Text>
               </View>
             ) : null}
 
-            <Text style={styles.fieldLabel}>Delivery Type</Text>
+            <Text style={styles.fieldLabel}>Delivery type</Text>
             <View style={styles.choiceRow}>
               <SelectionChip
-                label="Inland"
+                label="Within PAK"
                 selected={destinationType === "inland"}
                 onPress={() => {
                   setDestinationType("inland");
@@ -1677,14 +1898,26 @@ export default function PlaceOrderScreen() {
                 onPress={() => {
                   if (!resolved.exportsEnabled) return;
                   setDestinationType("export");
+                  if (!exportRegion.trim()) {
+                    setCountry((current) =>
+                      isBlankOrAutoCountry(current) ? "" : current,
+                    );
+                    return;
+                  }
+                  const autoCountry = countryForExportRegion(exportRegion);
+                  if (autoCountry) {
+                    setCountry(autoCountry);
+                  } else if (exportRegionNeedsCountry(exportRegion)) {
+                    setCountry((current) =>
+                      isBlankOrAutoCountry(current) ? "" : current,
+                    );
+                  }
                 }}
               />
             </View>
 
             {!resolved.exportsEnabled ? (
-              <Text style={styles.helper}>
-                This vendor does not offer export orders.
-              </Text>
+              <Text style={styles.helper}>Export not available.</Text>
             ) : null}
 
             {destinationType === "export" ? (
@@ -1696,14 +1929,14 @@ export default function PlaceOrderScreen() {
                       key={region}
                       label={region}
                       selected={exportRegion === region}
-                      onPress={() => setExportRegion(region)}
+                      onPress={() => onSelectExportRegion(region)}
                     />
                   ))}
                 </View>
               </>
             ) : null}
 
-            <Text style={styles.fieldLabel}>Full Name</Text>
+            <Text style={styles.fieldLabel}>Full name</Text>
             <TextInput
               value={buyerName}
               onChangeText={setBuyerName}
@@ -1745,7 +1978,7 @@ export default function PlaceOrderScreen() {
               placeholderTextColor={stylesVars.placeholder}
             />
 
-            <Text style={styles.fieldLabel}>Postal Code</Text>
+            <Text style={styles.fieldLabel}>Postal code</Text>
             <TextInput
               value={postalCode}
               onChangeText={setPostalCode}
@@ -1760,18 +1993,19 @@ export default function PlaceOrderScreen() {
             <TextInput
               value={displayCountry}
               onChangeText={setCountry}
-              placeholder="e.g., Pakistan"
-              editable={destinationType !== "inland"}
+              placeholder={countryNeedsManual ? "e.g., Germany" : "e.g., Pakistan"}
+              editable={!countryAutoFilled}
               style={[
                 styles.input,
-                destinationType === "inland" ? styles.disabledInput : null,
+                countryAutoFilled ? styles.disabledInput : null,
+                countryMissing ? styles.validationInput : null,
               ]}
               placeholderTextColor={stylesVars.placeholder}
             />
 
             {!!fullAddressPreview && (
               <View style={styles.previewBox}>
-                <Text style={styles.previewLabel}>Address Preview</Text>
+                <Text style={styles.previewLabel}>Address preview</Text>
                 <Text style={styles.previewText}>{fullAddressPreview}</Text>
               </View>
             )}
@@ -1780,7 +2014,7 @@ export default function PlaceOrderScreen() {
             <TextInput
               value={notes}
               onChangeText={setNotes}
-              placeholder="Any special instructions"
+              placeholder="Optional"
               style={[styles.input, styles.multiline]}
               multiline
               placeholderTextColor={stylesVars.placeholder}
@@ -1788,7 +2022,14 @@ export default function PlaceOrderScreen() {
 
             <View style={styles.shippingBox}>
               <Text style={styles.shippingTitle}>Shipping</Text>
-              <Text style={styles.shippingValue}>{courierSummary}</Text>
+              <Text
+                style={[
+                  styles.shippingValue,
+                  exportRegionMissing ? styles.validationText : null,
+                ]}
+              >
+                {courierSummary}
+              </Text>
               {!!base.weightKg && (
                 <Text style={styles.shippingMeta}>
                   Weight used: {base.weightKg} kg
@@ -1869,6 +2110,11 @@ export default function PlaceOrderScreen() {
             <Text style={styles.footerTotalValue}>
               {formatMoney(base.currency, grandTotalPkr)}
             </Text>
+            {!!missingOrderInstruction ? (
+              <Text style={styles.footerInlineHint}>
+                {missingOrderInstruction}
+              </Text>
+            ) : null}
           </View>
 
           <Pressable
@@ -1887,15 +2133,6 @@ export default function PlaceOrderScreen() {
           </Pressable>
         </View>
 
-        {!canContinue ? (
-          <View style={styles.footerHintWrap}>
-            <Text style={styles.footerHint}>
-              Enter name, mobile, address, city, and shipping details to
-              continue.
-            </Text>
-          </View>
-        ) : null}
-
         <ExactMeasurementsModal
           visible={measurementsOpen}
           onClose={() => setMeasurementsOpen(false)}
@@ -1907,24 +2144,25 @@ export default function PlaceOrderScreen() {
           fabricCostPkr={base.fabricCostPkr}
           showGuideImage
         />
-      </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E2E8F0",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  mutedText: "#64748B",
+  bg: apColors.bg,
+  cardBg: apColors.card,
+  border: apColors.border,
+  borderSoft: apColors.borderSoft,
+  blue: apColors.blue,
+  blueSoft: apColors.blueSoft,
+  text: apColors.text,
+  mutedText: apColors.muted,
+  danger: apColors.danger,
   placeholder: "#94A3B8",
-  white: "#FFFFFF",
-  greenSoft: "#ECFDF3",
-  greenText: "#166534",
+  white: apColors.white,
+  greenSoft: apColors.successSoft,
+  greenText: apColors.success,
 };
 
 const styles = StyleSheet.create({
@@ -1953,16 +2191,20 @@ const styles = StyleSheet.create({
   },
 
   title: {
+    fontFamily: apFontFamily,
     fontSize: 24,
     fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   pageSubtitle: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   loadingRow: {
@@ -1975,7 +2217,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: stylesVars.border,
     backgroundColor: stylesVars.cardBg,
-    borderRadius: 20,
+    borderRadius: apRadii.card,
     padding: 16,
     gap: 12,
   },
@@ -1985,16 +2227,20 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
+    fontFamily: apFontFamily,
     fontSize: 16,
     fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   sectionSubtitle: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 17,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   productRow: {
@@ -2006,7 +2252,7 @@ const styles = StyleSheet.create({
   imageBox: {
     width: 96,
     height: 96,
-    borderRadius: 16,
+    borderRadius: apRadii.control,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: stylesVars.border,
@@ -2026,21 +2272,26 @@ const styles = StyleSheet.create({
   },
 
   imagePlaceholderText: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.mutedText,
     fontWeight: "600",
+    letterSpacing: 0,
   },
 
   productMetaWrap: {
     flex: 1,
+    minWidth: 0,
     gap: 8,
   },
 
   productName: {
+    fontFamily: apFontFamily,
     fontSize: 16,
     lineHeight: 22,
     fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
   },
 
   productMetaInfo: {
@@ -2048,23 +2299,31 @@ const styles = StyleSheet.create({
   },
 
   productMetaLabel: {
+    fontFamily: apFontFamily,
     fontSize: 11,
     color: stylesVars.mutedText,
     fontWeight: "700",
     textTransform: "uppercase",
-    letterSpacing: 0.3,
+    letterSpacing: 0,
   },
 
   productMetaValue: {
+    fontFamily: apFontFamily,
     fontSize: 13,
+    lineHeight: 18,
     color: stylesVars.text,
     fontWeight: "700",
+    letterSpacing: 0,
+    flexShrink: 1,
+    flexWrap: "wrap",
   },
 
   heroPrice: {
+    fontFamily: apFontFamily,
     fontSize: 18,
     color: stylesVars.text,
     fontWeight: "800",
+    letterSpacing: 0,
   },
 
   kvRow: {
@@ -2076,19 +2335,35 @@ const styles = StyleSheet.create({
 
   kvLabel: {
     flex: 0.9,
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 19,
     color: stylesVars.mutedText,
     fontWeight: "600",
+    letterSpacing: 0,
+  },
+
+  kvLabelWithIcon: {
+    flex: 0.9,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  kvLabelWithIconText: {
+    flex: 1,
   },
 
   kvValue: {
     flex: 1.1,
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 19,
     color: stylesVars.text,
     fontWeight: "700",
     textAlign: "right",
+    letterSpacing: 0,
   },
 
   kvMuted: {
@@ -2103,15 +2378,19 @@ const styles = StyleSheet.create({
   },
 
   priceLabel: {
+    fontFamily: apFontFamily,
     fontSize: 14,
     color: stylesVars.mutedText,
     fontWeight: "600",
+    letterSpacing: 0,
   },
 
   priceValue: {
+    fontFamily: apFontFamily,
     fontSize: 14,
     color: stylesVars.text,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   priceLabelStrong: {
@@ -2145,6 +2424,29 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
 
+  customSection: {
+    borderTopWidth: 1,
+    borderTopColor: stylesVars.border,
+    paddingTop: 10,
+    gap: 8,
+  },
+
+  customSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+
+  customSectionTitle: {
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 17,
+    color: stylesVars.blue,
+    fontWeight: "800",
+    letterSpacing: 0,
+  },
+
   colorPreviewRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -2154,15 +2456,69 @@ const styles = StyleSheet.create({
   dyeSwatch: {
     width: 34,
     height: 34,
-    borderRadius: 10,
+    borderRadius: apRadii.control,
     borderWidth: 1,
     borderColor: "#CBD5E1",
+  },
+
+  dyeSwatchSmall: {
+    width: 22,
+    height: 22,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+
+  dyeSplitSummaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  dyeSplitSummaryText: {
+    flex: 1,
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.text,
+    fontWeight: "700",
+    letterSpacing: 0,
+  },
+
+  dyePortionList: {
+    gap: 7,
+  },
+
+  dyePortionRow: {
+    minHeight: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  dyePortionText: {
+    flex: 1,
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 17,
+    color: stylesVars.text,
+    fontWeight: "700",
+    letterSpacing: 0,
+  },
+
+  dyePortionCost: {
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 17,
+    color: stylesVars.mutedText,
+    fontWeight: "700",
+    letterSpacing: 0,
   },
 
   tailoringImageWrapCompact: {
     width: "100%",
     height: 160,
-    borderRadius: 14,
+    borderRadius: apRadii.card,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: stylesVars.border,
@@ -2175,44 +2531,55 @@ const styles = StyleSheet.create({
   },
 
   noteBox: {
-    borderWidth: 1,
-    borderColor: stylesVars.borderSoft,
-    borderRadius: 14,
-    padding: 12,
-    backgroundColor: "#F8FAFC",
+    borderTopWidth: 1,
+    borderTopColor: stylesVars.border,
+    paddingTop: 10,
+    backgroundColor: "transparent",
     gap: 6,
   },
 
   noteLabel: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.mutedText,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   noteText: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 19,
     color: stylesVars.text,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   fieldLabel: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     color: stylesVars.text,
     fontWeight: "800",
     marginTop: 2,
+    letterSpacing: 0,
   },
 
   input: {
     borderWidth: 1,
     borderColor: stylesVars.borderSoft,
-    borderRadius: 14,
+    borderRadius: apRadii.control,
     paddingHorizontal: 12,
     paddingVertical: 12,
+    fontFamily: apFontFamily,
     fontSize: 14,
     color: stylesVars.text,
     fontWeight: "500",
     backgroundColor: stylesVars.white,
+    letterSpacing: 0,
+  },
+
+  validationInput: {
+    borderColor: stylesVars.danger,
   },
 
   multiline: {
@@ -2231,7 +2598,7 @@ const styles = StyleSheet.create({
     borderColor: "#D7E3FF",
     paddingVertical: 9,
     paddingHorizontal: 12,
-    borderRadius: 999,
+    borderRadius: apRadii.pill,
     backgroundColor: stylesVars.blueSoft,
   },
 
@@ -2241,9 +2608,11 @@ const styles = StyleSheet.create({
   },
 
   choiceText: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.blue,
     fontWeight: "800",
+    letterSpacing: 0,
   },
 
   choiceTextOn: {
@@ -2251,11 +2620,7 @@ const styles = StyleSheet.create({
   },
 
   savedAddressBox: {
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
-    borderRadius: 14,
-    padding: 12,
-    backgroundColor: "#F8FBFF",
+    backgroundColor: "transparent",
     gap: 6,
   },
 
@@ -2268,22 +2633,26 @@ const styles = StyleSheet.create({
 
   savedAddressTitle: {
     flex: 1,
+    fontFamily: apFontFamily,
     fontSize: 13,
     color: stylesVars.text,
     fontWeight: "800",
+    letterSpacing: 0,
   },
 
   savedAddressText: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   clearSavedAddressBtn: {
     minHeight: 30,
     paddingHorizontal: 10,
-    borderRadius: 999,
+    borderRadius: apRadii.pill,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: stylesVars.white,
@@ -2292,72 +2661,88 @@ const styles = StyleSheet.create({
   },
 
   clearSavedAddressText: {
+    fontFamily: apFontFamily,
     color: stylesVars.blue,
     fontSize: 12,
     fontWeight: "800",
+    letterSpacing: 0,
   },
 
   previewBox: {
-    borderWidth: 1,
-    borderColor: stylesVars.borderSoft,
-    borderRadius: 14,
-    padding: 12,
-    backgroundColor: "#F8FAFC",
+    borderTopWidth: 1,
+    borderTopColor: stylesVars.border,
+    paddingTop: 10,
+    backgroundColor: "transparent",
     gap: 4,
   },
 
   previewLabel: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.mutedText,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   previewText: {
+    fontFamily: apFontFamily,
     fontSize: 13,
     lineHeight: 19,
     color: stylesVars.text,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   shippingBox: {
-    borderWidth: 1,
-    borderColor: "#DCEAFE",
-    backgroundColor: "#F8FBFF",
-    borderRadius: 14,
-    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: stylesVars.border,
+    backgroundColor: "transparent",
+    paddingTop: 10,
     gap: 4,
   },
 
   shippingTitle: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.mutedText,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   shippingValue: {
+    fontFamily: apFontFamily,
     fontSize: 14,
     color: stylesVars.text,
     fontWeight: "800",
+    letterSpacing: 0,
+  },
+
+  validationText: {
+    color: stylesVars.danger,
   },
 
   shippingMeta: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   helper: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     lineHeight: 18,
     color: stylesVars.mutedText,
     fontWeight: "500",
+    letterSpacing: 0,
   },
 
   secondaryInlineBtn: {
     minHeight: 38,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: apRadii.control,
     backgroundColor: stylesVars.white,
     borderWidth: 1,
     borderColor: "#D7E3FF",
@@ -2366,9 +2751,11 @@ const styles = StyleSheet.create({
   },
 
   secondaryInlineText: {
+    fontFamily: apFontFamily,
     color: stylesVars.blue,
     fontSize: 12,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   backBtn: {
@@ -2376,7 +2763,7 @@ const styles = StyleSheet.create({
     minHeight: 38,
     paddingVertical: 8,
     paddingHorizontal: 14,
-    borderRadius: 999,
+    borderRadius: apRadii.pill,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: stylesVars.blueSoft,
@@ -2385,29 +2772,27 @@ const styles = StyleSheet.create({
   },
 
   backText: {
+    fontFamily: apFontFamily,
     color: stylesVars.blue,
     fontWeight: "800",
     fontSize: 12,
+    letterSpacing: 0,
   },
 
   footerBar: {
     position: "absolute",
-    left: 12,
-    right: 12,
-    bottom: 14,
-    borderRadius: 18,
-    padding: 12,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
     backgroundColor: stylesVars.white,
-    borderWidth: 1,
-    borderColor: stylesVars.border,
+    borderTopWidth: 1,
+    borderTopColor: stylesVars.border,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
   },
 
   footerTotalWrap: {
@@ -2416,51 +2801,46 @@ const styles = StyleSheet.create({
   },
 
   footerTotalLabel: {
+    fontFamily: apFontFamily,
     fontSize: 12,
     color: stylesVars.mutedText,
     fontWeight: "700",
+    letterSpacing: 0,
   },
 
   footerTotalValue: {
+    fontFamily: apFontFamily,
     fontSize: 18,
     color: stylesVars.text,
     fontWeight: "800",
+    letterSpacing: 0,
+  },
+
+  footerInlineHint: {
+    fontFamily: apFontFamily,
+    fontSize: 11,
+    lineHeight: 15,
+    color: stylesVars.danger,
+    fontWeight: "700",
+    letterSpacing: 0,
   },
 
   footerCta: {
-    minHeight: 48,
-    minWidth: 136,
-    paddingHorizontal: 18,
-    borderRadius: 14,
+    minHeight: 42,
+    minWidth: 128,
+    paddingHorizontal: 16,
+    borderRadius: apRadii.control,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: stylesVars.blue,
   },
 
   footerCtaText: {
+    fontFamily: apFontFamily,
     color: stylesVars.white,
     fontWeight: "800",
     fontSize: 14,
-  },
-
-  footerHintWrap: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    bottom: 88,
-    alignItems: "center",
-  },
-
-  footerHint: {
-    fontSize: 12,
-    lineHeight: 17,
-    color: stylesVars.mutedText,
-    fontWeight: "500",
-    textAlign: "center",
-    backgroundColor: "rgba(248,250,252,0.96)",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    letterSpacing: 0,
   },
 
   disabledBtn: {
@@ -2468,7 +2848,7 @@ const styles = StyleSheet.create({
   },
 
   disabledInput: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: stylesVars.white,
     color: stylesVars.mutedText,
   },
 

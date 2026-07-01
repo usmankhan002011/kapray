@@ -1,11 +1,15 @@
-// app/vendor/profile/add-product/index.tsx
-import React, { useMemo, useRef } from "react";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import React, { useMemo } from "react";
+import { Alert } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
-import { apStyles } from "@/components/product/addProductStyles";
-import { useAutoFocus } from "@/components/product/useAutoFocus";
+import {
+  AddProductCard,
+  AddProductField,
+  AddProductFooter,
+  AddProductScreen,
+  AddProductSecondaryButton,
+} from "@/components/product/add-product/AddProductWizard";
 
 function safeInt(v: any) {
   const n = Number(v);
@@ -13,30 +17,62 @@ function safeInt(v: any) {
   return Math.trunc(n);
 }
 
-export default function AddProductIndex() {
+function safeStr(v: any) {
+  return String(v ?? "").trim();
+}
+
+function formatPicked(list: any, emptyLabel: string) {
+  const arr = Array.isArray(list) ? list : [];
+  const cleaned = arr.map((x) => safeStr(x)).filter(Boolean);
+  if (!cleaned.length) return emptyLabel;
+  return cleaned.join(", ");
+}
+
+function dressTypeSummary(draft: any) {
+  const names = (draft?.spec as any)?.dressTypeNames as any[] | undefined;
+  if (Array.isArray(names) && names.length) {
+    return formatPicked(names, "Not set");
+  }
+
+  const ids = (draft?.spec?.dressTypeIds ?? []).map((x: any) => String(x));
+  if (!ids.length) return "Select dress type";
+  return `${ids.length} selected`;
+}
+
+export default function AddProductDressType() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const inputRef = useRef<TextInput>(null);
-
   const returnTo = typeof params?.returnTo === "string" ? params.returnTo : "";
 
   const vendorIdRaw =
     useAppSelector((s: any) => s?.vendorSlice?.vendor?.id ?? null) ??
     useAppSelector((s: any) => s?.vendor?.id ?? null);
-
   const vendorId = safeInt(vendorIdRaw);
 
-  const { draft, setTitle } = useProductDraft() as any;
-
-  const title = String(draft?.title ?? "");
+  const { draft } = useProductDraft() as any;
+  const dressTypeValue = dressTypeSummary(draft);
 
   const canContinue = useMemo(() => {
     if (!vendorId) return false;
-    return Boolean(title.trim());
-  }, [vendorId, title]);
+    return (draft?.spec?.dressTypeIds ?? []).length >= 1;
+  }, [vendorId, draft]);
+  const disabledHint = !vendorId
+    ? "Vendor not loaded."
+    : !canContinue
+      ? "Select at least one dress type."
+      : "";
 
-  // ✅ Clean reusable autofocus
-  useAutoFocus(inputRef);
+  function openDressTypeModal() {
+    const screenPath = "/vendor/profile/add-product";
+    const modalReturnTo = returnTo
+      ? `${screenPath}?returnTo=${encodeURIComponent(returnTo)}`
+      : screenPath;
+    const encoded = encodeURIComponent(modalReturnTo);
+
+    router.push(
+      `/vendor/profile/(product-modals)/dress-type_modal?returnTo=${encoded}` as any,
+    );
+  }
 
   function onContinue() {
     if (!vendorId) {
@@ -44,22 +80,20 @@ export default function AddProductIndex() {
       return;
     }
 
-    if (!title.trim()) {
-      Alert.alert("Title required", "Please enter a product title.");
+    if ((draft?.spec?.dressTypeIds ?? []).length < 1) {
+      Alert.alert("Dress type required", "Please select at least one dress type.");
       return;
     }
 
-    // ✅ If coming from Review (or any returnTo), go back there after saving
     if (returnTo) {
       router.replace(returnTo as any);
       return;
     }
 
-    router.push("/vendor/profile/add-product/q02-category" as any);
+    router.push("/vendor/profile/add-product/q01-title" as any);
   }
 
   function onClose() {
-    // ✅ If coming from Review (or any returnTo), close returns to Review
     if (returnTo) {
       router.replace(returnTo as any);
       return;
@@ -68,49 +102,26 @@ export default function AddProductIndex() {
   }
 
   return (
-    <View style={apStyles.screen}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        style={apStyles.screen}
-        contentContainerStyle={apStyles.content}
-      >
-        <View style={apStyles.headerRow}>
-          <Text style={apStyles.title}>Title</Text>
-
-          <Pressable
-            onPress={onClose}
-            style={({ pressed }) => [apStyles.linkBtn, pressed ? apStyles.pressed : null]}
-          >
-            <Text style={apStyles.linkText}>Close</Text>
-          </Pressable>
-        </View>
-
-        <View style={apStyles.card}>
-          <Text style={apStyles.label}>Product title *</Text>
-
-          <TextInput
-            ref={inputRef}
-            value={title}
-            onChangeText={(t) => setTitle?.(t)}
-            placeholder="e.g., Bridal heavy embroidered lehenga"
-            style={apStyles.input}
-            maxLength={80}
-            returnKeyType="done"
+    <AddProductScreen
+      title="Dress type"
+      onBack={onClose}
+      footer={
+        <AddProductFooter
+          onPrimaryPress={onContinue}
+          primaryDisabled={!canContinue}
+          disabledHint={disabledHint}
+        />
+      }
+    >
+      <AddProductCard>
+        <AddProductField label="Dress type" required style={{ marginTop: 0 }}>
+          <AddProductSecondaryButton
+            label={dressTypeValue}
+            onPress={openDressTypeModal}
+            style={{ marginTop: 10 }}
           />
-
-          <Pressable
-            style={({ pressed }) => [
-              apStyles.primaryBtn,
-              !canContinue ? apStyles.primaryBtnDisabled : null,
-              pressed ? apStyles.pressed : null
-            ]}
-            onPress={onContinue}
-            disabled={!canContinue}
-          >
-            <Text style={apStyles.primaryText}>Continue</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-    </View>
+        </AddProductField>
+      </AddProductCard>
+    </AddProductScreen>
   );
 }
