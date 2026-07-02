@@ -21,6 +21,7 @@ type InventoryStockFieldProps = {
 
 type StitchedPricingFieldsProps = {
   madeOnOrder: boolean;
+  showCostFrom: boolean;
   priceTotal: number;
   availableSizes: string[];
   onPriceTotalChangeText: (value: string) => void;
@@ -83,6 +84,7 @@ export function InventoryStockField({
 
 export function StitchedPricingFields({
   madeOnOrder,
+  showCostFrom,
   priceTotal,
   availableSizes,
   onPriceTotalChangeText,
@@ -91,7 +93,7 @@ export function StitchedPricingFields({
   return (
     <>
       <Text style={[styles.label, styles.priceLabel]}>
-        {madeOnOrder ? "Cost From (PKR) *" : "Total Cost (PKR) *"}
+        {showCostFrom ? "Cost From (PKR) *" : "Total Cost (PKR) *"}
       </Text>
       <FastNumberInput
         value={String(priceTotal ?? "")}

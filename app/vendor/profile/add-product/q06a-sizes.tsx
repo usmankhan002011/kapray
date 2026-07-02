@@ -10,6 +10,8 @@ import {
   AddProductScreen,
 } from "@/components/product/add-product/AddProductWizard";
 
+const SIZE_OPTIONS = [...READY_STANDARD_SIZES, "All"];
+
 function safeInt(v: any) {
   const n = Number(v);
   if (!Number.isFinite(n)) return null;
@@ -20,6 +22,40 @@ function pickFirstString(v: unknown): string | null {
   if (typeof v === "string") return v.trim() || null;
   if (Array.isArray(v) && typeof v[0] === "string") return v[0].trim() || null;
   return null;
+}
+
+function safeStr(v: any) {
+  return String(v ?? "").trim();
+}
+
+function normalizeSizeLabel(value: any) {
+  const raw = safeStr(value);
+  if (!raw) return "";
+
+  const match = SIZE_OPTIONS.find(
+    (size) => size.toLowerCase() === raw.toLowerCase(),
+  );
+
+  return match ?? raw;
+}
+
+function normalizeSelectedSizes(value: any, fallback: string[] = []) {
+  const raw = Array.isArray(value) ? value : [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const item of raw) {
+    const size = normalizeSizeLabel(item);
+    if (!size) continue;
+
+    const key = size.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(size);
+  }
+
+  if (out.some((size) => size.toLowerCase() === "all")) return ["All"];
+  return out.length ? out : fallback;
 }
 
 export default function Q06ASizes() {
@@ -35,14 +71,17 @@ export default function Q06ASizes() {
   const ctx = useProductDraft() as any;
   const { draft, setAvailableSizes } = ctx;
 
+  const productCategory = safeStr((draft?.spec as any)?.product_category);
+  const madeOnOrder = Boolean((draft?.spec as any)?.made_on_order ?? false);
+  const isMadeOrderStitched =
+    productCategory === "stitched_ready" && madeOnOrder;
+
   const [selectedSizes, setSelectedSizes] = useState<string[]>(() =>
-    Array.isArray((draft?.price as any)?.available_sizes)
-      ? ((draft?.price as any)?.available_sizes as any[])
-          .map((x) => String(x ?? "").trim())
-          .filter(Boolean)
-      : [],
+    normalizeSelectedSizes(
+      (draft?.price as any)?.available_sizes,
+      isMadeOrderStitched ? ["All"] : [],
+    ),
   );
-  const sizeOptions = [...READY_STANDARD_SIZES, "All"];
 
   function patchPrice(patch: any) {
     if (typeof ctx.setPrice === "function") {
@@ -59,10 +98,15 @@ export default function Q06ASizes() {
     draft.price = { ...(draft?.price ?? {}), ...patch };
   }
 
-  const canContinue = useMemo(() => Boolean(vendorId), [vendorId]);
+  const canContinue = useMemo(
+    () => Boolean(vendorId) && selectedSizes.length > 0,
+    [selectedSizes.length, vendorId],
+  );
   const disabledHint = !vendorId
     ? "Vendor not loaded."
-    : "Select sizes if this product uses standard sizes.";
+    : !selectedSizes.length
+      ? "Select at least one size, or All."
+      : "";
 
   function closeScreen() {
     if (returnTo) {
@@ -92,8 +136,17 @@ export default function Q06ASizes() {
       return;
     }
 
-    setAvailableSizes?.(selectedSizes);
-    patchPrice({ available_sizes: selectedSizes });
+    const nextSizes = normalizeSelectedSizes(selectedSizes);
+    if (!nextSizes.length) {
+      Alert.alert("Sizes required", "Select at least one size, or All.");
+      return;
+    }
+
+    setAvailableSizes?.(nextSizes);
+    patchPrice({
+      available_sizes: nextSizes,
+      ...(isMadeOrderStitched ? { simple_ready_inventory: [] } : {}),
+    });
 
     if (returnTo) {
       router.replace(returnTo as any);
@@ -105,7 +158,7 @@ export default function Q06ASizes() {
 
   return (
     <AddProductScreen
-      title="Sizes"
+      title={isMadeOrderStitched ? "Size applicability" : "Sizes"}
       onBack={closeScreen}
       footer={
         <AddProductFooter
@@ -116,14 +169,17 @@ export default function Q06ASizes() {
       }
     >
       <View style={apStyles.card}>
-        <Text style={apStyles.label}>Available sizes</Text>
+        <Text style={apStyles.label}>
+          {isMadeOrderStitched ? "Sizes offered" : "Available sizes"}
+        </Text>
         <Text style={apStyles.metaHint}>
-          Tap every size this product can support. Use All when one selection
-          covers every standard size.
+          {isMadeOrderStitched
+            ? "Default is All. Select only the sizes this made-on-order product can be made in."
+            : "Tap every size this product can support. Use All when one selection covers every standard size."}
         </Text>
 
         <View style={apStyles.chipWrap}>
-          {sizeOptions.map((size) => {
+          {SIZE_OPTIONS.map((size) => {
             const selected = selectedSizes.includes(size);
 
             return (

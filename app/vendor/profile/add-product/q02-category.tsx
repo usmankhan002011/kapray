@@ -175,16 +175,20 @@ export default function Q02Category() {
     setCategoryChoice(next);
 
     if (next === "stitched_ready" || next === "stitched_made_on_order") {
+      const isMadeOnOrder = next === "stitched_made_on_order";
+
       ctx.setDraft({
         ...draft,
         inventory_qty: 0,
         spec: {
           ...(draft?.spec ?? {}),
           product_category: "stitched_ready",
-          made_on_order: next === "stitched_made_on_order",
+          made_on_order: isMadeOnOrder,
           dyeing_enabled: false,
           tailoring_enabled: false,
           tailoring_turnaround_days: 0,
+          has_ready_variants: false,
+          variant_mode: null,
         },
         price: {
           ...(draft?.price ?? {}),
@@ -192,7 +196,8 @@ export default function Q02Category() {
           cost_pkr_per_meter: null,
           dyeing_cost_pkr: 0,
           tailoring_cost_pkr: 0,
-          ...(next === "stitched_made_on_order"
+          available_sizes: isMadeOnOrder ? ["All"] : [],
+          ...(isMadeOnOrder
             ? { simple_ready_inventory: [], variants: [] }
             : { made_order_variants: [] }),
         },

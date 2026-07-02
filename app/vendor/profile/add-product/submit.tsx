@@ -71,6 +71,9 @@ type TailoringStylePreset = {
   allow_custom_note?: boolean;
 };
 
+const STANDARD_SIZE_LABELS = ["XS", "S", "M", "L", "XL", "XXL", "All"];
+const DEFAULT_MADE_ORDER_SIZES = ["All"];
+
 function safeInt(v: any) {
   const n = Number(v);
   if (!Number.isFinite(n)) return null;
@@ -89,6 +92,30 @@ function safeNumOrZero(v: any) {
 
 function roundMeter(n: number) {
   return Math.round(n * 100) / 100;
+}
+
+function normalizeAvailableSizes(v: any, fallback: string[] = []) {
+  const arr = Array.isArray(v) ? v : [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const item of arr) {
+    const raw = safeStr(item);
+    if (!raw) continue;
+
+    const size =
+      STANDARD_SIZE_LABELS.find(
+        (label) => label.toLowerCase() === raw.toLowerCase(),
+      ) ?? raw;
+    const key = size.toLowerCase();
+
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(size);
+  }
+
+  if (out.some((size) => size.toLowerCase() === "all")) return ["All"];
+  return out.length ? out : fallback;
 }
 
 function normalizePresetArray(v: unknown): TailoringStylePreset[] {
@@ -595,6 +622,14 @@ export default function AddProductSubmitScreen() {
 
   const madeOnOrder = Boolean((draft.spec as any)?.made_on_order ?? false);
   const moreDescription = safeStr((draft.spec as any)?.more_description ?? "");
+  const applicableSizes = useMemo(
+    () =>
+      normalizeAvailableSizes(
+        (draft.price as any)?.available_sizes,
+        madeOnOrder ? DEFAULT_MADE_ORDER_SIZES : [],
+      ),
+    [draft.price, madeOnOrder],
+  );
 
   const needsDyeing =
     productCategory === "unstitched_dyeing" ||
@@ -693,6 +728,8 @@ export default function AddProductSubmitScreen() {
       const n = Number((draft.price as any)?.cost_pkr_total ?? 0);
       if (!Number.isFinite(n) || n <= 0) return false;
 
+      if (madeOnOrder && !applicableSizes.length) return false;
+
       if (hasMadeOrderVariants) {
         const variantError = validateMadeOrderVariants(madeOrderVariants);
         if (variantError) return false;
@@ -762,6 +799,7 @@ export default function AddProductSubmitScreen() {
     draft,
     madeOnOrder,
     productCategory,
+    applicableSizes,
     hasReadyVariants,
     hasMadeOrderVariants,
     isSimpleReady,
@@ -809,6 +847,14 @@ export default function AddProductSubmitScreen() {
         Alert.alert(
           "Missing price",
           "Please enter valid total cost for stitched product.",
+        );
+        return;
+      }
+
+      if (madeOnOrder && !applicableSizes.length) {
+        Alert.alert(
+          "Missing sizes",
+          "Please select the sizes this made-on-order product can be made in.",
         );
         return;
       }
@@ -1066,7 +1112,7 @@ export default function AddProductSubmitScreen() {
 
           available_sizes: isSimpleReady
             ? simpleReadyInventory.map((row) => row.size)
-            : (draft.price as any)?.available_sizes ?? [],
+            : applicableSizes,
           simple_ready_inventory: isSimpleReady
             ? simpleReadyInventory
             : [],

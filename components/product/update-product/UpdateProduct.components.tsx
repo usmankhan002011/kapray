@@ -2,6 +2,7 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import type { ComponentProps, ReactNode } from "react";
 import {
   Image,
+  Keyboard,
   Pressable,
   type StyleProp,
   Text,
@@ -39,6 +40,7 @@ type UpdateProductBottomBarProps = {
   visible: boolean;
   canSave: boolean;
   saving: boolean;
+  saveWarning?: string;
   onCancel: () => void;
   onSave: () => void;
 };
@@ -247,47 +249,66 @@ export function UpdateProductBottomBar({
   visible,
   canSave,
   saving,
+  saveWarning,
   onCancel,
   onSave,
 }: UpdateProductBottomBarProps) {
   if (!visible) return null;
 
+  function handleCancel() {
+    Keyboard.dismiss();
+    onCancel();
+  }
+
+  function handleSave() {
+    Keyboard.dismiss();
+    onSave();
+  }
+
   return (
     <View style={styles.bottomBar}>
-      <Pressable
-        style={({ pressed }) => [
-          styles.cancelBtn,
-          pressed ? styles.pressed : null,
-        ]}
-        onPress={onCancel}
-        disabled={saving}
-      >
-        <View style={styles.actionButtonContent}>
-          <MaterialIcons name="close" size={18} color={stylesVars.text} />
-          <Text style={styles.cancelText}>Cancel</Text>
+      {saveWarning ? (
+        <View style={styles.bottomAlert}>
+          <Text style={styles.bottomAlertText}>{saveWarning}</Text>
         </View>
-      </Pressable>
+      ) : null}
 
-      <Pressable
-        style={({ pressed }) => [
-          styles.saveBtn,
-          !canSave || saving ? styles.saveBtnDisabled : null,
-          pressed ? styles.pressed : null,
-        ]}
-        onPress={onSave}
-        disabled={!canSave || saving}
-      >
-        <View style={styles.actionButtonContent}>
-          <MaterialIcons
-            name={saving ? "hourglass-empty" : "check"}
-            size={18}
-            color={stylesVars.white}
-          />
-          <Text style={styles.saveText}>
-            {saving ? "Saving..." : "Save Changes"}
-          </Text>
-        </View>
-      </Pressable>
+      <View style={styles.bottomButtonRow}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.cancelBtn,
+            pressed ? styles.pressed : null,
+          ]}
+          onPress={handleCancel}
+          disabled={saving}
+        >
+          <View style={styles.actionButtonContent}>
+            <MaterialIcons name="close" size={18} color={stylesVars.text} />
+            <Text style={styles.cancelText}>Cancel</Text>
+          </View>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.saveBtn,
+            !canSave || saving ? styles.saveBtnDisabled : null,
+            pressed ? styles.pressed : null,
+          ]}
+          onPress={handleSave}
+          disabled={!canSave || saving}
+        >
+          <View style={styles.actionButtonContent}>
+            <MaterialIcons
+              name={saving ? "hourglass-empty" : "check"}
+              size={18}
+              color={stylesVars.white}
+            />
+            <Text style={styles.saveText}>
+              {saving ? "Saving..." : "Save Changes"}
+            </Text>
+          </View>
+        </Pressable>
+      </View>
     </View>
   );
 }

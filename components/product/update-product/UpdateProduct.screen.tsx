@@ -3,7 +3,11 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -171,6 +175,16 @@ function getInventoryRevisionRecordInfo(
   };
 }
 
+function hasUsableDraftImage(images: unknown) {
+  if (!Array.isArray(images)) return false;
+
+  return images.some((image) => {
+    if (!image || typeof image !== "object") return false;
+    const draft = image as { uri?: unknown; path?: unknown; url?: unknown };
+    return Boolean(String(draft.uri ?? draft.path ?? draft.url ?? "").trim());
+  });
+}
+
 export default function UpdateProductScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
@@ -186,6 +200,17 @@ export default function UpdateProductScreen() {
   const vendorId = safeInt(vendorIdRaw);
   const routeProductId = safeInt(
     (params as any)?.productId ?? (params as any)?.product_id,
+  );
+
+  const goToProducts = useCallback(
+    (nextParams?: Record<string, string>) => {
+      Keyboard.dismiss();
+      router.replace({
+        pathname: "/vendor/profile/products",
+        params: nextParams ?? {},
+      } as any);
+    },
+    [router],
   );
 
   const [loadingList, setLoadingList] = useState(false);
@@ -521,6 +546,20 @@ export default function UpdateProductScreen() {
     }, [fetchProducts, fetchVendorTailoring, vendorId]),
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        () => {
+          goToProducts();
+          return true;
+        },
+      );
+
+      return () => subscription.remove();
+    }, [goToProducts]),
+  );
+
   useEffect(() => {
     if (routeProductId != null) {
       setSelectedId(routeProductId);
@@ -645,6 +684,20 @@ export default function UpdateProductScreen() {
     priceMode,
     selected?.made_on_order,
     simpleReadyInventoryActive,
+    stitchedVariants.length,
+  ]);
+
+  const usesCostFromPricing = useMemo(() => {
+    return (
+      priceMode === "stitched_total" &&
+      (Boolean(selected?.made_on_order) ||
+        stitchedVariants.length > 0 ||
+        newReadyVariants.length > 0)
+    );
+  }, [
+    newReadyVariants.length,
+    priceMode,
+    selected?.made_on_order,
     stitchedVariants.length,
   ]);
 
@@ -791,7 +844,45 @@ export default function UpdateProductScreen() {
     newTailoringStyles.length,
   ]);
 
-  const canSave = useMemo(() => {
+  const missingNewStyleImageMessage = useMemo(() => {
+    if (priceMode === "stitched_total" && !Boolean(selected?.made_on_order)) {
+      const missingIndex = newReadyVariants.findIndex(
+        (variant) => !hasUsableDraftImage(variant.images),
+      );
+      if (missingIndex >= 0) {
+        return "Please add at least one image to each new ready-to-wear style.";
+      }
+    }
+
+    if (priceMode === "stitched_total" && Boolean(selected?.made_on_order)) {
+      const missingIndex = newMadeOrderVariants.findIndex(
+        (variant) => !hasUsableDraftImage(variant.images),
+      );
+      if (missingIndex >= 0) {
+        return "Please add at least one image to each new made-on-order style.";
+      }
+    }
+
+    if (priceMode === "unstitched_per_meter" && tailoringEnabled) {
+      const missingIndex = newTailoringStyles.findIndex(
+        (style) => !hasUsableDraftImage(style.images),
+      );
+      if (missingIndex >= 0) {
+        return "Please add at least one image to each new tailoring style card.";
+      }
+    }
+
+    return "";
+  }, [
+    newMadeOrderVariants,
+    newReadyVariants,
+    newTailoringStyles,
+    priceMode,
+    selected?.made_on_order,
+    tailoringEnabled,
+  ]);
+
+  const baseRequiredFieldsComplete = useMemo(() => {
     if (!vendorId) return false;
     if (!selectedId) return false;
     if (!title.trim()) return false;
@@ -843,6 +934,47 @@ export default function UpdateProductScreen() {
     existingTailoringStylePresets.length,
     newTailoringStyles.length,
   ]);
+
+  const newStyleRequiredFieldsComplete = useMemo(() => {
+    if (priceMode === "stitched_total" && Boolean(selected?.made_on_order)) {
+      return !newMadeOrderVariants.some(
+        (variant) => !String(variant.name ?? "").trim(),
+      );
+    }
+
+    if (priceMode === "stitched_total" && !Boolean(selected?.made_on_order)) {
+      return !newReadyVariants.some(
+        (variant) =>
+          !String(variant.name ?? "").trim() ||
+          sumReadyVariantDraftQty(variant) <= 0,
+      );
+    }
+
+    if (priceMode === "unstitched_per_meter" && tailoringEnabled) {
+      return !newTailoringStyles.some(
+        (style) => !String(style.title ?? "").trim(),
+      );
+    }
+
+    return true;
+  }, [
+    newMadeOrderVariants,
+    newReadyVariants,
+    newTailoringStyles,
+    priceMode,
+    selected?.made_on_order,
+    tailoringEnabled,
+  ]);
+
+  const showMissingNewStyleImageWarning = Boolean(
+    missingNewStyleImageMessage &&
+      baseRequiredFieldsComplete &&
+      newStyleRequiredFieldsComplete,
+  );
+
+  const canSave = useMemo(() => {
+    return baseRequiredFieldsComplete && !missingNewStyleImageMessage;
+  }, [baseRequiredFieldsComplete, missingNewStyleImageMessage]);
 
   function getBasePriceChangeInfo() {
     if (!selected) return null;
@@ -942,6 +1074,11 @@ export default function UpdateProductScreen() {
       return;
     }
 
+    if (missingNewStyleImageMessage) {
+      Alert.alert("Missing style image", missingNewStyleImageMessage);
+      return;
+    }
+
     if (!canSave) {
       Alert.alert(
         "Incomplete",
@@ -963,6 +1100,13 @@ export default function UpdateProductScreen() {
         );
         return;
       }
+      if (!hasUsableDraftImage(variant.images)) {
+        Alert.alert(
+          "Missing style image",
+          "Each new ready-to-wear style needs at least one image.",
+        );
+        return;
+      }
       if (sumReadyVariantDraftQty(variant) <= 0) {
         Alert.alert(
           "Missing stock",
@@ -980,6 +1124,13 @@ export default function UpdateProductScreen() {
         );
         return;
       }
+      if (!hasUsableDraftImage(variant.images)) {
+        Alert.alert(
+          "Missing style image",
+          "Each new made-on-order style needs at least one image.",
+        );
+        return;
+      }
     }
 
     for (const style of newTailoringStyles) {
@@ -990,7 +1141,7 @@ export default function UpdateProductScreen() {
         );
         return;
       }
-      if (!style.images.length) {
+      if (!hasUsableDraftImage(style.images)) {
         Alert.alert(
           "Missing style image",
           "Each new tailoring style card needs at least one reference image.",
@@ -1450,13 +1601,10 @@ export default function UpdateProductScreen() {
           {
             text: "OK",
             onPress: () =>
-              router.replace({
-                pathname: "/vendor/profile/products",
-                params: {
-                  updated_product_id: String(updated.id),
-                  refresh: String(Date.now()),
-                },
-              } as any),
+              goToProducts({
+                updated_product_id: String(updated.id),
+                refresh: String(Date.now()),
+              }),
           },
         ],
       );
@@ -1810,11 +1958,21 @@ export default function UpdateProductScreen() {
   }
 
   return (
-    <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={0}
+    >
+      <View style={styles.screen}>
+        <ScrollView
+          style={styles.screen}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+        >
         <UpdateProductHeader
           hasVendor={Boolean(vendorId)}
-          onClose={() => router.back()}
+          onClose={goToProducts}
         />
         <ProductPreviewSection
           selected={selected}
@@ -1825,7 +1983,7 @@ export default function UpdateProductScreen() {
           }
           stitchedVariantInventoryStyleCount={stitchedVariants.length}
           isUnstitched={isUnstitched}
-          onBack={() => router.back()}
+          onBack={goToProducts}
         />
 
         <MediaSection
@@ -2017,6 +2175,7 @@ export default function UpdateProductScreen() {
                 <>
                   <StitchedPricingFields
                     madeOnOrder={Boolean(selected?.made_on_order)}
+                    showCostFrom={usesCostFromPricing}
                     priceTotal={priceTotal}
                     availableSizes={availableSizes}
                     onPriceTotalChangeText={(t) =>
@@ -2376,15 +2535,21 @@ export default function UpdateProductScreen() {
             Open from vendor profile.
           </UpdateProductNotice>
         ) : null}
-      </ScrollView>
+        </ScrollView>
 
-      <UpdateProductBottomBar
-        visible={Boolean(selected)}
-        canSave={canSave}
-        saving={saving}
-        onCancel={() => router.back()}
-        onSave={saveUpdate}
-      />
-    </View>
+        <UpdateProductBottomBar
+          visible={Boolean(selected)}
+          canSave={canSave}
+          saving={saving}
+          saveWarning={
+            showMissingNewStyleImageWarning
+              ? missingNewStyleImageMessage
+              : ""
+          }
+          onCancel={goToProducts}
+          onSave={saveUpdate}
+        />
+      </View>
+    </KeyboardAvoidingView>
   );
 }

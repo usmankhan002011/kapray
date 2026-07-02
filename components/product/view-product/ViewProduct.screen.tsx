@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import {
   ActivityIndicator,
   Alert,
@@ -580,6 +581,11 @@ export default function ViewProductScreen() {
     return safeDecode(raw);
   }, [params]);
 
+  const fromParam = useMemo(
+    () => String((params as any)?.from ?? "").trim().toLowerCase(),
+    [params],
+  );
+
   const choiceKey = useMemo(
     () => makeChoiceKey(productId, productCode),
     [productId, productCode],
@@ -674,7 +680,7 @@ export default function ViewProductScreen() {
     };
   }, []);
 
-  const resetBuyerSelections = useCallback(() => {
+  const clearBuyerSelections = useCallback(() => {
     setSelectedStitchedVariant(null);
     _setBuyerWantsTailoring(false);
     _setBuyerWantsDyeing(false);
@@ -692,19 +698,42 @@ export default function ViewProductScreen() {
       productId != null ? String(productId) : null,
       productCode ?? "",
     );
+  }, [choiceKey, productId, productCode]);
 
-    router.setParams({
-      dyeing_selected: "0",
-      dye_shade_id: undefined,
-      dye_hex: undefined,
-      dye_label: undefined,
-    } as any);
-  }, [choiceKey, productId, productCode, router]);
+  const fallbackBackPath = useMemo(() => {
+    if (!isBuyerRoute) return "/vendor/profile/products";
+    if (fromParam === "results") return "/(tabs)/flow/results";
+    return "/(tabs)";
+  }, [fromParam, isBuyerRoute]);
 
-  const exitBuyerToResults = useCallback(() => {
-    resetBuyerSelections();
-    router.replace("/(tabs)");
-  }, [resetBuyerSelections, router]);
+  const goBackToEntry = useCallback(() => {
+    if (!isBuyerRoute && fromParam === "vendor-products") {
+      router.navigate("/vendor/profile/products" as any);
+      return;
+    }
+
+    if (isBuyerRoute) {
+      clearBuyerSelections();
+    }
+
+    const canGoBack =
+      typeof (router as any).canGoBack === "function"
+        ? (router as any).canGoBack()
+        : true;
+
+    if (canGoBack) {
+      router.back();
+      return;
+    }
+
+    router.replace(fallbackBackPath as any);
+  }, [
+    clearBuyerSelections,
+    fallbackBackPath,
+    fromParam,
+    isBuyerRoute,
+    router,
+  ]);
 
   useEffect(() => {
     setSelectedStitchedVariant(null);
@@ -1065,10 +1094,8 @@ export default function ViewProductScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!isBuyerRoute) return;
-
       const onBackPress = () => {
-        exitBuyerToResults();
+        goBackToEntry();
         return true;
       };
 
@@ -1077,7 +1104,7 @@ export default function ViewProductScreen() {
         onBackPress,
       );
       return () => sub.remove();
-    }, [exitBuyerToResults, isBuyerRoute]),
+    }, [goBackToEntry]),
   );
 
   const ChipRow = ({ title, items }: { title: string; items: unknown }) => {
@@ -2083,23 +2110,22 @@ export default function ViewProductScreen() {
         ]}
       >
         <View style={styles.headerRow}>
-          <Text style={styles.title}>Product</Text>
-
           <Pressable
-            onPress={() => {
-              if (isBuyerRoute) {
-                exitBuyerToResults();
-                return;
-              }
-              router.back();
-            }}
+            accessibilityRole="button"
+            accessibilityLabel="Back to previous screen"
+            onPress={goBackToEntry}
             style={({ pressed }) => [
-              styles.linkBtn,
+              styles.backIconBtn,
               pressed ? styles.pressed : null,
             ]}
           >
-            <Text style={styles.linkText}>Close</Text>
+            <MaterialIcons
+              name="arrow-back"
+              size={22}
+              color={stylesVars.blue}
+            />
           </Pressable>
+          <Text style={styles.title}>Product</Text>
         </View>
 
         {missingParam ? (

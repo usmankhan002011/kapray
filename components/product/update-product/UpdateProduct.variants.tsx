@@ -93,7 +93,7 @@ export function ExistingMadeOrderVariantList({
   variants,
 }: ExistingMadeOrderVariantListProps) {
   if (!variants.length) {
-    return <UpdateProductEmptyState title="No saved designs" />;
+    return <UpdateProductEmptyState title="One saved design" />;
   }
 
   const hasSingleVariant = variants.length === 1;
@@ -101,7 +101,7 @@ export function ExistingMadeOrderVariantList({
   return (
     <View style={styles.readonlyListBox}>
       <Text style={styles.appendTitle}>
-        {hasSingleVariant ? "Saved design" : "Saved styles"}
+        {hasSingleVariant ? "One saved design" : "Saved styles"}
       </Text>
       {variants.map((variant, index) => (
         <Text key={`old-made-${index}`} style={styles.readonlyValue}>
@@ -353,7 +353,7 @@ export function ReadyVariantDraftCard({
       />
 
       <View style={styles.sectionHeaderRow}>
-        <Text style={styles.label}>Style Images</Text>
+        <Text style={styles.label}>Style Images *</Text>
         <UpdateProductActionButton
           label="Images"
           icon="add-photo-alternate"
@@ -477,7 +477,7 @@ export function MadeOrderVariantDraftCard({
       />
 
       <View style={styles.sectionHeaderRow}>
-        <Text style={styles.label}>Style Images</Text>
+        <Text style={styles.label}>Style Images *</Text>
         <UpdateProductActionButton
           label="Images"
           icon="add-photo-alternate"

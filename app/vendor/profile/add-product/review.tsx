@@ -73,6 +73,9 @@ type SizeLengthMap = Partial<
   Record<"XS" | "S" | "M" | "L" | "XL" | "XXL", number>
 >;
 
+const STANDARD_SIZE_LABELS = ["XS", "S", "M", "L", "XL", "XXL", "All"];
+const DEFAULT_MADE_ORDER_SIZES = ["All"];
+
 type TailoringStylePresetImage = {
   uri?: string | null;
   url?: string | null;
@@ -138,6 +141,30 @@ function normalizeStringArray(v: any): string[] {
   }
 
   return out;
+}
+
+function normalizeAvailableSizes(v: any, fallback: string[] = []) {
+  const arr = Array.isArray(v) ? v : [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const item of arr) {
+    const raw = safeStr(item);
+    if (!raw) continue;
+
+    const size =
+      STANDARD_SIZE_LABELS.find(
+        (label) => label.toLowerCase() === raw.toLowerCase(),
+      ) ?? raw;
+    const key = size.toLowerCase();
+
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(size);
+  }
+
+  if (out.some((size) => size.toLowerCase() === "all")) return ["All"];
+  return out.length ? out : fallback;
 }
 
 function formatPicked(list: any, emptyLabel: string) {
@@ -569,7 +596,11 @@ export default function AddProductReviewScreen() {
     (draft.spec as any)?.tailoring_turnaround_days ?? 0,
   );
 
-  const sizes = (draft.price as any)?.available_sizes ?? [];
+  const sizes = normalizeAvailableSizes(
+    (draft.price as any)?.available_sizes,
+    madeOnOrder ? DEFAULT_MADE_ORDER_SIZES : [],
+  );
+  const sizesSummary = sizes.length ? sizes.join(", ") : "Not set";
   const sizeLengthMap = (draft.spec as any)?.size_length_m as
     | SizeLengthMap
     | undefined;
@@ -847,12 +878,27 @@ export default function AddProductReviewScreen() {
               </Text>
             </Pressable>
 
-            {hasMadeOrderVariants ? (
+            {madeOnOrder ? (
               <>
                 <Pressable
                   onPress={() =>
+                    goEdit("/vendor/profile/add-product/q06a-sizes")
+                  }
+                  style={({ pressed }) => [
+                    styles.rowBtn,
+                    pressed ? styles.pressed : null,
+                  ]}
+                >
+                  <Text style={styles.rowTitle}>Sizes offered</Text>
+                  <Text style={styles.rowValue}>{sizesSummary}</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() =>
                     goEdit(
-                      "/vendor/profile/add-product/q06b4-made-order-variants",
+                      hasMadeOrderVariants
+                        ? "/vendor/profile/add-product/q06b4-made-order-variants"
+                        : "/vendor/profile/add-product/q06b4-made-order-variant-choice",
                     )
                   }
                   style={({ pressed }) => [
@@ -870,7 +916,7 @@ export default function AddProductReviewScreen() {
                       ? hasSingleMadeOrderVariant
                         ? "1 design / Inventory 0"
                         : `${madeOrderVariants.length} style(s) / Inventory 0`
-                      : "Not set"}
+                      : "One design / Inventory 0"}
                   </Text>
                 </Pressable>
 

@@ -787,6 +787,7 @@ export default function ViewProductStitchedVariants({
       : [];
 
   const showingSimpleReady = !variants.length && !!simpleReadyCard;
+  const showingMadeOrderSizes = readOnly && madeOnOrder && showingSimpleReady;
   const hasMultipleReadyStyles = variants.length > 1;
   const hasSingleReadyStyle = variants.length === 1;
   const hasMultipleMadeOrderStyles = madeOrderVariants.length > 1;
@@ -1073,7 +1074,11 @@ export default function ViewProductStitchedVariants({
   return (
     <View style={styles.card}>
       <Text style={[styles.sectionTitle, { color: stylesVars.blue }]}>
-        {showingSimpleReady
+        {showingMadeOrderSizes
+          ? readOnly
+            ? "Made-on-order Sizes Offered"
+            : "Choose a Made-on-order Size"
+          : showingSimpleReady
           ? readOnly
             ? "Ready-to-wear Sizes Offered"
             : "Choose a Size"
@@ -1099,7 +1104,9 @@ export default function ViewProductStitchedVariants({
         }}
       >
         {displayReadyVariants.map((variant, index) => {
-          const visibleSizes = variant.sizes.filter((row) => !isAllSize(row));
+          const visibleSizes = showingMadeOrderSizes
+            ? variant.sizes
+            : variant.sizes.filter((row) => !isAllSize(row));
           const isActive = activeVariantId === variant.id;
           const selectedSize =
             selectedVariant?.rawVariant?.id === variant.id
@@ -1114,14 +1121,20 @@ export default function ViewProductStitchedVariants({
             : null;
           const styleLabel = hasMultipleReadyStyles
             ? variant.label || `Style ${variant.variant_no || index + 1}`
-            : showingSimpleReady
+            : showingMadeOrderSizes
+              ? "Made on order"
+              : showingSimpleReady
               ? "Ready-to-wear"
               : "Design";
           const styleName = hasMultipleReadyStyles
             ? variant.name || variant.display_name
             : designTitleFromVariant(
                 variant,
-                showingSimpleReady ? "Ready-to-wear" : "Available design",
+                showingMadeOrderSizes
+                  ? "Made on order"
+                  : showingSimpleReady
+                    ? "Ready-to-wear"
+                    : "Available design",
               );
 
           return (
@@ -1253,9 +1266,11 @@ export default function ViewProductStitchedVariants({
                       ]}
                       numberOfLines={2}
                     >
-                      {showingSimpleReady || hasMultipleReadyStyles
-                        ? variant.display_name
-                        : designTitleFromVariant(variant)}
+                      {showingMadeOrderSizes
+                        ? "Made on order"
+                        : showingSimpleReady || hasMultipleReadyStyles
+                          ? variant.display_name
+                          : designTitleFromVariant(variant)}
                     </Text>
 
                     <Text style={[styles.metaLine, detailTextStyle]}>
@@ -1353,17 +1368,22 @@ export default function ViewProductStitchedVariants({
                       },
                     ]}
                   >
-                    {readOnly
-                      ? "Offered sizes and stock:"
-                      : "Select from the available sizes:"}
+                    {showingMadeOrderSizes
+                      ? "Sizes offered:"
+                      : readOnly
+                        ? "Offered sizes and stock:"
+                        : "Select from the available sizes:"}
                   </Text>
 
                   <View
                     style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}
                   >
                     {visibleSizes.map((row: StitchedVariantSize) => {
-                      const out = row.qty <= 0;
-                      const low = row.qty > 0 && row.qty <= 2;
+                      const out = !showingMadeOrderSizes && row.qty <= 0;
+                      const low =
+                        !showingMadeOrderSizes &&
+                        row.qty > 0 &&
+                        row.qty <= 2;
                       const selected = !readOnly && selectedSize === row.size;
 
                       return (
@@ -1421,24 +1441,26 @@ export default function ViewProductStitchedVariants({
                             {row.size}
                           </Text>
 
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              lineHeight: 16,
-                              fontWeight: "800",
-                              color: selected
-                                ? "#FFFFFF"
-                                : out
-                                  ? "#94A3B8"
-                                  : low
-                                    ? "#C2410C"
-                                    : stylesVars.mutedText,
-                              textAlign: "center",
-                            }}
-                            numberOfLines={2}
-                          >
-                            {stockMessage(row.qty)}
-                          </Text>
+                          {!showingMadeOrderSizes ? (
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                lineHeight: 16,
+                                fontWeight: "800",
+                                color: selected
+                                  ? "#FFFFFF"
+                                  : out
+                                    ? "#94A3B8"
+                                    : low
+                                      ? "#C2410C"
+                                      : stylesVars.mutedText,
+                                textAlign: "center",
+                              }}
+                              numberOfLines={2}
+                            >
+                              {stockMessage(row.qty)}
+                            </Text>
+                          ) : null}
                         </Pressable>
                       );
                     })}

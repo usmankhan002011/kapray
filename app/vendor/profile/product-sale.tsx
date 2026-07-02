@@ -3,6 +3,9 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -163,14 +166,14 @@ export default function ProductSaleScreen() {
 
     const cleaned = Number(sanitizeNumber(saleCostText) || "0");
     if (!Number.isFinite(cleaned) || cleaned <= 0) {
-      Alert.alert("Invalid price", "Enter a valid sale price.");
+      Alert.alert("Invalid price", "Enter a valid SALE price.");
       return;
     }
 
     if (cleaned >= reference.previousCostPkr) {
       Alert.alert(
-        "Sale price too high",
-        "New sale price must be lower than the previous price.",
+        "SALE price too high",
+        "New SALE price must be lower than the previous price.",
       );
       return;
     }
@@ -189,17 +192,17 @@ export default function ProductSaleScreen() {
     );
 
     Alert.alert(
-      "Confirm Sale Price?",
+      "Confirm SALE Price?",
       [
         `Product: ${safeText(product.product_code)}`,
         `Previous price: ${previousLabel}`,
-        `New sale price: ${cleanSaleLabel}`,
+        `New SALE price: ${cleanSaleLabel}`,
         `Discount: -${discountPercent}%`,
       ].join("\n"),
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Confirm Sale",
+          text: "Confirm SALE",
           style: "destructive",
           onPress: () => {
             void saveSale(cleaned);
@@ -229,7 +232,7 @@ export default function ProductSaleScreen() {
         .single();
 
       if (error) {
-        Alert.alert("Sale not saved", error.message);
+        Alert.alert("SALE not saved", error.message);
         return;
       }
 
@@ -240,11 +243,11 @@ export default function ProductSaleScreen() {
         updatedSale ? String(Math.round(updatedSale.currentCostPkr)) : "",
       );
 
-      Alert.alert("Sale saved", "Product price has been updated.", [
+      Alert.alert("SALE saved", "Product price has been updated.", [
         { text: "OK", onPress: () => router.back() },
       ]);
     } catch (e: any) {
-      Alert.alert("Error", e?.message ?? "Could not save sale.");
+      Alert.alert("Error", e?.message ?? "Could not save SALE.");
     } finally {
       setSaving(false);
     }
@@ -254,12 +257,12 @@ export default function ProductSaleScreen() {
     if (!product || !vendorId || !productId || !saleInfo) return;
 
     Alert.alert(
-      "End sale?",
+      "End SALE?",
       "This will restore the previous price on this product.",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "End Sale",
+          text: "End SALE",
           style: "destructive",
           onPress: () => {
             void endSale();
@@ -289,7 +292,7 @@ export default function ProductSaleScreen() {
         .single();
 
       if (error) {
-        Alert.alert("Sale not ended", error.message);
+        Alert.alert("SALE not ended", error.message);
         return;
       }
 
@@ -297,153 +300,189 @@ export default function ProductSaleScreen() {
       setProduct(updated);
       setSaleCostText("");
 
-      Alert.alert("Sale ended", "Previous product price has been restored.", [
+      Alert.alert("SALE ended", "Previous product price has been restored.", [
         { text: "OK", onPress: () => router.back() },
       ]);
     } catch (e: any) {
-      Alert.alert("Error", e?.message ?? "Could not end sale.");
+      Alert.alert("Error", e?.message ?? "Could not end SALE.");
     } finally {
       setSaving(false);
     }
   }
 
+  function closeScreen() {
+    Keyboard.dismiss();
+    router.back();
+  }
+
+  function handleConfirmSaveSale() {
+    Keyboard.dismiss();
+    confirmSaveSale();
+  }
+
+  function handleConfirmEndSale() {
+    Keyboard.dismiss();
+    void confirmEndSale();
+  }
+
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <View style={styles.headerRow}>
-        <View style={styles.headerText}>
-          <Text style={styles.title}>Product Sale</Text>
-          <Text style={styles.subtitle}>Reduce price for buyer display</Text>
-        </View>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close sale screen"
-          onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.closeBtn,
-            pressed ? styles.pressed : null,
-          ]}
-        >
-          <MaterialIcons name="close" size={18} color={stylesVars.blue} />
-        </Pressable>
-      </View>
-
-      {!vendorId || !productId ? (
-        <View style={styles.notice}>
-          <Text style={styles.noticeTitle}>Product not loaded</Text>
-          <Text style={styles.noticeText}>Open Sale from your product list.</Text>
-        </View>
-      ) : loading ? (
-        <View style={styles.loadingRow}>
-          <ActivityIndicator />
-          <Text style={styles.loadingText}>Loading product...</Text>
-        </View>
-      ) : product ? (
-        <>
-          <View style={styles.card}>
-            <Text style={styles.productCode}>{safeText(product.product_code)}</Text>
-            <Text style={styles.productTitle}>{safeText(product.title)}</Text>
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.label}>Previous Cost</Text>
-            <Text style={styles.previousPrice}>{previousLabel}</Text>
-
-            <Text style={styles.label}>Current Cost</Text>
-            <Text style={saleInfo ? styles.salePrice : styles.currentPrice}>
-              {currentLabel}
-            </Text>
-
-            {saleInfo ? (
-              <View style={styles.discountPill}>
-                <Text style={styles.discountText}>
-                  -{saleInfo.discountPercent}%
-                </Text>
-              </View>
-            ) : null}
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.label}>New Sale Cost</Text>
-            <FastNumberInput
-              value={saleCostText}
-              onChangeText={(value) => setSaleCostText(sanitizeNumber(value))}
-              placeholder="e.g., 8000"
-              placeholderTextColor={stylesVars.placeholder}
-              style={styles.input}
-              commitMode="change"
-              keyboardType="decimal-pad"
-              maxLength={12}
-            />
-
-            {canSave ? (
-              <View style={styles.previewBox}>
-                <Text style={styles.previewPrice}>{newSaleLabel}</Text>
-                <View style={styles.previewPill}>
-                  <Text style={styles.previewPillText}>
-                    -{newDiscountPercent}%
-                  </Text>
-                </View>
-              </View>
-            ) : null}
-
-            {reference ? (
-              <Text style={styles.hint}>
-                Enter a price below {previousLabel}.
-              </Text>
-            ) : (
-              <Text style={styles.hint}>
-                This product does not have an editable price.
-              </Text>
-            )}
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={0}
+    >
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+      >
+        <View style={styles.headerRow}>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>Product SALE</Text>
+            <Text style={styles.subtitle}>Reduce price for buyer display</Text>
           </View>
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Save product sale"
-            disabled={!canSave}
-            onPress={confirmSaveSale}
+            accessibilityLabel="Close SALE screen"
+            onPress={closeScreen}
             style={({ pressed }) => [
-              styles.primaryBtn,
-              !canSave ? styles.disabled : null,
-              pressed && canSave ? styles.pressed : null,
+              styles.closeBtn,
+              pressed ? styles.pressed : null,
             ]}
           >
-            <View style={styles.btnContent}>
-              <MaterialIcons
-                name={saving ? "hourglass-empty" : "local-offer"}
-                size={18}
-                color={stylesVars.white}
-              />
-              <Text style={styles.primaryText}>
-                {saving ? "Saving..." : saleInfo ? "Update Sale" : "Start Sale"}
-              </Text>
-            </View>
+            <MaterialIcons name="close" size={18} color={stylesVars.blue} />
           </Pressable>
+        </View>
 
-          {saleInfo ? (
+        {!vendorId || !productId ? (
+          <View style={styles.notice}>
+            <Text style={styles.noticeTitle}>Product not loaded</Text>
+            <Text style={styles.noticeText}>
+              Open SALE from your product list.
+            </Text>
+          </View>
+        ) : loading ? (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator />
+            <Text style={styles.loadingText}>Loading product...</Text>
+          </View>
+        ) : product ? (
+          <>
+            <View style={styles.card}>
+              <Text style={styles.productCode}>
+                {safeText(product.product_code)}
+              </Text>
+              <Text style={styles.productTitle}>{safeText(product.title)}</Text>
+            </View>
+
+            <View style={styles.card}>
+              <Text style={styles.label}>Previous Cost</Text>
+              <Text style={styles.previousPrice}>{previousLabel}</Text>
+
+              <Text style={styles.label}>Current Cost</Text>
+              <Text style={saleInfo ? styles.salePrice : styles.currentPrice}>
+                {currentLabel}
+              </Text>
+
+              {saleInfo ? (
+                <View style={styles.discountPill}>
+                  <Text style={styles.discountText}>
+                    -{saleInfo.discountPercent}%
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.card}>
+              <Text style={styles.label}>New SALE Cost</Text>
+              <FastNumberInput
+                value={saleCostText}
+                onChangeText={(value) => setSaleCostText(sanitizeNumber(value))}
+                placeholder="e.g., 8000"
+                placeholderTextColor={stylesVars.placeholder}
+                style={styles.input}
+                commitMode="change"
+                keyboardType="decimal-pad"
+                maxLength={12}
+              />
+
+              {canSave ? (
+                <View style={styles.previewBox}>
+                  <Text style={styles.previewPrice}>{newSaleLabel}</Text>
+                  <View style={styles.previewPill}>
+                    <Text style={styles.previewPillText}>
+                      -{newDiscountPercent}%
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+
+              {reference ? (
+                <Text style={styles.hint}>
+                  Enter a price below {previousLabel}.
+                </Text>
+              ) : (
+                <Text style={styles.hint}>
+                  This product does not have an editable price.
+                </Text>
+              )}
+            </View>
+
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="End product sale"
-              disabled={saving}
-              onPress={confirmEndSale}
+              accessibilityLabel="Save product SALE"
+              disabled={!canSave}
+              onPress={handleConfirmSaveSale}
               style={({ pressed }) => [
-                styles.secondaryBtn,
-                saving ? styles.disabled : null,
-                pressed && !saving ? styles.pressed : null,
+                styles.primaryBtn,
+                !canSave ? styles.disabled : null,
+                pressed && canSave ? styles.pressed : null,
               ]}
             >
-              <Text style={styles.secondaryText}>End Sale</Text>
+              <View style={styles.btnContent}>
+                <MaterialIcons
+                  name={saving ? "hourglass-empty" : "local-offer"}
+                  size={18}
+                  color={stylesVars.white}
+                />
+                <Text style={styles.primaryText}>
+                  {saving
+                    ? "Saving..."
+                    : saleInfo
+                      ? "Update SALE"
+                      : "Start SALE"}
+                </Text>
+              </View>
             </Pressable>
-          ) : null}
-        </>
-      ) : (
-        <View style={styles.notice}>
-          <Text style={styles.noticeTitle}>Product not found</Text>
-          <Text style={styles.noticeText}>Return to Products and try again.</Text>
-        </View>
-      )}
-    </ScrollView>
+
+            {saleInfo ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="End product SALE"
+                disabled={saving}
+                onPress={handleConfirmEndSale}
+                style={({ pressed }) => [
+                  styles.secondaryBtn,
+                  saving ? styles.disabled : null,
+                  pressed && !saving ? styles.pressed : null,
+                ]}
+              >
+                <Text style={styles.secondaryText}>End SALE</Text>
+              </Pressable>
+            ) : null}
+          </>
+        ) : (
+          <View style={styles.notice}>
+            <Text style={styles.noticeTitle}>Product not found</Text>
+            <Text style={styles.noticeText}>
+              Return to Products and try again.
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -465,6 +504,11 @@ const stylesVars = {
 };
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: stylesVars.bg,
+  },
+
   content: {
     minHeight: "100%",
     padding: 16,

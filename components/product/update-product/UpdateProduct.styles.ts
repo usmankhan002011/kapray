@@ -658,12 +658,26 @@ export const styles = StyleSheet.create({
   },
 
   bottomBar: {
-    flexDirection: "row",
-    gap: 10,
     padding: 14,
     borderTopWidth: 1,
     borderTopColor: stylesVars.border,
     backgroundColor: stylesVars.white,
+  },
+
+  bottomAlert: {
+    marginBottom: 8,
+  },
+
+  bottomAlertText: {
+    color: stylesVars.danger,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "400",
+  },
+
+  bottomButtonRow: {
+    flexDirection: "row",
+    gap: 10,
   },
 
   cancelBtn: {

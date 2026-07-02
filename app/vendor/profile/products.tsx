@@ -47,6 +47,7 @@ type ProductRow = {
   title: string | null;
   created_at?: string | null;
   inventory_qty?: number | null;
+  order_count?: number | null;
   made_on_order?: boolean | null;
   product_category?: ProductCategory | null;
   spec?: any;
@@ -69,11 +70,6 @@ type ProductCardPriceDisplay = {
   discountLabel?: string;
 };
 
-type ProductCardStockDisplay = {
-  label: string;
-  value: string;
-};
-
 type ProductCardStockStatus = {
   label: "Out of stock" | "Low stock";
   tone: "danger" | "warning";
@@ -81,6 +77,11 @@ type ProductCardStockStatus = {
 
 type ProductCardInventoryRevision = {
   previousLabel: string;
+};
+
+type ProductCardMetric = {
+  label: string;
+  value: string | number;
 };
 
 function safeInt(v: any) {
@@ -284,6 +285,51 @@ function getStitchedInventorySummary(
   return getSimpleReadyInventorySummary(product);
 }
 
+function getArrayLength(value: unknown) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function getReadyStyleCount(product: ProductRow) {
+  const price = product?.price ?? {};
+  const spec = product?.spec ?? {};
+  const inventory = (product as any)?.inventory ?? {};
+
+  return Math.max(
+    getArrayLength(price?.variants),
+    getArrayLength(price?.ready_variants),
+    getArrayLength(price?.readyVariants),
+    getArrayLength(price?.stitched_variants),
+    getArrayLength(price?.stitchedVariants),
+    getArrayLength(spec?.variants),
+    getArrayLength(spec?.ready_variants),
+    getArrayLength(spec?.readyVariants),
+    getArrayLength(spec?.stitched_variants),
+    getArrayLength(spec?.stitchedVariants),
+    getArrayLength(inventory?.variants),
+    getArrayLength(inventory?.ready_variants),
+    getArrayLength(inventory?.readyVariants),
+    getArrayLength(inventory?.stitched_variants),
+    getArrayLength(inventory?.stitchedVariants),
+  );
+}
+
+function getMadeOrderStyleCount(product: ProductRow) {
+  const price = product?.price ?? {};
+  const spec = product?.spec ?? {};
+  const inventory = (product as any)?.inventory ?? {};
+
+  return Math.max(
+    getArrayLength(price?.made_order_variants),
+    getArrayLength(price?.madeOrderVariants),
+    getArrayLength(product?.price?.made_order_variants),
+    getArrayLength(product?.price?.madeOrderVariants),
+    getArrayLength(spec?.made_order_variants),
+    getArrayLength(spec?.madeOrderVariants),
+    getArrayLength(inventory?.made_order_variants),
+    getArrayLength(inventory?.madeOrderVariants),
+  );
+}
+
 function isProductCategory(v: unknown): v is ProductCategory {
   return (
     v === "unstitched_plain" ||
@@ -402,30 +448,62 @@ function productCategoryCardLabel(item: ProductRow) {
   return isMadeOnOrderProduct(item) ? "Made-on-order" : "Product";
 }
 
-function getStockSummaryDisplay(item: ProductRow): ProductCardStockDisplay {
+function getCompactStockDisplay(item: ProductRow): string {
   if (isMadeOnOrderProduct(item)) {
-    return { label: "", value: "Made on order" };
+    return "MTO";
   }
 
-  if (isStitchedReadyProduct(item)) {
-    const info = getStitchedInventorySummary(item);
+  const qty = Math.max(0, Number(getCurrentStockQty(item) ?? 0));
+  const suffix = getStockUnit(item) === "m" ? " m" : "";
+  return `${formatStockQty(qty)}${suffix}`;
+}
 
-    if (!info.hasStock) return { label: "Total stock", value: "0" };
-
-    const styleWord = info.variantCount === 1 ? "style" : "styles";
-    return {
-      label: "Total stock",
-      value: `${info.totalQty} in ${info.variantCount} ${styleWord}`,
-    };
+function getProductOrderMetricLabel(item: ProductRow) {
+  if (isMadeOnOrderProduct(item)) {
+    return "Sold";
   }
 
-  const qty = Math.max(0, Number(item?.inventory_qty ?? 0));
+  return isUnstitchedProduct(item) ? "Orders" : "Sold";
+}
+
+function getProductOrderMetricValue(item: ProductRow) {
+  const count = safeInt(item?.order_count);
+  return Math.max(0, count ?? 0);
+}
+
+function getStyleMetric(item: ProductRow): ProductCardMetric | null {
+  const count = isMadeOnOrderProduct(item)
+    ? getMadeOrderStyleCount(item)
+    : isStitchedReadyProduct(item)
+      ? getReadyStyleCount(item)
+      : 0;
+
+  if (count <= 0) return null;
+
   return {
-    label: "Total stock",
-    value: isUnstitchedProduct(item)
-      ? `${formatStockQty(qty)} m`
-      : formatStockQty(qty),
+    label: count === 1 ? "Design" : "Styles",
+    value: count,
   };
+}
+
+function getProductCardMetrics(item: ProductRow): ProductCardMetric[] {
+  const metrics: ProductCardMetric[] = [];
+
+  if (!isMadeOnOrderProduct(item)) {
+    metrics.push({ label: "Stock", value: getCompactStockDisplay(item) });
+  }
+
+  const styleMetric = getStyleMetric(item);
+  if (styleMetric) {
+    metrics.push(styleMetric);
+  }
+
+  metrics.push({
+    label: getProductOrderMetricLabel(item),
+    value: getProductOrderMetricValue(item),
+  });
+
+  return metrics;
 }
 
 function getStockUnit(item: ProductRow) {
@@ -633,6 +711,7 @@ export default function VendorProductsScreen() {
   const [productCount, setProductCount] = useState<number | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const loadedVendorIdRef = React.useRef<number | null>(null);
 
   const trimmedSearch = searchQuery.trim();
   const searching = trimmedSearch.length > 0;
@@ -644,13 +723,72 @@ export default function VendorProductsScreen() {
   ).trim();
   const refreshParam = String((params as any)?.refresh ?? "").trim();
 
-  async function fetchProductsReset() {
+  function isCountedOrderStatus(status: unknown) {
+    const value = String(status ?? "").trim().toLowerCase();
+    return !["canceled", "cancelled", "rejected", "refunded", "returned"].includes(
+      value,
+    );
+  }
+
+  async function fetchOrderCountsByProductId(
+    productIds: Array<string | number | null | undefined>,
+  ): Promise<Record<string, number>> {
+    if (!vendorId) return {};
+
+    const ids = Array.from(
+      new Set(
+        productIds
+          .map((id) => safeInt(id))
+          .filter((id): id is number => id != null),
+      ),
+    );
+
+    if (!ids.length) return {};
+
+    const { data, error } = await supabase
+      .from("orders")
+      .select("product_id, status")
+      .eq("vendor_id", vendorId)
+      .in("product_id", ids);
+
+    if (error) {
+      console.warn("Could not load product order counts:", error.message);
+      return {};
+    }
+
+    const counts: Record<string, number> = {};
+    for (const row of (data as any[]) ?? []) {
+      if (!isCountedOrderStatus(row?.status)) continue;
+
+      const productId = safeInt(row?.product_id);
+      if (productId == null) continue;
+
+      const key = String(productId);
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+
+    return counts;
+  }
+
+  async function attachOrderCounts(rows: ProductRow[]) {
+    const counts = await fetchOrderCountsByProductId(rows.map((row) => row.id));
+    return rows.map((row) => ({
+      ...row,
+      order_count: counts[String(safeInt(row.id) ?? row.id)] ?? 0,
+    }));
+  }
+
+  async function fetchProductsReset(options?: { showLoading?: boolean }) {
     if (!vendorId) {
       return;
     }
 
+    const showLoading = options?.showLoading ?? true;
+
     try {
-      setLoading(true);
+      if (showLoading) {
+        setLoading(true);
+      }
       setHasMore(true);
 
       let query = supabase
@@ -682,14 +820,18 @@ export default function VendorProductsScreen() {
           banner_url: publicUrlForStoragePath(imgPath),
         };
       });
+      const mappedWithCounts = await attachOrderCounts(mapped);
 
-      setProducts(mapped);
+      setProducts(mappedWithCounts);
       setProductCount(typeof count === "number" ? count : rows.length);
       setHasMore(rows.length === PAGE_SIZE);
+      loadedVendorIdRef.current = vendorId;
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not load products.");
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   }
 
@@ -732,10 +874,11 @@ export default function VendorProductsScreen() {
           banner_url: publicUrlForStoragePath(imgPath),
         };
       });
+      const mappedWithCounts = await attachOrderCounts(mapped);
 
       setProducts((prev) => {
         const seen = new Set(prev.map((p) => p.id));
-        const add = mapped.filter((r) => !seen.has(r.id));
+        const add = mappedWithCounts.filter((r) => !seen.has(r.id));
         return [...prev, ...add];
       });
 
@@ -750,7 +893,9 @@ export default function VendorProductsScreen() {
   useFocusEffect(
     React.useCallback(() => {
       if (vendorId) {
-        void fetchProductsReset();
+        void fetchProductsReset({
+          showLoading: loadedVendorIdRef.current !== vendorId,
+        });
       }
     }, [
       vendorId,
@@ -787,9 +932,11 @@ export default function VendorProductsScreen() {
         const row = data as any as ProductRow;
         const imgPath = firstImagePath((row as any).media);
         const banner_url = publicUrlForStoragePath(imgPath);
+        const [mappedRow] = await attachOrderCounts([{ ...row, banner_url }]);
+
+        if (!alive) return;
 
         setProducts((prev) => {
-          const mappedRow = { ...row, banner_url };
           const exists = prev.some((p) => p.id === row.id);
           if (exists) {
             return prev.map((p) => (p.id === row.id ? mappedRow : p));
@@ -807,11 +954,13 @@ export default function VendorProductsScreen() {
   }, [newProductIdParam, refreshParam, updatedProductIdParam, vendorId]);
 
   function openProduct(item: ProductRow) {
-    router.push(
-      `/vendor/profile/view-product?product_id=${encodeURIComponent(
-        item.id,
-      )}` as any,
-    );
+    router.push({
+      pathname: "/vendor/profile/view-product",
+      params: {
+        product_id: item.id,
+        from: "vendor-products",
+      },
+    } as any);
   }
 
   function editProduct(item: ProductRow) {
@@ -843,7 +992,7 @@ export default function VendorProductsScreen() {
     const code = safeText(item.product_code);
     const title = safeText(item.title);
     const categoryText = productCategoryCardLabel(item);
-    const stockDisplay = getStockSummaryDisplay(item);
+    const cardMetrics = getProductCardMetrics(item);
     const inventoryRevision = getInventoryRevisionDisplay(item);
     const stockStatus = getStockStatusDisplay(item);
     const saleInfo = getActiveProductSale(item.price);
@@ -889,13 +1038,6 @@ export default function VendorProductsScreen() {
                 </Text>
                 {priceDisplay.previousLabel ? (
                   <View style={styles.previousPriceRow}>
-                    {priceDisplay.discountLabel ? (
-                      <View style={styles.discountBadge}>
-                        <Text style={styles.discountBadgeText}>
-                          {priceDisplay.discountLabel}
-                        </Text>
-                      </View>
-                    ) : null}
                     <Text
                       style={[
                         styles.previousPrice,
@@ -910,6 +1052,13 @@ export default function VendorProductsScreen() {
                     >
                       {priceDisplay.previousLabel}
                     </Text>
+                    {priceDisplay.discountLabel ? (
+                      <View style={styles.discountBadge}>
+                        <Text style={styles.discountBadgeText}>
+                          {priceDisplay.discountLabel}
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
                 ) : null}
               </View>
@@ -918,9 +1067,14 @@ export default function VendorProductsScreen() {
             <Text style={styles.stockText} numberOfLines={2}>
               {categoryText}
             </Text>
-            <Text style={styles.stockText}>
-              {stockDisplay.label ? `${stockDisplay.label} ` : ""}
-              <Text style={styles.stockValueText}>{stockDisplay.value}</Text>
+            <Text style={styles.stockText} numberOfLines={1}>
+              {cardMetrics.map((metric, index) => (
+                <React.Fragment key={`${metric.label}-${index}`}>
+                  {index > 0 ? " | " : ""}
+                  {metric.label}:{" "}
+                  <Text style={styles.stockValueText}>{metric.value}</Text>
+                </React.Fragment>
+              ))}
             </Text>
             {inventoryRevision ? (
               <Text style={styles.inventoryRevisionText}>
@@ -1069,7 +1223,7 @@ export default function VendorProductsScreen() {
             <View style={styles.listCard}>
               <Text style={styles.empty}>Vendor not loaded.</Text>
             </View>
-          ) : loading ? (
+          ) : loading && !products.length ? (
             <View style={styles.listCard}>
               <View style={styles.loadingRow}>
                 <ActivityIndicator />
