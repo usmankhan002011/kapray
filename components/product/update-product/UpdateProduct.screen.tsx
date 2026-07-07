@@ -3,13 +3,17 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   Text,
   View,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { supabase } from "@/utils/supabase/client";
 import { useAppSelector } from "@/store/hooks";
 import * as ImagePicker from "expo-image-picker";
@@ -34,7 +38,10 @@ import {
 import { MediaSection } from "./UpdateProduct.media";
 import { styles, stylesVars } from "./UpdateProduct.styles";
 import {
+  applyProductRegularPriceRevision,
+  formatPkr,
   getActiveProductSale,
+  getProductRegularPriceRevision,
   syncProductSaleWithLivePrice,
 } from "@/utils/kapray/productSale";
 import {
@@ -50,6 +57,7 @@ import {
   ExistingMadeOrderVariantList,
   MadeOrderVariantDraftCard,
   ReadyVariantDraftCard,
+  SimpleReadyInventorySection,
   StitchedVariantInventorySection,
 } from "./UpdateProduct.variants";
 import {
@@ -58,6 +66,7 @@ import {
   clearProductTailoringSelections,
   editedCategoryFromState,
   emptyTailoringSelections,
+  getSimpleReadyInventoryInfo,
   extFromUri,
   getStitchedVariantInventoryInfo,
   guessContentTypeFromExt,
@@ -67,6 +76,7 @@ import {
   makeEmptyTailoringStyleDraft,
   nextVariantNoFromList,
   normalizeStringList,
+  readEditableSimpleReadyInventory,
   readEditableStitchedVariants,
   readMadeOrderVariants,
   readProductTailoringSelections,
@@ -84,6 +94,7 @@ import {
   sumReadyVariantDraftQty,
   writeEditableStitchedVariantsToJson,
   writeProductTailoringSelections,
+  writeSimpleReadyInventoryToJson,
 } from "./UpdateProduct.helpers";
 import type {
   EditableReadyVariant,
@@ -99,6 +110,81 @@ import type {
 
 const PRODUCTS_TABLE = "products";
 const BUCKET_VENDOR = "vendor_images";
+
+function roundPriceForCompare(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(value * 100) / 100;
+}
+
+type InventoryUnit = "unit" | "m";
+
+type InventoryChangeInfo = {
+  previousQty: number;
+  nextQty: number;
+  unit: InventoryUnit;
+  previousLabel: string;
+  nextLabel: string;
+};
+
+type InventoryRevisionRecordInfo = {
+  previousLabel: string;
+  currentLabel: string;
+};
+
+function formatInventoryQty(value: number, unit: InventoryUnit) {
+  const qty =
+    unit === "m"
+      ? roundMeter(Math.max(0, value))
+      : Math.max(0, Math.trunc(value));
+  const formatted = String(qty)
+    .replace(/(\.\d*?)0+$/, "$1")
+    .replace(/\.$/, "");
+
+  return unit === "m" ? `${formatted} m` : formatted;
+}
+
+function normalizeInventoryQty(value: unknown, unit: InventoryUnit) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return unit === "m"
+    ? roundMeter(Math.max(0, n))
+    : Math.max(0, Math.trunc(n));
+}
+
+function getInventoryRevisionRecordInfo(
+  product: ProductRow | null,
+): InventoryRevisionRecordInfo | null {
+  if (!product || Boolean(product.made_on_order)) return null;
+
+  const spec = safeJson(product.spec);
+  const revision = safeJson(spec?.inventory_revision);
+  if (revision?.active !== true) return null;
+
+  const unit: InventoryUnit = revision?.unit === "m" ? "m" : "unit";
+  const previousQty = normalizeInventoryQty(revision?.previous_qty, unit);
+  const revisionCurrentQty = normalizeInventoryQty(revision?.current_qty, unit);
+  const currentQty = normalizeInventoryQty(product.inventory_qty, unit);
+
+  if (previousQty === currentQty || revisionCurrentQty !== currentQty) {
+    return null;
+  }
+
+  return {
+    previousLabel: formatInventoryQty(previousQty, unit),
+    currentLabel: formatInventoryQty(currentQty, unit),
+  };
+}
+
+function hasUsableDraftImage(images: unknown) {
+  if (!Array.isArray(images)) return false;
+
+  return images.some((image) => {
+    if (!image || typeof image !== "object") return false;
+    const draft = image as { uri?: unknown; path?: unknown; url?: unknown };
+    return Boolean(String(draft.uri ?? draft.path ?? draft.url ?? "").trim());
+  });
+}
+
 export default function UpdateProductScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
@@ -114,6 +200,17 @@ export default function UpdateProductScreen() {
   const vendorId = safeInt(vendorIdRaw);
   const routeProductId = safeInt(
     (params as any)?.productId ?? (params as any)?.product_id,
+  );
+
+  const goToProducts = useCallback(
+    (nextParams?: Record<string, string>) => {
+      Keyboard.dismiss();
+      router.replace({
+        pathname: "/vendor/profile/products",
+        params: nextParams ?? {},
+      } as any);
+    },
+    [router],
   );
 
   const [loadingList, setLoadingList] = useState(false);
@@ -162,6 +259,11 @@ export default function UpdateProductScreen() {
   const [stitchedVariants, setStitchedVariants] = useState<
     EditableReadyVariant[]
   >([]);
+  const [simpleReadyInventory, setSimpleReadyInventory] = useState<
+    EditableVariantSizeRow[]
+  >([]);
+  const [simpleReadyInventoryActive, setSimpleReadyInventoryActive] =
+    useState(false);
 
   const [newReadyVariants, setNewReadyVariants] = useState<
     NewReadyVariantDraft[]
@@ -234,6 +336,43 @@ export default function UpdateProductScreen() {
                 additional_price_pkr: additionalPrice,
               }
             : variant,
+        ),
+      );
+    },
+    [],
+  );
+
+  const toggleSimpleReadySize = useCallback((size: string) => {
+    const clean = String(size ?? "").trim();
+    const key = clean.toLowerCase();
+    if (!key) return;
+
+    setSimpleReadyInventory((prev) => {
+      const exists = prev.some(
+        (row) => String(row.size ?? "").trim().toLowerCase() === key,
+      );
+
+      if (exists) {
+        return prev.filter(
+          (row) => String(row.size ?? "").trim().toLowerCase() !== key,
+        );
+      }
+
+      return [...prev, { size: clean, qty: 0, raw: {} }];
+    });
+  }, []);
+
+  const updateSimpleReadySizeQty = useCallback(
+    (size: string, rawValue: string) => {
+      const key = String(size ?? "").trim().toLowerCase();
+      const qty = safeNonNegInt(sanitizeNumber(rawValue));
+      if (!key) return;
+
+      setSimpleReadyInventory((prev) =>
+        prev.map((row) =>
+          String(row.size ?? "").trim().toLowerCase() === key
+            ? { ...row, qty }
+            : row,
         ),
       );
     },
@@ -324,9 +463,8 @@ export default function UpdateProductScreen() {
     [updateNewTailoringStyle],
   );
 
-  async function fetchProducts() {
+  const fetchProducts = useCallback(async () => {
     if (!vendorId) {
-      Alert.alert("Vendor missing", "Open from vendor profile.");
       return;
     }
 
@@ -352,7 +490,7 @@ export default function UpdateProductScreen() {
     } finally {
       setLoadingList(false);
     }
-  }
+  }, [vendorId]);
 
   const fetchVendorTailoring = useCallback(async () => {
     if (!vendorId) {
@@ -400,11 +538,27 @@ export default function UpdateProductScreen() {
     }
   }, [vendorId]);
 
-  useEffect(() => {
-    void fetchProducts();
-    void fetchVendorTailoring();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vendorId]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!vendorId) return;
+      void fetchProducts();
+      void fetchVendorTailoring();
+    }, [fetchProducts, fetchVendorTailoring, vendorId]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        () => {
+          goToProducts();
+          return true;
+        },
+      );
+
+      return () => subscription.remove();
+    }, [goToProducts]),
+  );
 
   useEffect(() => {
     if (routeProductId != null) {
@@ -476,6 +630,9 @@ export default function UpdateProductScreen() {
 
     setSelectedTailoringStyles(readProductTailoringSelections(spec));
     setStitchedVariants(readEditableStitchedVariants(selected));
+    const nextSimpleReadyInventory = readEditableSimpleReadyInventory(selected);
+    setSimpleReadyInventory(nextSimpleReadyInventory);
+    setSimpleReadyInventoryActive(nextSimpleReadyInventory.length > 0);
     setNewReadyVariants([]);
     setNewMadeOrderVariants([]);
     setNewTailoringStyles(
@@ -508,15 +665,55 @@ export default function UpdateProductScreen() {
     return getStitchedVariantInventoryInfo(stitchedVariants);
   }, [stitchedVariants]);
 
+  const simpleReadyInventoryInfo = useMemo(() => {
+    return getSimpleReadyInventoryInfo(simpleReadyInventory);
+  }, [simpleReadyInventory]);
+
   const usesVariantInventory = useMemo(() => {
     return priceMode === "stitched_total" && stitchedVariants.length > 0;
   }, [priceMode, stitchedVariants.length]);
+
+  const usesSimpleReadyInventory = useMemo(() => {
+    return (
+      priceMode === "stitched_total" &&
+      !Boolean(selected?.made_on_order) &&
+      stitchedVariants.length === 0 &&
+      simpleReadyInventoryActive
+    );
+  }, [
+    priceMode,
+    selected?.made_on_order,
+    simpleReadyInventoryActive,
+    stitchedVariants.length,
+  ]);
+
+  const usesCostFromPricing = useMemo(() => {
+    return (
+      priceMode === "stitched_total" &&
+      (Boolean(selected?.made_on_order) ||
+        stitchedVariants.length > 0 ||
+        newReadyVariants.length > 0)
+    );
+  }, [
+    newReadyVariants.length,
+    priceMode,
+    selected?.made_on_order,
+    stitchedVariants.length,
+  ]);
 
   const media = useMemo(() => safeJson(selected?.media), [selected]);
 
   const activeSaleInfo = useMemo(
     () => getActiveProductSale(selected?.price),
     [selected?.price],
+  );
+  const regularPriceRevisionInfo = useMemo(
+    () => getProductRegularPriceRevision(selected?.price),
+    [selected?.price],
+  );
+  const inventoryRevisionInfo = useMemo(
+    () => getInventoryRevisionRecordInfo(selected),
+    [selected],
   );
 
   const imagePaths = useMemo(
@@ -647,7 +844,45 @@ export default function UpdateProductScreen() {
     newTailoringStyles.length,
   ]);
 
-  const canSave = useMemo(() => {
+  const missingNewStyleImageMessage = useMemo(() => {
+    if (priceMode === "stitched_total" && !Boolean(selected?.made_on_order)) {
+      const missingIndex = newReadyVariants.findIndex(
+        (variant) => !hasUsableDraftImage(variant.images),
+      );
+      if (missingIndex >= 0) {
+        return "Please add at least one image to each new ready-to-wear style.";
+      }
+    }
+
+    if (priceMode === "stitched_total" && Boolean(selected?.made_on_order)) {
+      const missingIndex = newMadeOrderVariants.findIndex(
+        (variant) => !hasUsableDraftImage(variant.images),
+      );
+      if (missingIndex >= 0) {
+        return "Please add at least one image to each new made-on-order style.";
+      }
+    }
+
+    if (priceMode === "unstitched_per_meter" && tailoringEnabled) {
+      const missingIndex = newTailoringStyles.findIndex(
+        (style) => !hasUsableDraftImage(style.images),
+      );
+      if (missingIndex >= 0) {
+        return "Please add at least one image to each new tailoring style card.";
+      }
+    }
+
+    return "";
+  }, [
+    newMadeOrderVariants,
+    newReadyVariants,
+    newTailoringStyles,
+    priceMode,
+    selected?.made_on_order,
+    tailoringEnabled,
+  ]);
+
+  const baseRequiredFieldsComplete = useMemo(() => {
     if (!vendorId) return false;
     if (!selectedId) return false;
     if (!title.trim()) return false;
@@ -700,7 +935,131 @@ export default function UpdateProductScreen() {
     newTailoringStyles.length,
   ]);
 
-  async function saveUpdate() {
+  const newStyleRequiredFieldsComplete = useMemo(() => {
+    if (priceMode === "stitched_total" && Boolean(selected?.made_on_order)) {
+      return !newMadeOrderVariants.some(
+        (variant) => !String(variant.name ?? "").trim(),
+      );
+    }
+
+    if (priceMode === "stitched_total" && !Boolean(selected?.made_on_order)) {
+      return !newReadyVariants.some(
+        (variant) =>
+          !String(variant.name ?? "").trim() ||
+          sumReadyVariantDraftQty(variant) <= 0,
+      );
+    }
+
+    if (priceMode === "unstitched_per_meter" && tailoringEnabled) {
+      return !newTailoringStyles.some(
+        (style) => !String(style.title ?? "").trim(),
+      );
+    }
+
+    return true;
+  }, [
+    newMadeOrderVariants,
+    newReadyVariants,
+    newTailoringStyles,
+    priceMode,
+    selected?.made_on_order,
+    tailoringEnabled,
+  ]);
+
+  const showMissingNewStyleImageWarning = Boolean(
+    missingNewStyleImageMessage &&
+      baseRequiredFieldsComplete &&
+      newStyleRequiredFieldsComplete,
+  );
+
+  const canSave = useMemo(() => {
+    return baseRequiredFieldsComplete && !missingNewStyleImageMessage;
+  }, [baseRequiredFieldsComplete, missingNewStyleImageMessage]);
+
+  function getBasePriceChangeInfo() {
+    if (!selected) return null;
+
+    const price = safeJson(selected.price);
+    const previous =
+      priceMode === "unstitched_per_meter"
+        ? safeNumOrZero(price?.cost_pkr_per_meter)
+        : safeNumOrZero(price?.cost_pkr_total);
+    const next =
+      priceMode === "unstitched_per_meter"
+        ? safeNumOrZero(pricePerMeter)
+        : safeNumOrZero(priceTotal);
+
+    if (roundPriceForCompare(previous) === roundPriceForCompare(next)) {
+      return null;
+    }
+
+    const unitSuffix =
+      priceMode === "unstitched_per_meter" ? " / meter" : "";
+
+    return {
+      previousCostPkr: previous,
+      nextCostPkr: next,
+      previousLabel:
+        previous > 0 ? `${formatPkr(previous)}${unitSuffix}` : "Not set",
+      nextLabel: `${formatPkr(next)}${unitSuffix}`,
+    };
+  }
+
+  function getInventoryChangeInfo(): InventoryChangeInfo | null {
+    if (!selected || Boolean(selected.made_on_order)) return null;
+
+    const unit: InventoryUnit =
+      priceMode === "unstitched_per_meter" ? "m" : "unit";
+    const previousSpec = safeJson(selected.spec);
+    const previousSource =
+      selected.inventory_qty ??
+      (unit === "m" ? previousSpec?.inventory_length_m : 0);
+    const previousQty = normalizeInventoryQty(previousSource, unit);
+
+    let nextQty: number | null = null;
+
+    if (priceMode === "stitched_total" && usesSimpleReadyInventory) {
+      nextQty = normalizeInventoryQty(
+        simpleReadyInventoryInfo.totalQty,
+        unit,
+      );
+    } else if (
+      priceMode === "stitched_total" &&
+      (stitchedVariants.length > 0 || newReadyVariants.length > 0)
+    ) {
+      nextQty = normalizeInventoryQty(
+        stitchedVariantInventoryInfo.totalQty +
+          newReadyVariants.reduce(
+            (sum, variant) => sum + sumReadyVariantDraftQty(variant),
+            0,
+          ),
+        unit,
+      );
+    } else if (inventoryEditable) {
+      const parsedInventoryInput = Number(
+        sanitizeNumber(inventoryQtyText) || "0",
+      );
+      nextQty = normalizeInventoryQty(
+        Number.isFinite(parsedInventoryInput) ? parsedInventoryInput : 0,
+        unit,
+      );
+    }
+
+    if (nextQty == null || previousQty === nextQty) return null;
+
+    return {
+      previousQty,
+      nextQty,
+      unit,
+      previousLabel: formatInventoryQty(previousQty, unit),
+      nextLabel: formatInventoryQty(nextQty, unit),
+    };
+  }
+
+  async function saveUpdate(options?: {
+    confirmedPriceChange?: boolean;
+    confirmedInventoryChange?: boolean;
+  }) {
     if (saving) return;
 
     if (
@@ -712,6 +1071,11 @@ export default function UpdateProductScreen() {
         "Missing style cards",
         "Please add at least one tailoring style card.",
       );
+      return;
+    }
+
+    if (missingNewStyleImageMessage) {
+      Alert.alert("Missing style image", missingNewStyleImageMessage);
       return;
     }
 
@@ -736,6 +1100,13 @@ export default function UpdateProductScreen() {
         );
         return;
       }
+      if (!hasUsableDraftImage(variant.images)) {
+        Alert.alert(
+          "Missing style image",
+          "Each new ready-to-wear style needs at least one image.",
+        );
+        return;
+      }
       if (sumReadyVariantDraftQty(variant) <= 0) {
         Alert.alert(
           "Missing stock",
@@ -753,6 +1124,13 @@ export default function UpdateProductScreen() {
         );
         return;
       }
+      if (!hasUsableDraftImage(variant.images)) {
+        Alert.alert(
+          "Missing style image",
+          "Each new made-on-order style needs at least one image.",
+        );
+        return;
+      }
     }
 
     for (const style of newTailoringStyles) {
@@ -763,13 +1141,100 @@ export default function UpdateProductScreen() {
         );
         return;
       }
-      if (!style.images.length) {
+      if (!hasUsableDraftImage(style.images)) {
         Alert.alert(
           "Missing style image",
           "Each new tailoring style card needs at least one reference image.",
         );
         return;
       }
+    }
+
+    const priceChangeInfo = getBasePriceChangeInfo();
+    const inventoryChangeInfo = getInventoryChangeInfo();
+    if (priceChangeInfo && activeSaleInfo) {
+      Alert.alert(
+        "Product Already On SALE",
+        [
+          "You have already placed this product on SALE.",
+          "",
+          "To change the regular product cost, end SALE first.",
+          "",
+          "To continue the SALE at a different price, open SALE and enter the new SALE price.",
+          "",
+          "Existing orders will not change.",
+        ].join("\n"),
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Open SALE",
+            onPress: () => {
+              if (!selectedId) return;
+              router.push({
+                pathname: "/vendor/profile/product-sale",
+                params: {
+                  productId: String(selectedId),
+                  product_id: String(selectedId),
+                },
+              } as any);
+            },
+          },
+        ],
+      );
+      return;
+    }
+
+    if (priceChangeInfo && !options?.confirmedPriceChange) {
+      Alert.alert(
+        "Confirm Price Change?",
+        [
+          `Product: ${safeText(selected?.product_code)}`,
+          `Previous price: ${priceChangeInfo.previousLabel}`,
+          `New price: ${priceChangeInfo.nextLabel}`,
+          "Existing orders stay unchanged. New orders will use the revised live price.",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Confirm Update",
+            style: "destructive",
+            onPress: () => {
+              void saveUpdate({
+                confirmedPriceChange: true,
+                confirmedInventoryChange: options?.confirmedInventoryChange,
+              });
+            },
+          },
+        ],
+      );
+      return;
+    }
+
+    if (inventoryChangeInfo && !options?.confirmedInventoryChange) {
+      Alert.alert(
+        "Confirm Inventory Change?",
+        [
+          `Product: ${safeText(selected?.product_code)}`,
+          `Previous stock: ${inventoryChangeInfo.previousLabel}`,
+          `New stock: ${inventoryChangeInfo.nextLabel}`,
+        ].join("\n"),
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Confirm Stock",
+            style: "destructive",
+            onPress: () => {
+              void saveUpdate({
+                confirmedPriceChange: options?.confirmedPriceChange,
+                confirmedInventoryChange: true,
+              });
+            },
+          },
+        ],
+      );
+      return;
     }
 
     try {
@@ -863,6 +1328,17 @@ export default function UpdateProductScreen() {
           nextPrice,
           nextSpec,
           variants: stitchedVariants,
+        });
+
+        nextPrice = written.nextPrice;
+        nextSpec = written.nextSpec;
+      }
+
+      if (priceMode === "stitched_total" && usesSimpleReadyInventory) {
+        const written = writeSimpleReadyInventoryToJson({
+          nextPrice,
+          nextSpec,
+          rows: simpleReadyInventory,
         });
 
         nextPrice = written.nextPrice;
@@ -1037,6 +1513,23 @@ export default function UpdateProductScreen() {
       }
 
       const now = new Date().toISOString();
+      if (priceChangeInfo && !activeSaleInfo) {
+        nextPrice = applyProductRegularPriceRevision(
+          nextPrice,
+          priceChangeInfo.previousCostPkr,
+          priceChangeInfo.nextCostPkr,
+          now,
+        );
+      }
+      if (inventoryChangeInfo) {
+        nextSpec.inventory_revision = {
+          active: true,
+          previous_qty: inventoryChangeInfo.previousQty,
+          current_qty: inventoryChangeInfo.nextQty,
+          unit: inventoryChangeInfo.unit,
+          updated_at: now,
+        };
+      }
       nextPrice = syncProductSaleWithLivePrice(nextPrice, now);
 
       const updatePayload: any = {
@@ -1049,6 +1542,8 @@ export default function UpdateProductScreen() {
 
       if (Boolean(selected?.made_on_order)) {
         updatePayload.inventory_qty = 0;
+      } else if (priceMode === "stitched_total" && usesSimpleReadyInventory) {
+        updatePayload.inventory_qty = simpleReadyInventoryInfo.totalQty;
       } else if (
         priceMode === "stitched_total" &&
         (stitchedVariants.length > 0 || newReadyVariants.length > 0)
@@ -1102,7 +1597,16 @@ export default function UpdateProductScreen() {
       Alert.alert(
         "Updated",
         `Saved changes for ${safeText(updated.product_code)}`,
-        [{ text: "OK", onPress: () => router.back() }],
+        [
+          {
+            text: "OK",
+            onPress: () =>
+              goToProducts({
+                updated_product_id: String(updated.id),
+                refresh: String(Date.now()),
+              }),
+          },
+        ],
       );
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not update product.");
@@ -1454,11 +1958,21 @@ export default function UpdateProductScreen() {
   }
 
   return (
-    <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={0}
+    >
+      <View style={styles.screen}>
+        <ScrollView
+          style={styles.screen}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+        >
         <UpdateProductHeader
           hasVendor={Boolean(vendorId)}
-          onClose={() => router.back()}
+          onClose={goToProducts}
         />
         <ProductPreviewSection
           selected={selected}
@@ -1469,7 +1983,7 @@ export default function UpdateProductScreen() {
           }
           stitchedVariantInventoryStyleCount={stitchedVariants.length}
           isUnstitched={isUnstitched}
-          onBack={() => router.back()}
+          onBack={goToProducts}
         />
 
         <MediaSection
@@ -1503,6 +2017,8 @@ export default function UpdateProductScreen() {
               {!Boolean(selected?.made_on_order) &&
               (usesVariantInventory
                 ? stitchedVariantInventoryInfo.allOutOfStock
+                : usesSimpleReadyInventory
+                  ? simpleReadyInventoryInfo.allOutOfStock
                 : Number(inventoryQty ?? 0) <= 0) ? (
                 <OutOfStockNotice />
               ) : null}
@@ -1539,9 +2055,105 @@ export default function UpdateProductScreen() {
                     </Text>
                   </View>
                 </View>
+              ) : regularPriceRevisionInfo ? (
+                <View style={[styles.saleRecordBox, styles.revisionRecordBox]}>
+                  <View style={styles.saleRecordHeader}>
+                    <Text style={styles.saleRecordTitle}>Price revision</Text>
+                    <View
+                      style={[
+                        styles.saleRecordPill,
+                        styles.revisionRecordPill,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.saleRecordPillText,
+                          styles.revisionRecordPillText,
+                        ]}
+                      >
+                        Revised
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.saleRecordRow}>
+                    <Text style={styles.saleRecordLabel}>Previous</Text>
+                    <Text
+                      style={[
+                        styles.saleRecordOldPrice,
+                        styles.revisionRecordOldPrice,
+                      ]}
+                    >
+                      {regularPriceRevisionInfo.previousLabel}
+                    </Text>
+                  </View>
+
+                  <View style={styles.saleRecordRow}>
+                    <Text style={styles.saleRecordLabel}>Current</Text>
+                    <Text
+                      style={[
+                        styles.saleRecordSalePrice,
+                        styles.revisionRecordCurrentPrice,
+                      ]}
+                    >
+                      {regularPriceRevisionInfo.currentLabel}
+                    </Text>
+                  </View>
+                </View>
               ) : null}
 
-              {!Boolean(selected?.made_on_order) && !usesVariantInventory ? (
+              {inventoryRevisionInfo ? (
+                <View style={[styles.saleRecordBox, styles.revisionRecordBox]}>
+                  <View style={styles.saleRecordHeader}>
+                    <Text style={styles.saleRecordTitle}>
+                      Inventory revision
+                    </Text>
+                    <View
+                      style={[
+                        styles.saleRecordPill,
+                        styles.revisionRecordPill,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.saleRecordPillText,
+                          styles.revisionRecordPillText,
+                        ]}
+                      >
+                        Revised
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.saleRecordRow}>
+                    <Text style={styles.saleRecordLabel}>Previous</Text>
+                    <Text
+                      style={[
+                        styles.saleRecordOldPrice,
+                        styles.revisionRecordOldPrice,
+                      ]}
+                    >
+                      {inventoryRevisionInfo.previousLabel}
+                    </Text>
+                  </View>
+
+                  <View style={styles.saleRecordRow}>
+                    <Text style={styles.saleRecordLabel}>Current</Text>
+                    <Text
+                      style={[
+                        styles.saleRecordSalePrice,
+                        styles.revisionRecordCurrentPrice,
+                      ]}
+                    >
+                      {inventoryRevisionInfo.currentLabel}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+
+              {!Boolean(selected?.made_on_order) &&
+              !usesVariantInventory &&
+              !usesSimpleReadyInventory ? (
                 <InventoryStockField
                   isUnstitched={isUnstitched}
                   value={inventoryQtyText}
@@ -1563,6 +2175,7 @@ export default function UpdateProductScreen() {
                 <>
                   <StitchedPricingFields
                     madeOnOrder={Boolean(selected?.made_on_order)}
+                    showCostFrom={usesCostFromPricing}
                     priceTotal={priceTotal}
                     availableSizes={availableSizes}
                     onPriceTotalChangeText={(t) =>
@@ -1586,6 +2199,14 @@ export default function UpdateProductScreen() {
                     }
                     onSizeQtyChange={updateStitchedVariantSizeQty}
                   />
+
+                  {usesSimpleReadyInventory ? (
+                    <SimpleReadyInventorySection
+                      rows={simpleReadyInventory}
+                      onToggleSize={toggleSimpleReadySize}
+                      onSizeQtyChange={updateSimpleReadySizeQty}
+                    />
+                  ) : null}
 
                   {!Boolean(selected?.made_on_order) ? (
                     <View style={styles.appendBox}>
@@ -1715,7 +2336,9 @@ export default function UpdateProductScreen() {
                 </>
               ) : (
                 <>
-                  <Text style={styles.label}>Cost per Meter (PKR) *</Text>
+                  <Text style={[styles.label, styles.priceLabel]}>
+                    Cost per Meter (PKR) *
+                  </Text>
                   <FastNumberInput
                     value={String(pricePerMeter ?? "")}
                     onChangeText={(t) =>
@@ -1723,7 +2346,8 @@ export default function UpdateProductScreen() {
                     }
                     placeholder="e.g., 1800"
                     placeholderTextColor={stylesVars.placeholder}
-                    style={styles.input}
+                    style={[styles.input, styles.priceInput]}
+                    commitMode="change"
                     keyboardType="decimal-pad"
                     maxLength={12}
                   />
@@ -1757,6 +2381,7 @@ export default function UpdateProductScreen() {
                           placeholder="e.g., 800"
                           placeholderTextColor={stylesVars.placeholder}
                           style={styles.input}
+                          commitMode="change"
                           keyboardType="decimal-pad"
                           maxLength={12}
                         />
@@ -1793,6 +2418,7 @@ export default function UpdateProductScreen() {
                           placeholder="e.g., 2500"
                           placeholderTextColor={stylesVars.placeholder}
                           style={styles.input}
+                          commitMode="change"
                           keyboardType="decimal-pad"
                           maxLength={12}
                         />
@@ -1909,15 +2535,21 @@ export default function UpdateProductScreen() {
             Open from vendor profile.
           </UpdateProductNotice>
         ) : null}
-      </ScrollView>
+        </ScrollView>
 
-      <UpdateProductBottomBar
-        visible={Boolean(selected)}
-        canSave={canSave}
-        saving={saving}
-        onCancel={() => router.back()}
-        onSave={saveUpdate}
-      />
-    </View>
+        <UpdateProductBottomBar
+          visible={Boolean(selected)}
+          canSave={canSave}
+          saving={saving}
+          saveWarning={
+            showMissingNewStyleImageWarning
+              ? missingNewStyleImageMessage
+              : ""
+          }
+          onCancel={goToProducts}
+          onSave={saveUpdate}
+        />
+      </View>
+    </KeyboardAvoidingView>
   );
 }

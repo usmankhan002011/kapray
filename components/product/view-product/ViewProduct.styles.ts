@@ -35,8 +35,19 @@ export function makeViewProductStyles(width: number, FOOTER_H: number) {
     headerRow: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "space-between",
+      justifyContent: "flex-start",
       gap: 12,
+    },
+
+    backIconBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: stylesVars.blueSoft,
+      borderWidth: 1,
+      borderColor: "#D7E3FF",
+      alignItems: "center",
+      justifyContent: "center",
     },
 
     title: {

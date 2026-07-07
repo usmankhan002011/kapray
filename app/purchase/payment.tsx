@@ -35,6 +35,7 @@ type Params = {
   selected_variant_made_on_order?: string;
   variant_mode?: string;
   selected_variant_mode?: string;
+  selected_variant_label?: string;
   selected_variant_snapshot?: string;
 
   price?: string;
@@ -116,6 +117,7 @@ type Params = {
   selected_tailoring_style_title?: string;
   selected_tailoring_style_image?: string;
   selected_tailoring_style_snapshot?: string;
+  tailoring_style_label?: string;
 
   selected_variant_id?: string;
   selected_variant_title?: string;
@@ -135,6 +137,8 @@ type Params = {
 type SelectedTailoringStyleSnapshot = {
   id?: string | null;
   title?: string | null;
+  styleLabel?: string | null;
+  style_label?: string | null;
   note?: string | null;
   extra_cost_pkr?: number | string | null;
   default_neck?: string | null;
@@ -234,6 +238,44 @@ function cleanReadyToWearTitle(title: string, sizeLike: string) {
     )
     .replace(/\s{2,}/g, " ")
     .trim();
+}
+
+function designText(value: unknown, fallback = "") {
+  const s = String(value ?? "").trim();
+  if (!s || s === "â€”" || s === "—" || s === "Ã¢â‚¬â€") {
+    return fallback;
+  }
+
+  return (
+    s
+      .replace(/^(?:Variant|Style)\s+\d+\s*:\s*/i, "")
+      .replace(/^(?:Variant|Style)\s+\d+$/i, "")
+      .trim() || fallback
+  );
+}
+
+type SelectionLabel = "style" | "design";
+
+function normalizeSelectionLabel(
+  value: unknown,
+  fallback: SelectionLabel = "design",
+): SelectionLabel {
+  const s = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return s === "style" || s === "styles" ? "style" : fallback;
+}
+
+function selectionLabelText(label: SelectionLabel) {
+  return label === "style" ? "style" : "design";
+}
+
+function selectionLabelTitle(label: SelectionLabel) {
+  return label === "style" ? "Style" : "Design";
+}
+
+function selectedLabelTitle(label: SelectionLabel) {
+  return `Selected ${selectionLabelTitle(label)}`;
 }
 
 function cleanVariationLabel(value: string, kind: "neck" | "sleeve") {
@@ -512,6 +554,15 @@ export default function PaymentScreen() {
         rawVariantSnapshot?.variant_mode,
       ),
     );
+    const selectedVariantLabel = normalizeSelectionLabel(
+      firstNonEmpty(
+        params.selected_variant_label,
+        selectedStitchedVariantSnapshot?.selection_label,
+        selectedStitchedVariantSnapshot?.selected_variant_label,
+        selectedStitchedVariantSnapshot?.styleLabel,
+        selectedStitchedVariantSnapshot?.style_label,
+      ),
+    );
     const selectedVariantId = safeDecode(
       firstNonEmpty(
         params.selected_variant_id,
@@ -601,6 +652,13 @@ export default function PaymentScreen() {
         params.selected_tailoring_style_snapshot,
         null,
       );
+    const tailoringStyleLabel = normalizeSelectionLabel(
+      firstNonEmpty(
+        params.tailoring_style_label,
+        selectedTailoringStyleSnapshot?.styleLabel,
+        selectedTailoringStyleSnapshot?.style_label,
+      ),
+    );
 
     const selectedTailoringStyleId = safeDecode(
       params.selected_tailoring_style_id,
@@ -639,6 +697,9 @@ export default function PaymentScreen() {
       safeDecode(params.tailoring_style_extra_cost_pkr) ||
         (selectedTailoringStyleSnapshot as any)?.extra_cost_pkr,
     );
+    const totalTailoringCostPkr = tailoringSelected
+      ? tailoringCostPkr + tailoringStyleExtraCostPkr
+      : 0;
 
     const hasStyleSelected =
       tailoringSelected &&
@@ -668,6 +729,7 @@ export default function PaymentScreen() {
       madeOnOrder: isMadeOnOrder,
       isSimpleReadyStitched,
       selectedVariantMode,
+      selectedVariantLabel,
       selectedStitchedVariantSnapshot,
       imageUrl: firstNonEmpty(params.imageUrl, params.image_url),
 
@@ -729,11 +791,13 @@ export default function PaymentScreen() {
       selectedTailoringStyleTitle,
       selectedTailoringStyleImage,
       selectedTailoringStyleSnapshot,
+      tailoringStyleLabel,
       selectedNeckVariation,
       selectedSleeveVariation,
       selectedTrouserVariation,
       customTailoringNote,
       tailoringStyleExtraCostPkr,
+      totalTailoringCostPkr,
       hasStyleSelected,
     };
   }, [params]);
@@ -884,6 +948,8 @@ export default function PaymentScreen() {
           (specSnapshot as any).selected_variant_mode =
             data.selectedVariantMode;
         }
+        (specSnapshot as any).selected_variant_label =
+          data.selectedVariantLabel;
         if (data.madeOnOrder) {
           (specSnapshot as any).selected_variant_made_on_order = true;
           (specSnapshot as any).selected_variant_mode = "made_order_variants";
@@ -914,6 +980,8 @@ export default function PaymentScreen() {
       if (data.tailoringSelected) {
         (specSnapshot as any).tailoring_enabled = true;
         (specSnapshot as any).tailoring_selected = true;
+        (specSnapshot as any).tailoring_style_label =
+          data.tailoringStyleLabel;
         (specSnapshot as any).tailoring_cost_pkr = data.tailoringCostPkr;
         (specSnapshot as any).tailoring_turnaround_days =
           data.tailoringTurnaroundDays;
@@ -960,7 +1028,10 @@ export default function PaymentScreen() {
 
         if (data.selectedTailoringStyleSnapshot) {
           (specSnapshot as any).selected_tailoring_style_snapshot =
-            data.selectedTailoringStyleSnapshot;
+            {
+              ...data.selectedTailoringStyleSnapshot,
+              styleLabel: data.tailoringStyleLabel,
+            };
         }
       }
 
@@ -1077,13 +1148,27 @@ export default function PaymentScreen() {
       categoryKey === "ready_to_wear_stitched");
   const isStitchedVariantSelection =
     isReadyToWearStitched || isMadeOrderStitched;
+  const selectedVariantLabelTitle = selectedLabelTitle(
+    data.selectedVariantLabel,
+  );
+  const selectedVariantFallback = `Selected ${selectionLabelText(
+    data.selectedVariantLabel,
+  )}`;
+  const variantLabelTitle = selectionLabelTitle(data.selectedVariantLabel);
+  const tailoringStyleLabelTitle = selectionLabelTitle(
+    data.tailoringStyleLabel,
+  );
+  const tailoringStyleLower = selectionLabelText(data.tailoringStyleLabel);
 
   const selectedStitchedVariantTitle = isReadyToWearStitched
-    ? cleanReadyToWearTitle(
-        data.selectedVariantTitle || "Selected style",
-        data.selectedVariantSize || data.sizeLabel,
+    ? designText(
+        cleanReadyToWearTitle(
+          data.selectedVariantTitle || selectedVariantFallback,
+          data.selectedVariantSize || data.sizeLabel,
+        ),
+        selectedVariantFallback,
       )
-    : data.selectedVariantTitle;
+    : designText(data.selectedVariantTitle);
   // Keep original image handling untouched: imageUrl already carries the correct selected style image.
   const productSummaryImageUrl = data.imageUrl;
   const productSummaryTitle = isReadyToWearStitched
@@ -1149,7 +1234,7 @@ export default function PaymentScreen() {
                   <>
                     <View style={styles.productMetaInfo}>
                       <Text style={styles.productMetaLabel}>
-                        Selected style
+                        {selectedVariantLabelTitle}
                       </Text>
                       <Text style={styles.productMetaValue}>
                         {selectedStitchedVariantTitle || "Not selected"}
@@ -1197,28 +1282,28 @@ export default function PaymentScreen() {
                 data.selectedVariantColor) ? (
                 <View style={styles.customBlock}>
                   <KVRow
-                    label="Selected style"
+                    label={selectedVariantLabelTitle}
                     value={
-                      data.selectedVariantTitle ||
+                      designText(data.selectedVariantTitle) ||
                       data.selectedVariantSize ||
-                      "Selected style"
+                      selectedVariantFallback
                     }
                   />
                   {!!data.selectedVariantSize && (
                     <KVRow
-                      label="Style size"
+                      label={`${variantLabelTitle} size`}
                       value={data.selectedVariantSize}
                     />
                   )}
                   {!!data.selectedVariantColor && (
                     <KVRow
-                      label="Style color"
+                      label={`${variantLabelTitle} color`}
                       value={data.selectedVariantColor}
                     />
                   )}
                   {data.selectedVariantPricePkr > 0 ? (
                     <KVRow
-                      label="Style price"
+                      label={`${variantLabelTitle} price`}
                       value={formatMoney(
                         data.currency,
                         data.selectedVariantPricePkr,
@@ -1345,9 +1430,10 @@ export default function PaymentScreen() {
                       )}
 
                       <KVRow
-                        label="Style"
+                        label={tailoringStyleLabelTitle}
                         value={
-                          data.selectedTailoringStyleTitle || "Selected style"
+                          data.selectedTailoringStyleTitle ||
+                          `Selected ${tailoringStyleLower}`
                         }
                       />
 
@@ -1386,7 +1472,7 @@ export default function PaymentScreen() {
 
                       {data.tailoringStyleExtraCostPkr > 0 ? (
                         <KVRow
-                          label="Additional style cost"
+                          label={`Additional ${tailoringStyleLower} cost`}
                           value={formatMoney(
                             data.currency,
                             data.tailoringStyleExtraCostPkr,
@@ -1404,6 +1490,14 @@ export default function PaymentScreen() {
                       ) : null}
                     </>
                   ) : null}
+
+                  <KVRow
+                    label="Total Tailoring Cost"
+                    value={formatMoney(
+                      data.currency,
+                      data.totalTailoringCostPkr,
+                    )}
+                  />
                 </View>
               ) : null}
             </PlainSection>
@@ -1455,7 +1549,7 @@ export default function PaymentScreen() {
 
             {data.tailoringStyleExtraCostPkr > 0 ? (
               <PriceRow
-                label="Additional style cost"
+                label={`Additional ${tailoringStyleLower} cost`}
                 value={formatMoney(
                   data.currency,
                   data.tailoringStyleExtraCostPkr,

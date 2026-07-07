@@ -14,7 +14,7 @@ function sanitizeNumberText(input: string) {
 
 type Props = Omit<
   AppTextInputProps,
-  "commitDelayMs" | "commitMode" | "onChangeText" | "sanitizeText"
+  "commitDelayMs" | "onChangeText" | "sanitizeText"
 > & {
   value: string | number | null | undefined;
   onChangeText: (text: string) => void;
@@ -28,6 +28,7 @@ const FastNumberInput = forwardRef<TextInput, Props>(function FastNumberInput(
     onChangeText,
     sanitize = sanitizeNumberText,
     commitDelayMs = 90,
+    commitMode = "debounce",
     ...props
   },
   ref,
@@ -37,7 +38,7 @@ const FastNumberInput = forwardRef<TextInput, Props>(function FastNumberInput(
       {...props}
       ref={ref}
       commitDelayMs={commitDelayMs}
-      commitMode="debounce"
+      commitMode={commitMode}
       onChangeText={onChangeText}
       sanitizeText={sanitize}
       value={value == null ? "" : String(value)}

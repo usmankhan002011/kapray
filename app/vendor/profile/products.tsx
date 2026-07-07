@@ -22,12 +22,18 @@ import {
   apInputTextStyle,
   apRadii,
 } from "@/components/product/addProductStyles";
-import { getActiveProductSale } from "@/utils/kapray/productSale";
+import {
+  formatPkr,
+  getActiveProductSale,
+  getProductRegularPriceRevision,
+  getProductSaleKeys,
+} from "@/utils/kapray/productSale";
 
 const PRODUCTS_TABLE = "products";
 const BUCKET_VENDOR = "vendor_images";
 
 const PAGE_SIZE = 30;
+const LOW_STOCK_THRESHOLD = 5;
 
 type ProductCategory =
   | "unstitched_plain"
@@ -41,6 +47,7 @@ type ProductRow = {
   title: string | null;
   created_at?: string | null;
   inventory_qty?: number | null;
+  order_count?: number | null;
   made_on_order?: boolean | null;
   product_category?: ProductCategory | null;
   spec?: any;
@@ -54,6 +61,27 @@ type VariantInventorySummary = {
   availableSizes: number;
   variantCount: number;
   hasStock: boolean;
+};
+
+type ProductCardPriceDisplay = {
+  tone: "sale" | "revision" | "regular";
+  currentLabel: string;
+  previousLabel?: string;
+  discountLabel?: string;
+};
+
+type ProductCardStockStatus = {
+  label: "Out of stock" | "Low stock";
+  tone: "danger" | "warning";
+};
+
+type ProductCardInventoryRevision = {
+  previousLabel: string;
+};
+
+type ProductCardMetric = {
+  label: string;
+  value: string | number;
 };
 
 function safeInt(v: any) {
@@ -257,6 +285,51 @@ function getStitchedInventorySummary(
   return getSimpleReadyInventorySummary(product);
 }
 
+function getArrayLength(value: unknown) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function getReadyStyleCount(product: ProductRow) {
+  const price = product?.price ?? {};
+  const spec = product?.spec ?? {};
+  const inventory = (product as any)?.inventory ?? {};
+
+  return Math.max(
+    getArrayLength(price?.variants),
+    getArrayLength(price?.ready_variants),
+    getArrayLength(price?.readyVariants),
+    getArrayLength(price?.stitched_variants),
+    getArrayLength(price?.stitchedVariants),
+    getArrayLength(spec?.variants),
+    getArrayLength(spec?.ready_variants),
+    getArrayLength(spec?.readyVariants),
+    getArrayLength(spec?.stitched_variants),
+    getArrayLength(spec?.stitchedVariants),
+    getArrayLength(inventory?.variants),
+    getArrayLength(inventory?.ready_variants),
+    getArrayLength(inventory?.readyVariants),
+    getArrayLength(inventory?.stitched_variants),
+    getArrayLength(inventory?.stitchedVariants),
+  );
+}
+
+function getMadeOrderStyleCount(product: ProductRow) {
+  const price = product?.price ?? {};
+  const spec = product?.spec ?? {};
+  const inventory = (product as any)?.inventory ?? {};
+
+  return Math.max(
+    getArrayLength(price?.made_order_variants),
+    getArrayLength(price?.madeOrderVariants),
+    getArrayLength(product?.price?.made_order_variants),
+    getArrayLength(product?.price?.madeOrderVariants),
+    getArrayLength(spec?.made_order_variants),
+    getArrayLength(spec?.madeOrderVariants),
+    getArrayLength(inventory?.made_order_variants),
+    getArrayLength(inventory?.madeOrderVariants),
+  );
+}
+
 function isProductCategory(v: unknown): v is ProductCategory {
   return (
     v === "unstitched_plain" ||
@@ -375,32 +448,178 @@ function productCategoryCardLabel(item: ProductRow) {
   return isMadeOnOrderProduct(item) ? "Made-on-order" : "Product";
 }
 
-function getStockSummaryText(item: ProductRow) {
-  if (isMadeOnOrderProduct(item)) return "Made on order";
-
-  if (isStitchedReadyProduct(item)) {
-    const info = getStitchedInventorySummary(item);
-
-    if (!info.hasStock) return "Total stock 0";
-
-    const styleWord = info.variantCount === 1 ? "style" : "styles";
-    return `Total stock ${info.totalQty} in ${info.variantCount} ${styleWord}`;
+function getCompactStockDisplay(item: ProductRow): string {
+  if (isMadeOnOrderProduct(item)) {
+    return "MTO";
   }
 
-  const qty = Math.max(0, Number(item?.inventory_qty ?? 0));
-  return isUnstitchedProduct(item)
-    ? `Total stock ${formatStockQty(qty)} m`
-    : `Total stock ${formatStockQty(qty)}`;
+  const qty = Math.max(0, Number(getCurrentStockQty(item) ?? 0));
+  const suffix = getStockUnit(item) === "m" ? " m" : "";
+  return `${formatStockQty(qty)}${suffix}`;
 }
 
-function isOutOfStock(item: ProductRow) {
-  if (isMadeOnOrderProduct(item)) return false;
-
-  if (isStitchedReadyProduct(item)) {
-    return !getStitchedInventorySummary(item).hasStock;
+function getProductOrderMetricLabel(item: ProductRow) {
+  if (isMadeOnOrderProduct(item)) {
+    return "Sold";
   }
 
-  return Number(item?.inventory_qty ?? 0) <= 0;
+  return isUnstitchedProduct(item) ? "Orders" : "Sold";
+}
+
+function getProductOrderMetricValue(item: ProductRow) {
+  const count = safeInt(item?.order_count);
+  return Math.max(0, count ?? 0);
+}
+
+function getStyleMetric(item: ProductRow): ProductCardMetric | null {
+  const count = isMadeOnOrderProduct(item)
+    ? getMadeOrderStyleCount(item)
+    : isStitchedReadyProduct(item)
+      ? getReadyStyleCount(item)
+      : 0;
+
+  if (count <= 0) return null;
+
+  return {
+    label: count === 1 ? "Design" : "Styles",
+    value: count,
+  };
+}
+
+function getProductCardMetrics(item: ProductRow): ProductCardMetric[] {
+  const metrics: ProductCardMetric[] = [];
+
+  if (!isMadeOnOrderProduct(item)) {
+    metrics.push({ label: "Stock", value: getCompactStockDisplay(item) });
+  }
+
+  const styleMetric = getStyleMetric(item);
+  if (styleMetric) {
+    metrics.push(styleMetric);
+  }
+
+  metrics.push({
+    label: getProductOrderMetricLabel(item),
+    value: getProductOrderMetricValue(item),
+  });
+
+  return metrics;
+}
+
+function getStockUnit(item: ProductRow) {
+  return isUnstitchedProduct(item) ? "m" : "unit";
+}
+
+function normalizeStockQtyForUnit(value: unknown, unit: string) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  if (unit === "m") return Math.round(n * 100) / 100;
+  return Math.trunc(n);
+}
+
+function getCurrentStockQty(item: ProductRow) {
+  if (isMadeOnOrderProduct(item)) return null;
+
+  if (isStitchedReadyProduct(item)) {
+    return getStitchedInventorySummary(item).totalQty;
+  }
+
+  const qty = Number(item?.inventory_qty ?? 0);
+  return Number.isFinite(qty) ? qty : 0;
+}
+
+function getInventoryRevisionDisplay(
+  item: ProductRow,
+): ProductCardInventoryRevision | null {
+  if (isMadeOnOrderProduct(item)) return null;
+
+  const revision = item?.spec?.inventory_revision;
+  if (!revision || typeof revision !== "object" || revision?.active !== true) {
+    return null;
+  }
+
+  const unit = String(revision?.unit ?? getStockUnit(item)).trim() || "unit";
+  if (unit !== getStockUnit(item)) return null;
+
+  const previousQty = normalizeStockQtyForUnit(revision?.previous_qty, unit);
+  const revisionCurrentQty = normalizeStockQtyForUnit(
+    revision?.current_qty,
+    unit,
+  );
+  const currentQty = normalizeStockQtyForUnit(getCurrentStockQty(item), unit);
+
+  if (
+    previousQty == null ||
+    revisionCurrentQty == null ||
+    currentQty == null ||
+    previousQty === currentQty ||
+    revisionCurrentQty !== currentQty
+  ) {
+    return null;
+  }
+
+  const suffix = unit === "m" ? " m" : "";
+
+  return {
+    previousLabel: `Previous stock ${formatStockQty(previousQty)}${suffix}`,
+  };
+}
+
+function getStockStatusDisplay(
+  item: ProductRow,
+): ProductCardStockStatus | null {
+  if (isMadeOnOrderProduct(item)) return null;
+
+  const qty = isStitchedReadyProduct(item)
+    ? getStitchedInventorySummary(item).totalQty
+    : Number(item?.inventory_qty ?? 0);
+
+  if (!Number.isFinite(qty) || qty <= 0) {
+    return { label: "Out of stock", tone: "danger" };
+  }
+
+  if (qty <= LOW_STOCK_THRESHOLD) {
+    return { label: "Low stock", tone: "warning" };
+  }
+
+  return null;
+}
+
+function getProductCardPriceDisplay(
+  item: ProductRow,
+): ProductCardPriceDisplay | null {
+  const saleInfo = getActiveProductSale(item.price);
+
+  if (saleInfo) {
+    return {
+      tone: "sale",
+      currentLabel: saleInfo.currentLabel,
+      previousLabel: saleInfo.previousLabel,
+      discountLabel: `-${saleInfo.discountPercent}%`,
+    };
+  }
+
+  const regularRevision = getProductRegularPriceRevision(item.price);
+
+  if (regularRevision) {
+    return {
+      tone: "revision",
+      currentLabel: regularRevision.currentLabel,
+      previousLabel: regularRevision.previousLabel,
+    };
+  }
+
+  const keys = getProductSaleKeys(item.price);
+  if (!keys) return null;
+
+  const price = item?.price ?? {};
+  const currentCost = positiveNumber(price?.[keys.priceKey]);
+  if (currentCost <= 0) return null;
+
+  return {
+    tone: "regular",
+    currentLabel: `${formatPkr(currentCost)}${keys.unitSuffix}`,
+  };
 }
 
 function getSearchCategories(searchText: string): ProductCategory[] {
@@ -480,6 +699,7 @@ export default function VendorProductsScreen() {
   const { resetDraft } = useProductDraft();
 
   const vendorIdRaw =
+    useAppSelector((s: any) => s?.vendorSlice?.id ?? null) ??
     useAppSelector((s: any) => s?.vendorSlice?.vendor?.id ?? null) ??
     useAppSelector((s: any) => s?.vendor?.id ?? null);
 
@@ -488,26 +708,94 @@ export default function VendorProductsScreen() {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [products, setProducts] = useState<ProductRow[]>([]);
+  const [productCount, setProductCount] = useState<number | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const loadedVendorIdRef = React.useRef<number | null>(null);
 
   const trimmedSearch = searchQuery.trim();
   const searching = trimmedSearch.length > 0;
+  const displayedProductCount = productCount ?? products.length;
+  const productCountLabel = `Total Products: ${displayedProductCount.toLocaleString()}`;
+  const newProductIdParam = String((params as any)?.new_product_id ?? "").trim();
+  const updatedProductIdParam = String(
+    (params as any)?.updated_product_id ?? "",
+  ).trim();
+  const refreshParam = String((params as any)?.refresh ?? "").trim();
 
-  async function fetchProductsReset() {
+  function isCountedOrderStatus(status: unknown) {
+    const value = String(status ?? "").trim().toLowerCase();
+    return !["canceled", "cancelled", "rejected", "refunded", "returned"].includes(
+      value,
+    );
+  }
+
+  async function fetchOrderCountsByProductId(
+    productIds: Array<string | number | null | undefined>,
+  ): Promise<Record<string, number>> {
+    if (!vendorId) return {};
+
+    const ids = Array.from(
+      new Set(
+        productIds
+          .map((id) => safeInt(id))
+          .filter((id): id is number => id != null),
+      ),
+    );
+
+    if (!ids.length) return {};
+
+    const { data, error } = await supabase
+      .from("orders")
+      .select("product_id, status")
+      .eq("vendor_id", vendorId)
+      .in("product_id", ids);
+
+    if (error) {
+      console.warn("Could not load product order counts:", error.message);
+      return {};
+    }
+
+    const counts: Record<string, number> = {};
+    for (const row of (data as any[]) ?? []) {
+      if (!isCountedOrderStatus(row?.status)) continue;
+
+      const productId = safeInt(row?.product_id);
+      if (productId == null) continue;
+
+      const key = String(productId);
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+
+    return counts;
+  }
+
+  async function attachOrderCounts(rows: ProductRow[]) {
+    const counts = await fetchOrderCountsByProductId(rows.map((row) => row.id));
+    return rows.map((row) => ({
+      ...row,
+      order_count: counts[String(safeInt(row.id) ?? row.id)] ?? 0,
+    }));
+  }
+
+  async function fetchProductsReset(options?: { showLoading?: boolean }) {
     if (!vendorId) {
-      Alert.alert("Vendor missing", "Open from vendor profile.");
       return;
     }
 
+    const showLoading = options?.showLoading ?? true;
+
     try {
-      setLoading(true);
+      if (showLoading) {
+        setLoading(true);
+      }
       setHasMore(true);
 
       let query = supabase
         .from(PRODUCTS_TABLE)
         .select(
           "id, product_code, title, created_at, inventory_qty, made_on_order, product_category, spec, price, media",
+          { count: "exact" },
         )
         .eq("vendor_id", vendorId);
 
@@ -515,7 +803,7 @@ export default function VendorProductsScreen() {
         query = applyVendorProductSearch(query, trimmedSearch);
       }
 
-      const { data, error } = await query
+      const { data, error, count } = await query
         .order("created_at", { ascending: false })
         .range(0, PAGE_SIZE - 1);
 
@@ -532,13 +820,18 @@ export default function VendorProductsScreen() {
           banner_url: publicUrlForStoragePath(imgPath),
         };
       });
+      const mappedWithCounts = await attachOrderCounts(mapped);
 
-      setProducts(mapped);
+      setProducts(mappedWithCounts);
+      setProductCount(typeof count === "number" ? count : rows.length);
       setHasMore(rows.length === PAGE_SIZE);
+      loadedVendorIdRef.current = vendorId;
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not load products.");
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   }
 
@@ -581,10 +874,11 @@ export default function VendorProductsScreen() {
           banner_url: publicUrlForStoragePath(imgPath),
         };
       });
+      const mappedWithCounts = await attachOrderCounts(mapped);
 
       setProducts((prev) => {
         const seen = new Set(prev.map((p) => p.id));
-        const add = mapped.filter((r) => !seen.has(r.id));
+        const add = mappedWithCounts.filter((r) => !seen.has(r.id));
         return [...prev, ...add];
       });
 
@@ -599,15 +893,25 @@ export default function VendorProductsScreen() {
   useFocusEffect(
     React.useCallback(() => {
       if (vendorId) {
-        void fetchProductsReset();
+        void fetchProductsReset({
+          showLoading: loadedVendorIdRef.current !== vendorId,
+        });
       }
-    }, [vendorId, trimmedSearch]),
+    }, [
+      vendorId,
+      trimmedSearch,
+      newProductIdParam,
+      updatedProductIdParam,
+      refreshParam,
+    ]),
   );
 
   useEffect(() => {
-    const newIdRaw = String((params as any)?.new_product_id ?? "").trim();
-    const newId = safeInt(newIdRaw);
-    if (newId == null || !vendorId) return;
+    const newId = safeInt(newProductIdParam);
+    const updatedId = safeInt(updatedProductIdParam);
+    const targetId = updatedId ?? newId;
+    const shouldPrepend = newId != null && updatedId == null;
+    if (targetId == null || !vendorId) return;
 
     let alive = true;
 
@@ -618,7 +922,7 @@ export default function VendorProductsScreen() {
           .select(
             "id, product_code, title, created_at, inventory_qty, made_on_order, product_category, spec, price, media",
           )
-          .eq("id", newId)
+          .eq("id", targetId)
           .eq("vendor_id", vendorId)
           .single();
 
@@ -628,11 +932,16 @@ export default function VendorProductsScreen() {
         const row = data as any as ProductRow;
         const imgPath = firstImagePath((row as any).media);
         const banner_url = publicUrlForStoragePath(imgPath);
+        const [mappedRow] = await attachOrderCounts([{ ...row, banner_url }]);
+
+        if (!alive) return;
 
         setProducts((prev) => {
           const exists = prev.some((p) => p.id === row.id);
-          if (exists) return prev;
-          return [{ ...row, banner_url }, ...prev];
+          if (exists) {
+            return prev.map((p) => (p.id === row.id ? mappedRow : p));
+          }
+          return shouldPrepend ? [mappedRow, ...prev] : prev;
         });
       } catch {
         // ignore
@@ -642,14 +951,16 @@ export default function VendorProductsScreen() {
     return () => {
       alive = false;
     };
-  }, [params, vendorId]);
+  }, [newProductIdParam, refreshParam, updatedProductIdParam, vendorId]);
 
   function openProduct(item: ProductRow) {
-    router.push(
-      `/vendor/profile/view-product?product_id=${encodeURIComponent(
-        item.id,
-      )}` as any,
-    );
+    router.push({
+      pathname: "/vendor/profile/view-product",
+      params: {
+        product_id: item.id,
+        from: "vendor-products",
+      },
+    } as any);
   }
 
   function editProduct(item: ProductRow) {
@@ -681,9 +992,11 @@ export default function VendorProductsScreen() {
     const code = safeText(item.product_code);
     const title = safeText(item.title);
     const categoryText = productCategoryCardLabel(item);
-    const stockText = getStockSummaryText(item);
-    const outOfStock = isOutOfStock(item);
+    const cardMetrics = getProductCardMetrics(item);
+    const inventoryRevision = getInventoryRevisionDisplay(item);
+    const stockStatus = getStockStatusDisplay(item);
     const saleInfo = getActiveProductSale(item.price);
+    const priceDisplay = getProductCardPriceDisplay(item);
 
     return (
       <View style={styles.item}>
@@ -710,18 +1023,85 @@ export default function VendorProductsScreen() {
               {title}
             </Text>
 
+            {priceDisplay ? (
+              <View style={styles.priceBlock}>
+                <Text
+                  style={[
+                    styles.cardPrice,
+                    priceDisplay.tone === "sale" ? styles.salePrice : null,
+                  ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.82}
+                >
+                  {priceDisplay.currentLabel}
+                </Text>
+                {priceDisplay.previousLabel ? (
+                  <View style={styles.previousPriceRow}>
+                    <Text
+                      style={[
+                        styles.previousPrice,
+                        priceDisplay.tone === "sale"
+                          ? styles.salePreviousPrice
+                          : null,
+                        priceDisplay.tone === "revision"
+                          ? styles.revisionPreviousPrice
+                          : null,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {priceDisplay.previousLabel}
+                    </Text>
+                    {priceDisplay.discountLabel ? (
+                      <View style={styles.discountBadge}>
+                        <Text style={styles.discountBadgeText}>
+                          {priceDisplay.discountLabel}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
             <Text style={styles.stockText} numberOfLines={2}>
               {categoryText}
             </Text>
-            <Text style={styles.stockText}>{stockText}</Text>
-
-            {outOfStock ? (
-              <Text style={styles.outOfStockText}>Out of stock</Text>
-            ) : null}
-            {saleInfo ? (
-              <Text style={styles.saleText}>
-                Sale {saleInfo.currentLabel} -{saleInfo.discountPercent}%
+            <Text style={styles.stockText} numberOfLines={1}>
+              {cardMetrics.map((metric, index) => (
+                <React.Fragment key={`${metric.label}-${index}`}>
+                  {index > 0 ? " | " : ""}
+                  {metric.label}:{" "}
+                  <Text style={styles.stockValueText}>{metric.value}</Text>
+                </React.Fragment>
+              ))}
+            </Text>
+            {inventoryRevision ? (
+              <Text style={styles.inventoryRevisionText}>
+                {inventoryRevision.previousLabel}
               </Text>
+            ) : null}
+
+            {stockStatus ? (
+              <View
+                style={[
+                  styles.stockStatusTag,
+                  stockStatus.tone === "danger"
+                    ? styles.stockStatusDanger
+                    : styles.stockStatusWarning,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.stockStatusText,
+                    stockStatus.tone === "danger"
+                      ? styles.stockStatusDangerText
+                      : styles.stockStatusWarningText,
+                  ]}
+                >
+                  {stockStatus.label}
+                </Text>
+              </View>
             ) : null}
           </View>
         </Pressable>
@@ -782,11 +1162,11 @@ export default function VendorProductsScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.refreshBtn,
-                loading ? styles.disabledButton : null,
+                loading || !vendorId ? styles.disabledButton : null,
                 pressed ? styles.pressed : null,
               ]}
-              onPress={loading ? undefined : fetchProductsReset}
-              disabled={loading}
+              onPress={loading || !vendorId ? undefined : fetchProductsReset}
+              disabled={loading || !vendorId}
             >
               <View style={styles.actionContent}>
                 <MaterialIcons
@@ -830,15 +1210,20 @@ export default function VendorProductsScreen() {
             </View>
           ) : null}
 
-          <Text style={styles.section}>
-            {searching ? "Results" : "Recent Products"}
-          </Text>
+          <View style={styles.sectionRow}>
+            <Text style={styles.section}>
+              {searching ? "Results" : "Recent Products"}
+            </Text>
+            {vendorId ? (
+              <Text style={styles.productCountText}>{productCountLabel}</Text>
+            ) : null}
+          </View>
 
           {!vendorId ? (
             <View style={styles.listCard}>
               <Text style={styles.empty}>Vendor not loaded.</Text>
             </View>
-          ) : loading ? (
+          ) : loading && !products.length ? (
             <View style={styles.listCard}>
               <View style={styles.loadingRow}>
                 <ActivityIndicator />
@@ -1018,12 +1403,31 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  section: {
+  sectionRow: {
     marginTop: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+
+  section: {
+    flex: 1,
     fontFamily: apFontFamily,
     fontSize: 15,
     fontWeight: "800",
     color: stylesVars.text,
+    letterSpacing: 0,
+  },
+
+  productCountText: {
+    flexShrink: 0,
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "800",
+    color: stylesVars.mutedText,
+    textAlign: "right",
     letterSpacing: 0,
   },
 
@@ -1107,6 +1511,70 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
 
+  priceBlock: {
+    marginTop: 4,
+  },
+
+  cardPrice: {
+    fontFamily: apFontFamily,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "900",
+    color: stylesVars.text,
+    letterSpacing: 0,
+  },
+
+  salePrice: {
+    color: stylesVars.danger,
+  },
+
+  previousPriceRow: {
+    marginTop: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  discountBadge: {
+    minHeight: 20,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: apRadii.pill,
+    borderWidth: 1,
+    borderColor: "#FDBA74",
+    backgroundColor: "#FFF7ED",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  discountBadgeText: {
+    fontFamily: apFontFamily,
+    fontSize: 11,
+    lineHeight: 13,
+    fontWeight: "900",
+    color: "#C2410C",
+    letterSpacing: 0,
+  },
+
+  previousPrice: {
+    flexShrink: 1,
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: "800",
+    color: stylesVars.mutedText,
+    textDecorationLine: "line-through",
+    letterSpacing: 0,
+  },
+
+  salePreviousPrice: {
+    color: stylesVars.mutedText,
+  },
+
+  revisionPreviousPrice: {
+    color: stylesVars.text,
+  },
+
   stockText: {
     marginTop: 2,
     fontFamily: apFontFamily,
@@ -1116,22 +1584,60 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
 
-  outOfStockText: {
-    marginTop: 2,
+  stockValueText: {
     fontFamily: apFontFamily,
-    fontSize: 12,
-    color: stylesVars.danger,
-    fontWeight: "800",
+    fontWeight: "900",
+    color: stylesVars.text,
     letterSpacing: 0,
   },
 
-  saleText: {
-    marginTop: 2,
+  inventoryRevisionText: {
+    marginTop: 1,
     fontFamily: apFontFamily,
     fontSize: 12,
-    color: stylesVars.danger,
+    lineHeight: 15,
     fontWeight: "800",
+    color: stylesVars.mutedText,
+    textDecorationLine: "line-through",
     letterSpacing: 0,
+  },
+
+  stockStatusTag: {
+    marginTop: 5,
+    alignSelf: "flex-start",
+    minHeight: 24,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: apRadii.pill,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  stockStatusDanger: {
+    borderColor: stylesVars.dangerBorder,
+    backgroundColor: stylesVars.dangerSoft,
+  },
+
+  stockStatusWarning: {
+    borderColor: "#FDBA74",
+    backgroundColor: "#FFF7ED",
+  },
+
+  stockStatusText: {
+    fontFamily: apFontFamily,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "900",
+    letterSpacing: 0,
+  },
+
+  stockStatusDangerText: {
+    color: stylesVars.danger,
+  },
+
+  stockStatusWarningText: {
+    color: "#C2410C",
   },
 
   itemActions: {

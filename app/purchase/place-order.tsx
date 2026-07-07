@@ -85,6 +85,7 @@ type Params = {
   selected_variant_made_on_order?: string;
   variant_mode?: string;
   selected_variant_mode?: string;
+  selected_variant_label?: string;
   selected_variant_snapshot?: string;
   selected_stitched_variant_snapshot?: string;
 
@@ -118,6 +119,7 @@ type Params = {
   selected_tailoring_style_title?: string;
   selected_tailoring_style_image?: string;
   selected_tailoring_style_snapshot?: string;
+  tailoring_style_label?: string;
 
   selected_variant_id?: string;
   selected_variant_title?: string;
@@ -190,6 +192,8 @@ type ProductRow = {
 type SelectedTailoringStyleSnapshot = {
   id?: string | null;
   title?: string | null;
+  styleLabel?: string | null;
+  style_label?: string | null;
   note?: string | null;
   extra_cost_pkr?: number | string | null;
   default_neck?: string | null;
@@ -387,6 +391,44 @@ function cleanReadyToWearTitle(title: string, selectedSize: string) {
     )
     .replace(new RegExp(`\\s+size\\s*[:#-]?\\s*${escaped}\\s*$`, "i"), "")
     .trim();
+}
+
+function designText(value: unknown, fallback = "") {
+  const s = String(value ?? "").trim();
+  if (!s || s === "â€”" || s === "—" || s === "Ã¢â‚¬â€") {
+    return fallback;
+  }
+
+  return (
+    s
+      .replace(/^(?:Variant|Style)\s+\d+\s*:\s*/i, "")
+      .replace(/^(?:Variant|Style)\s+\d+$/i, "")
+      .trim() || fallback
+  );
+}
+
+type SelectionLabel = "style" | "design";
+
+function normalizeSelectionLabel(
+  value: unknown,
+  fallback: SelectionLabel = "design",
+): SelectionLabel {
+  const s = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return s === "style" || s === "styles" ? "style" : fallback;
+}
+
+function selectionLabelText(label: SelectionLabel) {
+  return label === "style" ? "style" : "design";
+}
+
+function selectionLabelTitle(label: SelectionLabel) {
+  return label === "style" ? "Style" : "Design";
+}
+
+function selectedLabelTitle(label: SelectionLabel) {
+  return `Selected ${selectionLabelTitle(label)}`;
 }
 
 function prettyCategory(v: string) {
@@ -668,6 +710,13 @@ export default function PlaceOrderScreen() {
         params.selected_tailoring_style_snapshot,
         null,
       );
+    const tailoringStyleLabel = normalizeSelectionLabel(
+      firstNonEmpty(
+        params.tailoring_style_label,
+        selectedTailoringStyleSnapshot?.styleLabel,
+        selectedTailoringStyleSnapshot?.style_label,
+      ),
+    );
 
     const selectedVariantSnapshot = safeJsonDecode<any>(
       firstNonEmpty(
@@ -693,6 +742,15 @@ export default function PlaceOrderScreen() {
       selectedVariantSnapshot?.rawVariant?.made_on_order ??
       selectedVariantSnapshot?.rawVariant?.madeOnOrder ??
       variantMode === "made_order_variants",
+    );
+    const selectedVariantLabel = normalizeSelectionLabel(
+      firstNonEmpty(
+        params.selected_variant_label,
+        selectedVariantSnapshot?.selection_label,
+        selectedVariantSnapshot?.selected_variant_label,
+        selectedVariantSnapshot?.styleLabel,
+        selectedVariantSnapshot?.style_label,
+      ),
     );
 
     const selectedVariantId = safeDecode(
@@ -775,6 +833,7 @@ export default function PlaceOrderScreen() {
       productCategory: norm(params.product_category),
       madeOnOrder,
       variantMode,
+      selectedVariantLabel,
       selectedVariantSnapshot,
       priceParam: norm(params.price),
       pricePerMeterPkr: safePositiveNumber(params.price_per_meter_pkr),
@@ -820,6 +879,7 @@ export default function PlaceOrderScreen() {
           firstNonEmpty((selectedTailoringStyleSnapshot as any)?.image_url),
         ),
       selectedTailoringStyleSnapshot,
+      tailoringStyleLabel,
       selectedNeckVariation,
       selectedSleeveVariation,
       selectedTrouserVariation,
@@ -1331,11 +1391,22 @@ export default function PlaceOrderScreen() {
         selected_variant_mode: resolved.isMadeOrderStitched
           ? "made_order_variants"
           : base.variantMode || "",
+        selected_variant_label: base.selectedVariantLabel,
         selected_variant_snapshot: base.selectedVariantSnapshot
-          ? encodeURIComponent(JSON.stringify(base.selectedVariantSnapshot))
+          ? encodeURIComponent(
+              JSON.stringify({
+                ...base.selectedVariantSnapshot,
+                selection_label: base.selectedVariantLabel,
+              }),
+            )
           : "",
         selected_stitched_variant_snapshot: base.selectedVariantSnapshot
-          ? encodeURIComponent(JSON.stringify(base.selectedVariantSnapshot))
+          ? encodeURIComponent(
+              JSON.stringify({
+                ...base.selectedVariantSnapshot,
+                selection_label: base.selectedVariantLabel,
+              }),
+            )
           : "",
 
         currency: base.currency,
@@ -1463,9 +1534,13 @@ export default function PlaceOrderScreen() {
         selected_tailoring_style_image: base.selectedTailoringStyleImage
           ? encodeURIComponent(base.selectedTailoringStyleImage)
           : "",
+        tailoring_style_label: base.tailoringStyleLabel,
         selected_tailoring_style_snapshot: base.selectedTailoringStyleSnapshot
           ? encodeURIComponent(
-              JSON.stringify(base.selectedTailoringStyleSnapshot),
+              JSON.stringify({
+                ...base.selectedTailoringStyleSnapshot,
+                styleLabel: base.tailoringStyleLabel,
+              }),
             )
           : "",
         selected_neck_variation: base.selectedNeckVariation
@@ -1499,6 +1574,16 @@ export default function PlaceOrderScreen() {
     : base.productCategory
       ? prettyCategory(base.productCategory)
       : "—";
+  const selectedVariantLabelTitle = selectedLabelTitle(
+    base.selectedVariantLabel,
+  );
+  const selectedVariantFallback = `Selected ${selectionLabelText(
+    base.selectedVariantLabel,
+  )}`;
+  const tailoringStyleLabelTitle = selectionLabelTitle(
+    base.tailoringStyleLabel,
+  );
+  const tailoringStyleLower = selectionLabelText(base.tailoringStyleLabel);
   const exportRegionsText = joinRegions(exportRegionList);
   const exportAutoCountry = countryForExportRegion(exportRegion);
   const countryAutoFilled =
@@ -1513,13 +1598,16 @@ export default function PlaceOrderScreen() {
   const displayCountry =
     destinationType === "inland" ? "Pakistan" : exportAutoCountry || country;
   const selectedReadyVariantTitle = resolved.shouldShowSelectedStitchedVariant
-    ? cleanReadyToWearTitle(
-        base.selectedVariantTitle || "Selected style",
-        resolved.isMadeOrderStitched
-          ? ""
-          : base.selectedVariantSize || base.sizeLabel,
+    ? designText(
+        cleanReadyToWearTitle(
+          base.selectedVariantTitle || selectedVariantFallback,
+          resolved.isMadeOrderStitched
+            ? ""
+            : base.selectedVariantSize || base.sizeLabel,
+        ),
+        selectedVariantFallback,
       )
-    : base.selectedVariantTitle;
+    : designText(base.selectedVariantTitle);
 
   return (
     <SafeAreaView
@@ -1584,7 +1672,7 @@ export default function PlaceOrderScreen() {
                   <>
                     <View style={styles.productMetaInfo}>
                       <Text style={styles.productMetaLabel}>
-                        Selected style
+                        {selectedVariantLabelTitle}
                       </Text>
                       <Text style={styles.productMetaValue}>
                         {selectedReadyVariantTitle || "Not selected"}
@@ -1639,8 +1727,8 @@ export default function PlaceOrderScreen() {
             <SectionCard title="Customization">
               {!resolved.isUnstitched ? (
                 <KVRow
-                  label="Selected style"
-                  value={base.selectedVariantTitle || "Not selected"}
+                  label={selectedVariantLabelTitle}
+                  value={designText(base.selectedVariantTitle, "Not selected")}
                 />
               ) : null}
 
@@ -1792,9 +1880,10 @@ export default function PlaceOrderScreen() {
                       )}
 
                       <KVRow
-                        label="Style"
+                        label={tailoringStyleLabelTitle}
                         value={
-                          base.selectedTailoringStyleTitle || "Selected style"
+                          base.selectedTailoringStyleTitle ||
+                          `Selected ${tailoringStyleLower}`
                         }
                       />
 
@@ -1832,7 +1921,7 @@ export default function PlaceOrderScreen() {
 
                       {base.styleExtraCostPkr > 0 ? (
                         <KVRow
-                          label="Additional style cost"
+                          label={`Additional ${tailoringStyleLower} cost`}
                           value={formatMoney(
                             base.currency,
                             base.styleExtraCostPkr,
@@ -1850,6 +1939,17 @@ export default function PlaceOrderScreen() {
                       )}
                     </>
                   ) : null}
+
+                  <KVRow
+                    label="Total Tailoring Cost"
+                    value={formatMoney(
+                      base.currency,
+                      base.tailoringCostPkr +
+                        (base.styleExtraCostPkr > 0
+                          ? base.styleExtraCostPkr
+                          : 0),
+                    )}
+                  />
                 </View>
               ) : null}
             </SectionCard>
@@ -2060,7 +2160,7 @@ export default function PlaceOrderScreen() {
 
             {base.styleExtraCostPkr > 0 ? (
               <PriceRow
-                label="Additional style cost"
+                label={`Additional ${tailoringStyleLower} cost`}
                 value={formatMoney(base.currency, base.styleExtraCostPkr)}
               />
             ) : null}

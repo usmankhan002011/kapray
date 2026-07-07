@@ -89,6 +89,40 @@ function cleanText(v: any) {
   return t.length ? t : "";
 }
 
+function designText(value: unknown, fallback = "") {
+  const s = String(value ?? "").trim();
+  if (!s || s === "â€”" || s === "—" || s === "Ã¢â‚¬â€") {
+    return fallback;
+  }
+
+  return (
+    s
+      .replace(/^(?:Variant|Style)\s+\d+\s*:\s*/i, "")
+      .replace(/^(?:Variant|Style)\s+\d+$/i, "")
+      .trim() || fallback
+  );
+}
+
+type SelectionLabel = "style" | "design";
+
+function normalizeSelectionLabel(
+  value: unknown,
+  fallback: SelectionLabel = "design",
+): SelectionLabel {
+  const s = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return s === "style" || s === "styles" ? "style" : fallback;
+}
+
+function selectionLabelText(label: SelectionLabel) {
+  return label === "style" ? "style" : "design";
+}
+
+function selectionLabelTitle(label: SelectionLabel) {
+  return label === "style" ? "Style" : "Design";
+}
+
 function humanizeCat(v: any) {
   const s = String(v ?? "").trim();
   if (!s) return "—";
@@ -127,13 +161,28 @@ function normalizeDyeSplits(v: any): DyeSplit[] {
 }
 
 function getSelectedVariant(spec: any) {
-  const title = cleanText(spec?.selected_variant_title);
+  const selectedVariantSnapshot =
+    spec?.selected_stitched_variant &&
+    typeof spec.selected_stitched_variant === "object"
+      ? spec.selected_stitched_variant
+      : spec?.selected_variant && typeof spec.selected_variant === "object"
+        ? spec.selected_variant
+        : {};
+  const label = normalizeSelectionLabel(
+    spec?.selected_variant_label ??
+      selectedVariantSnapshot?.selection_label ??
+      selectedVariantSnapshot?.selected_variant_label ??
+      selectedVariantSnapshot?.styleLabel ??
+      selectedVariantSnapshot?.style_label,
+  );
+  const title = designText(cleanText(spec?.selected_variant_title));
   const size = cleanText(spec?.selected_variant_size);
   const color = cleanText(spec?.selected_variant_color);
   const price = numOrNull(spec?.selected_variant_price_pkr);
 
   return {
     hasVariant: !!(title || size || color || price != null),
+    label,
     title,
     size,
     color,
@@ -206,7 +255,8 @@ function getOrderExportDetails(item: OrderRow): OrderExportDetails {
 
   const selectedStyle = selectedVariant.hasVariant
     ? [
-        selectedVariant.title || "Selected style",
+        selectedVariant.title ||
+          `Selected ${selectionLabelText(selectedVariant.label)}`,
         selectedVariant.size ? `Size ${selectedVariant.size}` : "",
         selectedVariant.color ? `Color ${selectedVariant.color}` : "",
         selectedVariant.price != null
@@ -363,7 +413,7 @@ function buildOrdersPdfHtml(args: {
               <th>Order</th>
               <th>Buyer</th>
               <th>Product</th>
-              <th>Style/Fabric</th>
+              <th>Design/Fabric</th>
               <th>Dyeing</th>
               <th>City</th>
               <th>Total</th>
@@ -756,8 +806,9 @@ export default function OrdersIndexScreen() {
         {selectedVariant.hasVariant ? (
           <View style={styles.variantBox}>
             <Text style={styles.variantTitle} numberOfLines={2}>
-              Selected Style:{" "}
-              {selectedVariant.title || "Ready-to-wear style"}
+              Selected {selectionLabelTitle(selectedVariant.label)}:{" "}
+              {selectedVariant.title ||
+                `Ready-to-wear ${selectionLabelText(selectedVariant.label)}`}
             </Text>
 
             <Text style={styles.variantMeta} numberOfLines={2}>

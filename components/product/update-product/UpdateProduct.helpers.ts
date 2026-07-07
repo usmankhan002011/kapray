@@ -560,6 +560,106 @@ export function getStitchedVariantInventoryInfo(variants: EditableReadyVariant[]
   };
 }
 
+export function readEditableSimpleReadyInventory(
+  product: ProductRow | null,
+): EditableVariantSizeRow[] {
+  if (!product) return [];
+
+  const price = safeJson(product.price);
+  const spec = safeJson(product.spec);
+  const rawRows =
+    price?.simple_ready_inventory ??
+    price?.simpleReadyInventory ??
+    spec?.simple_ready_inventory ??
+    spec?.simpleReadyInventory ??
+    [];
+
+  if (!Array.isArray(rawRows)) return [];
+
+  const seen = new Set<string>();
+  const rows: EditableVariantSizeRow[] = [];
+
+  for (const item of rawRows) {
+    const row = safeJson(item);
+    const size = String(
+      row?.size ?? row?.label ?? row?.name ?? row?.value ?? "",
+    ).trim();
+    const key = size.toLowerCase();
+
+    if (!size || seen.has(key)) continue;
+    seen.add(key);
+
+    rows.push({
+      size,
+      qty: safeNonNegInt(
+        row?.qty ??
+          row?.stock_qty ??
+          row?.stockQty ??
+          row?.stock ??
+          row?.quantity ??
+          0,
+      ),
+      raw: row,
+    });
+  }
+
+  return rows;
+}
+
+export function getSimpleReadyInventoryInfo(rows: EditableVariantSizeRow[]) {
+  let totalQty = 0;
+  let availableSizes = 0;
+
+  for (const row of rows) {
+    const qty = safeNonNegInt(row.qty);
+    totalQty += qty;
+    if (qty > 0) availableSizes += 1;
+  }
+
+  return {
+    totalQty,
+    availableSizes,
+    allOutOfStock: totalQty <= 0,
+  };
+}
+
+export function writeSimpleReadyInventoryToJson(args: {
+  nextPrice: any;
+  nextSpec: any;
+  rows: EditableVariantSizeRow[];
+}) {
+  const cleanedRows = args.rows
+    .map((row) => {
+      const rawRow =
+        row.raw && typeof row.raw === "object" && !Array.isArray(row.raw)
+          ? row.raw
+          : {};
+      const size = String(row.size ?? "").trim();
+      const qty = safeNonNegInt(row.qty);
+
+      return {
+        ...rawRow,
+        size,
+        qty,
+        stock_qty: qty,
+        stockQty: qty,
+      };
+    })
+    .filter((row) => row.size);
+
+  args.nextPrice.simple_ready_inventory = cleanedRows;
+  args.nextSpec.simple_ready_inventory = cleanedRows;
+  args.nextPrice.available_sizes = cleanedRows.map((row) => row.size);
+  args.nextSpec.has_ready_variants = false;
+  args.nextSpec.variant_mode = "simple_ready";
+
+  return {
+    nextPrice: args.nextPrice,
+    nextSpec: args.nextSpec,
+    totalQty: getSimpleReadyInventoryInfo(args.rows).totalQty,
+  };
+}
+
 export function writeEditableStitchedVariantsToJson(args: {
   prevPrice: any;
   prevSpec: any;

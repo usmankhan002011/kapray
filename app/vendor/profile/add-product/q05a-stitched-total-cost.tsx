@@ -28,6 +28,10 @@ function safeInt(v: any) {
   return Math.trunc(n);
 }
 
+function safeStr(v: any) {
+  return String(v ?? "").trim();
+}
+
 export default function Q05AStitchedTotalCost() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -105,6 +109,14 @@ export default function Q05AStitchedTotalCost() {
 
     if (returnTo) {
       router.replace(returnTo as any);
+      return;
+    }
+
+    const productCategory = safeStr((draft?.spec as any)?.product_category);
+    const madeOnOrder = Boolean((draft?.spec as any)?.made_on_order ?? false);
+
+    if (productCategory === "stitched_ready" && madeOnOrder) {
+      router.push("/vendor/profile/add-product/q06a-sizes" as any);
       return;
     }
 

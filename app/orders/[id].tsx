@@ -292,6 +292,44 @@ function cleanVariantTitle(value: string, sizeValue: string) {
     .trim();
 }
 
+function designText(value: unknown, fallback = "Design") {
+  const s = String(value ?? "").trim();
+  if (!s || s === "â€”" || s === "—" || s === "Ã¢â‚¬â€") {
+    return fallback;
+  }
+
+  return (
+    s
+      .replace(/^(?:Variant|Style)\s+\d+\s*:\s*/i, "")
+      .replace(/^(?:Variant|Style)\s+\d+$/i, "")
+      .trim() || fallback
+  );
+}
+
+type SelectionLabel = "style" | "design";
+
+function normalizeSelectionLabel(
+  value: unknown,
+  fallback: SelectionLabel = "design",
+): SelectionLabel {
+  const s = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return s === "style" || s === "styles" ? "style" : fallback;
+}
+
+function selectionLabelText(label: SelectionLabel) {
+  return label === "style" ? "style" : "design";
+}
+
+function selectionLabelTitle(label: SelectionLabel) {
+  return label === "style" ? "Style" : "Design";
+}
+
+function selectedLabelTitle(label: SelectionLabel) {
+  return `Selected ${selectionLabelTitle(label)}`;
+}
+
 function buildAddressPreview(args: {
   address: string;
   city: string;
@@ -618,6 +656,36 @@ export default function OrderDetailScreen() {
   }, [order]);
 
   const isUnstitched = useMemo(() => isUnstitchedFromSpec(spec), [spec]);
+
+  const selectedVariantLabel = useMemo(() => {
+    const snapshot =
+      spec?.selected_stitched_variant &&
+      typeof spec.selected_stitched_variant === "object"
+        ? spec.selected_stitched_variant
+        : spec?.selected_variant && typeof spec.selected_variant === "object"
+          ? spec.selected_variant
+          : {};
+    return normalizeSelectionLabel(
+      spec?.selected_variant_label ??
+        snapshot?.selection_label ??
+        snapshot?.selected_variant_label ??
+        snapshot?.styleLabel ??
+        snapshot?.style_label,
+    );
+  }, [spec]);
+
+  const tailoringStyleLabel = useMemo(() => {
+    const snapshot =
+      spec?.selected_tailoring_style_snapshot &&
+      typeof spec.selected_tailoring_style_snapshot === "object"
+        ? spec.selected_tailoring_style_snapshot
+        : {};
+    return normalizeSelectionLabel(
+      spec?.tailoring_style_label ??
+        snapshot?.styleLabel ??
+        snapshot?.style_label,
+    );
+  }, [spec]);
 
   const exactPairs = useMemo(() => {
     if (!order || order.size_mode !== "exact") return [] as [string, string][];
@@ -1018,6 +1086,15 @@ export default function OrderDetailScreen() {
     );
   }, [order, spec]);
 
+  const totalTailoringCostPkr = useMemo(() => {
+    if (!order || !tailoringSelected) return null;
+    if (tailoringCostPkr == null && tailoringStyleExtraCostPkr == null) {
+      return null;
+    }
+
+    return (tailoringCostPkr ?? 0) + (tailoringStyleExtraCostPkr ?? 0);
+  }, [order, tailoringCostPkr, tailoringSelected, tailoringStyleExtraCostPkr]);
+
   const destinationType = useMemo(() => {
     if (!order) return "";
     const raw = safeText(spec?.destination_type ?? "");
@@ -1201,6 +1278,12 @@ export default function OrderDetailScreen() {
     if (s === "delivered") return [styles.statusPill, styles.statusPillGreen];
     return [styles.statusPill, styles.statusPillBlue];
   }, [order?.status]);
+  const selectedVariantLabelTitle = selectedLabelTitle(selectedVariantLabel);
+  const selectedVariantFallback = `Selected ${selectionLabelText(
+    selectedVariantLabel,
+  )}`;
+  const tailoringStyleLabelTitle = selectionLabelTitle(tailoringStyleLabel);
+  const tailoringStyleLower = selectionLabelText(tailoringStyleLabel);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -1304,7 +1387,7 @@ export default function OrderDetailScreen() {
             </SectionCard>
 
             {selectedStitchedVariant ? (
-              <SectionCard title="Selected Style">
+              <SectionCard title={selectedVariantLabelTitle}>
                 <View style={styles.variantRow}>
                   {selectedStitchedVariant.imageUrl ? (
                     <View style={styles.variantImageWrap}>
@@ -1318,7 +1401,10 @@ export default function OrderDetailScreen() {
 
                   <View style={styles.variantInfoWrap}>
                     <Text style={styles.variantTitle} numberOfLines={2}>
-                      {selectedStitchedVariant.title || "Selected style"}
+                      {designText(
+                        selectedStitchedVariant.title,
+                        selectedVariantFallback,
+                      )}
                     </Text>
                     {!isMadeOrderStitchedOrder ? (
                       <KVRow
@@ -1359,7 +1445,9 @@ export default function OrderDetailScreen() {
 
                 {!!selectedStitchedVariant.note && (
                   <View style={styles.noteBox}>
-                    <Text style={styles.noteLabel}>Style note</Text>
+                    <Text style={styles.noteLabel}>
+                      {selectionLabelTitle(selectedVariantLabel)} note
+                    </Text>
                     <Text style={styles.noteText}>
                       {selectedStitchedVariant.note}
                     </Text>
@@ -1499,7 +1587,10 @@ export default function OrderDetailScreen() {
                       </View>
                     )}
 
-                    <KVRow label="Style" value={selectedTailoringStyleTitle} />
+                    <KVRow
+                      label={tailoringStyleLabelTitle}
+                      value={selectedTailoringStyleTitle}
+                    />
                     <KVRow
                       label="Neck"
                       value={
@@ -1535,7 +1626,7 @@ export default function OrderDetailScreen() {
 
                     {tailoringStyleExtraCostPkr != null ? (
                       <KVRow
-                        label="Additional style cost"
+                        label={`Additional ${tailoringStyleLower} cost`}
                         value={money(
                           order.currency,
                           tailoringStyleExtraCostPkr,
@@ -1551,6 +1642,13 @@ export default function OrderDetailScreen() {
                         </Text>
                       </View>
                     )}
+
+                    {totalTailoringCostPkr != null ? (
+                      <KVRow
+                        label="Total Tailoring Cost"
+                        value={money(order.currency, totalTailoringCostPkr)}
+                      />
+                    ) : null}
                   </View>
                 ) : null}
               </SectionCard>
@@ -1628,7 +1726,7 @@ export default function OrderDetailScreen() {
 
               {tailoringStyleExtraCostPkr != null ? (
                 <PriceRow
-                  label="Additional style tailoring cost"
+                  label={`Additional ${tailoringStyleLower} cost`}
                   value={money(order.currency, tailoringStyleExtraCostPkr)}
                 />
               ) : null}

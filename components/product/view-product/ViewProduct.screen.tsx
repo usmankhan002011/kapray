@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import {
   ActivityIndicator,
   Alert,
@@ -121,8 +122,64 @@ function safeText(v: unknown) {
   return t.length ? t : "—";
 }
 
+function designText(value: unknown, fallback = "Design") {
+  const s = String(value ?? "").trim();
+  if (!s || s === "â€”" || s === "—") return fallback;
+
+  return (
+    s
+      .replace(/^(?:Variant|Style)\s+\d+\s*:\s*/i, "")
+      .replace(/^(?:Variant|Style)\s+\d+$/i, "")
+      .trim() || fallback
+  );
+}
+
 function isHttpUrl(v: unknown) {
   return typeof v === "string" && /^https?:\/\//i.test(v);
+}
+
+function safeArray(v: any): any[] {
+  return Array.isArray(v) ? v : [];
+}
+
+function getReadyStyleCount(product: any) {
+  const price = product?.price ?? {};
+  const spec = product?.spec ?? {};
+  const inventory = product?.inventory ?? {};
+
+  return [
+    product?.variants,
+    price?.variants,
+    price?.ready_variants,
+    price?.readyVariants,
+    price?.stitched_variants,
+    price?.stitchedVariants,
+    spec?.variants,
+    spec?.ready_variants,
+    spec?.readyVariants,
+    spec?.stitched_variants,
+    spec?.stitchedVariants,
+    inventory?.variants,
+    inventory?.ready_variants,
+    inventory?.stitched_variants,
+  ].reduce((max, value) => Math.max(max, safeArray(value).length), 0);
+}
+
+function getMadeOrderStyleCount(product: any) {
+  const price = product?.price ?? {};
+  const spec = product?.spec ?? {};
+  const inventory = product?.inventory ?? {};
+
+  return [
+    price?.made_order_variants,
+    price?.madeOrderVariants,
+    product?.made_order_variants,
+    product?.madeOrderVariants,
+    spec?.made_order_variants,
+    spec?.madeOrderVariants,
+    inventory?.made_order_variants,
+    inventory?.madeOrderVariants,
+  ].reduce((max, value) => Math.max(max, safeArray(value).length), 0);
 }
 
 function firstParam(v: unknown): string | null {
@@ -524,6 +581,11 @@ export default function ViewProductScreen() {
     return safeDecode(raw);
   }, [params]);
 
+  const fromParam = useMemo(
+    () => String((params as any)?.from ?? "").trim().toLowerCase(),
+    [params],
+  );
+
   const choiceKey = useMemo(
     () => makeChoiceKey(productId, productCode),
     [productId, productCode],
@@ -618,7 +680,7 @@ export default function ViewProductScreen() {
     };
   }, []);
 
-  const resetBuyerSelections = useCallback(() => {
+  const clearBuyerSelections = useCallback(() => {
     setSelectedStitchedVariant(null);
     _setBuyerWantsTailoring(false);
     _setBuyerWantsDyeing(false);
@@ -636,19 +698,42 @@ export default function ViewProductScreen() {
       productId != null ? String(productId) : null,
       productCode ?? "",
     );
+  }, [choiceKey, productId, productCode]);
 
-    router.setParams({
-      dyeing_selected: "0",
-      dye_shade_id: undefined,
-      dye_hex: undefined,
-      dye_label: undefined,
-    } as any);
-  }, [choiceKey, productId, productCode, router]);
+  const fallbackBackPath = useMemo(() => {
+    if (!isBuyerRoute) return "/vendor/profile/products";
+    if (fromParam === "results") return "/(tabs)/flow/results";
+    return "/(tabs)";
+  }, [fromParam, isBuyerRoute]);
 
-  const exitBuyerToResults = useCallback(() => {
-    resetBuyerSelections();
-    router.replace("/(tabs)");
-  }, [resetBuyerSelections, router]);
+  const goBackToEntry = useCallback(() => {
+    if (!isBuyerRoute && fromParam === "vendor-products") {
+      router.navigate("/vendor/profile/products" as any);
+      return;
+    }
+
+    if (isBuyerRoute) {
+      clearBuyerSelections();
+    }
+
+    const canGoBack =
+      typeof (router as any).canGoBack === "function"
+        ? (router as any).canGoBack()
+        : true;
+
+    if (canGoBack) {
+      router.back();
+      return;
+    }
+
+    router.replace(fallbackBackPath as any);
+  }, [
+    clearBuyerSelections,
+    fallbackBackPath,
+    fromParam,
+    isBuyerRoute,
+    router,
+  ]);
 
   useEffect(() => {
     setSelectedStitchedVariant(null);
@@ -1009,10 +1094,8 @@ export default function ViewProductScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!isBuyerRoute) return;
-
       const onBackPress = () => {
-        exitBuyerToResults();
+        goBackToEntry();
         return true;
       };
 
@@ -1021,7 +1104,7 @@ export default function ViewProductScreen() {
         onBackPress,
       );
       return () => sub.remove();
-    }, [exitBuyerToResults, isBuyerRoute]),
+    }, [goBackToEntry]),
   );
 
   const ChipRow = ({ title, items }: { title: string; items: unknown }) => {
@@ -1380,6 +1463,7 @@ export default function ViewProductScreen() {
   const hasTailoringStylePresets = useMemo(() => {
     return tailoringStylePresets.length > 0;
   }, [tailoringStylePresets]);
+  const hasMultipleTailoringStylePresets = tailoringStylePresets.length > 1;
 
   const sizeLengthMap = useMemo(() => {
     return ((product as any)?.spec?.size_length_m ?? {}) as Record<
@@ -1575,6 +1659,19 @@ export default function ViewProductScreen() {
     const selectedVariantMode = selectedVariantMadeOnOrder
       ? "made_order_variants"
       : String((selectedStitchedVariant as any)?.variant_mode ?? "");
+    const selectedVariantLabel =
+      isStitchedReady && selectedStitchedVariant
+        ? selectedVariantMadeOnOrder
+          ? getMadeOrderStyleCount(product) > 1
+            ? "style"
+            : "design"
+          : getReadyStyleCount(product) > 1
+            ? "style"
+            : "design"
+        : "design";
+    const tailoringStyleLabel = hasMultipleTailoringStylePresets
+      ? "style"
+      : "design";
 
     if (isStitchedReady && !selectedStitchedVariant) {
       Alert.alert(
@@ -1591,8 +1688,12 @@ export default function ViewProductScreen() {
     if (tailoringEligible && buyerWantsTailoring) {
       if (!tailoringSelection?.presetId) {
         Alert.alert(
-          "Select tailoring style",
-          "Please select a tailoring style card.",
+          hasMultipleTailoringStylePresets
+            ? "Select tailoring style"
+            : "Select tailoring design",
+          hasMultipleTailoringStylePresets
+            ? "Please select a tailoring style card."
+            : "Please select the tailoring design.",
         );
         return;
       }
@@ -1646,6 +1747,10 @@ export default function ViewProductScreen() {
         selected_variant_made_on_order: selectedVariantMadeOnOrder ? "1" : "0",
         variant_mode: selectedVariantMode,
         selected_variant_mode: selectedVariantMode,
+        selected_variant_label:
+          isStitchedReady && selectedStitchedVariant
+            ? selectedVariantLabel
+            : "",
         currency: "PKR",
         imageUrl,
 
@@ -1742,7 +1847,10 @@ export default function ViewProductScreen() {
             : "",
         selected_stitched_variant_snapshot:
           isStitchedReady && selectedStitchedVariant
-            ? encodeJsonParam(selectedStitchedVariant)
+            ? encodeJsonParam({
+                ...selectedStitchedVariant,
+                selection_label: selectedVariantLabel,
+              })
             : "",
 
         size_length_m: hasAnySizeLengthMap
@@ -1798,8 +1906,13 @@ export default function ViewProductScreen() {
             : "",
         selected_tailoring_style_snapshot:
           tailoringEligible && buyerWantsTailoring && tailoringSelection
-            ? encodeJsonParam(tailoringSelection)
+            ? encodeJsonParam({
+                ...tailoringSelection,
+                styleLabel: tailoringStyleLabel,
+              })
             : "",
+        tailoring_style_label:
+          tailoringEligible && buyerWantsTailoring ? tailoringStyleLabel : "",
         tailoring_style_extra_cost_pkr:
           tailoringEligible &&
           buyerWantsTailoring &&
@@ -1865,6 +1978,7 @@ export default function ViewProductScreen() {
     buyerWantsTailoring,
     dyeingCostPkr,
     hasAnySizeLengthMap,
+    hasMultipleTailoringStylePresets,
     imageUrls,
     isFabricByMeterPurchase,
     isMadeOnOrder,
@@ -1996,23 +2110,22 @@ export default function ViewProductScreen() {
         ]}
       >
         <View style={styles.headerRow}>
-          <Text style={styles.title}>Product</Text>
-
           <Pressable
-            onPress={() => {
-              if (isBuyerRoute) {
-                exitBuyerToResults();
-                return;
-              }
-              router.back();
-            }}
+            accessibilityRole="button"
+            accessibilityLabel="Back to previous screen"
+            onPress={goBackToEntry}
             style={({ pressed }) => [
-              styles.linkBtn,
+              styles.backIconBtn,
               pressed ? styles.pressed : null,
             ]}
           >
-            <Text style={styles.linkText}>Close</Text>
+            <MaterialIcons
+              name="arrow-back"
+              size={22}
+              color={stylesVars.blue}
+            />
           </Pressable>
+          <Text style={styles.title}>Product</Text>
         </View>
 
         {missingParam ? (
@@ -2443,7 +2556,9 @@ export default function ViewProductScreen() {
                     color: stylesVars.blue,
                   }}
                 >
-                  Selected Tailoring Style
+                  {hasMultipleTailoringStylePresets
+                    ? "Selected Tailoring Style"
+                    : "Selected Tailoring Design"}
                 </Text>
 
                 <View
@@ -2486,7 +2601,10 @@ export default function ViewProductScreen() {
 
                     {tailoringSelection?.extraCostPkr ? (
                       <Text style={styles.metaLine}>
-                        Style Extra Cost: PKR{" "}
+                        {hasMultipleTailoringStylePresets
+                          ? "Style Extra Cost"
+                          : "Design Extra Cost"}
+                        : PKR{" "}
                         {tailoringSelection.extraCostPkr.toLocaleString()}
                       </Text>
                     ) : null}
@@ -2559,7 +2677,9 @@ export default function ViewProductScreen() {
             {hasTailoringStylePresets ? (
               <View style={{ marginTop: 14, gap: 12 }}>
                 <Text style={[styles.specTitle, { color: stylesVars.blue }]}>
-                  Styles Offered
+                  {hasMultipleTailoringStylePresets
+                    ? "Styles Offered"
+                    : "Tailoring Design Offered"}
                 </Text>
                 {tailoringStylePresets.map((preset, index) => {
                   const presetImageUrls = resolveTailoringPresetImageUrls(
@@ -2568,7 +2688,10 @@ export default function ViewProductScreen() {
                   );
                   const extraCost = safeInt0(preset.extra_cost_pkr);
                   const title =
-                    String(preset.title || "").trim() || `Style ${index + 1}`;
+                    String(preset.title || "").trim() ||
+                    (hasMultipleTailoringStylePresets
+                      ? `Style ${index + 1}`
+                      : "Design");
 
                   return (
                     <View
@@ -2589,7 +2712,9 @@ export default function ViewProductScreen() {
                           color: stylesVars.text,
                         }}
                       >
-                        Style Card {index + 1}
+                        {hasMultipleTailoringStylePresets
+                          ? `Style Card ${index + 1}`
+                          : "Tailoring Design"}
                       </Text>
 
                       {presetImageUrls.length ? (
@@ -2643,7 +2768,7 @@ export default function ViewProductScreen() {
               </View>
             ) : (
               <Text style={[styles.meta, { marginTop: 10 }]}>
-                No tailoring style cards added for this product.
+                No tailoring designs added for this product.
               </Text>
             )}
           </View>
@@ -2669,13 +2794,30 @@ export default function ViewProductScreen() {
                     (selectedStitchedVariant as any)?.pricePkr ??
                     (selectedStitchedVariant as any)?.price_pkr,
                 ) || baseCost + additionalCost;
+              const selectedVariantIsMadeOnOrder =
+                Boolean((selectedStitchedVariant as any)?.made_on_order) ||
+                String(
+                  (selectedStitchedVariant as any)?.variant_mode ?? "",
+                ) === "made_order_variants" ||
+                String(
+                  (selectedStitchedVariant as any)?.rawVariant?.variant_mode ??
+                    "",
+                ) === "made_order_variants";
+              const selectedVariantNoun =
+                selectedVariantIsMadeOnOrder
+                  ? getMadeOrderStyleCount(product) > 1
+                    ? "Style"
+                    : "Design"
+                  : getReadyStyleCount(product) > 1
+                    ? "Style"
+                    : "Design";
 
               return (
                 <View style={styles.card}>
                   <Text
                     style={[styles.sectionTitle, { color: stylesVars.blue }]}
                   >
-                    Selected Style
+                    Selected {selectedVariantNoun}
                   </Text>
 
                   <View
@@ -2723,9 +2865,11 @@ export default function ViewProductScreen() {
                         }}
                         numberOfLines={2}
                       >
-                        {selectedStitchedVariant.rawVariant?.display_name ||
-                          selectedStitchedVariant.title ||
-                          selectedStitchedVariant.label}
+                        {designText(
+                          selectedStitchedVariant.rawVariant?.display_name ||
+                            selectedStitchedVariant.title ||
+                            selectedStitchedVariant.label,
+                        )}
                       </Text>
 
                       {!isMadeOnOrder ? (
@@ -2747,7 +2891,7 @@ export default function ViewProductScreen() {
                       Base Cost: PKR {baseCost.toLocaleString()}
                     </Text>
                     <Text style={styles.metaLine}>
-                      Style Additional Cost: PKR{" "}
+                      Design Additional Cost: PKR{" "}
                       {additionalCost.toLocaleString()}
                     </Text>
                     <Text

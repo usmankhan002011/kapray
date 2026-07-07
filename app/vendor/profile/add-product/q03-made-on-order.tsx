@@ -50,18 +50,35 @@ export default function Q03MadeOnOrder() {
     draft.spec = { ...(draft?.spec ?? {}), ...patch };
   }
 
+  function patchPrice(patch: any) {
+    if (typeof ctx.setPrice === "function") {
+      ctx.setPrice((prev: any) => ({ ...(prev ?? {}), ...patch }));
+      return;
+    }
+    if (typeof ctx.setDraft === "function") {
+      ctx.setDraft((prev: any) => ({
+        ...prev,
+        price: { ...(prev?.price ?? {}), ...patch },
+      }));
+      return;
+    }
+    draft.price = { ...(draft?.price ?? {}), ...patch };
+  }
+
   const canContinue = useMemo(() => Boolean(vendorId), [vendorId]);
   const disabledHint = !vendorId ? "Vendor not loaded." : "";
 
   function setYes() {
     setMadeOnOrder(true);
     patchSpec({ made_on_order: true });
+    patchPrice({ available_sizes: ["All"], simple_ready_inventory: [] });
     setInventoryQty?.(0);
   }
 
   function setNo() {
     setMadeOnOrder(false);
     patchSpec({ made_on_order: false });
+    patchPrice({ available_sizes: [] });
   }
 
   function goNext() {

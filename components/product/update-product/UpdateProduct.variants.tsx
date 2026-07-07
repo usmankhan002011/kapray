@@ -14,9 +14,11 @@ import {
   UpdateProductEmptyState,
 } from "./UpdateProduct.components";
 import {
+  READY_STANDARD_SIZES,
   resolveVariantImageUrls,
   variantDisplayTitle,
   type EditableReadyVariant,
+  type EditableVariantSizeRow,
   type NewMadeOrderVariantDraft,
   type NewReadyVariantDraft,
 } from "./UpdateProduct.helpers";
@@ -27,6 +29,12 @@ type StitchedVariantInventorySectionProps = {
   resolvePublicUrl: (path: string | null | undefined) => string | null;
   onAdditionalPriceChangeText: (variantId: string, value: string) => void;
   onSizeQtyChange: (variantId: string, size: string, value: string) => void;
+};
+
+type SimpleReadyInventorySectionProps = {
+  rows: EditableVariantSizeRow[];
+  onToggleSize: (size: string) => void;
+  onSizeQtyChange: (size: string, value: string) => void;
 };
 
 type ExistingMadeOrderVariantListProps = {
@@ -65,21 +73,114 @@ type MadeOrderVariantDraftCardProps = {
   onRemoveImage: (index: number, imageIndex: number) => void;
 };
 
+function designText(value: unknown, fallback = "Design") {
+  const s = String(value ?? "").trim();
+  if (!s || s === "â€”" || s === "—" || s === "Ã¢â‚¬â€") return fallback;
+
+  return (
+    s
+      .replace(/^(?:Variant|Style)\s+\d+\s*:\s*/i, "")
+      .replace(/^(?:Variant|Style)\s+\d+$/i, "")
+      .trim() || fallback
+  );
+}
+
+function sizeKey(value: unknown) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
 export function ExistingMadeOrderVariantList({
   variants,
 }: ExistingMadeOrderVariantListProps) {
   if (!variants.length) {
-    return <UpdateProductEmptyState title="No saved styles" />;
+    return <UpdateProductEmptyState title="One saved design" />;
   }
+
+  const hasSingleVariant = variants.length === 1;
 
   return (
     <View style={styles.readonlyListBox}>
-      <Text style={styles.appendTitle}>Saved styles</Text>
+      <Text style={styles.appendTitle}>
+        {hasSingleVariant ? "One saved design" : "Saved styles"}
+      </Text>
       {variants.map((variant, index) => (
         <Text key={`old-made-${index}`} style={styles.readonlyValue}>
-          {variantDisplayTitle(variant, index + 1)}
+          {hasSingleVariant
+            ? designText(variantDisplayTitle(variant, index + 1))
+            : variantDisplayTitle(variant, index + 1)}
         </Text>
       ))}
+    </View>
+  );
+}
+
+export function SimpleReadyInventorySection({
+  rows,
+  onToggleSize,
+  onSizeQtyChange,
+}: SimpleReadyInventorySectionProps) {
+  const sizeOptions = Array.from(
+    new Set(
+      [...READY_STANDARD_SIZES, ...rows.map((row) => row.size)]
+        .map((size) => String(size ?? "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const totalQty = rows.reduce((sum, row) => sum + Number(row.qty || 0), 0);
+  const usedSizes = rows.filter((row) => Number(row.qty || 0) > 0).length;
+
+  return (
+    <View style={styles.variantInventoryBox}>
+      <Text style={styles.variantInventoryTitle}>Edit Design</Text>
+      <Text style={styles.label}>Stock by size *</Text>
+
+      <View style={styles.variantSizeGrid}>
+        {sizeOptions.map((size) => {
+          const selected = rows.find(
+            (row) => sizeKey(row.size) === sizeKey(size),
+          );
+
+          return (
+            <View key={`simple-ready-${size}`} style={styles.variantSizeCell}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => onToggleSize(size)}
+                style={({ pressed }) => [
+                  styles.optionPill,
+                  selected ? styles.optionPillOn : null,
+                  pressed ? styles.pressed : null,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.optionPillText,
+                    selected ? styles.optionPillTextOn : null,
+                  ]}
+                >
+                  {size}
+                </Text>
+              </Pressable>
+
+              {selected ? (
+                <FastNumberInput
+                  value={String(selected.qty ?? 0)}
+                  onChangeText={(value) => onSizeQtyChange(size, value)}
+                  placeholder="0"
+                  placeholderTextColor={stylesVars.placeholder}
+                  style={styles.variantQtyInput}
+                  commitMode="change"
+                  keyboardType="number-pad"
+                  maxLength={6}
+                />
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
+
+      <Text style={styles.variantCardMeta}>
+        Stock: {totalQty} | Sizes: {usedSizes}
+      </Text>
     </View>
   );
 }
@@ -117,10 +218,13 @@ export function StitchedVariantInventorySection({
   onSizeQtyChange,
 }: StitchedVariantInventorySectionProps) {
   if (!variants.length) return null;
+  const hasSingleVariant = variants.length === 1;
 
   return (
     <View style={styles.variantInventoryBox}>
-      <Text style={styles.variantInventoryTitle}>Edit Styles</Text>
+      <Text style={styles.variantInventoryTitle}>
+        {hasSingleVariant ? "Edit Design" : "Edit Styles"}
+      </Text>
 
       {variants.map((variant) => {
         const variantImageUrls = resolveVariantImageUrls(
@@ -137,7 +241,9 @@ export function StitchedVariantInventorySection({
 
         return (
           <View key={variant.id} style={styles.variantCard}>
-            <Text style={styles.variantCardTitle}>{variant.label}</Text>
+            <Text style={styles.variantCardTitle}>
+              {hasSingleVariant ? designText(variant.label) : variant.label}
+            </Text>
 
             {variantImageUrls[0] ? (
               <Image
@@ -158,6 +264,7 @@ export function StitchedVariantInventorySection({
               placeholder="0"
               placeholderTextColor={stylesVars.placeholder}
               style={styles.input}
+              commitMode="change"
               keyboardType="number-pad"
               maxLength={8}
             />
@@ -177,6 +284,7 @@ export function StitchedVariantInventorySection({
                     placeholder="0"
                     placeholderTextColor={stylesVars.placeholder}
                     style={styles.variantQtyInput}
+                    commitMode="change"
                     keyboardType="number-pad"
                     maxLength={6}
                   />
@@ -239,12 +347,13 @@ export function ReadyVariantDraftCard({
         placeholder="0"
         placeholderTextColor={stylesVars.placeholder}
         style={styles.input}
+        commitMode="change"
         keyboardType="number-pad"
         maxLength={8}
       />
 
       <View style={styles.sectionHeaderRow}>
-        <Text style={styles.label}>Style Images</Text>
+        <Text style={styles.label}>Style Images *</Text>
         <UpdateProductActionButton
           label="Images"
           icon="add-photo-alternate"
@@ -295,6 +404,7 @@ export function ReadyVariantDraftCard({
               placeholder="0"
               placeholderTextColor={stylesVars.placeholder}
               style={styles.variantQtyInput}
+              commitMode="change"
               keyboardType="number-pad"
               maxLength={6}
             />
@@ -350,6 +460,7 @@ export function MadeOrderVariantDraftCard({
         placeholder="0"
         placeholderTextColor={stylesVars.placeholder}
         style={styles.input}
+        commitMode="change"
         keyboardType="number-pad"
         maxLength={8}
       />
@@ -366,7 +477,7 @@ export function MadeOrderVariantDraftCard({
       />
 
       <View style={styles.sectionHeaderRow}>
-        <Text style={styles.label}>Style Images</Text>
+        <Text style={styles.label}>Style Images *</Text>
         <UpdateProductActionButton
           label="Images"
           icon="add-photo-alternate"

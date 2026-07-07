@@ -73,6 +73,9 @@ type SizeLengthMap = Partial<
   Record<"XS" | "S" | "M" | "L" | "XL" | "XXL", number>
 >;
 
+const STANDARD_SIZE_LABELS = ["XS", "S", "M", "L", "XL", "XXL", "All"];
+const DEFAULT_MADE_ORDER_SIZES = ["All"];
+
 type TailoringStylePresetImage = {
   uri?: string | null;
   url?: string | null;
@@ -104,6 +107,20 @@ function safeStr(v: any) {
   return String(v ?? "").trim();
 }
 
+function designText(value: any, fallback = "Design") {
+  const s = String(value ?? "").trim();
+  if (!s || s === "â€”" || s === "—" || s === "Ã¢â‚¬â€") {
+    return fallback;
+  }
+
+  return (
+    s
+      .replace(/^(?:Variant|Style)\s+\d+\s*:\s*/i, "")
+      .replace(/^(?:Variant|Style)\s+\d+$/i, "")
+      .trim() || fallback
+  );
+}
+
 function safeNum(v: any) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -124,6 +141,30 @@ function normalizeStringArray(v: any): string[] {
   }
 
   return out;
+}
+
+function normalizeAvailableSizes(v: any, fallback: string[] = []) {
+  const arr = Array.isArray(v) ? v : [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const item of arr) {
+    const raw = safeStr(item);
+    if (!raw) continue;
+
+    const size =
+      STANDARD_SIZE_LABELS.find(
+        (label) => label.toLowerCase() === raw.toLowerCase(),
+      ) ?? raw;
+    const key = size.toLowerCase();
+
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(size);
+  }
+
+  if (out.some((size) => size.toLowerCase() === "all")) return ["All"];
+  return out.length ? out : fallback;
 }
 
 function formatPicked(list: any, emptyLabel: string) {
@@ -347,18 +388,23 @@ function firstReadyVariantImageUri(variant: ReadyVariant) {
   return normalizeReadyVariantImagePaths(variant)[0] || "";
 }
 
-function getReadyVariantTitle(variant: ReadyVariant) {
-  return (
+function getReadyVariantTitle(variant: ReadyVariant, useDesign = false) {
+  const raw =
     safeStr(variant?.display_name) ||
     safeStr(variant?.title) ||
     safeStr(variant?.label) ||
     safeStr(variant?.name) ||
-    "Style"
-  );
+    "Style";
+
+  return useDesign ? designText(raw) : raw;
 }
 
-function summarizeReadyVariant(variant: ReadyVariant, basePrice: number) {
-  const title = getReadyVariantTitle(variant);
+function summarizeReadyVariant(
+  variant: ReadyVariant,
+  basePrice: number,
+  useDesign = false,
+) {
+  const title = getReadyVariantTitle(variant, useDesign);
   const imgCount = countReadyVariantImages(variant);
   const finalPrice = getReadyVariantFinalPrice(basePrice, variant as any);
   const sizes = Array.isArray(variant?.sizes) ? variant.sizes : [];
@@ -424,14 +470,18 @@ function firstMadeOrderVariantImageUri(variant: MadeOrderVariant) {
   return normalizeMadeOrderVariantImagePaths(variant)[0] || "";
 }
 
-function getMadeOrderVariantTitle(variant: MadeOrderVariant) {
-  return (
+function getMadeOrderVariantTitle(
+  variant: MadeOrderVariant,
+  useDesign = false,
+) {
+  const raw =
     safeStr(variant?.display_name) ||
     safeStr(variant?.title) ||
     safeStr(variant?.label) ||
     safeStr(variant?.name) ||
-    "Style"
-  );
+    "Style";
+
+  return useDesign ? designText(raw) : raw;
 }
 
 function summarizeMadeOrderVariant(
@@ -505,6 +555,8 @@ export default function AddProductReviewScreen() {
       ) as MadeOrderVariant[],
     [draft.price],
   );
+  const hasSingleReadyVariant = readyVariants.length === 1;
+  const hasSingleMadeOrderVariant = madeOrderVariants.length === 1;
 
   const readyVariantQty = useMemo(
     () => sumReadyVariantQty(readyVariants),
@@ -544,7 +596,11 @@ export default function AddProductReviewScreen() {
     (draft.spec as any)?.tailoring_turnaround_days ?? 0,
   );
 
-  const sizes = (draft.price as any)?.available_sizes ?? [];
+  const sizes = normalizeAvailableSizes(
+    (draft.price as any)?.available_sizes,
+    madeOnOrder ? DEFAULT_MADE_ORDER_SIZES : [],
+  );
+  const sizesSummary = sizes.length ? sizes.join(", ") : "Not set";
   const sizeLengthMap = (draft.spec as any)?.size_length_m as
     | SizeLengthMap
     | undefined;
@@ -822,12 +878,27 @@ export default function AddProductReviewScreen() {
               </Text>
             </Pressable>
 
-            {hasMadeOrderVariants ? (
+            {madeOnOrder ? (
               <>
                 <Pressable
                   onPress={() =>
+                    goEdit("/vendor/profile/add-product/q06a-sizes")
+                  }
+                  style={({ pressed }) => [
+                    styles.rowBtn,
+                    pressed ? styles.pressed : null,
+                  ]}
+                >
+                  <Text style={styles.rowTitle}>Sizes offered</Text>
+                  <Text style={styles.rowValue}>{sizesSummary}</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() =>
                     goEdit(
-                      "/vendor/profile/add-product/q06b4-made-order-variants",
+                      hasMadeOrderVariants
+                        ? "/vendor/profile/add-product/q06b4-made-order-variants"
+                        : "/vendor/profile/add-product/q06b4-made-order-variant-choice",
                     )
                   }
                   style={({ pressed }) => [
@@ -835,17 +906,26 @@ export default function AddProductReviewScreen() {
                     pressed ? styles.pressed : null,
                   ]}
                 >
-                  <Text style={styles.rowTitle}>Made-on-order styles</Text>
+                  <Text style={styles.rowTitle}>
+                    {hasSingleMadeOrderVariant
+                      ? "Made-on-order design"
+                      : "Made-on-order styles"}
+                  </Text>
                   <Text style={styles.rowValue}>
                     {madeOrderVariants.length
-                      ? `${madeOrderVariants.length} style(s) / Inventory 0`
-                      : "Not set"}
+                      ? hasSingleMadeOrderVariant
+                        ? "1 design / Inventory 0"
+                        : `${madeOrderVariants.length} style(s) / Inventory 0`
+                      : "One design / Inventory 0"}
                   </Text>
                 </Pressable>
 
                 {madeOrderVariants.map((variant, index) => {
                   const imageUri = firstMadeOrderVariantImageUri(variant);
-                  const title = getMadeOrderVariantTitle(variant);
+                  const title = getMadeOrderVariantTitle(
+                    variant,
+                    hasSingleMadeOrderVariant,
+                  );
                   const summary = summarizeMadeOrderVariant(variant, costTotal);
 
                   return (
@@ -896,10 +976,16 @@ export default function AddProductReviewScreen() {
                     pressed ? styles.pressed : null,
                   ]}
                 >
-                  <Text style={styles.rowTitle}>Ready-to-wear styles</Text>
+                  <Text style={styles.rowTitle}>
+                    {hasSingleReadyVariant
+                      ? "Ready-to-wear design"
+                      : "Ready-to-wear styles"}
+                  </Text>
                   <Text style={styles.rowValue}>
                     {readyVariants.length
-                      ? `${readyVariants.length} style(s) / Total stock ${readyVariantQty}`
+                      ? hasSingleReadyVariant
+                        ? `1 design / Total stock ${readyVariantQty}`
+                        : `${readyVariants.length} style(s) / Total stock ${readyVariantQty}`
                       : "Not set"}
                   </Text>
                 </Pressable>
@@ -923,8 +1009,15 @@ export default function AddProductReviewScreen() {
 
                 {readyVariants.map((variant, index) => {
                   const imageUri = firstReadyVariantImageUri(variant);
-                  const title = getReadyVariantTitle(variant);
-                  const summary = summarizeReadyVariant(variant, costTotal);
+                  const title = getReadyVariantTitle(
+                    variant,
+                    hasSingleReadyVariant,
+                  );
+                  const summary = summarizeReadyVariant(
+                    variant,
+                    costTotal,
+                    hasSingleReadyVariant,
+                  );
 
                   return (
                     <Pressable
@@ -1063,10 +1156,16 @@ export default function AddProductReviewScreen() {
                     pressed ? styles.pressed : null,
                   ]}
                 >
-                  <Text style={styles.rowTitle}>Tailoring style cards</Text>
+                  <Text style={styles.rowTitle}>
+                    {tailoringStylePresets.length === 1
+                      ? "Tailoring design"
+                      : "Tailoring style cards"}
+                  </Text>
                   <Text style={styles.rowValue}>
                     {tailoringStylePresets.length
-                      ? `${tailoringStylePresets.length} style card(s)`
+                      ? tailoringStylePresets.length === 1
+                        ? "1 design"
+                        : `${tailoringStylePresets.length} style card(s)`
                       : "Not set"}
                   </Text>
                 </Pressable>
@@ -1084,7 +1183,11 @@ export default function AddProductReviewScreen() {
                       pressed ? styles.pressed : null,
                     ]}
                   >
-                    <Text style={styles.rowTitle}>Style Card {index + 1}</Text>
+                    <Text style={styles.rowTitle}>
+                      {tailoringStylePresets.length === 1
+                        ? "Tailoring Design"
+                        : `Style Card ${index + 1}`}
+                    </Text>
                     <Text style={styles.rowValue}>
                       {summarizePreset(preset, includesTrouser)}
                     </Text>

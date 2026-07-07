@@ -44,16 +44,17 @@ export default function AppStarter() {
     async (session: Session | null) => {
       const role = getRoleFromSession(session);
 
-      dispatch(clearBuyer());
-      dispatch(clearSelectedVendor());
-
       if (!session || !role) {
+        dispatch(clearBuyer());
+        dispatch(clearSelectedVendor());
         return { role: null as AppRole };
       }
 
       const user = session.user;
 
       if (role === "buyer") {
+        dispatch(clearBuyer());
+        dispatch(clearSelectedVendor());
         dispatch(
           setBuyer({
             userId: user.id,
@@ -68,6 +69,7 @@ export default function AppStarter() {
       }
 
       if (role === "vendor") {
+        dispatch(clearBuyer());
         const { data: vendor, error } = await supabase
           .from("vendor")
           .select("*")
