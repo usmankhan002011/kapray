@@ -53,7 +53,7 @@ export type StepConfig = {
 };
 
 export const BUSINESS_AUTH_DOCUMENTS_COPY =
-  "Upload all applicable business authorization documents, including owner CNIC, shop/local authority permission, FBR NTN or tax registration, SECP/firm registration if applicable, police verification/NOC if required, and any other local permit. Existing verification documents cannot be deleted after upload; new documents may be added for review.";
+  "Upload all applicable business authorization documents, including owner CNIC, shop/local authority permission or trade license, Shops & Establishment registration, FBR NTN/tax registration, business premises proof and recent utility bill, SECP incorporation or firm/AOP registration and authority letter if applicable, police verification/NOC or sector-specific license if required, and any other local permit. Existing verification documents cannot be deleted after upload; new documents may be added for review.";
 
 export const STEPS: StepConfig[] = [
   {

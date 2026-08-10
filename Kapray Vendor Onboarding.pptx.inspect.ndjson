@@ -1,0 +1,374 @@
+{"kind":"deck","id":"pr/5poymn","name":"Deck"}
+{"kind":"layout","layoutId":"c87b55d3-10d6-4e9d-a87c-eb0e4424e11b","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"7c4767c6-2cd3-446d-999e-0bd9317db249","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/lltjh1","slide":1,"title":"VENDOR APP WALKTHROUGH","textShapes":7}
+{"kind":"textbox","id":"sh/d8r2t03i","slide":1,"text":"VENDOR APP WALKTHROUGH","textPreview":"VENDOR APP WALKTHROUGH","textChars":22,"textLines":1,"bbox":[48,44,380,28]}
+{"kind":"textbox","id":"sh/q5gjy547","slide":1,"text":"Kapray Vendor Onboarding","textPreview":"Kapray Vendor Onboarding","textChars":24,"textLines":1,"bbox":[48,178,590,178]}
+{"kind":"textbox","id":"sh/r6pkrals","slide":1,"text":"Set up products, services, and orders from the vendor app screens.","textPreview":"Set up products, services, and orders from the vendor app screens.","textChars":66,"textLines":1,"bbox":[50,390,480,92]}
+{"kind":"shape","id":"sh/0bil4fm9","slide":1,"bbox":[48,562,420,2]}
+{"kind":"shape","id":"sh/1cr2xk3u","slide":1,"name":"Frame Choose dress types","bbox":[710,54,205,430]}
+{"kind":"textbox","id":"sh/fa9kvalo","slide":1,"text":"Choose dress types","textPreview":"Choose dress types","textChars":18,"textLines":1,"bbox":[710,492,205,26]}
+{"kind":"shape","id":"sh/gfe1sbm5","slide":1,"name":"Frame Review product","bbox":[936,116,205,430]}
+{"kind":"textbox","id":"sh/xkvu9ory","slide":1,"text":"Review product","textPreview":"Review product","textChars":14,"textLines":1,"bbox":[936,554,205,26]}
+{"kind":"shape","id":"sh/wjmtgjqd","slide":1,"name":"Frame Fulfil orders","bbox":[808,246,205,430]}
+{"kind":"textbox","id":"sh/ah4be987","slide":1,"text":"Fulfil orders","textPreview":"Fulfil orders","textChars":13,"textLines":1,"bbox":[808,684,205,26]}
+{"kind":"textbox","id":"sh/58fud8ru","slide":1,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[1185,666,48,24]}
+{"kind":"image","id":"im/7apczy9o","slide":1,"name":"","geometry":"rect","alt":"Choose dress types","bbox":[716,60,193,418]}
+{"kind":"image","id":"im/gfitcna5","slide":1,"name":"","geometry":"rect","alt":"Review product","bbox":[942,122,193,418]}
+{"kind":"image","id":"im/4rqps3qt","slide":1,"name":"","geometry":"rect","alt":"Fulfil orders","bbox":[814,252,193,418]}
+{"kind":"notes","id":"nt/lltjh1","slide":1,"text":"[Sources]\nUser-provided Kapray screenshots: IMG-20260703-WA0168.jpg, IMG-20260703-WA0188.jpg, IMG-20260703-WA0247.jpg"}
+{"kind":"slide","id":"sl/6b0xdc","slide":2,"title":"Vendors work through one repeatable loop","textShapes":19}
+{"kind":"textbox","id":"sh/9g329on6","slide":2,"text":"Vendors work through one repeatable loop","textPreview":"Vendors work through one repeatable loop","textChars":40,"textLines":1,"bbox":[48,36,1100,72]}
+{"kind":"textbox","id":"sh/mdcjy9of","slide":2,"text":"Every product path follows the same operating rhythm: set up the listing, publish it, then manage buyer orders.","textPreview":"Every product path follows the same operating rhythm: set up the listing, publish it, then manage buyer orders.","textChars":111,"textLines":1,"bbox":[49,112,900,52]}
+{"kind":"shape","id":"sh/7elk7e50","slide":2,"bbox":[48,162,1184,1]}
+{"kind":"textbox","id":"sh/wje14j6x","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[1185,666,48,24]}
+{"kind":"shape","id":"sh/hkn2don2","slide":2,"bbox":[58,232,58,58]}
+{"kind":"textbox","id":"sh/uhcj2tor","slide":2,"text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[58,242,58,38]}
+{"kind":"textbox","id":"sh/vi5kby5c","slide":2,"text":"Choose product path","textPreview":"Choose product path","textChars":19,"textLines":1,"bbox":[58,324,222,70]}
+{"kind":"textbox","id":"sh/47e1836t","slide":2,"text":"Unstitched, ready-to-wear, or made-to-order.","textPreview":"Unstitched, ready-to-wear, or made-to-order.","textChars":44,"textLines":1,"bbox":[58,402,222,110]}
+{"kind":"shape","id":"sh/58n2h8ne","slide":2,"bbox":[284,270,10,2]}
+{"kind":"shape","id":"sh/xc3et8b2","slide":2,"bbox":[298,232,58,58]}
+{"kind":"textbox","id":"sh/wbux03ah","slide":2,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[298,242,58,38]}
+{"kind":"textbox","id":"sh/valwrytw","slide":2,"text":"Add product data","textPreview":"Add product data","textChars":16,"textLines":1,"bbox":[298,324,222,70]}
+{"kind":"textbox","id":"sh/a9cfytsb","slide":2,"text":"Title, dress type, stock, price, shipping, media, and details.","textPreview":"Title, dress type, stock, price, shipping, media, and details.","textChars":62,"textLines":1,"bbox":[298,402,222,110]}
+{"kind":"shape","id":"sh/5gnex8by","slide":2,"bbox":[524,270,10,2]}
+{"kind":"shape","id":"sh/kfux43at","slide":2,"bbox":[538,232,58,58]}
+{"kind":"textbox","id":"sh/jelwvyt8","slide":2,"text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[538,242,58,38]}
+{"kind":"textbox","id":"sh/idcf2tsn","slide":2,"text":"Publish listing","textPreview":"Publish listing","textChars":15,"textLines":1,"bbox":[538,324,222,70]}
+{"kind":"textbox","id":"sh/lkjelobu","slide":2,"text":"Review the product record before it becomes visible.","textPreview":"Review the product record before it becomes visible.","textChars":52,"textLines":1,"bbox":[538,402,222,110]}
+{"kind":"shape","id":"sh/0jadsju9","slide":2,"bbox":[764,270,10,2]}
+{"kind":"shape","id":"sh/cnex8j25","slide":2,"bbox":[778,232,58,58]}
+{"kind":"textbox","id":"sh/done1ojq","slide":2,"text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[778,242,58,38]}
+{"kind":"textbox","id":"sh/q1cf69kz","slide":2,"text":"Maintain live offers","textPreview":"Maintain live offers","textChars":20,"textLines":1,"bbox":[778,324,222,70]}
+{"kind":"textbox","id":"sh/rm5wze1k","slide":2,"text":"Update stock, pricing, media, and sale price when needed.","textPreview":"Update stock, pricing, media, and sale price when needed.","textChars":57,"textLines":1,"bbox":[778,402,222,110]}
+{"kind":"shape","id":"sh/0rexcj2h","slide":2,"bbox":[1004,270,10,2]}
+{"kind":"shape","id":"sh/1sne5ojm","slide":2,"bbox":[1018,232,58,58]}
+{"kind":"textbox","id":"sh/epwfatkb","slide":2,"text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[1018,242,58,38]}
+{"kind":"textbox","id":"sh/zq5w3e1w","slide":2,"text":"Fulfil orders","textPreview":"Fulfil orders","textChars":13,"textLines":1,"bbox":[1018,324,222,70]}
+{"kind":"textbox","id":"sh/ovyxg3id","slide":2,"text":"Pack, dispatch with tracking, and mark delivered.","textPreview":"Pack, dispatch with tracking, and mark delivered.","textChars":49,"textLines":1,"bbox":[1018,402,222,110]}
+{"kind":"shape","id":"sh/9w7y98jy","slide":2,"bbox":[58,588,1080,1]}
+{"kind":"textbox","id":"sh/jq90f2l0","slide":2,"text":"Use this loop during live onboarding: create one product, test the buyer view, then process a sample order.","textPreview":"Use this loop during live onboarding: create one product, test the buyer view, then process a sample order.","textChars":107,"textLines":1,"bbox":[60,608,1060,46]}
+{"kind":"notes","id":"nt/6b0xdc","slide":2,"text":"[Sources]\nUser-provided context: WhatsApp Chat with Kapray vendors onboarfing.txt"}
+{"kind":"slide","id":"sl/6kwox0","slide":3,"title":"Choose the product path that matches the sale","textShapes":7}
+{"kind":"textbox","id":"sh/tczu18jm","slide":3,"text":"Choose the product path that matches the sale","textPreview":"Choose the product path that matches the sale","textChars":45,"textLines":1,"bbox":[48,36,1100,72]}
+{"kind":"textbox","id":"sh/69ob6tkv","slide":3,"text":"The category choice determines the required fields and the buyer customization flow.","textPreview":"The category choice determines the required fields and the buyer customization flow.","textChars":84,"textLines":1,"bbox":[49,112,900,52]}
+{"kind":"shape","id":"sh/7axczy1g","slide":3,"bbox":[48,162,1184,1]}
+{"kind":"textbox","id":"sh/k76t4j25","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[1185,666,48,24]}
+{"kind":"shape","id":"sh/l8fuxo3a","slide":3,"name":"Frame Unstitched plain","bbox":[138,174,230,480]}
+{"kind":"textbox","id":"sh/j6xcvelk","slide":3,"text":"Unstitched plain","textPreview":"Unstitched plain","textChars":16,"textLines":1,"bbox":[138,662,230,26]}
+{"kind":"shape","id":"sh/cjmt0j2t","slide":3,"name":"Frame Dyeing + tailoring","bbox":[396,174,230,480]}
+{"kind":"textbox","id":"sh/hkj29w3m","slide":3,"text":"Dyeing + tailoring","textPreview":"Dyeing + tailoring","textChars":18,"textLines":1,"bbox":[396,662,230,26]}
+{"kind":"shape","id":"sh/gja10rmh","slide":3,"name":"Frame Ready-to-wear","bbox":[654,174,230,480]}
+{"kind":"textbox","id":"sh/uhsjyh4b","slide":3,"text":"Ready-to-wear","textPreview":"Ready-to-wear","textChars":13,"textLines":1,"bbox":[654,662,230,26]}
+{"kind":"shape","id":"sh/tgj25c3q","slide":3,"name":"Frame Made-to-order","bbox":[912,174,230,480]}
+{"kind":"textbox","id":"sh/7uhk3mlk","slide":3,"text":"Made-to-order","textPreview":"Made-to-order","textChars":13,"textLines":1,"bbox":[912,662,230,26]}
+{"kind":"image","id":"im/ritozm58","slide":3,"name":"","geometry":"rect","alt":"Unstitched plain","bbox":[144,180,218,468]}
+{"kind":"image","id":"im/8ni5g7mp","slide":3,"name":"","geometry":"rect","alt":"Dyeing + tailoring","bbox":[402,180,218,468]}
+{"kind":"image","id":"im/wzat8b2t","slide":3,"name":"","geometry":"rect","alt":"Ready-to-wear","bbox":[660,180,218,468]}
+{"kind":"image","id":"im/j21c3q1k","slide":3,"name":"","geometry":"rect","alt":"Made-to-order","bbox":[918,180,218,468]}
+{"kind":"notes","id":"nt/6kwox0","slide":3,"text":"[Sources]\nUser-provided Kapray screenshots: IMG-20260703-WA0172.jpg, IMG-20260710-WA0008.jpg, IMG-20260710-WA0084.jpg, IMG-20260712-WA0024.jpg"}
+{"kind":"slide","id":"sl/l3vclm","slide":4,"title":"Unstitched plain captures fabric details","textShapes":12}
+{"kind":"textbox","id":"sh/tszipsji","slide":4,"text":"Unstitched plain captures fabric details","textPreview":"Unstitched plain captures fabric details","textChars":40,"textLines":1,"bbox":[48,36,1100,72]}
+{"kind":"shape","id":"sh/6p8juxkr","slide":4,"bbox":[48,162,1184,1]}
+{"kind":"textbox","id":"sh/7qh0n21c","slide":4,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[1185,666,48,24]}
+{"kind":"textbox","id":"sh/knq1sn2l","slide":4,"text":"For plain fabric, vendors define what is being sold first: product title, stock length, base price, and available fabric lengths by size.","textPreview":"For plain fabric, vendors define what is being sold first: product title, stock length, base price, and available fabric lengths by size.","textChars":137,"textLines":1,"bbox":[52,180,350,150]}
+{"kind":"shape","id":"sh/lozilsj6","slide":4,"bbox":[54,382,36,36]}
+{"kind":"textbox","id":"sh/ylozqdkv","slide":4,"text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[54,387,36,24]}
+{"kind":"textbox","id":"sh/jmx0ji10","slide":4,"text":"Stock in meters","textPreview":"Stock in meters","textChars":15,"textLines":1,"bbox":[108,385,270,34]}
+{"kind":"shape","id":"sh/4ja14r25","slide":4,"bbox":[54,454,36,36]}
+{"kind":"textbox","id":"sh/5kjixwja","slide":4,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[54,459,36,24]}
+{"kind":"textbox","id":"sh/5ozq1k7a","slide":4,"text":"Cost per meter","textPreview":"Cost per meter","textChars":14,"textLines":1,"bbox":[108,457,270,34]}
+{"kind":"shape","id":"sh/4nqp8fq5","slide":4,"bbox":[54,526,36,36]}
+{"kind":"textbox","id":"sh/jmx8zapk","slide":4,"text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[54,531,36,24]}
+{"kind":"textbox","id":"sh/ilo7658z","slide":4,"text":"Size-wise fabric length","textPreview":"Size-wise fabric length","textChars":23,"textLines":1,"bbox":[108,529,270,34]}
+{"kind":"shape","id":"sh/hkfqx07e","slide":4,"name":"Frame Product title","bbox":[472,174,226,470]}
+{"kind":"textbox","id":"sh/vyx8vap8","slide":4,"text":"Product title","textPreview":"Product title","textChars":13,"textLines":1,"bbox":[472,652,226,26]}
+{"kind":"shape","id":"sh/uxo7258n","slide":4,"name":"Frame Inventory","bbox":[722,174,226,470]}
+{"kind":"textbox","id":"sh/gfa9gzqx","slide":4,"text":"Inventory","textPreview":"Inventory","textChars":9,"textLines":1,"bbox":[722,652,226,26]}
+{"kind":"shape","id":"sh/0b21s72l","slide":4,"name":"Frame Fabric length","bbox":[972,174,226,470]}
+{"kind":"textbox","id":"sh/y90jqxkf","slide":4,"text":"Fabric length","textPreview":"Fabric length","textChars":13,"textLines":1,"bbox":[972,652,226,26]}
+{"kind":"image","id":"im/ral83ids","slide":4,"name":"","geometry":"rect","alt":"Product title","bbox":[478,180,214,458]}
+{"kind":"image","id":"im/edw7exc3","slide":4,"name":"","geometry":"rect","alt":"Inventory","bbox":[728,180,214,458]}
+{"kind":"image","id":"im/q1w72xsb","slide":4,"name":"","geometry":"rect","alt":"Fabric length","bbox":[978,180,214,458]}
+{"kind":"notes","id":"nt/l3vclm","slide":4,"text":"[Sources]\nUser-provided Kapray screenshots: IMG-20260703-WA0170.jpg, IMG-20260703-WA0173.jpg, IMG-20260703-WA0176.jpg"}
+{"kind":"slide","id":"sl/02w522","slide":5,"title":"Shipping and media make listings buyer-ready","textShapes":12}
+{"kind":"textbox","id":"sh/grip0bm5","slide":5,"text":"Shipping and media make listings buyer-ready","textPreview":"Shipping and media make listings buyer-ready","textChars":44,"textLines":1,"bbox":[48,36,1100,72]}
+{"kind":"shape","id":"sh/f6por6lk","slide":5,"bbox":[48,162,1184,1]}
+{"kind":"textbox","id":"sh/u5g7y14f","slide":5,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1185,666,48,24]}
+{"kind":"textbox","id":"sh/pwrqxg32","slide":5,"text":"The listing becomes actionable after the vendor calculates shipping, adds images and video, and fills the product details buyers use to judge fit and quality.","textPreview":"The listing becomes actionable after the vendor calculates shipping, adds images and video, and fills the product details buyers use to j...","textChars":158,"textLines":1,"bbox":[52,180,350,150]}
+{"kind":"shape","id":"sh/4vip4bmh","slide":5,"bbox":[54,382,36,36]}
+{"kind":"textbox","id":"sh/3u9ovqlw","slide":5,"text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[54,387,36,24]}
+{"kind":"textbox","id":"sh/2t072l4b","slide":5,"text":"Shipping calculator","textPreview":"Shipping calculator","textChars":19,"textLines":1,"bbox":[108,385,270,34]}
+{"kind":"shape","id":"sh/5076lwni","slide":5,"bbox":[54,454,36,36]}
+{"kind":"textbox","id":"sh/kzepsrmx","slide":5,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[54,459,36,24]}
+{"kind":"textbox","id":"sh/q9gzet8v","slide":5,"text":"Product images and video","textPreview":"Product images and video","textChars":24,"textLines":1,"bbox":[108,457,270,34]}
+{"kind":"shape","id":"sh/bap07y9g","slide":5,"bbox":[54,526,36,36]}
+{"kind":"textbox","id":"sh/cvyhgjq1","slide":5,"text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[54,531,36,24]}
+{"kind":"textbox","id":"sh/dw7i9orm","slide":5,"text":"Fabric, work, density, origin","textPreview":"Fabric, work, density, origin","textChars":29,"textLines":1,"bbox":[108,529,270,34]}
+{"kind":"shape","id":"sh/yxgzit87","slide":5,"name":"Frame Shipping","bbox":[472,174,226,470]}
+{"kind":"textbox","id":"sh/0zyhk3qd","slide":5,"text":"Shipping","textPreview":"Shipping","textChars":8,"textLines":1,"bbox":[472,652,226,26]}
+{"kind":"shape","id":"sh/l0rid8ri","slide":5,"name":"Frame Images","bbox":[722,174,226,470]}
+{"kind":"textbox","id":"sh/n290fi9o","slide":5,"text":"Images","textPreview":"Images","textChars":6,"textLines":1,"bbox":[722,652,226,26]}
+{"kind":"shape","id":"sh/j69g3i5w","slide":5,"name":"Frame Details","bbox":[972,174,226,470]}
+{"kind":"textbox","id":"sh/58by5sn2","slide":5,"text":"Details","textPreview":"Details","textChars":7,"textLines":1,"bbox":[972,652,226,26]}
+{"kind":"image","id":"im/c769872d","slide":5,"name":"","geometry":"rect","alt":"Shipping","bbox":[478,180,214,458]}
+{"kind":"image","id":"im/pkfqds3m","slide":5,"name":"","geometry":"rect","alt":"Images","bbox":[728,180,214,458]}
+{"kind":"image","id":"im/h03i9wfu","slide":5,"name":"","geometry":"rect","alt":"Details","bbox":[978,180,214,458]}
+{"kind":"notes","id":"nt/02w522","slide":5,"text":"[Sources]\nUser-provided Kapray screenshots: IMG-20260703-WA0179.jpg, IMG-20260703-WA0181.jpg, IMG-20260703-WA0184.jpg"}
+{"kind":"slide","id":"sl/1b7q67","slide":6,"title":"Review and publish the completed product record","textShapes":7}
+{"kind":"textbox","id":"sh/idc3ehkz","slide":6,"text":"Review and publish the completed product record","textPreview":"Review and publish the completed product record","textChars":47,"textLines":1,"bbox":[48,36,1100,72]}
+{"kind":"textbox","id":"sh/50nm9w3a","slide":6,"text":"The review screen gives vendors one last pass across basics, pricing, shipping, media, and description before saving.","textPreview":"The review screen gives vendors one last pass across basics, pricing, shipping, media, and description before saving.","textChars":117,"textLines":1,"bbox":[49,112,900,52]}
+{"kind":"shape","id":"sh/4ze5gr25","slide":6,"bbox":[48,162,1184,1]}
+{"kind":"textbox","id":"sh/val43ml8","slide":6,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[1185,666,48,24]}
+{"kind":"shape","id":"sh/u9c3ahkn","slide":6,"name":"Frame Basics review","bbox":[138,174,230,480]}
+{"kind":"textbox","id":"sh/wbulcr2t","slide":6,"text":"Basics review","textPreview":"Basics review","textChars":13,"textLines":1,"bbox":[138,662,230,26]}
+{"kind":"shape","id":"sh/f654f6ls","slide":6,"name":"Frame Pricing and shipping","bbox":[396,174,230,480]}
+{"kind":"textbox","id":"sh/436p4fup","slide":6,"text":"Pricing and shipping","textPreview":"Pricing and shipping","textChars":20,"textLines":1,"bbox":[396,662,230,26]}
+{"kind":"shape","id":"sh/54fqxkba","slide":6,"name":"Frame Ready to save","bbox":[654,174,230,480]}
+{"kind":"textbox","id":"sh/j2d8vat4","slide":6,"text":"Ready to save","textPreview":"Ready to save","textChars":13,"textLines":1,"bbox":[654,662,230,26]}
+{"kind":"shape","id":"sh/wzmp0vut","slide":6,"name":"Frame Saved confirmation","bbox":[912,174,230,480]}
+{"kind":"textbox","id":"sh/ud47y5cn","slide":6,"text":"Saved confirmation","textPreview":"Saved confirmation","textChars":18,"textLines":1,"bbox":[912,662,230,26]}
+{"kind":"image","id":"im/kn2x8zyl","slide":6,"name":"","geometry":"rect","alt":"Basics review","bbox":[144,180,218,468]}
+{"kind":"image","id":"im/bitwvaho","slide":6,"name":"","geometry":"rect","alt":"Pricing and shipping","bbox":[402,180,218,468]}
+{"kind":"image","id":"im/9kvyhoj6","slide":6,"name":"","geometry":"rect","alt":"Ready to save","bbox":[660,180,218,468]}
+{"kind":"image","id":"im/al4zq90r","slide":6,"name":"","geometry":"rect","alt":"Saved confirmation","bbox":[918,180,218,468]}
+{"kind":"notes","id":"nt/1b7q67","slide":6,"text":"[Sources]\nUser-provided Kapray screenshots: IMG-20260703-WA0188.jpg, IMG-20260703-WA0189.jpg, IMG-20260703-WA0191.jpg, IMG-20260703-WA0192.jpg"}
+{"kind":"slide","id":"sl/bpfsl2","slide":7,"title":"Update live products with explicit confirmations","textShapes":7}
+{"kind":"textbox","id":"sh/je9crmh4","slide":7,"text":"Update live products with explicit confirmations","textPreview":"Update live products with explicit confirmations","textChars":48,"textLines":1,"bbox":[48,36,1100,72]}
+{"kind":"textbox","id":"sh/kfit0rip","slide":7,"text":"Vendors can revise stock, price, media, and sale pricing with explicit confirmation prompts.","textPreview":"Vendors can revise stock, price, media, and sale pricing with explicit confirmation prompts.","textChars":92,"textLines":1,"bbox":[49,112,900,52]}
+{"kind":"shape","id":"sh/lgbutwzu","slide":7,"bbox":[48,162,1184,1]}
+{"kind":"textbox","id":"sh/ap0buh07","slide":7,"text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[1185,666,48,24]}
+{"kind":"shape","id":"sh/bq9cnm1s","slide":7,"name":"Frame Update product","bbox":[138,174,230,480]}
+{"kind":"textbox","id":"sh/xsrupwzy","slide":7,"text":"Update product","textPreview":"Update product","textChars":14,"textLines":1,"bbox":[138,662,230,26]}
+{"kind":"shape","id":"sh/mlgbqx0b","slide":7,"name":"Frame Confirm price","bbox":[396,174,230,480]}
+{"kind":"textbox","id":"sh/7q9836x4","slide":7,"text":"Confirm price","textPreview":"Confirm price","textChars":13,"textLines":1,"bbox":[396,662,230,26]}
+{"kind":"shape","id":"sh/6pg7a1gj","slide":7,"name":"Frame Confirm stock","bbox":[654,174,230,480]}
+{"kind":"textbox","id":"sh/8ripcbyp","slide":7,"text":"Confirm stock","textPreview":"Confirm stock","textChars":13,"textLines":1,"bbox":[654,662,230,26]}
+{"kind":"shape","id":"sh/vu9876xg","slide":7,"name":"Frame Confirm sale","bbox":[912,174,230,480]}
+{"kind":"textbox","id":"sh/hwrq9gf6","slide":7,"text":"Confirm sale","textPreview":"Confirm sale","textChars":12,"textLines":1,"bbox":[912,662,230,26]}
+{"kind":"image","id":"im/18rmpwju","slide":7,"name":"","geometry":"rect","alt":"Update product","bbox":[144,180,218,468]}
+{"kind":"image","id":"im/y14n6lkn","slide":7,"name":"","geometry":"rect","alt":"Confirm price","bbox":[402,180,218,468]}
+{"kind":"image","id":"im/i5cz6xsn","slide":7,"name":"","geometry":"rect","alt":"Confirm stock","bbox":[660,180,218,468]}
+{"kind":"image","id":"im/h43ydsr2","slide":7,"name":"","geometry":"rect","alt":"Confirm sale","bbox":[918,180,218,468]}
+{"kind":"notes","id":"nt/bpfsl2","slide":7,"text":"[Sources]\nUser-provided Kapray screenshots: IMG-20260703-WA0197.jpg, IMG-20260703-WA0201.jpg, IMG-20260703-WA0202.jpg, IMG-20260703-WA0207.jpg"}
+{"kind":"slide","id":"sl/666efa","slide":8,"title":"Buyer views mirror the vendor setup","textShapes":7}
+{"kind":"textbox","id":"sh/6hsn61sz","slide":8,"text":"Buyer views mirror the vendor setup","textPreview":"Buyer views mirror the vendor setup","textChars":35,"textLines":1,"bbox":[48,36,1100,72]}
+{"kind":"textbox","id":"sh/tk36hgbq","slide":8,"text":"Once published, the customer sees the catalogue, product media, size or fabric choices, and delivery options created by the vendor.","textPreview":"Once published, the customer sees the catalogue, product media, size or fabric choices, and delivery options created by the vendor.","textChars":131,"textLines":1,"bbox":[49,112,900,52]}
+{"kind":"shape","id":"sh/sja58ba5","slide":8,"bbox":[48,162,1184,1]}
+{"kind":"textbox","id":"sh/je14b6to","slide":8,"text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[1185,666,48,24]}
+{"kind":"shape","id":"sh/idsn21s3","slide":8,"name":"Frame Catalogue","bbox":[138,174,230,480]}
+{"kind":"textbox","id":"sh/kfa54ba9","slide":8,"text":"Catalogue","textPreview":"Catalogue","textChars":9,"textLines":1,"bbox":[138,662,230,26]}
+{"kind":"shape","id":"sh/3alonq9s","slide":8,"name":"Frame Product view","bbox":[396,174,230,480]}
+{"kind":"textbox","id":"sh/kvux4f69","slide":8,"text":"Product view","textPreview":"Product view","textChars":12,"textLines":1,"bbox":[396,662,230,26]}
+{"kind":"shape","id":"sh/lw3ydk7u","slide":8,"name":"Frame Fabric length","bbox":[654,174,230,480]}
+{"kind":"textbox","id":"sh/za1gbapo","slide":8,"text":"Fabric length","textPreview":"Fabric length","textChars":13,"textLines":1,"bbox":[654,662,230,26]}
+{"kind":"shape","id":"sh/c7ax0v6d","slide":8,"name":"Frame Delivery options","bbox":[912,174,230,480]}
+{"kind":"textbox","id":"sh/a5sfy5o7","slide":8,"text":"Delivery options","textPreview":"Delivery options","textChars":16,"textLines":1,"bbox":[912,662,230,26]}
+{"kind":"image","id":"im/8j210v6h","slide":8,"name":"","geometry":"rect","alt":"Catalogue","bbox":[144,180,218,468]}
+{"kind":"image","id":"im/3mp0v6pc","slide":8,"name":"","geometry":"rect","alt":"Product view","bbox":[402,180,218,468]}
+{"kind":"image","id":"im/pwr65gb2","slide":8,"name":"","geometry":"rect","alt":"Fabric length","bbox":[660,180,218,468]}
+{"kind":"image","id":"im/u5gnq1sf","slide":8,"name":"","geometry":"rect","alt":"Delivery options","bbox":[918,180,218,468]}
+{"kind":"notes","id":"nt/666efa","slide":8,"text":"[Sources]\nUser-provided Kapray screenshots: IMG-20260703-WA0218.jpg, IMG-20260703-WA0220.jpg, IMG-20260703-WA0224.jpg, IMG-20260703-WA0227.jpg"}
+{"kind":"slide","id":"sl/jpotbo","slide":9,"title":"Orders keep buyer choices through fulfilment","textShapes":7}
+{"kind":"textbox","id":"sh/svqxsfm5","slide":9,"text":"Orders keep buyer choices through fulfilment","textPreview":"Orders keep buyer choices through fulfilment","textChars":44,"textLines":1,"bbox":[48,36,1100,72]}
+{"kind":"textbox","id":"sh/ruxwzalk","slide":9,"text":"Order detail screens keep customization, buyer information, payment, delivery, shipping, and tracking together.","textPreview":"Order detail screens keep customization, buyer information, payment, delivery, shipping, and tracking together.","textChars":111,"textLines":1,"bbox":[49,112,900,52]}
+{"kind":"shape","id":"sh/qtofq54z","slide":9,"bbox":[48,162,1184,1]}
+{"kind":"textbox","id":"sh/5sfex03e","slide":9,"text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[1185,666,48,24]}
+{"kind":"shape","id":"sh/476dovm9","slide":9,"name":"Frame Place order","bbox":[138,174,230,480]}
+{"kind":"textbox","id":"sh/i5ovml43","slide":9,"text":"Place order","textPreview":"Place order","textChars":11,"textLines":1,"bbox":[138,662,230,26]}
+{"kind":"shape","id":"sh/9oje943y","slide":9,"name":"Frame Payment","bbox":[396,174,230,480]}
+{"kind":"textbox","id":"sh/294rqpk7","slide":9,"text":"Payment","textPreview":"Payment","textChars":7,"textLines":1,"bbox":[396,662,230,26]}
+{"kind":"shape","id":"sh/nud8zals","slide":9,"name":"Frame Order detail","bbox":[654,174,230,480]}
+{"kind":"textbox","id":"sh/pwvq1k3i","slide":9,"text":"Order detail","textPreview":"Order detail","textChars":12,"textLines":1,"bbox":[654,662,230,26]}
+{"kind":"shape","id":"sh/e5k7m54v","slide":9,"name":"Frame Delivery tracking","bbox":[912,174,230,480]}
+{"kind":"textbox","id":"sh/0729ofm1","slide":9,"text":"Delivery tracking","textPreview":"Delivery tracking","textChars":17,"textLines":1,"bbox":[912,662,230,26]}
+{"kind":"image","id":"im/mpsj6d8j","slide":9,"name":"","geometry":"rect","alt":"Place order","bbox":[144,180,218,468]}
+{"kind":"image","id":"im/loj2x87e","slide":9,"name":"","geometry":"rect","alt":"Payment","bbox":[402,180,218,468]}
+{"kind":"image","id":"im/3epw7i5c","slide":9,"name":"","geometry":"rect","alt":"Order detail","bbox":[660,180,218,468]}
+{"kind":"image","id":"im/grydw3ml","slide":9,"name":"","geometry":"rect","alt":"Delivery tracking","bbox":[918,180,218,468]}
+{"kind":"notes","id":"nt/jpotbo","slide":9,"text":"[Sources]\nUser-provided Kapray screenshots: IMG-20260703-WA0226.jpg, IMG-20260703-WA0234.jpg, IMG-20260703-WA0235.jpg, IMG-20260703-WA0236.jpg"}
+{"kind":"slide","id":"sl/jyudry","slide":10,"title":"Fulfil orders from the order detail","textShapes":7}
+{"kind":"textbox","id":"sh/9sjip0bu","slide":10,"text":"Fulfil orders from the order detail","textPreview":"Fulfil orders from the order detail","textChars":35,"textLines":1,"bbox":[48,36,1100,72]}
+{"kind":"textbox","id":"sh/m58zelcj","slide":10,"text":"The order moves through packed, dispatched with courier details, and delivered states.","textPreview":"The order moves through packed, dispatched with courier details, and delivered states.","textChars":86,"textLines":1,"bbox":[49,112,900,52]}
+{"kind":"shape","id":"sh/n6h0nqt4","slide":10,"bbox":[48,162,1184,1]}
+{"kind":"textbox","id":"sh/03qhcvud","slide":10,"text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[1185,666,48,24]}
+{"kind":"shape","id":"sh/14zilgby","slide":10,"name":"Frame Orders tab","bbox":[138,174,230,480]}
+{"kind":"textbox","id":"sh/z2h0jqts","slide":10,"text":"Orders tab","textPreview":"Orders tab","textChars":10,"textLines":1,"bbox":[138,662,230,26]}
+{"kind":"shape","id":"sh/cz6h8buh","slide":10,"name":"Frame Mark packed","bbox":[396,174,230,480]}
+{"kind":"textbox","id":"sh/1sjmpszm","slide":10,"text":"Mark packed","textPreview":"Mark packed","textChars":11,"textLines":1,"bbox":[396,662,230,26]}
+{"kind":"shape","id":"sh/0ra5gnyh","slide":10,"name":"Frame Dispatch","bbox":[654,174,230,480]}
+{"kind":"textbox","id":"sh/epsnedgb","slide":10,"text":"Dispatch","textPreview":"Dispatch","textChars":8,"textLines":1,"bbox":[654,662,230,26]}
+{"kind":"shape","id":"sh/dojml8zq","slide":10,"name":"Frame Delivered","bbox":[912,174,230,480]}
+{"kind":"textbox","id":"sh/rm14jihk","slide":10,"text":"Delivered","textPreview":"Delivered","textChars":9,"textLines":1,"bbox":[912,662,230,26]}
+{"kind":"image","id":"im/bidgj6hc","slide":10,"name":"","geometry":"rect","alt":"Orders tab","bbox":[144,180,218,468]}
+{"kind":"image","id":"im/cnix07yd","slide":10,"name":"","geometry":"rect","alt":"Mark packed","bbox":[402,180,218,468]}
+{"kind":"image","id":"im/4felwbm1","slide":10,"name":"","geometry":"rect","alt":"Dispatch","bbox":[660,180,218,468]}
+{"kind":"image","id":"im/r254rqlc","slide":10,"name":"","geometry":"rect","alt":"Delivered","bbox":[918,180,218,468]}
+{"kind":"notes","id":"nt/jyudry","slide":10,"text":"[Sources]\nUser-provided Kapray screenshots: IMG-20260703-WA0246.jpg, IMG-20260703-WA0247.jpg, IMG-20260703-WA0249.jpg, IMG-20260703-WA0252.jpg"}
+{"kind":"slide","id":"sl/7gxgnq","slide":11,"title":"Dyeing and tailoring add service pricing","textShapes":12}
+{"kind":"textbox","id":"sh/cn2pkryl","slide":11,"text":"Dyeing and tailoring add service pricing","textPreview":"Dyeing and tailoring add service pricing","textChars":40,"textLines":1,"bbox":[48,36,1100,72]}
+{"kind":"shape","id":"sh/rmt8bmh0","slide":11,"bbox":[48,162,1184,1]}
+{"kind":"textbox","id":"sh/qlk7ihgf","slide":11,"text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[1185,666,48,24]}
+{"kind":"textbox","id":"sh/lsvqhwz2","slide":11,"text":"For unstitched products with services, vendors add dyeing cost, tailoring cost, turnaround time, and one or more tailoring styles.","textPreview":"For unstitched products with services, vendors add dyeing cost, tailoring cost, turnaround time, and one or more tailoring styles.","textChars":130,"textLines":1,"bbox":[52,180,350,150]}
+{"kind":"shape","id":"sh/0r2poryx","slide":11,"bbox":[54,382,36,36]}
+{"kind":"textbox","id":"sh/zqt8fmhc","slide":11,"text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[54,387,36,24]}
+{"kind":"textbox","id":"sh/ypk7mhgr","slide":11,"text":"Dyeing cost","textPreview":"Dyeing cost","textChars":11,"textLines":1,"bbox":[108,385,270,34]}
+{"kind":"shape","id":"sh/9gvqlwze","slide":11,"bbox":[54,454,36,36]}
+{"kind":"textbox","id":"sh/8vmpsbyt","slide":11,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[54,459,36,24]}
+{"kind":"textbox","id":"sh/m94nixgn","slide":11,"text":"Tailoring cost and days","textPreview":"Tailoring cost and days","textChars":23,"textLines":1,"bbox":[108,457,270,34]}
+{"kind":"shape","id":"sh/naxobih8","slide":11,"bbox":[54,526,36,36]}
+{"kind":"textbox","id":"sh/8b65knyt","slide":11,"text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[54,531,36,24]}
+{"kind":"textbox","id":"sh/9cf6dsze","slide":11,"text":"Reusable style cards","textPreview":"Reusable style cards","textChars":20,"textLines":1,"bbox":[108,529,270,34]}
+{"kind":"shape","id":"sh/axonmxgz","slide":11,"name":"Frame Service costs","bbox":[472,174,226,470]}
+{"kind":"textbox","id":"sh/wz6po7y5","slide":11,"text":"Service costs","textPreview":"Service costs","textChars":13,"textLines":1,"bbox":[472,652,226,26]}
+{"kind":"shape","id":"sh/x0f6hcza","slide":11,"name":"Frame Tailoring styles","bbox":[722,174,226,470]}
+{"kind":"textbox","id":"sh/b2do3yh0","slide":11,"text":"Tailoring styles","textPreview":"Tailoring styles","textChars":16,"textLines":1,"bbox":[722,652,226,26]}
+{"kind":"shape","id":"sh/fm9kbuxs","slide":11,"name":"Frame Saved styles","bbox":[972,174,226,470]}
+{"kind":"textbox","id":"sh/h8r2d4fy","slide":11,"text":"Saved styles","textPreview":"Saved styles","textChars":12,"textLines":1,"bbox":[972,652,226,26]}
+{"kind":"image","id":"im/w3q543uh","slide":11,"name":"","geometry":"rect","alt":"Service costs","bbox":[478,180,214,458]}
+{"kind":"image","id":"im/hk36psb6","slide":11,"name":"","geometry":"rect","alt":"Tailoring styles","bbox":[728,180,214,458]}
+{"kind":"image","id":"im/1gvi10nu","slide":11,"name":"","geometry":"rect","alt":"Saved styles","bbox":[978,180,214,458]}
+{"kind":"notes","id":"nt/7gxgnq","slide":11,"text":"[Sources]\nUser-provided Kapray screenshots: IMG-20260710-WA0009.jpg, IMG-20260710-WA0014.jpg, IMG-20260710-WA0018.jpg"}
+{"kind":"slide","id":"sl/jw25ry","slide":12,"title":"Tailoring styles become buyer choices","textShapes":7}
+{"kind":"textbox","id":"sh/jqdkb6to","slide":12,"text":"Tailoring styles become buyer choices","textPreview":"Tailoring styles become buyer choices","textChars":37,"textLines":1,"bbox":[48,36,1100,72]}
+{"kind":"textbox","id":"sh/krmlkbu9","slide":12,"text":"A style can include title, images, extra price, allowed necks, sleeves, trouser options, and additional instructions.","textPreview":"A style can include title, images, extra price, allowed necks, sleeves, trouser options, and additional instructions.","textChars":117,"textLines":1,"bbox":[49,112,900,52]}
+{"kind":"shape","id":"sh/lsv2dgbu","slide":12,"bbox":[48,162,1184,1]}
+{"kind":"textbox","id":"sh/a143e1c7","slide":12,"text":"12","textPreview":"12","textChars":2,"textLines":1,"bbox":[1185,666,48,24]}
+{"kind":"shape","id":"sh/b2dk76tc","slide":12,"name":"Frame Edit style","bbox":[138,174,230,480]}
+{"kind":"textbox","id":"sh/xov29gbi","slide":12,"text":"Edit style","textPreview":"Edit style","textChars":10,"textLines":1,"bbox":[138,662,230,26]}
+{"kind":"shape","id":"sh/mxk3ahcv","slide":12,"name":"Frame Style cards","bbox":[396,174,230,480]}
+{"kind":"textbox","id":"sh/ve10vupk","slide":12,"text":"Style cards","textPreview":"Style cards","textChars":11,"textLines":1,"bbox":[396,662,230,26]}
+{"kind":"shape","id":"sh/adsj2p8z","slide":12,"name":"Frame Variations","bbox":[654,174,230,480]}
+{"kind":"textbox","id":"sh/wfa14fq5","slide":12,"text":"Variations","textPreview":"Variations","textChars":10,"textLines":1,"bbox":[654,662,230,26]}
+{"kind":"shape","id":"sh/j21kzupg","slide":12,"name":"Frame Vendor note","bbox":[912,174,230,480]}
+{"kind":"textbox","id":"sh/5432147m","slide":12,"text":"Vendor note","textPreview":"Vendor note","textChars":11,"textLines":1,"bbox":[912,662,230,26]}
+{"kind":"image","id":"im/hcv2d8jm","slide":12,"name":"","geometry":"rect","alt":"Edit style","bbox":[144,180,218,468]}
+{"kind":"image","id":"im/id436d07","slide":12,"name":"","geometry":"rect","alt":"Style cards","bbox":[402,180,218,468]}
+{"kind":"image","id":"im/yhk7qtgn","slide":12,"name":"","geometry":"rect","alt":"Variations","bbox":[660,180,218,468]}
+{"kind":"image","id":"im/tovq5sza","slide":12,"name":"","geometry":"rect","alt":"Vendor note","bbox":[918,180,218,468]}
+{"kind":"notes","id":"nt/jw25ry","slide":12,"text":"[Sources]\nUser-provided Kapray screenshots: IMG-20260710-WA0027.jpg, IMG-20260710-WA0048.jpg, IMG-20260710-WA0054.jpg, IMG-20260710-WA0055.jpg"}
+{"kind":"slide","id":"sl/ufwp8o","slide":13,"title":"Custom orders collect shade, style, and measurements","textShapes":7}
+{"kind":"textbox","id":"sh/5o7mpcni","slide":13,"text":"Custom orders collect shade, style, and measurements","textPreview":"Custom orders collect shade, style, and measurements","textChars":52,"textLines":1,"bbox":[48,36,1100,72]}
+{"kind":"textbox","id":"sh/ilg3ux4r","slide":13,"text":"The buyer can choose dye shade, tailoring style, standard or exact measurements, then review the full service cost in checkout.","textPreview":"The buyer can choose dye shade, tailoring style, standard or exact measurements, then review the full service cost in checkout.","textChars":127,"textLines":1,"bbox":[49,112,900,52]}
+{"kind":"shape","id":"sh/3mp4n25c","slide":13,"bbox":[48,162,1184,1]}
+{"kind":"textbox","id":"sh/gzels7ml","slide":13,"text":"13","textPreview":"13","textChars":2,"textLines":1,"bbox":[1185,666,48,24]}
+{"kind":"shape","id":"sh/h0nmlcn6","slide":13,"name":"Frame Shade","bbox":[138,174,230,480]}
+{"kind":"textbox","id":"sh/vy54j250","slide":13,"text":"Shade","textPreview":"Shade","textChars":5,"textLines":1,"bbox":[138,662,230,26]}
+{"kind":"shape","id":"sh/8velonmp","slide":13,"name":"Frame Size choice","bbox":[396,174,230,480]}
+{"kind":"textbox","id":"sh/1gve90nq","slide":13,"text":"Size choice","textPreview":"Size choice","textChars":11,"textLines":1,"bbox":[396,662,230,26]}
+{"kind":"shape","id":"sh/gfmx0vm5","slide":13,"name":"Frame Measurements","bbox":[654,174,230,480]}
+{"kind":"textbox","id":"sh/ed4vy54z","slide":13,"text":"Measurements","textPreview":"Measurements","textChars":12,"textLines":1,"bbox":[654,662,230,26]}
+{"kind":"shape","id":"sh/tcbe50ne","slide":13,"name":"Frame Order summary","bbox":[912,174,230,480]}
+{"kind":"textbox","id":"sh/ratw3q5o","slide":13,"text":"Order summary","textPreview":"Order summary","textChars":13,"textLines":1,"bbox":[912,662,230,26]}
+{"kind":"image","id":"im/3ahsved0","slide":13,"name":"","geometry":"rect","alt":"Shade","bbox":[144,180,218,468]}
+{"kind":"image","id":"im/cfat8juh","slide":13,"name":"","geometry":"rect","alt":"Size choice","bbox":[402,180,218,468]}
+{"kind":"image","id":"im/kfih0rud","slide":13,"name":"","geometry":"rect","alt":"Measurements","bbox":[660,180,218,468]}
+{"kind":"image","id":"im/729gv6t4","slide":13,"name":"","geometry":"rect","alt":"Order summary","bbox":[918,180,218,468]}
+{"kind":"notes","id":"nt/ufwp8o","slide":13,"text":"[Sources]\nUser-provided Kapray screenshots: IMG-20260710-WA0046.jpg, IMG-20260710-WA0056.jpg, IMG-20260710-WA0061.jpg, IMG-20260710-WA0063.jpg"}
+{"kind":"slide","id":"sl/791xh4","slide":14,"title":"Ready-to-wear uses stock by style and size","textShapes":7}
+{"kind":"textbox","id":"sh/5wbmxs3y","slide":14,"text":"Ready-to-wear uses stock by style and size","textPreview":"Ready-to-wear uses stock by style and size","textChars":42,"textLines":1,"bbox":[48,36,1100,72]}
+{"kind":"textbox","id":"sh/it0nmd4n","slide":14,"text":"This path is built for finished stock: choose ready-to-wear, define piece count, add styles, and assign inventory per size.","textPreview":"This path is built for finished stock: choose ready-to-wear, define piece count, add styles, and assign inventory per size.","textChars":123,"textLines":1,"bbox":[49,112,900,52]}
+{"kind":"shape","id":"sh/ju94vils","slide":14,"bbox":[48,162,1184,1]}
+{"kind":"textbox","id":"sh/wrilk3mh","slide":14,"text":"14","textPreview":"14","textChars":2,"textLines":1,"bbox":[1185,666,48,24]}
+{"kind":"shape","id":"sh/xsrmt832","slide":14,"name":"Frame Ready-to-wear","bbox":[138,174,230,480]}
+{"kind":"textbox","id":"sh/vq94rilw","slide":14,"text":"Ready-to-wear","textPreview":"Ready-to-wear","textChars":13,"textLines":1,"bbox":[138,662,230,26]}
+{"kind":"shape","id":"sh/8nylg3m5","slide":14,"name":"Frame Pieces","bbox":[396,174,230,480]}
+{"kind":"textbox","id":"sh/hg7itw3u","slide":14,"text":"Pieces","textPreview":"Pieces","textChars":6,"textLines":1,"bbox":[396,662,230,26]}
+{"kind":"shape","id":"sh/gfehkrm9","slide":14,"name":"Frame Style stock","bbox":[654,174,230,480]}
+{"kind":"textbox","id":"sh/utwzih43","slide":14,"text":"Style stock","textPreview":"Style stock","textChars":11,"textLines":1,"bbox":[654,662,230,26]}
+{"kind":"shape","id":"sh/tsnipc3i","slide":14,"name":"Frame Review","bbox":[912,174,230,480]}
+{"kind":"textbox","id":"sh/7q50n2ls","slide":14,"text":"Review","textPreview":"Review","textChars":6,"textLines":1,"bbox":[912,662,230,26]}
+{"kind":"image","id":"im/jih03u58","slide":14,"name":"","geometry":"rect","alt":"Ready-to-wear","bbox":[144,180,218,468]}
+{"kind":"image","id":"im/s7a10zmp","slide":14,"name":"","geometry":"rect","alt":"Pieces","bbox":[402,180,218,468]}
+{"kind":"image","id":"im/c3654zqd","slide":14,"name":"","geometry":"rect","alt":"Style stock","bbox":[660,180,218,468]}
+{"kind":"image","id":"im/z6xozu94","slide":14,"name":"","geometry":"rect","alt":"Review","bbox":[918,180,218,468]}
+{"kind":"notes","id":"nt/791xh4","slide":14,"text":"[Sources]\nUser-provided Kapray screenshots: IMG-20260710-WA0084.jpg, IMG-20260710-WA0090.jpg, IMG-20260710-WA0093.jpg, IMG-20260710-WA0098.jpg"}
+{"kind":"slide","id":"sl/xd30ks","slide":15,"title":"Ready-to-wear buyers choose style, then size","textShapes":7}
+{"kind":"textbox","id":"sh/d0fy9kvu","slide":15,"text":"Ready-to-wear buyers choose style, then size","textPreview":"Ready-to-wear buyers choose style, then size","textChars":44,"textLines":1,"bbox":[48,36,1100,72]}
+{"kind":"textbox","id":"sh/qxozepc3","slide":15,"text":"The buyer journey stays simple because vendor stock rules are already structured by style and size.","textPreview":"The buyer journey stays simple because vendor stock rules are already structured by style and size.","textChars":99,"textLines":1,"bbox":[49,112,900,52]}
+{"kind":"shape","id":"sh/ryxg7udo","slide":15,"bbox":[48,162,1184,1]}
+{"kind":"textbox","id":"sh/0n6hkzul","slide":15,"text":"15","textPreview":"15","textChars":2,"textLines":1,"bbox":[1185,666,48,24]}
+{"kind":"shape","id":"sh/lozyd4bq","slide":15,"name":"Frame Catalogue","bbox":[138,174,230,480]}
+{"kind":"textbox","id":"sh/zmxgbut0","slide":15,"text":"Catalogue","textPreview":"Catalogue","textChars":9,"textLines":1,"bbox":[138,662,230,26]}
+{"kind":"shape","id":"sh/8rqhojuh","slide":15,"name":"Frame Choose style","bbox":[396,174,230,480]}
+{"kind":"textbox","id":"sh/9wru5ova","slide":15,"text":"Choose style","textPreview":"Choose style","textChars":12,"textLines":1,"bbox":[396,662,230,26]}
+{"kind":"shape","id":"sh/ovitwjep","slide":15,"name":"Frame Choose size","bbox":[654,174,230,480]}
+{"kind":"textbox","id":"sh/29gbutwz","slide":15,"text":"Choose size","textPreview":"Choose size","textChars":11,"textLines":1,"bbox":[654,662,230,26]}
+{"kind":"shape","id":"sh/x0ru98vm","slide":15,"name":"Frame Order detail","bbox":[912,174,230,480]}
+{"kind":"textbox","id":"sh/by9c7ydg","slide":15,"text":"Order detail","textPreview":"Order detail","textChars":12,"textLines":1,"bbox":[912,662,230,26]}
+{"kind":"image","id":"im/bexknuxo","slide":15,"name":"","geometry":"rect","alt":"Catalogue","bbox":[144,180,218,468]}
+{"kind":"image","id":"im/sj21kfy5","slide":15,"name":"","geometry":"rect","alt":"Choose style","bbox":[402,180,218,468]}
+{"kind":"image","id":"im/g7edoja5","slide":15,"name":"","geometry":"rect","alt":"Choose size","bbox":[660,180,218,468]}
+{"kind":"image","id":"im/3apwzytw","slide":15,"name":"","geometry":"rect","alt":"Order detail","bbox":[918,180,218,468]}
+{"kind":"notes","id":"nt/xd30ks","slide":15,"text":"[Sources]\nUser-provided Kapray screenshots: IMG-20260710-WA0118.jpg, IMG-20260710-WA0122.jpg, IMG-20260710-WA0125.jpg, IMG-20260710-WA0130.jpg"}
+{"kind":"slide","id":"sl/7uryb2","slide":16,"title":"Made-to-order focuses on design and lead time","textShapes":7}
+{"kind":"textbox","id":"sh/h0netsfq","slide":16,"text":"Made-to-order focuses on design and lead time","textPreview":"Made-to-order focuses on design and lead time","textChars":45,"textLines":1,"bbox":[48,36,1100,72]}
+{"kind":"textbox","id":"sh/udwvixwf","slide":16,"text":"The setup flow captures allowed sizes, package/shipping rules, design names, additional price, and estimated days.","textPreview":"The setup flow captures allowed sizes, package/shipping rules, design names, additional price, and estimated days.","textChars":114,"textLines":1,"bbox":[49,112,900,52]}
+{"kind":"shape","id":"sh/ve5wrixk","slide":16,"bbox":[48,162,1184,1]}
+{"kind":"textbox","id":"sh/43ydo7eh","slide":16,"text":"16","textPreview":"16","textChars":2,"textLines":1,"bbox":[1185,666,48,24]}
+{"kind":"shape","id":"sh/547excf2","slide":16,"name":"Frame Size applicability","bbox":[138,174,230,480]}
+{"kind":"textbox","id":"sh/j2pwv2xw","slide":16,"text":"Size applicability","textPreview":"Size applicability","textChars":18,"textLines":1,"bbox":[138,662,230,26]}
+{"kind":"shape","id":"sh/k7udc3ex","slide":16,"name":"Frame Shipping","bbox":[396,174,230,480]}
+{"kind":"textbox","id":"sh/t0j29ozu","slide":16,"text":"Shipping","textPreview":"Shipping","textChars":8,"textLines":1,"bbox":[396,662,230,26]}
+{"kind":"shape","id":"sh/8zal0ji9","slide":16,"name":"Frame Design","bbox":[654,174,230,480]}
+{"kind":"textbox","id":"sh/md83y90j","slide":16,"text":"Design","textPreview":"Design","textChars":6,"textLines":1,"bbox":[654,662,230,26]}
+{"kind":"shape","id":"sh/h4j2d8z6","slide":16,"name":"Frame Review","bbox":[912,174,230,480]}
+{"kind":"textbox","id":"sh/v21kbyh0","slide":16,"text":"Review","textPreview":"Review","textChars":6,"textLines":1,"bbox":[912,662,230,26]}
+{"kind":"image","id":"im/vyd0vmxk","slide":16,"name":"","geometry":"rect","alt":"Size applicability","bbox":[144,180,218,468]}
+{"kind":"image","id":"im/4361sby1","slide":16,"name":"","geometry":"rect","alt":"Shipping","bbox":[402,180,218,468]}
+{"kind":"image","id":"im/oziponep","slide":16,"name":"","geometry":"rect","alt":"Design","bbox":[660,180,218,468]}
+{"kind":"image","id":"im/b298z2dg","slide":16,"name":"","geometry":"rect","alt":"Review","bbox":[918,180,218,468]}
+{"kind":"notes","id":"nt/7uryb2","slide":16,"text":"[Sources]\nUser-provided Kapray screenshots: IMG-20260712-WA0025.jpg, IMG-20260712-WA0028.jpg, IMG-20260712-WA0031.jpg, IMG-20260712-WA0040.jpg"}
+{"kind":"slide","id":"sl/e785jp","slide":17,"title":"Vendor profile builds trust behind the catalogue","textShapes":12}
+{"kind":"textbox","id":"sh/lcbqls3y","slide":17,"text":"Vendor profile builds trust behind the catalogue","textPreview":"Vendor profile builds trust behind the catalogue","textChars":48,"textLines":1,"bbox":[48,36,1100,72]}
+{"kind":"shape","id":"sh/y9krad4n","slide":17,"bbox":[48,162,1184,1]}
+{"kind":"textbox","id":"sh/zat8jil8","slide":17,"text":"17","textPreview":"17","textChars":2,"textLines":1,"bbox":[1185,666,48,24]}
+{"kind":"textbox","id":"sh/8z29g7mp","slide":17,"text":"The app keeps shop identity, services, contact, regions, product list, and catalogue visibility close together so buyers know who is fulfilling the order.","textPreview":"The app keeps shop identity, services, contact, regions, product list, and catalogue visibility close together so buyers know who is fulf...","textChars":154,"textLines":1,"bbox":[52,180,350,150]}
+{"kind":"shape","id":"sh/90vapc3a","slide":17,"bbox":[54,382,36,36]}
+{"kind":"textbox","id":"sh/mdkrex4j","slide":17,"text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[54,387,36,24]}
+{"kind":"textbox","id":"sh/nytsn2l4","slide":17,"text":"Shop identity","textPreview":"Shop identity","textChars":13,"textLines":1,"bbox":[108,385,270,34]}
+{"kind":"shape","id":"sh/w3m9k7ml","slide":17,"bbox":[54,454,36,36]}
+{"kind":"textbox","id":"sh/x4vatc36","slide":17,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[54,459,36,24]}
+{"kind":"textbox","id":"sh/xgbehk7q","slide":17,"text":"Services and regions","textPreview":"Services and regions","textChars":20,"textLines":1,"bbox":[108,457,270,34]}
+{"kind":"shape","id":"sh/wf2x8f65","slide":17,"bbox":[54,526,36,36]}
+{"kind":"textbox","id":"sh/betwfap0","slide":17,"text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[54,531,36,24]}
+{"kind":"textbox","id":"sh/adkf65of","slide":17,"text":"Live catalogue","textPreview":"Live catalogue","textChars":14,"textLines":1,"bbox":[108,529,270,34]}
+{"kind":"shape","id":"sh/l4bel4n2","slide":17,"name":"Frame Profile","bbox":[472,174,226,470]}
+{"kind":"textbox","id":"sh/j2twjupw","slide":17,"text":"Profile","textPreview":"Profile","textChars":7,"textLines":1,"bbox":[472,652,226,26]}
+{"kind":"shape","id":"sh/y1kfapob","slide":17,"name":"Frame Services","bbox":[722,174,226,470]}
+{"kind":"textbox","id":"sh/07id0v6d","slide":17,"text":"Services","textPreview":"Services","textChars":8,"textLines":1,"bbox":[722,652,226,26]}
+{"kind":"shape","id":"sh/srmxgvet","slide":17,"name":"Frame Catalogue","bbox":[972,174,226,470]}
+{"kind":"textbox","id":"sh/6pkfe5w3","slide":17,"text":"Catalogue","textPreview":"Catalogue","textChars":9,"textLines":1,"bbox":[972,652,226,26]}
+{"kind":"image","id":"im/7y1cz6tc","slide":17,"name":"","geometry":"rect","alt":"Profile","bbox":[478,180,214,458]}
+{"kind":"image","id":"im/m1obuxc7","slide":17,"name":"","geometry":"rect","alt":"Services","bbox":[728,180,214,458]}
+{"kind":"image","id":"im/q54r2tsz","slide":17,"name":"","geometry":"rect","alt":"Catalogue","bbox":[978,180,214,458]}
+{"kind":"notes","id":"nt/e785jp","slide":17,"text":"[Sources]\nUser-provided Kapray screenshots: IMG-20260712-WA0022.jpg, IMG-20260712-WA0023.jpg, IMG-20260710-WA0135.jpg"}
+{"kind":"slide","id":"sl/9zgnj0","slide":18,"title":"Onboarding checklist for the first product","textShapes":18}
+{"kind":"textbox","id":"sh/yxwrqds3","slide":18,"text":"Onboarding checklist for the first product","textPreview":"Onboarding checklist for the first product","textChars":42,"textLines":1,"bbox":[48,36,1100,72]}
+{"kind":"textbox","id":"sh/l07a18bu","slide":18,"text":"A smooth vendor session starts with product and fulfilment information ready to enter.","textPreview":"A smooth vendor session starts with product and fulfilment information ready to enter.","textChars":86,"textLines":1,"bbox":[49,112,900,52]}
+{"kind":"shape","id":"sh/0ze9s3a9","slide":18,"bbox":[48,162,1184,1]}
+{"kind":"textbox","id":"sh/ba5svyts","slide":18,"text":"18","textPreview":"18","textChars":2,"textLines":1,"bbox":[1185,666,48,24]}
+{"kind":"shape","id":"sh/q9wrmts7","slide":18,"bbox":[76,206,30,30]}
+{"kind":"textbox","id":"sh/dwnax8by","slide":18,"text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[76,210,30,22]}
+{"kind":"textbox","id":"sh/cve9o3ad","slide":18,"text":"Shop logo, shop name, contact, address, service areas, and export regions.","textPreview":"Shop logo, shop name, contact, address, service areas, and export regions.","textChars":74,"textLines":1,"bbox":[122,202,479,68]}
+{"kind":"shape","id":"sh/36l8rytg","slide":18,"bbox":[76,306,30,30]}
+{"kind":"textbox","id":"sh/25critsb","slide":18,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[76,310,30,22]}
+{"kind":"textbox","id":"sh/g3m5sru1","slide":18,"text":"Product path: unstitched plain, dyeing, tailoring, ready-to-wear, or made-to-order.","textPreview":"Product path: unstitched plain, dyeing, tailoring, ready-to-wear, or made-to-order.","textChars":83,"textLines":1,"bbox":[122,302,479,68]}
+{"kind":"shape","id":"sh/14vm1wvm","slide":18,"bbox":[76,406,30,30]}
+{"kind":"textbox","id":"sh/e1knqhcv","slide":18,"text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[76,410,30,22]}
+{"kind":"textbox","id":"sh/f2d4zmdg","slide":18,"text":"Product media: clear images, optional video, and style-specific photos.","textPreview":"Product media: clear images, optional video, and style-specific photos.","textChars":71,"textLines":1,"bbox":[122,402,479,68]}
+{"kind":"shape","id":"sh/sz25orup","slide":18,"bbox":[76,506,30,30]}
+{"kind":"textbox","id":"sh/t0bmxcva","slide":18,"text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[76,510,30,22]}
+{"kind":"textbox","id":"sh/6dknmhcz","slide":18,"text":"Pricing: base price, sale price rules, service add-ons, and style extra costs.","textPreview":"Pricing: base price, sale price rules, service add-ons, and style extra costs.","textChars":78,"textLines":1,"bbox":[122,502,479,68]}
+{"kind":"shape","id":"sh/ryt4vmd4","slide":18,"bbox":[645,206,30,30]}
+{"kind":"textbox","id":"sh/cv650bu9","slide":18,"text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[645,210,30,22]}
+{"kind":"textbox","id":"sh/dwf69gvu","slide":18,"text":"Inventory: fabric length, stock by size, or design availability.","textPreview":"Inventory: fabric length, stock by size, or design availability.","textChars":64,"textLines":1,"bbox":[691,202,479,68]}
+{"kind":"shape","id":"sh/lgrexczm","slide":18,"bbox":[645,306,30,30]}
+{"kind":"textbox","id":"sh/0fid47i1","slide":18,"text":"6","textPreview":"6","textChars":1,"textLines":1,"bbox":[645,310,30,22]}
+{"kind":"textbox","id":"sh/ze9wvm1g","slide":18,"text":"Shipping: weight, package dimensions, delivery type, courier, and tracking process.","textPreview":"Shipping: weight, package dimensions, delivery type, courier, and tracking process.","textChars":83,"textLines":1,"bbox":[691,302,479,68]}
+{"kind":"shape","id":"sh/yd0v2h0v","slide":18,"bbox":[645,406,30,30]}
+{"kind":"textbox","id":"sh/dcretcja","slide":18,"text":"7","textPreview":"7","textChars":1,"textLines":1,"bbox":[645,410,30,22]}
+{"kind":"textbox","id":"sh/cbid07i5","slide":18,"text":"Order owner: who packs, dispatches, updates tracking, and marks delivery complete.","textPreview":"Order owner: who packs, dispatches, updates tracking, and marks delivery complete.","textChars":82,"textLines":1,"bbox":[691,402,479,68]}
+{"kind":"shape","id":"sh/bapwr21k","slide":18,"bbox":[76,626,1080,1]}
+{"kind":"textbox","id":"sh/q9gvyx0z","slide":18,"text":"Recommended live exercise: add one real product, preview it as a buyer, place a test order, and move it through delivery.","textPreview":"Recommended live exercise: add one real product, preview it as a buyer, place a test order, and move it through delivery.","textChars":121,"textLines":1,"bbox":[78,642,1040,42]}
+{"kind":"notes","id":"nt/9zgnj0","slide":18,"text":"[Sources]\nUser-provided context: WhatsApp Chat with Kapray vendors onboarfing.txt"}
