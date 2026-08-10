@@ -79,7 +79,7 @@ export default function Q12MoreDescription() {
   const vendorId = safeInt(vendorIdRaw);
 
   const ctx = useProductDraft() as any;
-  const { draft } = ctx;
+  const { draft, draftSessionId } = ctx;
 
   const category = safeStr((draft?.spec as any)?.product_category ?? "");
   const needsTailoring = category === "unstitched_dyeing_tailoring";
@@ -171,7 +171,7 @@ export default function Q12MoreDescription() {
       }, 100);
 
       return () => clearTimeout(timer);
-    }, [appendManyRaw, appendOne, returnTo]),
+    }, [appendManyRaw, appendOne, returnTo, draftSessionId]),
   );
 
   function onChangeText(next: string) {

@@ -984,7 +984,7 @@ export default function VendorProductsScreen() {
   }
 
   function startNewProduct() {
-    resetDraft();
+    resetDraft("start-new-product");
     router.push("/vendor/profile/add-product");
   }
 
@@ -1165,7 +1165,9 @@ export default function VendorProductsScreen() {
                 loading || !vendorId ? styles.disabledButton : null,
                 pressed ? styles.pressed : null,
               ]}
-              onPress={loading || !vendorId ? undefined : fetchProductsReset}
+              onPress={
+                loading || !vendorId ? undefined : () => void fetchProductsReset()
+              }
               disabled={loading || !vendorId}
             >
               <View style={styles.actionContent}>

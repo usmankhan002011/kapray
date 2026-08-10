@@ -10,6 +10,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
+import { closeProductModal } from "@/components/product/productModalNavigation";
 import { getDressTypes, DressTypeItem } from "@/utils/supabase/dressType";
 
 type DressTypeOption = {
@@ -102,11 +103,7 @@ export default function ProductDressTypeModal() {
   }, []);
 
   function closeToAddProduct() {
-    if (returnTo) {
-      router.replace(returnTo as any);
-      return;
-    }
-    router.back();
+    closeProductModal(router, returnTo);
   }
 
   function toggle(key: string) {

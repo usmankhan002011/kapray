@@ -1289,7 +1289,7 @@ export default function AddProductSubmitScreen() {
       }
 
       Alert.alert("Saved", `Product created: ${finalCode}`);
-      resetDraft();
+      resetDraft("saved-product");
 
       router.replace(
         `/vendor/profile/products?new_product_id=${encodeURIComponent(

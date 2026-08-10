@@ -10,6 +10,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
+import { closeProductModal } from "@/components/product/productModalNavigation";
 import { getWorkTypes, WorkTypeItem } from "@/utils/supabase/workType";
 
 const WORK_LOCAL_IMAGES: Record<string, any> = {
@@ -108,11 +109,7 @@ export default function ProductWorkModal() {
   }, []);
 
   function close() {
-    if (returnTo) {
-      router.replace(returnTo as any);
-      return;
-    }
-    router.back();
+    closeProductModal(router, returnTo);
   }
 
   function openSubTypes(item: WorkTypeItem) {
