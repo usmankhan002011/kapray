@@ -41,11 +41,13 @@ import {
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setSelectedVendor } from "@/store/vendorSlice";
 import {
+  BUSINESS_AUTH_DOCUMENTS_COPY,
   STEPS,
   StepId,
   VendorWizardData,
   pickImages,
   pickVideos,
+  parseContactList,
   uploadToBucket,
 } from "@/utils/helpers/wizardHelpers";
 import { supabase } from "@/utils/supabase/client";
@@ -69,7 +71,9 @@ const initialForm: VendorWizardData = {
   ownerName: "",
   email: "",
   mobile: "",
+  additionalMobileNumbers: "",
   landline: "",
+  additionalLandlineNumbers: "",
   shopName: "",
   address: "",
   locationUrl: "",
@@ -325,7 +329,13 @@ export default function CreateShopScreen() {
           name: form.ownerName.trim(),
           email: form.email.trim(),
           mobile: form.mobile.trim(),
+          additional_mobile_numbers: parseContactList(
+            form.additionalMobileNumbers,
+          ),
           landline: form.landline.trim() || null,
+          additional_landline_numbers: parseContactList(
+            form.additionalLandlineNumbers,
+          ),
           shop_name: form.shopName.trim(),
           address: form.address.trim(),
           location_url: form.locationUrl.trim() || null,
@@ -359,7 +369,13 @@ export default function CreateShopScreen() {
           name: form.ownerName.trim(),
           email: form.email.trim(),
           mobile: form.mobile.trim(),
+          additional_mobile_numbers: parseContactList(
+            form.additionalMobileNumbers,
+          ),
           landline: form.landline.trim() || null,
+          additional_landline_numbers: parseContactList(
+            form.additionalLandlineNumbers,
+          ),
           shop_name: form.shopName.trim(),
           address: form.address.trim(),
           location_url: form.locationUrl.trim() || null,
@@ -448,6 +464,12 @@ export default function CreateShopScreen() {
         profile_image_path: profilePath,
         banner_path: bannerPath,
         certificate_paths,
+        additional_mobile_numbers: parseContactList(
+          form.additionalMobileNumbers,
+        ),
+        additional_landline_numbers: parseContactList(
+          form.additionalLandlineNumbers,
+        ),
         shop_image_paths: imagePaths.length
           ? imagePaths
           : (selectedVendor?.shop_image_paths ?? null),
@@ -480,7 +502,13 @@ export default function CreateShopScreen() {
         name: form.ownerName.trim(),
         email: form.email.trim(),
         mobile: form.mobile.trim(),
+        additional_mobile_numbers: parseContactList(
+          form.additionalMobileNumbers,
+        ),
         landline: form.landline.trim() || null,
+        additional_landline_numbers: parseContactList(
+          form.additionalLandlineNumbers,
+        ),
         shop_name: form.shopName.trim(),
         address: form.address.trim(),
         location_url: form.locationUrl.trim() || null,
@@ -700,14 +728,58 @@ export default function CreateShopScreen() {
         return (
           <View>
             <View style={styles.previewCard}>
+              <Text style={styles.previewLabel}>WhatsApp mobile</Text>
+              <Text style={styles.previewSubtext}>
+                This number is fixed after shop creation. It is used as the
+                primary WhatsApp contact.
+              </Text>
               <GradientInputCard
                 ref={mobileRef}
-                placeholder="Enter mobile number"
+                placeholder="Enter WhatsApp mobile number"
                 value={form.mobile}
                 onChangeText={(v) => updateForm("mobile", v)}
                 keyboardType="phone-pad"
                 returnKeyType="next"
                 onSubmitEditing={goNext}
+              />
+            </View>
+
+            <View style={styles.previewCard}>
+              <Text style={styles.previewLabel}>Additional mobile numbers</Text>
+              <Text style={styles.previewSubtext}>
+                Optional. These can be changed later from Edit Shop.
+              </Text>
+              <GradientInputCard
+                placeholder="One number per line, or comma-separated"
+                value={form.additionalMobileNumbers}
+                onChangeText={(v) => updateForm("additionalMobileNumbers", v)}
+                keyboardType="phone-pad"
+                multiline
+              />
+            </View>
+
+            <View style={styles.previewCard}>
+              <Text style={styles.previewLabel}>Landlines</Text>
+              <Text style={styles.previewSubtext}>
+                Optional. Add a primary landline and any additional landline
+                numbers.
+              </Text>
+              <GradientInputCard
+                ref={landlineRef}
+                placeholder="Primary landline"
+                value={form.landline}
+                onChangeText={(v) => updateForm("landline", v)}
+                keyboardType="phone-pad"
+              />
+
+              <View style={styles.fieldSpacer} />
+
+              <GradientInputCard
+                placeholder="Additional landlines, one per line"
+                value={form.additionalLandlineNumbers}
+                onChangeText={(v) => updateForm("additionalLandlineNumbers", v)}
+                keyboardType="phone-pad"
+                multiline
               />
             </View>
           </View>
@@ -1085,8 +1157,12 @@ export default function CreateShopScreen() {
                 <View style={styles.mediaIconBadge}>
                   <MaterialIcons name="verified-user" size={18} color="#2563EB" />
                 </View>
-                <Text style={styles.mediaTitle}>Authority permission</Text>
+                <Text style={styles.mediaTitle}>Business authorization</Text>
               </View>
+
+              <Text style={styles.mediaRequirementText}>
+                {BUSINESS_AUTH_DOCUMENTS_COPY}
+              </Text>
 
               <Pressable
                 style={({ pressed }) => [
@@ -1100,7 +1176,7 @@ export default function CreateShopScreen() {
               >
                 <MaterialIcons name="upload-file" size={18} color="#2563EB" />
                 <Text style={styles.uploadButtonText}>
-                  {form.govPermission ? "Change image" : "Upload permission"}
+                  {form.govPermission ? "Change document" : "Upload document"}
                 </Text>
               </Pressable>
 
@@ -1121,7 +1197,7 @@ export default function CreateShopScreen() {
               ) : (
                 <View style={styles.mediaEmptyBox}>
                   <MaterialIcons name="description" size={22} color="#94A3B8" />
-                  <Text style={styles.mediaEmptyText}>No permission selected</Text>
+                  <Text style={styles.mediaEmptyText}>No authorization document selected</Text>
                 </View>
               )}
             </View>
@@ -1424,6 +1500,9 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     marginBottom: 14,
   },
+  fieldSpacer: {
+    height: 12,
+  },
   secondaryActionButton: {
     marginTop: 14,
     minHeight: 48,
@@ -1582,6 +1661,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     color: "#0F172A",
+  },
+  mediaRequirementText: {
+    marginBottom: 12,
+    color: apColors.subText,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "600",
   },
   uploadButton: {
     minHeight: 46,

@@ -261,7 +261,7 @@ export default function MadeOrderVariantEditor({
             sanitize={sanitizeNumberText}
             placeholder="0"
             placeholderTextColor={apColors.muted}
-            style={[styles.input, styles.numberInput]}
+            style={[styles.input, styles.costInput]}
             keyboardType="number-pad"
             maxLength={10}
             commitMode="change"
@@ -280,7 +280,7 @@ export default function MadeOrderVariantEditor({
             sanitize={sanitizeNumberText}
             placeholder="e.g., 7"
             placeholderTextColor={apColors.muted}
-            style={[styles.input, styles.numberInput]}
+            style={styles.input}
             keyboardType="number-pad"
             maxLength={4}
             commitMode="change"
@@ -406,13 +406,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 11,
+    fontSize: 16,
     color: apColors.text,
     fontWeight: "800",
   },
-  numberInput: {
-    minHeight: 56,
-    fontSize: 22,
-    lineHeight: 28,
+  costInput: {
     color: apColors.danger,
   },
   helper: {

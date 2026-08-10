@@ -346,9 +346,11 @@ const ReadyVariantCard = memo(function ReadyVariantCard({
         onChangeText={updateExtra}
         placeholder="0"
         placeholderTextColor={apColors.muted}
-        style={apStyles.input}
+        style={[apStyles.input, { color: apColors.danger }]}
         keyboardType="number-pad"
         maxLength={12}
+        commitMode="change"
+        commitDelayMs={0}
       />
 
       <View style={styles.imagePanel}>
@@ -460,6 +462,8 @@ const ReadyVariantCard = memo(function ReadyVariantCard({
                     style={[apStyles.input, styles.inventoryInput]}
                     keyboardType="number-pad"
                     maxLength={5}
+                    commitMode="change"
+                    commitDelayMs={0}
                     selectTextOnFocus
                     showSoftInputOnFocus
                   />
@@ -471,7 +475,9 @@ const ReadyVariantCard = memo(function ReadyVariantCard({
       </View>
 
       <View style={styles.metaRow}>
-        <Text style={styles.metaPill}>Rs {finalPrice.toLocaleString()}</Text>
+        <Text style={[styles.metaPill, styles.costPill]}>
+          Rs {finalPrice.toLocaleString()}
+        </Text>
         <Text style={styles.metaPill}>Stock {totalQty}</Text>
         <Text style={styles.metaPill}>Sizes {sizeCount}</Text>
       </View>
@@ -673,7 +679,10 @@ export default function Q06B3ReadyVariants() {
           </Text>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryPill}>
-              From Rs {basePrice.toLocaleString()}
+              From{" "}
+              <Text style={styles.costText}>
+                Rs {basePrice.toLocaleString()}
+              </Text>
             </Text>
           </View>
         </View>
@@ -830,9 +839,15 @@ const styles = StyleSheet.create({
     backgroundColor: apColors.white,
     borderWidth: 1,
     borderColor: "#D7E3FF",
-    color: apColors.blue,
+    color: apColors.text,
     fontSize: 12,
     fontWeight: "800",
+  },
+  costPill: {
+    color: apColors.danger,
+  },
+  costText: {
+    color: apColors.danger,
   },
   imagePanel: {
     marginTop: 12,

@@ -38,6 +38,10 @@ import {
 
 const BUCKET_VENDOR = "vendor_images";
 const PRODUCTS_TABLE = "products";
+const SAVE_DB_TIMEOUT_MS = 30000;
+const SAVE_FILE_READ_TIMEOUT_MS = 30000;
+const SAVE_UPLOAD_TIMEOUT_MS = 60000;
+const VENDOR_SETTINGS_TIMEOUT_MS = 10000;
 
 type ProductCategory =
   | "unstitched_plain"
@@ -92,6 +96,22 @@ function warnSave(stage: string, details?: Record<string, unknown>) {
   console.warn("[add-product-save]", stage, details ?? {});
 }
 
+function withSaveTimeout<T>(promise: PromiseLike<T>, ms: number, label: string) {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  const timeout = new Promise<T>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(
+        new Error(`${label} timed out after ${Math.round(ms / 1000)} seconds.`),
+      );
+    }, ms);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
+}
+
 function safeNumOrZero(v: any) {
   const n = Number(v);
   if (!Number.isFinite(n)) return 0;
@@ -143,9 +163,13 @@ async function uploadAssetToStorage(args: {
     uriScheme: safeStr(args.uri).split(":")[0] || "unknown",
   });
 
-  const base64 = await FileSystem.readAsStringAsync(args.uri, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
+  const base64 = await withSaveTimeout(
+    FileSystem.readAsStringAsync(args.uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    }),
+    SAVE_FILE_READ_TIMEOUT_MS,
+    `${label} file read`,
+  );
   logSave("media-read-done", { label, base64Chars: base64.length });
 
   const buffer = decode(base64);
@@ -155,9 +179,16 @@ async function uploadAssetToStorage(args: {
     contentType: args.contentType,
     label,
   });
-  const { data, error } = await supabase.storage
-    .from(args.bucket)
-    .upload(args.path, buffer, { contentType: args.contentType, upsert: true });
+  const { data, error } = await withSaveTimeout(
+    supabase.storage
+      .from(args.bucket)
+      .upload(args.path, buffer, {
+        contentType: args.contentType,
+        upsert: true,
+      }),
+    SAVE_UPLOAD_TIMEOUT_MS,
+    `${label} storage upload`,
+  );
 
   if (error) throw new Error(error.message);
   logSave("storage-upload-done", { label, path: data?.path ?? "" });
@@ -337,6 +368,9 @@ type ReadyVariantImageInput = {
   url?: string | null;
   fileName?: string | null;
   mimeType?: string | null;
+  fileSize?: number | null;
+  width?: number | null;
+  height?: number | null;
 };
 
 function dedupeStrings(items: string[]) {
@@ -376,6 +410,45 @@ function storagePathFromPublicUrl(url: string) {
   return "";
 }
 
+function assetLookupKeys(input: ReadyVariantImageInput | any) {
+  const keys: string[] = [];
+  const uri = safeStr(input?.uri ?? "");
+  const fileName = safeStr(input?.fileName ?? "").toLowerCase();
+  const fileSize = Number(input?.fileSize ?? 0);
+  const width = Number(input?.width ?? 0);
+  const height = Number(input?.height ?? 0);
+
+  if (uri) keys.push(`uri:${uri}`);
+  if (fileName && Number.isFinite(fileSize) && fileSize > 0) {
+    keys.push(`file:${fileName}:${Math.trunc(fileSize)}`);
+  }
+  if (
+    fileName &&
+    Number.isFinite(width) &&
+    width > 0 &&
+    Number.isFinite(height) &&
+    height > 0
+  ) {
+    keys.push(`shape:${fileName}:${Math.trunc(width)}x${Math.trunc(height)}`);
+  }
+
+  return dedupeStrings(keys);
+}
+
+function findUploadedAssetPath(
+  map: Map<string, string> | undefined,
+  input: ReadyVariantImageInput,
+) {
+  if (!map) return "";
+
+  for (const key of assetLookupKeys(input)) {
+    const path = safeStr(map.get(key));
+    if (path) return path;
+  }
+
+  return "";
+}
+
 function normalizeReadyVariantImageInputs(
   variant: ReadyVariantForSubmit,
 ): ReadyVariantImageInput[] {
@@ -409,6 +482,13 @@ function normalizeReadyVariantImageInputs(
         url: safeStr(obj?.url ?? "") || null,
         fileName: obj?.fileName ?? null,
         mimeType: obj?.mimeType ?? null,
+        fileSize: Number.isFinite(Number(obj?.fileSize))
+          ? Number(obj.fileSize)
+          : null,
+        width: Number.isFinite(Number(obj?.width)) ? Number(obj.width) : null,
+        height: Number.isFinite(Number(obj?.height))
+          ? Number(obj.height)
+          : null,
       });
     }
   }
@@ -424,6 +504,15 @@ function normalizeReadyVariantImageInputs(
       url: safeStr((img as any)?.url ?? "") || null,
       fileName: (img as any)?.fileName ?? null,
       mimeType: (img as any)?.mimeType ?? null,
+      fileSize: Number.isFinite(Number((img as any)?.fileSize))
+        ? Number((img as any).fileSize)
+        : null,
+      width: Number.isFinite(Number((img as any)?.width))
+        ? Number((img as any).width)
+        : null,
+      height: Number.isFinite(Number((img as any)?.height))
+        ? Number((img as any).height)
+        : null,
     });
   }
 
@@ -472,6 +561,13 @@ async function uploadReadyVariantImages(args: {
       const rawUri = safeStr(img?.uri ?? "");
       const rawUrl = safeStr(img?.url ?? "");
       const rawPath = safeStr(img?.path ?? "");
+      logSave("ready-variant-image-input", {
+        variantIndex: variantIndex + 1,
+        imageIndex: imageIndex + 1,
+        hasPath: Boolean(rawPath),
+        hasUrl: Boolean(rawUrl),
+        uriScheme: rawUri.split(":")[0] || "",
+      });
 
       if (rawPath) {
         uploadedPaths.push(rawPath);
@@ -516,6 +612,10 @@ async function uploadReadyVariantImages(args: {
       if (uploadedPath) uploadedPaths.push(uploadedPath);
     }
 
+    if (!uploadedPaths.length) {
+      throw new Error(`Style ${variantIndex + 1} images could not be uploaded.`);
+    }
+
     nextVariants.push(stripReadyVariantForDb(variant, uploadedPaths));
   }
 
@@ -527,6 +627,7 @@ async function uploadMadeOrderVariantImages(args: {
   vendorId: number;
   productCode: string;
   variants: MadeOrderVariant[];
+  uploadedProductImagePathsByAssetKey?: Map<string, string>;
 }) {
   logSave("made-order-variant-images-start", {
     variantCount: args.variants.length,
@@ -551,6 +652,13 @@ async function uploadMadeOrderVariantImages(args: {
       const rawUri = safeStr(img?.uri ?? "");
       const rawUrl = safeStr(img?.url ?? "");
       const rawPath = safeStr(img?.path ?? "");
+      logSave("made-order-variant-image-input", {
+        variantIndex: variantIndex + 1,
+        imageIndex: imageIndex + 1,
+        hasPath: Boolean(rawPath),
+        hasUrl: Boolean(rawUrl),
+        uriScheme: rawUri.split(":")[0] || "",
+      });
 
       if (rawPath) {
         uploadedPaths.push(rawPath);
@@ -568,6 +676,20 @@ async function uploadMadeOrderVariantImages(args: {
       const uriPathFromPublicUrl = storagePathFromPublicUrl(rawUri);
       if (uriPathFromPublicUrl) {
         uploadedPaths.push(uriPathFromPublicUrl);
+        continue;
+      }
+
+      const reusedProductImagePath = findUploadedAssetPath(
+        args.uploadedProductImagePathsByAssetKey,
+        img,
+      );
+      if (reusedProductImagePath) {
+        logSave("made-order-variant-image-reused-product-image", {
+          variantIndex: variantIndex + 1,
+          imageIndex: imageIndex + 1,
+          path: reusedProductImagePath,
+        });
+        uploadedPaths.push(reusedProductImagePath);
         continue;
       }
 
@@ -596,6 +718,12 @@ async function uploadMadeOrderVariantImages(args: {
       if (uploadedPath) uploadedPaths.push(uploadedPath);
     }
 
+    if (!uploadedPaths.length) {
+      throw new Error(
+        `Made-on-order style ${variantIndex + 1} images could not be uploaded.`,
+      );
+    }
+
     nextVariants.push(stripMadeOrderVariantForDb(variant, uploadedPaths));
   }
 
@@ -621,11 +749,25 @@ export default function AddProductSubmitScreen() {
   const [vendorOffersTailoring, setVendorOffersTailoring] =
     useState<boolean>(false);
   const [vendorLoading, setVendorLoading] = useState<boolean>(false);
+  const madeOnOrderForVendorSettings = Boolean(
+    (draft.spec as any)?.made_on_order ?? false,
+  );
 
   useEffect(() => {
     let alive = true;
 
     async function loadVendor() {
+      if (madeOnOrderForVendorSettings) {
+        logSave("vendor-settings-skipped", {
+          reason: "made-on-order-submit",
+        });
+        if (alive) {
+          setVendorOffersTailoring(false);
+          setVendorLoading(false);
+        }
+        return;
+      }
+
       if (!vendorId) {
         logSave("vendor-settings-skipped", { reason: "missing-vendor-id" });
         if (alive) setVendorOffersTailoring(false);
@@ -636,11 +778,15 @@ export default function AddProductSubmitScreen() {
         if (alive) setVendorLoading(true);
         logSave("vendor-settings-start", { vendorId });
 
-        const { data, error } = await supabase
-          .from("vendor")
-          .select("id, offers_tailoring")
-          .eq("id", vendorId)
-          .single();
+        const { data, error } = await withSaveTimeout(
+          supabase
+            .from("vendor")
+            .select("id, offers_tailoring")
+            .eq("id", vendorId)
+            .single(),
+          VENDOR_SETTINGS_TIMEOUT_MS,
+          "Vendor settings",
+        );
 
         if (!alive) return;
 
@@ -676,7 +822,7 @@ export default function AddProductSubmitScreen() {
     return () => {
       alive = false;
     };
-  }, [vendorId]);
+  }, [madeOnOrderForVendorSettings, vendorId]);
 
   const productCategory = useMemo<ProductCategory>(
     () => inferCategoryFromDraft(draft),
@@ -1276,11 +1422,15 @@ export default function AddProductSubmitScreen() {
           : 0,
       });
 
-      const { data: created, error: insertErr } = await supabase
-        .from(PRODUCTS_TABLE)
-        .insert(insertPayload)
-        .select("id, product_code")
-        .single();
+      const { data: created, error: insertErr } = await withSaveTimeout(
+        supabase
+          .from(PRODUCTS_TABLE)
+          .insert(insertPayload)
+          .select("id, product_code")
+          .single(),
+        SAVE_DB_TIMEOUT_MS,
+        "Product insert",
+      );
 
       if (insertErr) {
         warnSave("insert-error", { message: insertErr.message });
@@ -1303,6 +1453,7 @@ export default function AddProductSubmitScreen() {
       const videoAssets = draft.media.videos ?? [];
 
       logSave("product-images-start", { count: imageAssets.length });
+      const uploadedProductImagePathsByAssetKey = new Map<string, string>();
       const uploadedImagePaths: string[] = [];
       for (let i = 0; i < imageAssets.length; i++) {
         const a: any = imageAssets[i];
@@ -1325,7 +1476,12 @@ export default function AddProductSubmitScreen() {
           label: `product image ${i + 1}/${imageAssets.length}`,
         });
 
-        if (p) uploadedImagePaths.push(p);
+        if (p) {
+          uploadedImagePaths.push(p);
+          for (const key of assetLookupKeys(a)) {
+            uploadedProductImagePathsByAssetKey.set(key, p);
+          }
+        }
       }
       logSave("product-images-done", { count: uploadedImagePaths.length });
 
@@ -1405,6 +1561,7 @@ export default function AddProductSubmitScreen() {
             vendorId,
             productCode: finalCode,
             variants: madeOrderVariants,
+            uploadedProductImagePathsByAssetKey,
           })
         : [];
 
@@ -1441,20 +1598,24 @@ export default function AddProductSubmitScreen() {
         madeOrderVariantCount: uploadedMadeOrderVariants.length,
       });
 
-      const { error: updErr } = await supabase
-        .from(PRODUCTS_TABLE)
-        .update({
-          media,
-          spec: finalSpec,
-          price: finalPrice,
-          inventory_qty: Number.isFinite(inventoryQty)
-            ? isUnstitched
-              ? roundMeter(inventoryQty)
-              : Math.trunc(inventoryQty)
-            : 0,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", productId);
+      const { error: updErr } = await withSaveTimeout(
+        supabase
+          .from(PRODUCTS_TABLE)
+          .update({
+            media,
+            spec: finalSpec,
+            price: finalPrice,
+            inventory_qty: Number.isFinite(inventoryQty)
+              ? isUnstitched
+                ? roundMeter(inventoryQty)
+                : Math.trunc(inventoryQty)
+              : 0,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", productId),
+        SAVE_DB_TIMEOUT_MS,
+        "Product media update",
+      );
 
       if (updErr) {
         warnSave("final-update-error", { message: updErr.message });

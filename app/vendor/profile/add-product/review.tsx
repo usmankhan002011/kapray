@@ -503,6 +503,38 @@ function summarizeMadeOrderVariant(
     .join(" / ");
 }
 
+const COST_TEXT_PATTERN = /(Rs\s[\d,]+|\+?PKR\s[\d,]+|\d+(?:\.\d+)?\sPKR)/g;
+
+function renderCostSegments(text: string) {
+  const clean = safeStr(text);
+  if (!clean) return "";
+
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+
+  for (const match of clean.matchAll(COST_TEXT_PATTERN)) {
+    const index = match.index ?? 0;
+    const costText = match[0];
+
+    if (index > lastIndex) {
+      parts.push(clean.slice(lastIndex, index));
+    }
+
+    parts.push(
+      <Text key={`cost-${index}`} style={styles.costValue}>
+        {costText}
+      </Text>,
+    );
+    lastIndex = index + costText.length;
+  }
+
+  if (lastIndex < clean.length) {
+    parts.push(clean.slice(lastIndex));
+  }
+
+  return parts.length ? parts : clean;
+}
+
 export default function AddProductReviewScreen() {
   const router = useRouter();
 
@@ -873,7 +905,9 @@ export default function AddProductReviewScreen() {
               </Text>
               <Text style={styles.rowValue}>
                 {costTotal > 0
-                  ? `${usesBaseCostWithStyleAdds ? "From " : ""}Rs ${costTotal.toLocaleString()}`
+                  ? renderCostSegments(
+                      `${usesBaseCostWithStyleAdds ? "From " : ""}Rs ${costTotal.toLocaleString()}`,
+                    )
                   : "Not set"}
               </Text>
             </Pressable>
@@ -957,7 +991,9 @@ export default function AddProductReviewScreen() {
 
                       <View style={styles.variantBody}>
                         <Text style={styles.rowTitle}>{title}</Text>
-                        <Text style={styles.rowValue}>{summary}</Text>
+                        <Text style={styles.rowValue}>
+                          {renderCostSegments(summary)}
+                        </Text>
                       </View>
                     </Pressable>
                   );
@@ -1048,7 +1084,9 @@ export default function AddProductReviewScreen() {
 
                       <View style={styles.variantBody}>
                         <Text style={styles.rowTitle}>{title}</Text>
-                        <Text style={styles.rowValue}>{summary}</Text>
+                        <Text style={styles.rowValue}>
+                          {renderCostSegments(summary)}
+                        </Text>
                       </View>
                     </Pressable>
                   );
@@ -1094,7 +1132,9 @@ export default function AddProductReviewScreen() {
             >
               <Text style={styles.rowTitle}>Cost per Meter (PKR) *</Text>
               <Text style={styles.rowValue}>
-                {costPerMeter > 0 ? String(costPerMeter) : "Not set"}
+                {costPerMeter > 0
+                  ? renderCostSegments(`Rs ${costPerMeter.toLocaleString()}`)
+                  : "Not set"}
               </Text>
             </Pressable>
 
@@ -1127,7 +1167,9 @@ export default function AddProductReviewScreen() {
               ]}
             >
               <Text style={styles.rowTitle}>Services summary</Text>
-              <Text style={styles.rowValue}>{serviceSummary()}</Text>
+              <Text style={styles.rowValue}>
+                {renderCostSegments(serviceSummary())}
+              </Text>
             </Pressable>
 
             {needsTailoring ? (
@@ -1189,7 +1231,9 @@ export default function AddProductReviewScreen() {
                         : `Style Card ${index + 1}`}
                     </Text>
                     <Text style={styles.rowValue}>
-                      {summarizePreset(preset, includesTrouser)}
+                      {renderCostSegments(
+                        summarizePreset(preset, includesTrouser),
+                      )}
                     </Text>
                   </Pressable>
                 ))}
@@ -1439,11 +1483,15 @@ const styles = StyleSheet.create({
 
   rowValue: {
     marginTop: 3,
-    color: apColors.subText,
+    color: apColors.text,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "600",
     fontFamily: apFontFamily,
+  },
+
+  costValue: {
+    color: apColors.danger,
   },
 
   variantCard: {

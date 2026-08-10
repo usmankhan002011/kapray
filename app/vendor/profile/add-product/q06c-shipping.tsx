@@ -766,8 +766,10 @@ export default function Q06CShipping() {
             {!!shippingPreview.inlandAmountPkr && (
               <Text style={styles.previewAmountText}>
                 Within Pakistan Estimated Courier
-                {isFabricByMeter ? " per meter" : " (avg distance)"}: PKR{" "}
-                {shippingPreview.inlandAmountPkr}
+                {isFabricByMeter ? " per meter" : " (avg distance)"}:{" "}
+                <Text style={styles.costText}>
+                  PKR {shippingPreview.inlandAmountPkr}
+                </Text>
               </Text>
             )}
 
@@ -778,9 +780,11 @@ export default function Q06CShipping() {
             {shippingPreview.exportAmounts.map((item) => (
               <Text key={item.region} style={styles.previewText}>
                 {item.region}:{" "}
-                {item.amountPkr && Number(item.amountPkr) > 0
-                  ? `PKR ${item.amountPkr}`
-                  : "Not available"}
+                {item.amountPkr && Number(item.amountPkr) > 0 ? (
+                  <Text style={styles.costText}>PKR {item.amountPkr}</Text>
+                ) : (
+                  "Not available"
+                )}
               </Text>
             ))}
           </View>
@@ -833,7 +837,7 @@ const styles = StyleSheet.create({
   previewText: {
     fontSize: 10,
     lineHeight: 14,
-    color: apColors.subText,
+    color: apColors.text,
     fontWeight: "600",
   },
   previewMetricText: {
@@ -885,6 +889,9 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     color: apColors.text,
     fontWeight: "700",
+  },
+  costText: {
+    color: apColors.danger,
   },
   previewHeadingText: {
     marginTop: 4,

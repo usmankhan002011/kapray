@@ -167,7 +167,7 @@ export const apStyles = StyleSheet.create({
     borderRadius: apRadii.control,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 14,
+    fontSize: 16,
     ...apInputTextStyle,
     color: apColors.text,
     backgroundColor: apColors.white

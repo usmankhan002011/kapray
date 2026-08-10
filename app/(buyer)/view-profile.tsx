@@ -42,7 +42,9 @@ type VendorRow = {
 
   email?: string | null;
   mobile?: string | null;
+  additional_mobile_numbers?: string[] | null;
   landline?: string | null;
+  additional_landline_numbers?: string[] | null;
 
   address?: string | null;
   location?: string | null;
@@ -57,6 +59,7 @@ type VendorRow = {
 
   status?: string | null;
 
+  offers_dyeing?: boolean | null;
   offers_tailoring?: boolean | null;
   exports_enabled?: boolean | null;
   export_regions?: string[] | null;
@@ -264,7 +267,9 @@ export default function BuyerViewProfileScreen() {
           shop_name,
           email,
           mobile,
+          additional_mobile_numbers,
           landline,
+          additional_landline_numbers,
           address,
           location,
           location_url,
@@ -274,6 +279,7 @@ export default function BuyerViewProfileScreen() {
           shop_image_paths,
           shop_video_paths,
           status,
+          offers_dyeing,
           offers_tailoring,
           exports_enabled,
           export_regions
@@ -300,7 +306,9 @@ export default function BuyerViewProfileScreen() {
           owner_name: row?.name ?? null,
           name: row?.name ?? null,
           mobile: row?.mobile ?? null,
+          additional_mobile_numbers: row?.additional_mobile_numbers ?? [],
           landline: row?.landline ?? null,
+          additional_landline_numbers: row?.additional_landline_numbers ?? [],
           email: row?.email ?? null,
           address: row?.address ?? null,
           location: row?.location ?? null,
@@ -308,6 +316,7 @@ export default function BuyerViewProfileScreen() {
           profile_image_path: row?.profile_image_path ?? null,
           banner_path: row?.banner_path ?? null,
           banner_url: banner_url ?? null,
+          offers_dyeing: row?.offers_dyeing ?? null,
           offers_tailoring: row?.offers_tailoring ?? null,
           exports_enabled: row?.exports_enabled ?? false,
           export_regions: row?.export_regions ?? [],
@@ -471,8 +480,16 @@ export default function BuyerViewProfileScreen() {
             </View>
           </View>
 
-          <Field label="Mobile" value={vendor?.mobile} />
-          <Field label="Landline" value={vendor?.landline} />
+          <Field label="WhatsApp mobile" value={vendor?.mobile} />
+          <Field
+            label="Additional mobiles"
+            value={joinOrDash(vendor?.additional_mobile_numbers)}
+          />
+          <Field label="Primary landline" value={vendor?.landline} />
+          <Field
+            label="Additional landlines"
+            value={joinOrDash(vendor?.additional_landline_numbers)}
+          />
           <Field label="Email" value={vendor?.email} />
           <Field label="Address" value={vendor?.address} />
 
@@ -505,6 +522,10 @@ export default function BuyerViewProfileScreen() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Services</Text>
 
+          <Field
+            label="Dyeing"
+            value={vendor?.offers_dyeing ? "Available" : "Not available"}
+          />
           <Field
             label="Tailoring"
             value={vendor?.offers_tailoring ? "Available" : "Not available"}

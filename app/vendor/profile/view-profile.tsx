@@ -45,7 +45,9 @@ type VendorRow = {
   name: string | null;
   email: string | null;
   mobile: string | null;
+  additional_mobile_numbers?: string[] | null;
   landline: string | null;
+  additional_landline_numbers?: string[] | null;
 
   shop_name: string | null;
   address: string | null;
@@ -59,6 +61,7 @@ type VendorRow = {
 
   status: string | null;
 
+  offers_dyeing?: boolean | null;
   offers_tailoring?: boolean | null;
   exports_enabled?: boolean | null;
   export_regions?: string[] | null;
@@ -198,7 +201,9 @@ export default function VendorProfileScreen() {
             "name",
             "email",
             "mobile",
+            "additional_mobile_numbers",
             "landline",
+            "additional_landline_numbers",
             "shop_name",
             "address",
             "location_url",
@@ -209,6 +214,7 @@ export default function VendorProfileScreen() {
             "shop_video_paths",
             "status",
             "location",
+            "offers_dyeing",
             "offers_tailoring",
             "exports_enabled",
             "export_regions",
@@ -431,10 +437,13 @@ export default function VendorProfileScreen() {
     return videoUrls.map((v, idx) => ({ videoUrl: v, idx }));
   }, [videoUrls]);
 
+  const offersDyeing = Boolean(vendor?.offers_dyeing);
   const offersTailoring = Boolean(vendor?.offers_tailoring);
   const exportsEnabled = Boolean(vendor?.exports_enabled);
 
   const exportRegions = vendor?.export_regions ?? [];
+  const additionalMobiles = vendor?.additional_mobile_numbers ?? [];
+  const additionalLandlines = vendor?.additional_landline_numbers ?? [];
 
   return (
     <View style={{ flex: 1, backgroundColor: stylesVars.bg }}>
@@ -508,6 +517,18 @@ export default function VendorProfileScreen() {
             <Text style={styles.ownerName}>{safeText(vendor?.name)}</Text>
 
             <View style={styles.badgeRow}>
+              <Text style={styles.badgeLabel}>Dyeing</Text>
+              <Text
+                style={[
+                  styles.statusText,
+                  offersDyeing && styles.statusTextOn,
+                ]}
+              >
+                {offersDyeing ? "Available" : "Not available"}
+              </Text>
+            </View>
+
+            <View style={styles.badgeRow}>
               <Text style={styles.badgeLabel}>Stitching / Tailoring</Text>
               <Text
                 style={[
@@ -542,8 +563,10 @@ export default function VendorProfileScreen() {
         <Text style={styles.section}>Contact</Text>
         <View style={styles.card}>
           <Field label="Email" value={vendor?.email} />
-          <Field label="Mobile" value={vendor?.mobile} />
-          <Field label="Landline" value={vendor?.landline} />
+          <Field label="WhatsApp mobile" value={vendor?.mobile} />
+          <Field label="Additional mobiles" value={joinOrDash(additionalMobiles)} />
+          <Field label="Primary landline" value={vendor?.landline} />
+          <Field label="Additional landlines" value={joinOrDash(additionalLandlines)} />
         </View>
 
         <Text style={styles.section}>Address</Text>
@@ -554,6 +577,11 @@ export default function VendorProfileScreen() {
 
         <Text style={styles.section}>Services</Text>
         <View style={styles.card}>
+          <Field
+            label="Dyeing service"
+            value={offersDyeing ? "Yes, dyeing available" : "No dyeing service"}
+          />
+
           <Field
             label="Tailoring service"
             value={

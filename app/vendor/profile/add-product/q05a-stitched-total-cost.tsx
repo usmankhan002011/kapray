@@ -157,10 +157,6 @@ export default function Q05AStitchedTotalCost() {
 
 const styles = StyleSheet.create({
   costInput: {
-    minHeight: 58,
-    fontSize: 26,
-    lineHeight: 32,
-    fontWeight: "900",
     color: apColors.danger,
   },
 });

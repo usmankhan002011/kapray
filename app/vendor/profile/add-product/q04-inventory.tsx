@@ -200,6 +200,8 @@ export default function Q04Inventory() {
             sanitizeText={sanitizeNumber}
             keyboardType={isUnstitched ? "decimal-pad" : "number-pad"}
             maxLength={10}
+            commitMode="change"
+            commitDelayMs={0}
             editable={!madeOnOrder}
             returnKeyType="done"
           />

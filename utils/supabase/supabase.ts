@@ -524,6 +524,8 @@ export type Database = {
       vendor: {
         Row: {
           address: string | null
+          additional_landline_numbers: string[]
+          additional_mobile_numbers: string[]
           auth_user_id: string | null
           banner_path: string | null
           certificate_paths: string[] | null
@@ -547,6 +549,8 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          additional_landline_numbers?: string[]
+          additional_mobile_numbers?: string[]
           auth_user_id?: string | null
           banner_path?: string | null
           certificate_paths?: string[] | null
@@ -570,6 +574,8 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          additional_landline_numbers?: string[]
+          additional_mobile_numbers?: string[]
           auth_user_id?: string | null
           banner_path?: string | null
           certificate_paths?: string[] | null
@@ -760,6 +766,8 @@ export type Database = {
       vendor_with_media_paths: {
         Row: {
           address: string | null
+          additional_landline_numbers: string[] | null
+          additional_mobile_numbers: string[] | null
           banner_path: string | null
           certificate_paths: string[] | null
           created_at: string | null
@@ -778,6 +786,8 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          additional_landline_numbers?: string[] | null
+          additional_mobile_numbers?: string[] | null
           banner_path?: string | null
           certificate_paths?: string[] | null
           created_at?: string | null
@@ -796,6 +806,8 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          additional_landline_numbers?: string[] | null
+          additional_mobile_numbers?: string[] | null
           banner_path?: string | null
           certificate_paths?: string[] | null
           created_at?: string | null

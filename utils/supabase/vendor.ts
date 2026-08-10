@@ -4,7 +4,9 @@ export type VendorInsert = {
   name: string;
   email: string;
   mobile: string;
+  additional_mobile_numbers?: string[] | null;
   landline?: string | null;
+  additional_landline_numbers?: string[] | null;
 
   shop_name: string;
   address: string;
