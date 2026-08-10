@@ -1,5 +1,5 @@
 // components/product/add-product/MadeOrderVariantEditor.tsx
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import {
   Alert,
   Image,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  type TextInput,
   View,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
@@ -23,7 +24,9 @@ type Props = {
   variant: MadeOrderVariant;
   index?: number;
   canRemove?: boolean;
+  autoFocusName?: boolean;
   onChange: (next: MadeOrderVariant) => void;
+  onNameAutoFocused?: () => void;
   onRemove?: () => void;
 };
 
@@ -81,9 +84,12 @@ export default function MadeOrderVariantEditor({
   variant,
   index = 0,
   canRemove = true,
+  autoFocusName = false,
   onChange,
+  onNameAutoFocused,
   onRemove,
 }: Props) {
+  const nameInputRef = useRef<TextInput>(null);
   const variantNo = safeInt(variant?.variant_no) || index + 1;
   const label =
     safeStr(variant?.label).replace(/^Variant\b/i, "Style") ||
@@ -94,6 +100,17 @@ export default function MadeOrderVariantEditor({
   const images = useMemo(() => normalizeImages(variant?.images), [variant]);
 
   const displayName = safeStr(variant?.display_name) || name;
+
+  useEffect(() => {
+    if (!autoFocusName) return;
+
+    const timer = setTimeout(() => {
+      nameInputRef.current?.focus();
+      onNameAutoFocused?.();
+    }, 80);
+
+    return () => clearTimeout(timer);
+  }, [autoFocusName, onNameAutoFocused]);
 
   function patch(patchValue: Partial<MadeOrderVariant>) {
     const nextName =
@@ -223,6 +240,7 @@ export default function MadeOrderVariantEditor({
       <View style={styles.fieldBlock}>
         <Text style={apStyles.label}>COLOR / DESIGN NAME *</Text>
         <AddProductInput
+          ref={nameInputRef}
           value={name}
           onChangeText={(text) => patch({ name: text })}
           placeholder="e.g., Black, Ivory Gold, Maroon Design"
@@ -240,11 +258,14 @@ export default function MadeOrderVariantEditor({
             onChangeText={(text) =>
               patch({ additional_price_pkr: safeInt(sanitizeNumberText(text)) })
             }
+            sanitize={sanitizeNumberText}
             placeholder="0"
             placeholderTextColor={apColors.muted}
-            style={styles.input}
+            style={[styles.input, styles.numberInput]}
             keyboardType="number-pad"
             maxLength={10}
+            commitMode="change"
+            commitDelayMs={0}
           />
           <Text style={styles.helper}>PKR added to base price.</Text>
         </View>
@@ -256,11 +277,14 @@ export default function MadeOrderVariantEditor({
             onChangeText={(text) =>
               patch({ estimated_days: safeInt(sanitizeNumberText(text)) })
             }
+            sanitize={sanitizeNumberText}
             placeholder="e.g., 7"
             placeholderTextColor={apColors.muted}
-            style={styles.input}
+            style={[styles.input, styles.numberInput]}
             keyboardType="number-pad"
             maxLength={4}
+            commitMode="change"
+            commitDelayMs={0}
           />
           <Text style={styles.helper}>Making time for this style.</Text>
         </View>
@@ -384,6 +408,12 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     color: apColors.text,
     fontWeight: "800",
+  },
+  numberInput: {
+    minHeight: 56,
+    fontSize: 22,
+    lineHeight: 28,
+    color: apColors.danger,
   },
   helper: {
     color: apColors.muted,

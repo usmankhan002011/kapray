@@ -11,7 +11,11 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
 import { closeProductModal } from "@/components/product/productModalNavigation";
-import { getFabricTypes, FabricTypeItem } from "@/utils/supabase/fabricType";
+import {
+  getFabricTypes,
+  getFallbackFabricTypes,
+  FabricTypeItem,
+} from "@/utils/supabase/fabricType";
 
 const FABRIC_LOCAL_IMAGES: Record<string, any> = {
   chiffon: require("@/assets/fabric-types-images/CHIFFON.jpg"),
@@ -48,7 +52,9 @@ export default function ProductFabricModal() {
 
   const { draft, setFabricTypeIds } = useProductDraft();
 
-  const [items, setItems] = useState<FabricTypeItem[]>([]);
+  const [items, setItems] = useState<FabricTypeItem[]>(() =>
+    getFallbackFabricTypes(),
+  );
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -66,13 +72,13 @@ export default function ProductFabricModal() {
 
   useEffect(() => {
     let alive = true;
-    setLoading(true);
+    setLoading(false);
     setErr(null);
 
     getFabricTypes()
       .then((res) => {
         if (!alive) return;
-        setItems(res ?? []);
+        setItems(res?.length ? res : getFallbackFabricTypes());
       })
       .catch((e) => {
         if (!alive) return;
@@ -133,7 +139,9 @@ export default function ProductFabricModal() {
         </Pressable>
       </View>
 
-      {loading ? <Text style={styles.infoText}>Loading fabrics...</Text> : null}
+      {loading && !items.length ? (
+        <Text style={styles.infoText}>Loading fabrics...</Text>
+      ) : null}
       {err ? <Text style={styles.errorText}>{err}</Text> : null}
 
       <FlatList

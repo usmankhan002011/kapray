@@ -11,7 +11,11 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
 import { closeProductModal } from "@/components/product/productModalNavigation";
-import { getWorkDensities, WorkDensityItem } from "@/utils/supabase/workDensity";
+import {
+  getFallbackWorkDensities,
+  getWorkDensities,
+  WorkDensityItem,
+} from "@/utils/supabase/workDensity";
 
 const WORK_DENSITY_LOCAL_IMAGES: Record<string, any> = {
   light: require("@/assets/work-density-images/light.png"),
@@ -41,7 +45,9 @@ export default function ProductWorkDensityModal() {
 
   const { draft, setWorkDensityIds } = useProductDraft();
 
-  const [items, setItems] = useState<WorkDensityItem[]>([]);
+  const [items, setItems] = useState<WorkDensityItem[]>(() =>
+    getFallbackWorkDensities(),
+  );
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -59,13 +65,13 @@ export default function ProductWorkDensityModal() {
 
   useEffect(() => {
     let alive = true;
-    setLoading(true);
+    setLoading(false);
     setErr(null);
 
     getWorkDensities()
       .then((res) => {
         if (!alive) return;
-        setItems(res ?? []);
+        setItems(res?.length ? res : getFallbackWorkDensities());
       })
       .catch((e) => {
         if (!alive) return;
@@ -126,7 +132,9 @@ export default function ProductWorkDensityModal() {
         </Pressable>
       </View>
 
-      {loading ? <Text style={styles.infoText}>Loading density...</Text> : null}
+      {loading && !items.length ? (
+        <Text style={styles.infoText}>Loading density...</Text>
+      ) : null}
       {err ? <Text style={styles.errorText}>{err}</Text> : null}
 
       <FlatList

@@ -1,5 +1,5 @@
 // app/vendor/profile/add-product/q06b4-made-order-variants.tsx
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
@@ -97,6 +97,9 @@ export default function Q06B4MadeOrderVariants() {
     [variants],
   );
   const hasSingleVariant = editableVariants.length === 1;
+  const [focusVariantIndex, setFocusVariantIndex] = useState<number | null>(
+    null,
+  );
 
   const disabledHint = useMemo(() => {
     if (!vendorId) return "Vendor not loaded.";
@@ -166,6 +169,7 @@ export default function Q06B4MadeOrderVariants() {
       ...editableVariants,
       makeEditableMadeOrderVariant(nextVariantNo),
     ];
+    setFocusVariantIndex(next.length - 1);
     persistVariants(next);
   }
 
@@ -260,7 +264,9 @@ export default function Q06B4MadeOrderVariants() {
             variant={variant}
             index={index}
             canRemove={editableVariants.length > 1}
+            autoFocusName={focusVariantIndex === index}
             onChange={(next) => updateVariant(index, next)}
+            onNameAutoFocused={() => setFocusVariantIndex(null)}
             onRemove={() => removeVariant(index)}
           />
         ))}

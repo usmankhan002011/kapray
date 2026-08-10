@@ -573,6 +573,8 @@ export default function Q06CShipping() {
             keyboardType="decimal-pad"
             maxLength={6}
             returnKeyType="next"
+            commitMode="change"
+            commitDelayMs={0}
           />
         </AddProductField>
 
@@ -614,6 +616,8 @@ export default function Q06CShipping() {
                 sanitizeText={sanitizeNumber}
                 keyboardType="decimal-pad"
                 returnKeyType="next"
+                commitMode="change"
+                commitDelayMs={0}
               />
             </View>
 
@@ -629,6 +633,8 @@ export default function Q06CShipping() {
                 sanitizeText={sanitizeNumber}
                 keyboardType="decimal-pad"
                 returnKeyType="next"
+                commitMode="change"
+                commitDelayMs={0}
               />
             </View>
 
@@ -644,6 +650,8 @@ export default function Q06CShipping() {
                 sanitizeText={sanitizeNumber}
                 keyboardType="decimal-pad"
                 returnKeyType="done"
+                commitMode="change"
+                commitDelayMs={0}
               />
             </View>
           </View>

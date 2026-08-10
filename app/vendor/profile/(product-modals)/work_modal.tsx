@@ -11,7 +11,11 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
 import { closeProductModal } from "@/components/product/productModalNavigation";
-import { getWorkTypes, WorkTypeItem } from "@/utils/supabase/workType";
+import {
+  getFallbackWorkTypes,
+  getWorkTypes,
+  WorkTypeItem,
+} from "@/utils/supabase/workType";
 
 const WORK_LOCAL_IMAGES: Record<string, any> = {
   designer: require("@/assets/work-images/designer.jpg"),
@@ -72,7 +76,9 @@ export default function ProductWorkModal() {
 
   const { draft, setWorkTypeIds } = useProductDraft() as any;
 
-  const [items, setItems] = useState<WorkTypeItem[]>([]);
+  const [items, setItems] = useState<WorkTypeItem[]>(() =>
+    getFallbackWorkTypes(),
+  );
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -83,7 +89,7 @@ export default function ProductWorkModal() {
 
   useEffect(() => {
     let alive = true;
-    setLoading(true);
+    setLoading(false);
     setErr(null);
 
     getWorkTypes()
@@ -92,7 +98,7 @@ export default function ProductWorkModal() {
         const cleaned = (res ?? []).filter((item) =>
           ALLOWED_PARENT_CODES.has(safeStr(item.code).toLowerCase()),
         );
-        setItems(cleaned);
+        setItems(cleaned.length ? cleaned : getFallbackWorkTypes());
       })
       .catch((e) => {
         if (!alive) return;
@@ -153,7 +159,9 @@ export default function ProductWorkModal() {
         </Pressable>
       </View>
 
-      {loading ? <Text style={styles.infoText}>Loading work...</Text> : null}
+      {loading && !items.length ? (
+        <Text style={styles.infoText}>Loading work...</Text>
+      ) : null}
       {err ? <Text style={styles.errorText}>{err}</Text> : null}
 
       <FlatList
