@@ -11,6 +11,11 @@ import {
   AddProductInput,
   AddProductScreen,
 } from "@/components/product/add-product/AddProductWizard";
+import {
+  formatFabricWidth,
+  normalizeFabricWidth,
+  normalizeFabricWidthFromSpec,
+} from "@/utils/kapray/fabricWidth";
 
 type ProductCategory =
   | "unstitched_plain"
@@ -104,6 +109,11 @@ function getInitialSizeTextsFromDraft(draft: any): Record<SizeKey, string> {
   };
 }
 
+function getInitialFabricWidthTextFromDraft(draft: any) {
+  const width = normalizeFabricWidthFromSpec(draft?.spec);
+  return width ? String(width.value) : "";
+}
+
 function buildComputedSizeLengthMap(baseSInput: string): Partial<Record<SizeKey, number>> {
   const s = Number(sanitizeNumber(baseSInput ?? ""));
   if (!Number.isFinite(s) || s <= 0) return {};
@@ -153,6 +163,9 @@ export default function Q05CUnstitchedFabricLength() {
   const ctx = useProductDraft() as any;
   const { draft } = ctx;
 
+  const [fabricWidthText, setFabricWidthText] = useState<string>(
+    getInitialFabricWidthTextFromDraft(draft),
+  );
   const [sLengthText, setSLengthText] = useState<string>(getBaseSLengthFromDraft(draft));
   const [sizeTexts, setSizeTexts] = useState<Record<SizeKey, string>>(
     getInitialSizeTextsFromDraft(draft),
@@ -194,6 +207,11 @@ export default function Q05CUnstitchedFabricLength() {
     });
   }, [sizeTexts, sLengthText]);
 
+  const fabricWidth = useMemo(
+    () => normalizeFabricWidth(fabricWidthText),
+    [fabricWidthText],
+  );
+
   const hasBaseSLength = useMemo(() => {
     const s = Number(sanitizeNumber(sLengthText ?? ""));
     return Number.isFinite(s) && s > 0;
@@ -208,10 +226,12 @@ export default function Q05CUnstitchedFabricLength() {
 
   const canContinue = useMemo(() => {
     if (!vendorId) return false;
-    return hasBaseSLength && hasAllSizes;
-  }, [vendorId, hasBaseSLength, hasAllSizes]);
+    return Boolean(fabricWidth) && hasBaseSLength && hasAllSizes;
+  }, [vendorId, fabricWidth, hasBaseSLength, hasAllSizes]);
   const disabledHint = !vendorId
     ? "Vendor not loaded."
+    : !fabricWidth
+      ? "Enter fabric width."
     : !hasBaseSLength
       ? "Enter fabric length for size S."
       : !hasAllSizes
@@ -289,6 +309,11 @@ export default function Q05CUnstitchedFabricLength() {
       return;
     }
 
+    if (!fabricWidth) {
+      Alert.alert("Missing fabric width", "Enter fabric width (Panna / عرض).");
+      return;
+    }
+
     if (!hasBaseSLength) {
       Alert.alert("Missing fabric length", "Please enter fabric length in meters for size S.");
       return;
@@ -300,6 +325,9 @@ export default function Q05CUnstitchedFabricLength() {
     }
 
     patchSpec({
+      fabric_width: fabricWidth,
+      fabric_width_in: fabricWidth.value,
+      fabric_width_label: formatFabricWidth(fabricWidth),
       size_length_m: finalSizeLengthMap,
     });
 
@@ -330,9 +358,26 @@ export default function Q05CUnstitchedFabricLength() {
     >
       <AddProductCard style={styles.card}>
         <AddProductField
+          label="Fabric width (Panna / عرض)"
+          hint="Inches, e.g. 44, 54, 60."
+          style={{ marginTop: 0 }}
+        >
+          <AddProductInput
+            ref={inputRef}
+            value={fabricWidthText}
+            onChangeText={(v) => setFabricWidthText(sanitizeNumber(v))}
+            sanitizeText={sanitizeNumber}
+            placeholder="e.g., 44 in"
+            keyboardType="decimal-pad"
+            maxLength={6}
+            returnKeyType="next"
+          />
+        </AddProductField>
+
+        <AddProductField
           label="Fabric length by size (meters)"
           hint="Enter fabric length for S. Edit others."
-          style={{ marginTop: 0 }}
+          style={{ marginTop: 14 }}
         >
           <View style={styles.grid}>
             {DISPLAY_SIZE_KEYS.map((size) => {
@@ -359,7 +404,6 @@ export default function Q05CUnstitchedFabricLength() {
                   </View>
 
                   <AddProductInput
-                    ref={isS ? inputRef : undefined}
                     value={isS ? sLengthText : sizeTexts[size]}
                     onChangeText={(v) => onChangeSize(size, v)}
                     sanitizeText={sanitizeNumber}

@@ -38,10 +38,15 @@ import {
   type MadeOrderVariant,
 } from "@/utils/kapray/productVariants";
 import {
+  isUnstitchedDeliveryCategory,
   normalizeDeliveryPolicy,
   normalizeExportRegionList,
   validateDeliveryPolicy,
 } from "@/utils/kapray/deliveryPolicy";
+import {
+  formatFabricWidth,
+  normalizeFabricWidthFromSpec,
+} from "@/utils/kapray/fabricWidth";
 
 const BUCKET_VENDOR = "vendor_images";
 const PRODUCTS_TABLE = "products";
@@ -872,9 +877,7 @@ export default function AddProductSubmitScreen() {
   const needsTailoring = productCategory === "unstitched_dyeing_tailoring";
   const isUnstitched = productCategory !== "stitched_ready";
   const requiresSizeLengthMap = isUnstitched;
-  const isFabricByMeter =
-    productCategory === "unstitched_plain" ||
-    productCategory === "unstitched_dyeing";
+  const isFabricByMeter = isUnstitchedDeliveryCategory(productCategory);
 
   const hasReadyVariants =
     productCategory === "stitched_ready" &&
@@ -934,6 +937,10 @@ export default function AddProductSubmitScreen() {
   );
 
   const sizeLengthMap = (draft.spec as any)?.size_length_m ?? {};
+  const fabricWidth = useMemo(
+    () => normalizeFabricWidthFromSpec(draft.spec),
+    [draft.spec],
+  );
   const weightKg = safeNumOrZero(
     isFabricByMeter
       ? (draft.spec as any)?.weight_per_meter_kg ??
@@ -997,6 +1004,8 @@ export default function AddProductSubmitScreen() {
       const n = Number((draft.price as any)?.cost_pkr_per_meter ?? 0);
       if (!Number.isFinite(n) || n <= 0) return false;
 
+      if (!fabricWidth) return false;
+
       if (requiresSizeLengthMap && !hasValidSizeLengthMap(sizeLengthMap)) return false;
 
       if (needsDyeing) {
@@ -1059,6 +1068,7 @@ export default function AddProductSubmitScreen() {
     dyeingCostPkr,
     needsTailoring,
     requiresSizeLengthMap,
+    fabricWidth,
     vendorOffersTailoring,
     tailoringCostPkr,
     tailoringTurnaroundDays,
@@ -1179,6 +1189,12 @@ export default function AddProductSubmitScreen() {
         return;
       }
 
+      if (!fabricWidth) {
+        warnSave("save-validation-stop", { reason: "missing-fabric-width" });
+        Alert.alert("Missing fabric width", "Enter fabric width (Panna / عرض).");
+        return;
+      }
+
       if (requiresSizeLengthMap && !hasValidSizeLengthMap(sizeLengthMap)) {
         warnSave("save-validation-stop", { reason: "missing-size-lengths" });
         Alert.alert(
@@ -1275,7 +1291,7 @@ export default function AddProductSubmitScreen() {
         reason: "invalid-delivery-policy",
         message: deliveryPolicyError,
       });
-      Alert.alert("Courier charge missing", deliveryPolicyError);
+      Alert.alert("Missing courier charge", deliveryPolicyError);
       return;
     }
 
@@ -1399,24 +1415,18 @@ export default function AddProductSubmitScreen() {
             : [],
 
           weight_kg: Number(weightKg),
-          weight_per_meter_kg:
-            finalCategory === "unstitched_plain" ||
-            finalCategory === "unstitched_dyeing"
-              ? Number(weightKg)
-              : null,
-          shipping_weight_mode:
-            finalCategory === "unstitched_plain" ||
-            finalCategory === "unstitched_dyeing"
-              ? "per_meter"
-              : "per_order",
-          package_cm:
-            isFabricByMeter && !hasValidPackageCm(packageCm)
-              ? null
-              : {
-                  length: Number(packageCm?.length ?? 0),
-                  width: Number(packageCm?.width ?? 0),
-                  height: Number(packageCm?.height ?? 0),
-                },
+          weight_per_meter_kg: isFabricByMeter ? Number(weightKg) : null,
+          shipping_weight_mode: isFabricByMeter ? "per_meter" : "per_order",
+          fabric_width: isUnstitched ? fabricWidth : null,
+          fabric_width_in: isUnstitched ? fabricWidth?.value ?? null : null,
+          fabric_width_label: isUnstitched ? formatFabricWidth(fabricWidth) : "",
+          package_cm: isFabricByMeter
+            ? null
+            : {
+                length: Number(packageCm?.length ?? 0),
+                width: Number(packageCm?.width ?? 0),
+                height: Number(packageCm?.height ?? 0),
+              },
           ...(isUnstitched
             ? {
                 inventory_unit: "m",

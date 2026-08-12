@@ -166,6 +166,7 @@ export default function SizeScreen() {
     price_per_meter_pkr?: string;
     available_fabric_m?: string;
     fabric_purchase_mode?: string;
+    fabric_width_label?: string;
     stitched_total_pkr?: string;
     currency?: string;
     imageUrl?: string;
@@ -422,6 +423,10 @@ export default function SizeScreen() {
     () => safePositiveNumber(params.available_fabric_m),
     [params.available_fabric_m],
   );
+  const fabricWidthLabel = useMemo(
+    () => safeDecode(params.fabric_width_label),
+    [params.fabric_width_label],
+  );
 
   const selectedMeterLength = useMemo(() => {
     const n = Number(sanitizeNumber(fabricLengthText));
@@ -521,11 +526,13 @@ export default function SizeScreen() {
     ? dyeSplitTotalCostPkr
     : selectedMeterDyeingCost;
 
+  const routeShippingWeightKg = useMemo(
+    () => safePositiveNumber(params.weight_kg),
+    [params.weight_kg],
+  );
   const weightPerMeterKg = useMemo(
-    () =>
-      safePositiveNumber(params.weight_per_meter_kg) ||
-      safePositiveNumber(params.weight_kg),
-    [params.weight_kg, params.weight_per_meter_kg],
+    () => safePositiveNumber(params.weight_per_meter_kg),
+    [params.weight_per_meter_kg],
   );
   const deliveryPolicy = useMemo(
     () => decodeDeliveryPolicyParam(params.delivery_policy),
@@ -815,6 +822,10 @@ export default function SizeScreen() {
     }
 
     const fabricCostPkr = isUnstitched ? pricePerMeterPkr * fabricLengthM : 0;
+    const shippingWeightKg =
+      isUnstitched && fabricLengthM > 0 && weightPerMeterKg > 0
+        ? roundMeter(fabricLengthM * weightPerMeterKg)
+        : 0;
     const encodedSize = encodeURIComponent(size);
     setPendingStandardSize(size);
 
@@ -831,6 +842,15 @@ export default function SizeScreen() {
           : "",
       fabric_cost_pkr:
         isUnstitched && fabricCostPkr > 0 ? String(fabricCostPkr) : "",
+      weight_kg:
+        isUnstitched && shippingWeightKg > 0
+          ? String(shippingWeightKg)
+          : norm(params.weight_kg),
+      weight_per_meter_kg:
+        isUnstitched && weightPerMeterKg > 0
+          ? String(weightPerMeterKg)
+          : norm(params.weight_per_meter_kg),
+      package_cm: isUnstitched ? "" : norm(params.package_cm),
 
       m1: "",
       m2: "",
@@ -906,7 +926,9 @@ export default function SizeScreen() {
       weight_kg:
         selectedMeterShippingWeightKg > 0
           ? String(selectedMeterShippingWeightKg)
-          : "",
+          : routeShippingWeightKg > 0
+            ? String(routeShippingWeightKg)
+            : "",
       weight_per_meter_kg:
         weightPerMeterKg > 0 ? String(weightPerMeterKg) : "",
       package_cm: "",
@@ -1064,6 +1086,15 @@ export default function SizeScreen() {
                     PKR {pricePerMeterPkr || 0} / meter
                   </Text>
                 </Text>
+
+                {fabricWidthLabel ? (
+                  <Text style={styles.summaryText}>
+                    Panna / عرض:{" "}
+                    <Text style={styles.summaryStrong}>
+                      {fabricWidthLabel}
+                    </Text>
+                  </Text>
+                ) : null}
 
                 {isFabricByMeterPurchase ? (
                   <Text style={styles.summaryText}>

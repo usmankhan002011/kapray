@@ -22,6 +22,7 @@ import {
 } from "@/components/product/add-product/AddProductWizard";
 import type { ExportRegion } from "@/data/kapray/productTypes";
 import {
+  isUnstitchedDeliveryCategory,
   normalizeDeliveryPolicy,
   normalizeExportRegionList,
   safeDeliveryAmount,
@@ -205,8 +206,7 @@ export default function Q06CShipping() {
   const ctx = useProductDraft() as any;
   const { draft } = ctx;
   const category = inferCategoryFromDraft(draft);
-  const isFabricByMeter =
-    category === "unstitched_plain" || category === "unstitched_dyeing";
+  const isFabricByMeter = isUnstitchedDeliveryCategory(category);
 
   function patchSpec(patch: any) {
     if (typeof ctx.setSpec === "function") {
@@ -318,6 +318,27 @@ export default function Q06CShipping() {
     return Boolean(vendorId);
   }, [vendorId]);
   const weightLabel = isFabricByMeter ? "Weight per meter (kg)" : "Weight (kg)";
+  const deliveryAmountHint = isFabricByMeter
+    ? "Courier is per meter and multiplies by purchased meters."
+    : "One delivery rule for this product.";
+  const inlandVendorChargeTitle = isFabricByMeter
+    ? "My Pakistan delivery charge per meter"
+    : "My Pakistan delivery charge";
+  const inlandVendorChargeDescription = isFabricByMeter
+    ? "Enter PKR per meter."
+    : "Enter one flat PKR charge.";
+  const exportVendorChargeTitle = isFabricByMeter
+    ? "My courier charge per meter"
+    : "My courier charge";
+  const exportVendorChargeDescription = isFabricByMeter
+    ? "Enter PKR per meter for this region."
+    : "Enter PKR for this region.";
+  const amountPlaceholder = isFabricByMeter
+    ? "PKR per meter"
+    : "PKR total";
+  const courierConsentText = isFabricByMeter
+    ? `${VENDOR_COURIER_CONSENT_TEXT} Charged per meter.`
+    : VENDOR_COURIER_CONSENT_TEXT;
   const disabledHint = !vendorId ? "Vendor not loaded." : "";
 
   function syncPreviewState() {
@@ -566,9 +587,8 @@ export default function Q06CShipping() {
       return null;
     }
 
-    const hasAnyDimensionInput =
-      lengthInput > 0 || widthInput > 0 || heightInput > 0;
     const hasValidDimensions =
+      !isFabricByMeter &&
       Number.isFinite(l) &&
       l > 0 &&
       Number.isFinite(wi) &&
@@ -578,14 +598,6 @@ export default function Q06CShipping() {
 
     if (!isFabricByMeter && !hasValidDimensions) {
       Alert.alert("Invalid dimensions", "Enter valid package dimensions.");
-      return null;
-    }
-
-    if (isFabricByMeter && hasAnyDimensionInput && !hasValidDimensions) {
-      Alert.alert(
-        "Invalid dimensions",
-        "Either complete all package dimensions or leave them blank for meter fabric.",
-      );
       return null;
     }
 
@@ -635,7 +647,7 @@ export default function Q06CShipping() {
     const policyError = validateDeliveryPolicy(policy, vendorExportRegions);
 
     if (policyError) {
-      Alert.alert("Courier charge missing", policyError);
+      Alert.alert("Missing courier charge", policyError);
       return null;
     }
 
@@ -659,8 +671,8 @@ export default function Q06CShipping() {
 
     if (!previewCalculatedRef.current || !hasCalculatedPreview) {
       Alert.alert(
-        "Calculate shipping first",
-        "Press Calculate to review the actual, dimensional, and chargeable weight before continuing.",
+        "Calculate first",
+        "Tap Calculate first.",
       );
       return;
     }
@@ -746,94 +758,89 @@ export default function Q06CShipping() {
           />
         </AddProductField>
 
-        <AddProductField
-          label={
-            isFabricByMeter
-              ? "Package dimensions"
-              : "Package dimensions"
-          }
-          hint={
-            isFabricByMeter
-              ? "Optional for fabric sold by meter. Meter checkout uses actual kg per meter only."
-              : undefined
-          }
-        >
-          <View style={styles.unitRow}>
-            <AddProductChip
-              label="cm"
-              selected={dimensionUnit === "cm"}
-              onPress={() => onChangeDimensionUnit("cm")}
-            />
-            <AddProductChip
-              label="in"
-              selected={dimensionUnit === "in"}
-              onPress={() => onChangeDimensionUnit("in")}
-            />
-          </View>
-
-          <View style={styles.dimensionRow}>
-            <View style={styles.dimensionField}>
-              <Text style={apStyles.label}>Length</Text>
-              <AddProductInput
-                key={`length-${dimensionUnit}`}
-                ref={lengthRef}
-                defaultValue={length}
-                onChangeText={markPreviewDirty}
-                placeholder="L"
-                textValueRef={lengthTextRef}
-                sanitizeText={sanitizeNumber}
-                keyboardType="decimal-pad"
-                returnKeyType="next"
-                commitMode="change"
-                commitDelayMs={0}
+        {!isFabricByMeter ? (
+          <AddProductField label="Package dimensions" required>
+            <View style={styles.unitRow}>
+              <AddProductChip
+                label="cm"
+                selected={dimensionUnit === "cm"}
+                onPress={() => onChangeDimensionUnit("cm")}
+              />
+              <AddProductChip
+                label="in"
+                selected={dimensionUnit === "in"}
+                onPress={() => onChangeDimensionUnit("in")}
               />
             </View>
 
-            <View style={styles.dimensionField}>
-              <Text style={apStyles.label}>Width</Text>
-              <AddProductInput
-                key={`width-${dimensionUnit}`}
-                ref={widthRef}
-                defaultValue={width}
-                onChangeText={markPreviewDirty}
-                placeholder="W"
-                textValueRef={widthTextRef}
-                sanitizeText={sanitizeNumber}
-                keyboardType="decimal-pad"
-                returnKeyType="next"
-                commitMode="change"
-                commitDelayMs={0}
-              />
-            </View>
+            <View style={styles.dimensionRow}>
+              <View style={styles.dimensionField}>
+                <Text style={apStyles.label}>Length</Text>
+                <AddProductInput
+                  key={`length-${dimensionUnit}`}
+                  ref={lengthRef}
+                  defaultValue={length}
+                  onChangeText={markPreviewDirty}
+                  placeholder="L"
+                  textValueRef={lengthTextRef}
+                  sanitizeText={sanitizeNumber}
+                  keyboardType="decimal-pad"
+                  returnKeyType="next"
+                  commitMode="change"
+                  commitDelayMs={0}
+                />
+              </View>
 
-            <View style={styles.dimensionField}>
-              <Text style={apStyles.label}>Height</Text>
-              <AddProductInput
-                key={`height-${dimensionUnit}`}
-                ref={heightRef}
-                defaultValue={height}
-                onChangeText={markPreviewDirty}
-                placeholder="H"
-                textValueRef={heightTextRef}
-                sanitizeText={sanitizeNumber}
-                keyboardType="decimal-pad"
-                returnKeyType="done"
-                commitMode="change"
-                commitDelayMs={0}
-              />
+              <View style={styles.dimensionField}>
+                <Text style={apStyles.label}>Width</Text>
+                <AddProductInput
+                  key={`width-${dimensionUnit}`}
+                  ref={widthRef}
+                  defaultValue={width}
+                  onChangeText={markPreviewDirty}
+                  placeholder="W"
+                  textValueRef={widthTextRef}
+                  sanitizeText={sanitizeNumber}
+                  keyboardType="decimal-pad"
+                  returnKeyType="next"
+                  commitMode="change"
+                  commitDelayMs={0}
+                />
+              </View>
+
+              <View style={styles.dimensionField}>
+                <Text style={apStyles.label}>Height</Text>
+                <AddProductInput
+                  key={`height-${dimensionUnit}`}
+                  ref={heightRef}
+                  defaultValue={height}
+                  onChangeText={markPreviewDirty}
+                  placeholder="H"
+                  textValueRef={heightTextRef}
+                  sanitizeText={sanitizeNumber}
+                  keyboardType="decimal-pad"
+                  returnKeyType="done"
+                  commitMode="change"
+                  commitDelayMs={0}
+                />
+              </View>
             </View>
-          </View>
-        </AddProductField>
+          </AddProductField>
+        ) : null}
 
         <AddProductField
           label="Within Pakistan delivery"
           required
-          hint="One product-level domestic rule. Buyer city is still used for address, not for vendor-flat pricing."
+          hint={deliveryAmountHint}
         >
           <View style={styles.choiceStack}>
             <AddProductChoice
               title="App calculated"
-              description="Use the app courier estimate from weight and package rules."
+              description={
+                isFabricByMeter
+                  ? "Uses kg/m; multiplied at checkout."
+                  : "Use app courier estimate."
+              }
               selected={inlandMode === "app_calculated"}
               onPress={() => setInlandMode("app_calculated")}
               icon="calculate"
@@ -841,15 +848,15 @@ export default function Q06CShipping() {
             />
             <AddProductChoice
               title="Free within Pakistan"
-              description="Buyer pays no domestic delivery charge for this product."
+              description="No Pakistan delivery charge."
               selected={inlandMode === "free"}
               onPress={() => setInlandMode("free")}
               icon="local-shipping"
               showCheckIcon
             />
             <AddProductChoice
-              title="My Pakistan delivery charge"
-              description="Enter one flat domestic courier charge for this product."
+              title={inlandVendorChargeTitle}
+              description={inlandVendorChargeDescription}
               selected={inlandMode === "vendor_flat"}
               onPress={() => setInlandMode("vendor_flat")}
               icon="edit"
@@ -862,7 +869,7 @@ export default function Q06CShipping() {
               <AddProductInput
                 value={inlandAmountText}
                 onChangeText={setInlandAmountText}
-                placeholder="Amount in PKR"
+                placeholder={amountPlaceholder}
                 sanitizeText={sanitizeNumber}
                 keyboardType="number-pad"
                 maxLength={8}
@@ -870,7 +877,7 @@ export default function Q06CShipping() {
                 commitDelayMs={0}
               />
               <Text style={styles.consentText}>
-                {VENDOR_COURIER_CONSENT_TEXT}
+                {courierConsentText}
               </Text>
             </View>
           ) : null}
@@ -891,7 +898,11 @@ export default function Q06CShipping() {
                     <View style={styles.choiceStack}>
                       <AddProductChoice
                         title="App calculated"
-                        description="Use app courier estimate."
+                        description={
+                          isFabricByMeter
+                            ? "Uses kg/m; multiplied at checkout."
+                            : "Use app courier estimate."
+                        }
                         selected={mode === "app_calculated"}
                         onPress={() =>
                           setExportModes((prev) => ({
@@ -903,8 +914,8 @@ export default function Q06CShipping() {
                         showCheckIcon
                       />
                       <AddProductChoice
-                        title="My courier charge"
-                        description="Enter your charge for this export region."
+                        title={exportVendorChargeTitle}
+                        description={exportVendorChargeDescription}
                         selected={mode === "vendor_flat"}
                         onPress={() =>
                           setExportModes((prev) => ({
@@ -927,7 +938,11 @@ export default function Q06CShipping() {
                               [region]: next,
                             }))
                           }
-                          placeholder={`Amount for ${region} in PKR`}
+                          placeholder={
+                            isFabricByMeter
+                              ? `PKR/m for ${region}`
+                              : `PKR for ${region}`
+                          }
                           sanitizeText={sanitizeNumber}
                           keyboardType="number-pad"
                           maxLength={8}
@@ -935,7 +950,7 @@ export default function Q06CShipping() {
                           commitDelayMs={0}
                         />
                         <Text style={styles.consentText}>
-                          {VENDOR_COURIER_CONSENT_TEXT}
+                          {courierConsentText}
                         </Text>
                       </View>
                     ) : null}
@@ -945,7 +960,7 @@ export default function Q06CShipping() {
             </View>
           ) : (
             <Text style={styles.mutedHint}>
-              No export regions are selected in shop profile. Add regions in Edit Shop to set export courier charges.
+              No export regions selected. Add them in Edit Shop.
             </Text>
           )}
         </AddProductField>
@@ -960,8 +975,8 @@ export default function Q06CShipping() {
           <View style={styles.preview}>
             <Text style={styles.previewText}>
               {isFabricByMeter
-                ? "Meter checkout uses actual kg per meter only. Dimensional weight is ignored."
-                : "Courier uses higher of actual and dimensional weight."}
+                ? "Uses kg/m only. No dimensions."
+                : "Uses higher of actual and dimensional weight."}
             </Text>
 
             {!!shippingPreview.actualWeightKg && (
@@ -1015,7 +1030,7 @@ export default function Q06CShipping() {
                 ))}
                 {isFabricByMeter ? (
                   <Text style={styles.slabGuideNote}>
-                    Final order weight scales by selected meters. Maximum checkout length is 20m, with a hard 20kg limit.
+                    Max checkout: 20m / 20kg.
                   </Text>
                 ) : null}
               </View>
@@ -1060,8 +1075,7 @@ export default function Q06CShipping() {
 
             {!!shippingPreview.inlandAmountPkr && (
               <Text style={styles.previewAmountText}>
-                Within Pakistan Estimated Courier
-                {isFabricByMeter ? " per meter" : " (avg distance)"}:{" "}
+                Pakistan Courier{isFabricByMeter ? " / m" : ""}:{" "}
                 <Text style={styles.costText}>
                   PKR {shippingPreview.inlandAmountPkr}
                 </Text>
@@ -1071,7 +1085,7 @@ export default function Q06CShipping() {
             {shippingPreview.exportAmounts.length ? (
               <>
                 <Text style={styles.previewHeadingText}>
-                  Export Estimated Courier:
+                  Export Courier:
                 </Text>
 
                 {shippingPreview.exportAmounts.map((item) => (
@@ -1125,23 +1139,23 @@ const styles = StyleSheet.create({
     width: "32%",
   },
   choiceStack: {
-    gap: 8,
-    marginTop: 10,
+    gap: 6,
+    marginTop: 8,
   },
   policyAmountBox: {
-    marginTop: 10,
-    gap: 6,
+    marginTop: 8,
+    gap: 4,
   },
   exportPolicyStack: {
-    gap: 10,
-    marginTop: 10,
+    gap: 8,
+    marginTop: 8,
   },
   regionPolicyBox: {
     borderWidth: 1,
     borderColor: apColors.borderSoft,
     borderRadius: 8,
     backgroundColor: apColors.bg,
-    padding: 10,
+    padding: 8,
   },
   regionTitle: {
     fontSize: 12,
@@ -1151,7 +1165,7 @@ const styles = StyleSheet.create({
   },
   consentText: {
     fontSize: 10,
-    lineHeight: 14,
+    lineHeight: 13,
     color: apColors.danger,
     fontWeight: "700",
   },
@@ -1163,13 +1177,13 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   preview: {
-    marginTop: 12,
-    padding: 10,
+    marginTop: 10,
+    padding: 8,
     borderWidth: 1,
     borderColor: "#BBF7D0",
     borderRadius: 8,
     backgroundColor: apColors.successSoft,
-    gap: 4,
+    gap: 3,
   },
   previewText: {
     fontSize: 10,

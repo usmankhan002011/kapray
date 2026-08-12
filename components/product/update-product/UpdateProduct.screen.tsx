@@ -72,6 +72,11 @@ import {
   type InlandDeliveryMode,
 } from "@/utils/kapray/deliveryPolicy";
 import {
+  formatFabricWidth,
+  normalizeFabricWidth,
+  normalizeFabricWidthFromSpec,
+} from "@/utils/kapray/fabricWidth";
+import {
   cleanNewMadeOrderVariantDraft,
   cleanNewReadyVariantDraft,
   clearProductTailoringSelections,
@@ -283,6 +288,7 @@ export default function UpdateProductScreen() {
   >("unstitched_per_meter");
   const [priceTotal, setPriceTotal] = useState<number>(0);
   const [pricePerMeter, setPricePerMeter] = useState<number>(0);
+  const [fabricWidthText, setFabricWidthText] = useState("");
   const [availableSizes, setAvailableSizes] = useState<string[]>([]);
 
   const [inlandDeliveryMode, setInlandDeliveryMode] =
@@ -672,6 +678,10 @@ export default function UpdateProductScreen() {
     setPriceMode(mode);
     setPriceTotal(safeNumOrZero(price?.cost_pkr_total));
     setPricePerMeter(safeNumOrZero(price?.cost_pkr_per_meter));
+    const selectedFabricWidth = normalizeFabricWidthFromSpec(spec);
+    setFabricWidthText(
+      selectedFabricWidth ? String(selectedFabricWidth.value) : "",
+    );
 
     setAvailableSizes(
       Array.isArray(price?.available_sizes)
@@ -1013,6 +1023,10 @@ export default function UpdateProductScreen() {
     () => validateDeliveryPolicy(editedDeliveryPolicy, vendorExportRegions),
     [editedDeliveryPolicy, vendorExportRegions],
   );
+  const fabricWidth = useMemo(
+    () => normalizeFabricWidth(fabricWidthText),
+    [fabricWidthText],
+  );
 
   const baseRequiredFieldsComplete = useMemo(() => {
     if (!vendorId) return false;
@@ -1022,6 +1036,7 @@ export default function UpdateProductScreen() {
     if (priceMode === "unstitched_per_meter") {
       const n = Number(pricePerMeter ?? 0);
       if (!Number.isFinite(n) || n <= 0) return false;
+      if (!fabricWidth) return false;
 
       if (dyeingEnabled) {
         const d = Number(dyeingCost ?? 0);
@@ -1059,6 +1074,7 @@ export default function UpdateProductScreen() {
     deliveryPolicyError,
     priceMode,
     pricePerMeter,
+    fabricWidth,
     priceTotal,
     dyeingEnabled,
     dyeingCost,
@@ -1215,7 +1231,12 @@ export default function UpdateProductScreen() {
     }
 
     if (deliveryPolicyError) {
-      Alert.alert("Courier charge missing", deliveryPolicyError);
+      Alert.alert("Missing courier charge", deliveryPolicyError);
+      return;
+    }
+
+    if (priceMode === "unstitched_per_meter" && !fabricWidth) {
+      Alert.alert("Missing fabric width", "Enter fabric width (Panna / عرض).");
       return;
     }
 
@@ -1452,6 +1473,9 @@ export default function UpdateProductScreen() {
           nextProductCategory === "unstitched_dyeing_tailoring"
             ? "dress_length"
             : "by_meter";
+        nextSpec.fabric_width = fabricWidth;
+        nextSpec.fabric_width_in = fabricWidth?.value ?? null;
+        nextSpec.fabric_width_label = formatFabricWidth(fabricWidth);
       } else {
         nextSpec.dyeing_enabled = false;
         nextSpec.dyeing_cost_pkr = 0;
@@ -1460,6 +1484,9 @@ export default function UpdateProductScreen() {
         nextSpec.tailoring_cost_pkr = 0;
         nextSpec.tailoring_turnaround_days = 0;
         nextSpec = clearProductTailoringSelections(nextSpec);
+        nextSpec.fabric_width = null;
+        nextSpec.fabric_width_in = null;
+        nextSpec.fabric_width_label = "";
       }
 
       if (priceMode === "stitched_total" && stitchedVariants.length > 0) {
@@ -2098,6 +2125,26 @@ export default function UpdateProductScreen() {
     }
   }
 
+  const usesPerMeterDelivery = priceMode === "unstitched_per_meter";
+  const deliverySectionSubtitle = usesPerMeterDelivery
+    ? "Courier is per meter and multiplies by purchased meters."
+    : "Vendor charge replaces app estimate.";
+  const inlandVendorChargeTitle = usesPerMeterDelivery
+    ? "My Pakistan delivery charge per meter"
+    : "My Pakistan delivery charge";
+  const inlandVendorChargeText = usesPerMeterDelivery
+    ? "Enter PKR per meter."
+    : "Enter one flat PKR charge.";
+  const exportVendorChargeTitle = usesPerMeterDelivery
+    ? "My courier charge per meter"
+    : "My courier charge";
+  const exportVendorChargeText = usesPerMeterDelivery
+    ? "Enter PKR per meter for this region."
+    : "Enter PKR for this region.";
+  const courierConsentText = usesPerMeterDelivery
+    ? `${VENDOR_COURIER_CONSENT_TEXT} Charged per meter.`
+    : VENDOR_COURIER_CONSENT_TEXT;
+
   return (
     <KeyboardAvoidingView
       style={styles.screen}
@@ -2493,6 +2540,18 @@ export default function UpdateProductScreen() {
                     maxLength={12}
                   />
 
+                  <Text style={styles.label}>Fabric width (Panna / عرض) *</Text>
+                  <FastNumberInput
+                    value={fabricWidthText}
+                    onChangeText={(t) => setFabricWidthText(sanitizeNumber(t))}
+                    placeholder="e.g., 44 in"
+                    placeholderTextColor={stylesVars.placeholder}
+                    style={styles.input}
+                    commitMode="change"
+                    keyboardType="decimal-pad"
+                    maxLength={6}
+                  />
+
                   <View
                     style={[
                       styles.serviceEditCard,
@@ -2674,7 +2733,7 @@ export default function UpdateProductScreen() {
         {selected ? (
           <UpdateProductSectionCard
             title="Delivery Policy"
-            subtitle="Vendor courier charges replace the app estimate for the selected destination."
+            subtitle={deliverySectionSubtitle}
           >
             <Text style={styles.label}>Within Pakistan</Text>
             <View style={styles.deliveryChoiceStack}>
@@ -2699,7 +2758,9 @@ export default function UpdateProductScreen() {
                   App calculated
                 </Text>
                 <Text style={styles.deliveryChoiceText}>
-                  Use the app courier estimate from weight and package rules.
+                  {usesPerMeterDelivery
+                    ? "Uses kg/m; multiplied at checkout."
+                    : "Use app courier estimate."}
                 </Text>
               </Pressable>
 
@@ -2724,7 +2785,7 @@ export default function UpdateProductScreen() {
                   Free within Pakistan
                 </Text>
                 <Text style={styles.deliveryChoiceText}>
-                  Buyer pays no domestic delivery charge for this product.
+                  No Pakistan delivery charge.
                 </Text>
               </Pressable>
 
@@ -2746,10 +2807,10 @@ export default function UpdateProductScreen() {
                       : null,
                   ]}
                 >
-                  My Pakistan delivery charge
+                  {inlandVendorChargeTitle}
                 </Text>
                 <Text style={styles.deliveryChoiceText}>
-                  One flat domestic courier charge for this product.
+                  {inlandVendorChargeText}
                 </Text>
               </Pressable>
             </View>
@@ -2759,7 +2820,11 @@ export default function UpdateProductScreen() {
                 <FastNumberInput
                   value={inlandDeliveryAmountText}
                   onChangeText={setInlandDeliveryAmountText}
-                  placeholder="Amount in PKR"
+                  placeholder={
+                    usesPerMeterDelivery
+                      ? "PKR per meter"
+                      : "PKR total"
+                  }
                   placeholderTextColor={stylesVars.placeholder}
                   style={styles.input}
                   commitMode="change"
@@ -2767,7 +2832,7 @@ export default function UpdateProductScreen() {
                   maxLength={8}
                 />
                 <Text style={styles.deliveryConsentText}>
-                  {VENDOR_COURIER_CONSENT_TEXT}
+                  {courierConsentText}
                 </Text>
               </View>
             ) : null}
@@ -2809,7 +2874,9 @@ export default function UpdateProductScreen() {
                             App calculated
                           </Text>
                           <Text style={styles.deliveryChoiceText}>
-                            Use app courier estimate for this region.
+                            {usesPerMeterDelivery
+                              ? "Uses kg/m for this region."
+                              : "Use app courier estimate."}
                           </Text>
                         </Pressable>
 
@@ -2836,10 +2903,10 @@ export default function UpdateProductScreen() {
                                 : null,
                             ]}
                           >
-                            My courier charge
+                            {exportVendorChargeTitle}
                           </Text>
                           <Text style={styles.deliveryChoiceText}>
-                            Enter your courier charge for {region}.
+                            {exportVendorChargeText}
                           </Text>
                         </Pressable>
                       </View>
@@ -2854,7 +2921,11 @@ export default function UpdateProductScreen() {
                                 [region]: next,
                               }))
                             }
-                            placeholder={`Amount for ${region} in PKR`}
+                            placeholder={
+                              usesPerMeterDelivery
+                                ? `PKR/m for ${region}`
+                                : `PKR for ${region}`
+                            }
                             placeholderTextColor={stylesVars.placeholder}
                             style={styles.input}
                             commitMode="change"
@@ -2862,7 +2933,7 @@ export default function UpdateProductScreen() {
                             maxLength={8}
                           />
                           <Text style={styles.deliveryConsentText}>
-                            {VENDOR_COURIER_CONSENT_TEXT}
+                            {courierConsentText}
                           </Text>
                         </View>
                       ) : null}
@@ -2872,7 +2943,7 @@ export default function UpdateProductScreen() {
               </View>
             ) : (
               <Text style={styles.hint}>
-                No export regions are selected in shop profile. Add regions in Edit Shop to set export courier charges.
+                No export regions selected. Add them in Edit Shop.
               </Text>
             )}
           </UpdateProductSectionCard>

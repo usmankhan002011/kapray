@@ -39,7 +39,7 @@ export type DeliveryPricingSource =
   | DeliveryPricingOverride["source"];
 
 export const VENDOR_COURIER_CONSENT_TEXT =
-  "Your entered courier charge will replace the app-calculated courier estimate for this destination.";
+  "Replaces app estimate.";
 
 export const DEFAULT_METER_SHIPPING: MeterShippingPolicy = {
   calculation_mode: "actual_weight_only",
@@ -57,6 +57,15 @@ export const DEFAULT_DELIVERY_POLICY: DeliveryPolicy = {
   export_regions: {},
   meter_shipping: DEFAULT_METER_SHIPPING,
 };
+
+export function isUnstitchedDeliveryCategory(value: unknown) {
+  const key = cleanString(value).toLowerCase();
+  return (
+    key === "unstitched_plain" ||
+    key === "unstitched_dyeing" ||
+    key === "unstitched_dyeing_tailoring"
+  );
+}
 
 function asObject(value: unknown): Record<string, any> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -237,7 +246,7 @@ export function resolveDeliveryPolicyOverride(args: {
       return {
         amountPkr: 0,
         source: "free_inland",
-        label: "Free delivery within Pakistan",
+        label: "Free in Pakistan",
       };
     }
 
@@ -248,7 +257,7 @@ export function resolveDeliveryPolicyOverride(args: {
       return {
         amountPkr: policy.inland.amount_pkr ?? 0,
         source: "vendor_flat_inland",
-        label: `Vendor Pakistan courier charge PKR ${policy.inland.amount_pkr}`,
+        label: `Pakistan courier PKR ${policy.inland.amount_pkr}`,
       };
     }
 
@@ -266,7 +275,7 @@ export function resolveDeliveryPolicyOverride(args: {
     return {
       amountPkr: exportPolicy.amount_pkr ?? 0,
       source: "vendor_flat_export",
-      label: `Vendor ${region} courier charge PKR ${exportPolicy.amount_pkr}`,
+      label: `${region} courier PKR ${exportPolicy.amount_pkr}`,
     };
   }
 
@@ -287,13 +296,13 @@ export function validateDeliveryPolicy(
     policy.inland.mode === "vendor_flat" &&
     !(Number(policy.inland.amount_pkr) > 0)
   ) {
-    return "Enter a valid Pakistan courier charge.";
+    return "Enter Pakistan courier charge.";
   }
 
   for (const region of allowedRegions) {
     const row = policy.export_regions[region];
     if (row?.mode === "vendor_flat" && !(Number(row.amount_pkr) > 0)) {
-      return `Enter a valid courier charge for ${region}.`;
+      return `Enter courier charge for ${region}.`;
     }
   }
 
@@ -303,6 +312,7 @@ export function validateDeliveryPolicy(
 export function getDeliveryPolicySummary(
   value: unknown,
   allowedExportRegions?: unknown,
+  options?: { perMeter?: boolean },
 ): string[] {
   const policy = normalizeDeliveryPolicy(value, allowedExportRegions);
   const allowedRegions =
@@ -310,19 +320,21 @@ export function getDeliveryPolicySummary(
       ? EXPORT_REGIONS
       : normalizeExportRegionList(allowedExportRegions);
   const rows: string[] = [];
+  const unit = options?.perMeter ? "/m" : "";
+  const appUnit = options?.perMeter ? " per meter" : "";
 
   if (policy.inland.mode === "free") {
-    rows.push("Within Pakistan: free delivery");
+    rows.push("Pakistan: free");
   } else if (policy.inland.mode === "vendor_flat") {
     rows.push(
-      `Within Pakistan: vendor courier charge PKR ${policy.inland.amount_pkr ?? 0}`,
+      `Pakistan: PKR ${policy.inland.amount_pkr ?? 0}${unit}`,
     );
   } else {
-    rows.push("Within Pakistan: app-calculated courier");
+    rows.push(`Pakistan: app courier${appUnit}`);
   }
 
   if (!allowedRegions.length) {
-    rows.push("Export: no shop export regions selected");
+    rows.push("Export: no regions");
     return rows;
   }
 
@@ -330,8 +342,8 @@ export function getDeliveryPolicySummary(
     const row = policy.export_regions[region];
     rows.push(
       row?.mode === "vendor_flat"
-        ? `${region}: vendor courier charge PKR ${row.amount_pkr ?? 0}`
-        : `${region}: app-calculated courier`,
+        ? `${region}: PKR ${row.amount_pkr ?? 0}${unit}`
+        : `${region}: app courier${appUnit}`,
     );
   }
 

@@ -47,8 +47,10 @@ import {
 } from "@/app/vendor/profile/(product-modals)/dyeing/dye_palette_modal";
 import {
   encodeDeliveryPolicyParam,
+  isUnstitchedDeliveryCategory,
   normalizeDeliveryPolicy,
 } from "@/utils/kapray/deliveryPolicy";
+import { formatFabricWidthFromSpec } from "@/utils/kapray/fabricWidth";
 
 const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
@@ -1365,12 +1367,28 @@ export default function ViewProductScreen() {
     productCategory === "unstitched_dyeing" ||
     productCategory === "unstitched_dyeing_tailoring";
 
-  const isFabricByMeterPurchase = useMemo(() => {
-    return (
-      productCategory === "unstitched_plain" ||
-      productCategory === "unstitched_dyeing"
-    );
-  }, [productCategory]);
+  const usesFabricWeightShipping = useMemo(
+    () => isUnstitchedDeliveryCategory(productCategory),
+    [productCategory],
+  );
+
+  const fabricPurchaseMode = useMemo(() => {
+    if (!isUnstitched) return "";
+
+    const spec = (product as any)?.spec ?? {};
+    const mode = String(spec?.fabric_purchase_mode ?? "").trim();
+    if (mode === "by_meter" || mode === "dress_length") return mode;
+
+    return productCategory === "unstitched_dyeing_tailoring"
+      ? "dress_length"
+      : "by_meter";
+  }, [isUnstitched, product, productCategory]);
+
+  const isFabricByMeterPurchase = fabricPurchaseMode === "by_meter";
+  const fabricWidthLabel = useMemo(
+    () => formatFabricWidthFromSpec((product as any)?.spec),
+    [product],
+  );
 
   const showDyeing = useMemo(() => {
     if (!product || !isUnstitched) return false;
@@ -1515,18 +1533,25 @@ export default function ViewProductScreen() {
     vendorOffersTailoring,
   ]);
 
+  const weightPerMeterKg = useMemo(() => {
+    const spec = (product as any)?.spec ?? {};
+    const price = (product as any)?.price ?? {};
+
+    return (
+      safePositiveNumber(spec?.weight_per_meter_kg) ||
+      safePositiveNumber(price?.weight_per_meter_kg) ||
+      0
+    );
+  }, [product]);
+
   const shippingWeightKg = useMemo(() => {
     const spec = (product as any)?.spec ?? {};
     const price = (product as any)?.price ?? {};
-    const isByMeter =
-      productCategory === "unstitched_plain" ||
-      productCategory === "unstitched_dyeing";
 
-    if (isByMeter) {
+    if (usesFabricWeightShipping) {
       return (
-        safePositiveNumber(spec?.weight_per_meter_kg) ||
+        weightPerMeterKg ||
         safePositiveNumber(spec?.weight_kg) ||
-        safePositiveNumber(price?.weight_per_meter_kg) ||
         0
       );
     }
@@ -1537,7 +1562,7 @@ export default function ViewProductScreen() {
       safePositiveNumber(price?.weight_kg) ||
       0
     );
-  }, [product, productCategory]);
+  }, [product, usesFabricWeightShipping, weightPerMeterKg]);
 
   const packageCm = useMemo(() => {
     const spec = (product as any)?.spec ?? {};
@@ -1768,9 +1793,11 @@ export default function ViewProductScreen() {
           isUnstitched && Number((product as any)?.inventory_qty ?? 0) > 0
             ? String((product as any)?.inventory_qty ?? "")
             : "",
-        fabric_purchase_mode: isFabricByMeterPurchase
-          ? "by_meter"
-          : "dress_length",
+        fabric_purchase_mode: isUnstitched ? fabricPurchaseMode : "",
+        fabric_width_label:
+          isUnstitched && fabricWidthLabel
+            ? encodeURIComponent(fabricWidthLabel)
+            : "",
         stitched_total_pkr:
           !isUnstitched && stitchedTotalPkr > 0 ? String(stitchedTotalPkr) : "",
 
@@ -1975,15 +2002,17 @@ export default function ViewProductScreen() {
         ),
 
         weight_kg:
-          !isFabricByMeterPurchase && shippingWeightKg > 0
+          (!usesFabricWeightShipping ||
+            (usesFabricWeightShipping && weightPerMeterKg <= 0)) &&
+          shippingWeightKg > 0
             ? String(shippingWeightKg)
             : "",
         weight_per_meter_kg:
-          isFabricByMeterPurchase && shippingWeightKg > 0
-            ? String(shippingWeightKg)
+          usesFabricWeightShipping && weightPerMeterKg > 0
+            ? String(weightPerMeterKg)
             : "",
         package_cm:
-          !isFabricByMeterPurchase && packageCm ? encodeJsonParam(packageCm) : "",
+          !usesFabricWeightShipping && packageCm ? encodeJsonParam(packageCm) : "",
       },
     });
   }, [
@@ -1993,6 +2022,8 @@ export default function ViewProductScreen() {
     hasAnySizeLengthMap,
     hasMultipleTailoringStylePresets,
     imageUrls,
+    fabricPurchaseMode,
+    fabricWidthLabel,
     isFabricByMeterPurchase,
     isMadeOnOrder,
     isStitchedReady,
@@ -2019,6 +2050,8 @@ export default function ViewProductScreen() {
     tailoringTurnaroundDays,
     vendorExportRegions,
     vendorExportsEnabled,
+    usesFabricWeightShipping,
+    weightPerMeterKg,
   ]);
 
   const onViewVendorProfile = useCallback(() => {
@@ -2094,6 +2127,10 @@ export default function ViewProductScreen() {
   }, [inventoryText]);
 
   const priceLine = useMemo(() => compactLineValue(priceText), [priceText]);
+  const fabricWidthLine = useMemo(() => {
+    if (!isUnstitched) return null;
+    return compactLineValue(fabricWidthLabel);
+  }, [fabricWidthLabel, isUnstitched]);
 
   const sizesLine = useMemo(() => {
     if (isFabricByMeterPurchase) return null;
@@ -2204,6 +2241,7 @@ export default function ViewProductScreen() {
           {!isStitchedReady && usePlainReadOnlySummary ? (
             <View style={styles.dataGroup}>
               <DataItem label="Price" value={priceLine} />
+              <DataItem label="Panna / عرض" value={fabricWidthLine} />
               <DataItem label="Sizes" value={sizesLine} />
               <DataItem label="Stock" value={inventoryLine} />
             </View>
@@ -2212,6 +2250,7 @@ export default function ViewProductScreen() {
           {!isStitchedReady && !usePlainReadOnlySummary ? (
             <View style={styles.summaryGrid}>
               <SummaryItem label="Price" value={priceLine} />
+              <SummaryItem label="Panna / عرض" value={fabricWidthLine} />
               <SummaryItem label="Sizes" value={sizesLine} />
               <SummaryItem label="Stock" value={inventoryLine} />
             </View>

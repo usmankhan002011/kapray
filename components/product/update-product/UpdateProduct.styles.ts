@@ -383,8 +383,8 @@ export const styles = StyleSheet.create({
   },
 
   deliveryChoiceStack: {
-    marginTop: 8,
-    gap: 8,
+    marginTop: 6,
+    gap: 6,
   },
 
   deliveryChoice: {
@@ -392,8 +392,8 @@ export const styles = StyleSheet.create({
     borderColor: stylesVars.borderSoft,
     borderRadius: apRadii.control,
     backgroundColor: stylesVars.white,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
 
   deliveryChoiceOn: {
@@ -415,32 +415,32 @@ export const styles = StyleSheet.create({
   },
 
   deliveryChoiceText: {
-    marginTop: 2,
+    marginTop: 1,
     fontFamily: apFontFamily,
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 11,
+    lineHeight: 15,
     fontWeight: "500",
     color: stylesVars.mutedText,
     letterSpacing: 0,
   },
 
   deliveryAmountBox: {
-    marginTop: 10,
+    marginTop: 8,
   },
 
   deliveryConsentText: {
-    marginTop: 6,
+    marginTop: 4,
     fontFamily: apFontFamily,
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 11,
+    lineHeight: 15,
     fontWeight: "700",
     color: stylesVars.danger,
     letterSpacing: 0,
   },
 
   exportPolicyStack: {
-    marginTop: 8,
-    gap: 10,
+    marginTop: 6,
+    gap: 8,
   },
 
   exportPolicyBox: {
@@ -448,7 +448,7 @@ export const styles = StyleSheet.create({
     borderColor: stylesVars.border,
     borderRadius: apRadii.card,
     backgroundColor: "#F8FAFC",
-    padding: 12,
+    padding: 10,
   },
 
   exportPolicyTitle: {

@@ -29,9 +29,11 @@ import { EXPORT_REGIONS } from "@/data/kapray/exportRegions";
 import type { ExportRegion } from "@/data/kapray/productTypes";
 import {
   getDeliveryPolicySummary,
+  isUnstitchedDeliveryCategory,
   normalizeDeliveryPolicy,
   normalizeExportRegionList,
 } from "@/utils/kapray/deliveryPolicy";
+import { formatFabricWidthFromSpec } from "@/utils/kapray/fabricWidth";
 import {
   apColors,
   apFontFamily,
@@ -584,8 +586,7 @@ export default function AddProductReviewScreen() {
   const needsDyeing =
     cat === "unstitched_dyeing" || cat === "unstitched_dyeing_tailoring";
   const needsTailoring = cat === "unstitched_dyeing_tailoring";
-  const isFabricByMeter =
-    cat === "unstitched_plain" || cat === "unstitched_dyeing";
+  const isFabricByMeter = isUnstitchedDeliveryCategory(cat);
 
   const hasReadyVariants =
     isStitched &&
@@ -662,6 +663,10 @@ export default function AddProductReviewScreen() {
   const sizeLengthMap = (draft.spec as any)?.size_length_m as
     | SizeLengthMap
     | undefined;
+  const fabricWidthLabel = useMemo(
+    () => formatFabricWidthFromSpec(draft.spec),
+    [draft.spec],
+  );
 
   const weightKg = safeNum(
     isFabricByMeter
@@ -676,8 +681,11 @@ export default function AddProductReviewScreen() {
     [draft.spec, vendorExportRegions],
   );
   const deliveryPolicyRows = useMemo(
-    () => getDeliveryPolicySummary(deliveryPolicy, vendorExportRegions),
-    [deliveryPolicy, vendorExportRegions],
+    () =>
+      getDeliveryPolicySummary(deliveryPolicy, vendorExportRegions, {
+        perMeter: isFabricByMeter,
+      }),
+    [deliveryPolicy, isFabricByMeter, vendorExportRegions],
   );
 
   const moreDescription = safeStr((draft.spec as any)?.more_description ?? "");
@@ -1173,22 +1181,43 @@ export default function AddProductReviewScreen() {
             </Pressable>
 
             {isUnstitched ? (
-              <Pressable
-                onPress={() =>
-                  goEdit(
-                    "/vendor/profile/add-product/q05c-unstitched-fabric-length",
-                  )
-                }
-                style={({ pressed }) => [
-                  styles.rowBtn,
-                  pressed ? styles.pressed : null,
-                ]}
-              >
-                <Text style={styles.rowTitle}>Fabric length by size</Text>
-                <Text style={styles.rowValue}>
-                  {formatSizeLengthMap(sizeLengthMap)}
-                </Text>
-              </Pressable>
+              <>
+                <Pressable
+                  onPress={() =>
+                    goEdit(
+                      "/vendor/profile/add-product/q05c-unstitched-fabric-length",
+                    )
+                  }
+                  style={({ pressed }) => [
+                    styles.rowBtn,
+                    pressed ? styles.pressed : null,
+                  ]}
+                >
+                  <Text style={styles.rowTitle}>
+                    Fabric width (Panna / عرض) *
+                  </Text>
+                  <Text style={styles.rowValue}>
+                    {fabricWidthLabel || "Not set"}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() =>
+                    goEdit(
+                      "/vendor/profile/add-product/q05c-unstitched-fabric-length",
+                    )
+                  }
+                  style={({ pressed }) => [
+                    styles.rowBtn,
+                    pressed ? styles.pressed : null,
+                  ]}
+                >
+                  <Text style={styles.rowTitle}>Fabric length by size</Text>
+                  <Text style={styles.rowValue}>
+                    {formatSizeLengthMap(sizeLengthMap)}
+                  </Text>
+                </Pressable>
+              </>
             ) : null}
 
             <Pressable
@@ -1295,20 +1324,18 @@ export default function AddProductReviewScreen() {
           </Text>
         </Pressable>
 
-        <Pressable
-          onPress={() => goEdit("/vendor/profile/add-product/q06c-shipping")}
-          style={({ pressed }) => [
-            styles.rowBtn,
-            pressed ? styles.pressed : null,
-          ]}
-        >
-          <Text style={styles.rowTitle}>
-            {isFabricByMeter
-              ? "Package dimensions (not used for meter checkout)"
-              : "Package dimensions"}
-          </Text>
-          <Text style={styles.rowValue}>{packageDimensions}</Text>
-        </Pressable>
+        {!isFabricByMeter ? (
+          <Pressable
+            onPress={() => goEdit("/vendor/profile/add-product/q06c-shipping")}
+            style={({ pressed }) => [
+              styles.rowBtn,
+              pressed ? styles.pressed : null,
+            ]}
+          >
+            <Text style={styles.rowTitle}>Package dimensions</Text>
+            <Text style={styles.rowValue}>{packageDimensions}</Text>
+          </Pressable>
+        ) : null}
 
         <Pressable
           onPress={() => goEdit("/vendor/profile/add-product/q06c-shipping")}
