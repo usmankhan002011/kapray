@@ -41,8 +41,15 @@ export type ProductDraft = {
   media: ProductDraftMedia;
 };
 
+export type ProductDraftResetReason =
+  | "manual"
+  | "start-new-product"
+  | "saved-product";
+
 type ProductDraftContextValue = {
   draft: ProductDraft;
+  draftSessionId: number;
+  draftResetReason: ProductDraftResetReason;
 
   setTitle: (title: string) => void;
   setInventoryQty: (qty: number) => void;
@@ -76,7 +83,7 @@ type ProductDraftContextValue = {
     next: ProductDraft | ((prev: ProductDraft) => ProductDraft)
   ) => void;
 
-  resetDraft: () => void;
+  resetDraft: (reason?: ProductDraftResetReason) => void;
 };
 
 function createDefaultDraft(): ProductDraft {
@@ -115,6 +122,9 @@ export function ProductDraftProvider({
   children: React.ReactNode;
 }) {
   const [draft, _setDraft] = useState<ProductDraft>(() => createDefaultDraft());
+  const [draftSessionId, setDraftSessionId] = useState(0);
+  const [draftResetReason, setDraftResetReason] =
+    useState<ProductDraftResetReason>("manual");
 
   const setDraft = useCallback(
     (next: ProductDraft | ((prev: ProductDraft) => ProductDraft)) => {
@@ -123,8 +133,10 @@ export function ProductDraftProvider({
     []
   );
 
-  const resetDraft = useCallback(() => {
+  const resetDraft = useCallback((reason: ProductDraftResetReason = "manual") => {
     _setDraft(createDefaultDraft());
+    setDraftResetReason(reason);
+    setDraftSessionId((value) => value + 1);
   }, []);
 
   const setTitle = useCallback((title: string) => {
@@ -273,6 +285,8 @@ export function ProductDraftProvider({
   const value = useMemo<ProductDraftContextValue>(
     () => ({
       draft,
+      draftSessionId,
+      draftResetReason,
 
       setTitle,
       setInventoryQty,
@@ -298,6 +312,8 @@ export function ProductDraftProvider({
     }),
     [
       draft,
+      draftSessionId,
+      draftResetReason,
       setTitle,
       setInventoryQty,
       setPriceMode,

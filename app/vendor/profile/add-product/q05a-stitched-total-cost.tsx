@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from "react";
 import {
   Alert,
+  StyleSheet,
   Text,
   type TextInput,
   View,
@@ -15,11 +16,8 @@ import {
   AddProductScreen,
 } from "@/components/product/add-product/AddProductWizard";
 
-function sanitizeNumber(input: string) {
-  const cleaned = input.replace(/[^\d.]/g, "");
-  const parts = cleaned.split(".");
-  if (parts.length <= 1) return cleaned;
-  return `${parts[0]}.${parts.slice(1).join("")}`;
+function sanitizeCost(input: string) {
+  return input.replace(/\D/g, "");
 }
 
 function safeInt(v: any) {
@@ -52,13 +50,13 @@ export default function Q05AStitchedTotalCost() {
 
   const canContinue = useMemo(() => {
     if (!vendorId) return false;
-    const n = Number(text);
+    const n = Number(sanitizeCost(text));
     return Number.isFinite(n) && n > 0;
   }, [vendorId, text]);
   const disabledHint = !vendorId
     ? "Vendor not loaded."
     : !canContinue
-      ? "Enter the stitched product base cost."
+      ? "Enter the product cost."
       : "";
 
   function patchPrice(patch: any) {
@@ -96,9 +94,9 @@ export default function Q05AStitchedTotalCost() {
       return;
     }
 
-    const n = Number(sanitizeNumber(text) || "0");
+    const n = Number(sanitizeCost(text) || "0");
     if (!Number.isFinite(n) || n <= 0) {
-      Alert.alert("Invalid cost", "Please enter a valid total cost (PKR).");
+      Alert.alert("Invalid cost", "Please enter a valid cost (PKR).");
       return;
     }
 
@@ -125,7 +123,7 @@ export default function Q05AStitchedTotalCost() {
 
   return (
     <AddProductScreen
-      title="Total cost"
+      title="Cost"
       onBack={() => router.back()}
       footer={
         <AddProductFooter
@@ -136,21 +134,29 @@ export default function Q05AStitchedTotalCost() {
       }
     >
       <View style={apStyles.card}>
-        <Text style={apStyles.label}>Total cost (PKR) *</Text>
+        <Text style={apStyles.label}>Cost (PKR) *</Text>
 
-          <FastNumberInput
-            ref={inputRef}
-            value={text}
-            onChangeText={setText}
-            placeholder="e.g., 25000"
-            placeholderTextColor={apColors.muted}
-            style={apStyles.input}
-            keyboardType="decimal-pad"
-            maxLength={12}
-            returnKeyType="done"
-          />
-
+        <FastNumberInput
+          ref={inputRef}
+          value={text}
+          onChangeText={setText}
+          sanitize={sanitizeCost}
+          placeholder="e.g., 25000"
+          placeholderTextColor={apColors.muted}
+          style={[apStyles.input, styles.costInput]}
+          keyboardType="number-pad"
+          maxLength={12}
+          returnKeyType="done"
+          commitMode="change"
+          commitDelayMs={0}
+        />
       </View>
     </AddProductScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  costInput: {
+    color: apColors.danger,
+  },
+});

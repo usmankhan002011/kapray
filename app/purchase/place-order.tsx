@@ -23,6 +23,15 @@ import {
 } from "@/components/product/addProductStyles";
 import { supabase } from "@/utils/supabase/client";
 import { getDeliveryCost } from "@/utils/kapray/delivery";
+import {
+  decodeDeliveryPolicyParam,
+  encodeDeliveryPolicyParam,
+  isUnstitchedDeliveryCategory,
+  normalizeDeliveryPolicy,
+  resolveDeliveryPolicyOverride,
+  type DeliveryPolicy,
+  type DeliveryPricingSource,
+} from "@/utils/kapray/deliveryPolicy";
 import DyePaletteReferenceButton from "@/components/product/DyePaletteReferenceButton";
 import ExactMeasurementsModal from "../(tabs)/flow/purchase/exact-measurements-modal";
 import type { ExactMeasurementSheetRow } from "../(tabs)/flow/purchase/exact-measurements-sheet";
@@ -140,6 +149,7 @@ type Params = {
 
   exports_enabled?: string;
   export_regions?: string;
+  delivery_policy?: string;
   weight_kg?: string;
   weight_per_meter_kg?: string;
   package_cm?: string;
@@ -183,6 +193,7 @@ type ProductRow = {
   id: string | number;
   product_code?: string | null;
   title?: string | null;
+  spec?: any;
   price?: any;
   media?: any;
   vendor_id?: string | number | null;
@@ -463,28 +474,95 @@ function buildFullAddress(args: {
   return [address, cityLine, country].filter(Boolean).join(", ");
 }
 
-function computeDeliveryCostSafe(args: {
+function computeDeliveryQuoteSafe(args: {
   destinationType: "inland" | "export";
   city: string;
   exportRegion: string;
   weightKg: number;
+  weightPerMeterKg?: number;
+  fabricLengthM?: number;
   packageCm?: Record<string, unknown> | null;
+  deliveryPolicy: DeliveryPolicy;
+  isMeterPurchase: boolean;
 }) {
-  const { destinationType, city, exportRegion, weightKg, packageCm } = args;
-  if (weightKg <= 0) return 0;
+  const {
+    destinationType,
+    city,
+    exportRegion,
+    weightKg,
+    weightPerMeterKg = 0,
+    fabricLengthM = 0,
+    packageCm,
+    deliveryPolicy,
+    isMeterPurchase,
+  } = args;
+  const meterMultiplier =
+    isMeterPurchase && fabricLengthM > 0 ? fabricLengthM : 0;
+  const usesPerMeterDelivery = meterMultiplier > 0;
+  const meterText = String(Math.round(meterMultiplier * 100) / 100);
+
+  const override = resolveDeliveryPolicyOverride({
+    policy: deliveryPolicy,
+    destinationType,
+    exportRegion,
+  });
+
+  if (override) {
+    if (override.source !== "free_inland" && usesPerMeterDelivery) {
+      return {
+        amountPkr: Math.round(override.amountPkr * meterMultiplier),
+        source: override.source as DeliveryPricingSource,
+        label: `${override.label}/m x ${meterText}m`,
+      };
+    }
+
+    return {
+      amountPkr: override.amountPkr,
+      source: override.source as DeliveryPricingSource,
+      label: override.label,
+    };
+  }
+
+  const ratedWeightKg =
+    usesPerMeterDelivery && weightPerMeterKg > 0 ? weightPerMeterKg : weightKg;
+
+  if (ratedWeightKg <= 0) {
+    return {
+      amountPkr: 0,
+      source: "app_calculated" as DeliveryPricingSource,
+      label: "Weight unavailable.",
+    };
+  }
 
   try {
     const raw = getDeliveryCost({
-      weightKg,
-      packageCm: packageCm ?? undefined,
+      weightKg: ratedWeightKg,
+      packageCm: isMeterPurchase ? undefined : packageCm ?? undefined,
       scope: destinationType === "export" ? "international" : "inland",
       regionOrCity: destinationType === "export" ? exportRegion : city,
     } as any);
 
     const n = Number(raw);
-    return Number.isFinite(n) && n > 0 ? n : 0;
+    const unitAmountPkr = Number.isFinite(n) && n > 0 ? n : 0;
+    if (usesPerMeterDelivery && weightPerMeterKg > 0) {
+      return {
+        amountPkr: Math.round(unitAmountPkr * meterMultiplier),
+        source: "app_calculated" as DeliveryPricingSource,
+        label: `App courier PKR ${Math.round(unitAmountPkr)}/m x ${meterText}m`,
+      };
+    }
+
+    return {
+      amountPkr: unitAmountPkr,
+      source: "app_calculated" as DeliveryPricingSource,
+      label: "App courier",
+    };
   } catch {
-    return 0;
+    return {
+      amountPkr: 0,
+      source: "app_calculated" as DeliveryPricingSource,
+      label: "Shipping unavailable.",
+    };
   }
 }
 
@@ -615,6 +693,12 @@ export default function PlaceOrderScreen() {
       safeDecode(params.selected_fabric_length_m),
     );
     const fabricCostPkr = safePositiveNumber(params.fabric_cost_pkr);
+    const weightPerMeterKg = safePositiveNumber(params.weight_per_meter_kg);
+    const routeWeightKg = safePositiveNumber(params.weight_kg);
+    const derivedFabricWeightKg =
+      selectedFabricLengthM > 0 && weightPerMeterKg > 0
+        ? Math.round(selectedFabricLengthM * weightPerMeterKg * 100) / 100
+        : 0;
 
     const measurements = {
       m1: norm(params.m1),
@@ -816,6 +900,15 @@ export default function PlaceOrderScreen() {
     const dyeingSplitCostPkr = Math.round(
       dyeingSplits.reduce((sum, row) => sum + row.dyeing_cost_pkr, 0),
     );
+    const exportRegionsParam = safeJsonDecode<string[]>(
+      params.export_regions,
+      [],
+    );
+    const hasDeliveryPolicyParam = Boolean(norm(params.delivery_policy));
+    const deliveryPolicy = decodeDeliveryPolicyParam(
+      params.delivery_policy,
+      exportRegionsParam,
+    );
 
     return {
       productId,
@@ -887,8 +980,11 @@ export default function PlaceOrderScreen() {
       styleExtraCostPkr,
 
       exportsEnabledParam: parseBoolParam(params.exports_enabled),
-      exportRegionsParam: safeJsonDecode<string[]>(params.export_regions, []),
-      weightKg: safePositiveNumber(params.weight_kg),
+      exportRegionsParam,
+      hasDeliveryPolicyParam,
+      deliveryPolicy,
+      weightKg: derivedFabricWeightKg || routeWeightKg,
+      weightPerMeterKg,
       packageCm: safeJsonDecode<Record<string, unknown> | null>(
         params.package_cm,
         null,
@@ -968,6 +1064,7 @@ export default function PlaceOrderScreen() {
           vendor_id,
           product_code,
           title,
+          spec,
           price,
           media,
           vendor:vendor_id (
@@ -1048,15 +1145,18 @@ export default function PlaceOrderScreen() {
       : ((vendor?.export_regions as unknown[] | null | undefined) ??
         (vJoin as any)?.export_regions ??
         []);
+    const deliveryPolicy = base.hasDeliveryPolicyParam
+      ? normalizeDeliveryPolicy(base.deliveryPolicy, exportRegions)
+      : normalizeDeliveryPolicy((fp as any)?.spec?.delivery_policy, exportRegions);
 
-    const isUnstitched =
-      base.productCategory === "unstitched_plain" ||
-      base.productCategory === "unstitched_dyeing" ||
-      base.productCategory === "unstitched_dyeing_tailoring";
+    const isUnstitched = isUnstitchedDeliveryCategory(base.productCategory);
     const isFabricByMeterPurchase =
       base.productCategory === "unstitched_plain" ||
       base.productCategory === "unstitched_dyeing" ||
       base.mode === "meter";
+    const usesFabricWeightShipping =
+      isUnstitched ||
+      (base.selectedFabricLengthM > 0 && base.weightPerMeterKg > 0);
 
     const categoryKey = base.productCategory.toLowerCase();
     const hasSelectedStitchedVariant = Boolean(
@@ -1121,8 +1221,10 @@ export default function PlaceOrderScreen() {
       vendorAddress,
       exportsEnabled,
       exportRegions,
+      deliveryPolicy,
       isUnstitched,
       isFabricByMeterPurchase,
+      usesFabricWeightShipping,
       isReadyToWearStitched,
       isMadeOrderStitched,
       shouldShowSelectedStitchedVariant,
@@ -1259,15 +1361,30 @@ export default function PlaceOrderScreen() {
     });
   }, [deliveryAddress, city, postalCode, country, destinationType]);
 
-  const deliveryCostPkr = useMemo(() => {
-    return computeDeliveryCostSafe({
+  const deliveryQuote = useMemo(() => {
+    return computeDeliveryQuoteSafe({
       destinationType,
       city: city.trim(),
       exportRegion: exportRegion.trim(),
       weightKg: base.weightKg,
+      weightPerMeterKg: base.weightPerMeterKg,
+      fabricLengthM: base.selectedFabricLengthM,
       packageCm: base.packageCm,
+      deliveryPolicy: resolved.deliveryPolicy,
+      isMeterPurchase: resolved.usesFabricWeightShipping,
     });
-  }, [base.packageCm, base.weightKg, city, destinationType, exportRegion]);
+  }, [
+    base.packageCm,
+    base.selectedFabricLengthM,
+    base.weightKg,
+    base.weightPerMeterKg,
+    city,
+    destinationType,
+    exportRegion,
+    resolved.deliveryPolicy,
+    resolved.usesFabricWeightShipping,
+  ]);
+  const deliveryCostPkr = deliveryQuote.amountPkr;
 
   const subtotalBeforeDeliveryPkr = useMemo(() => {
     return Math.round(
@@ -1290,7 +1407,8 @@ export default function PlaceOrderScreen() {
   }, [subtotalBeforeDeliveryPkr, deliveryCostPkr]);
 
   const courierSummary = useMemo(() => {
-    if (!base.weightKg) return "Shipping weight unavailable.";
+    if (deliveryQuote.source !== "app_calculated") return deliveryQuote.label;
+    if (!base.weightKg) return "Weight unavailable.";
     if (destinationType === "export") {
       if (!exportRegion.trim()) return "Select export region.";
       return deliveryCostPkr > 0
@@ -1305,6 +1423,8 @@ export default function PlaceOrderScreen() {
     base.weightKg,
     city,
     deliveryCostPkr,
+    deliveryQuote.label,
+    deliveryQuote.source,
     destinationType,
     exportRegion,
     base.currency,
@@ -1446,6 +1566,15 @@ export default function PlaceOrderScreen() {
 
         subtotal_before_delivery_pkr: String(subtotalBeforeDeliveryPkr || 0),
         delivery_cost_pkr: String(deliveryCostPkr || 0),
+        delivery_policy: encodeDeliveryPolicyParam(
+          resolved.deliveryPolicy,
+          resolved.exportRegions,
+        ),
+        export_regions: resolved.exportRegions.length
+          ? encodeURIComponent(JSON.stringify(resolved.exportRegions))
+          : "",
+        delivery_pricing_source: deliveryQuote.source,
+        delivery_pricing_label: encodeURIComponent(deliveryQuote.label),
         price: String(grandTotalPkr || 0),
 
         vendorName: resolved.vendorName,
@@ -1494,8 +1623,8 @@ export default function PlaceOrderScreen() {
           (destinationType === "inland" ? "Pakistan" : country).trim(),
         ),
         weight_kg: base.weightKg ? String(base.weightKg) : "",
-        weight_per_meter_kg: params.weight_per_meter_kg
-          ? String(params.weight_per_meter_kg)
+        weight_per_meter_kg: base.weightPerMeterKg
+          ? String(base.weightPerMeterKg)
           : "",
 
         dyeing_selected: resolved.hasDyeing ? "1" : "0",
@@ -2135,6 +2264,9 @@ export default function PlaceOrderScreen() {
                   Weight used: {base.weightKg} kg
                 </Text>
               )}
+              <Text style={styles.shippingMeta}>
+                {deliveryQuote.label}
+              </Text>
             </View>
           </SectionCard>
 

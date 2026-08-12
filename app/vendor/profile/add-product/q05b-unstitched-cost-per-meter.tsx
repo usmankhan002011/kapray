@@ -3,6 +3,7 @@ import { Alert, type TextInput } from "react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
+import { apColors } from "@/components/product/addProductStyles";
 import {
   AddProductCard,
   AddProductField,
@@ -114,6 +115,7 @@ export default function Q05BUnstitchedCostPerMeter() {
             keyboardType="decimal-pad"
             maxLength={12}
             returnKeyType="done"
+            style={{ color: apColors.danger }}
           />
         </AddProductField>
       </AddProductCard>

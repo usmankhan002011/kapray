@@ -11,7 +11,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { supabase } from "@/utils/supabase/client";
-import { apStyles } from "@/components/product/addProductStyles";
+import { apColors, apStyles } from "@/components/product/addProductStyles";
 import {
   AddProductInput,
   AddProductCard,
@@ -376,7 +376,10 @@ export default function Q06BServicesCosts() {
               placeholder="e.g., 800"
               keyboardType="decimal-pad"
               maxLength={12}
+              commitMode="change"
+              commitDelayMs={0}
               returnKeyType={needsTailoring ? "next" : "done"}
+              style={{ color: apColors.danger }}
               onSubmitEditing={() => {
                 if (needsTailoring) tailoringRef.current?.focus();
               }}
@@ -410,7 +413,10 @@ export default function Q06BServicesCosts() {
                 placeholder="e.g., 2500"
                 keyboardType="decimal-pad"
                 maxLength={12}
+                commitMode="change"
+                commitDelayMs={0}
                 returnKeyType="next"
+                style={{ color: apColors.danger }}
                 onSubmitEditing={() => turnaroundRef.current?.focus()}
               />
             </AddProductField>
@@ -424,6 +430,8 @@ export default function Q06BServicesCosts() {
                 placeholder="e.g., 12"
                 keyboardType="number-pad"
                 maxLength={3}
+                commitMode="change"
+                commitDelayMs={0}
                 returnKeyType="done"
               />
             </AddProductField>

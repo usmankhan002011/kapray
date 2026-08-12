@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
@@ -7,6 +7,7 @@ import { apColors, apStyles } from "@/components/product/addProductStyles";
 import {
   AddProductPrimaryButton,
   AddProductSecondaryButton,
+  isPristineProductDraft,
 } from "@/components/product/add-product/AddProductWizard";
 
 function safeStr(v: any) {
@@ -26,7 +27,7 @@ export default function MoreDescriptionOptionScreen({
 }: Props) {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { draft } = useProductDraft() as any;
+  const { draft, draftResetReason, draftSessionId } = useProductDraft() as any;
 
   const q12Path =
     safeStr((params as any)?.q12Path) ||
@@ -46,6 +47,12 @@ export default function MoreDescriptionOptionScreen({
   const visibleOptions = showMore ? options : primaryOptions;
   const pickedCount = picked.length;
 
+  useEffect(() => {
+    if (draftResetReason !== "start-new-product") return;
+    if (!isPristineProductDraft(draft)) return;
+    router.replace("/vendor/profile/add-product" as any);
+  }, [draft, draftResetReason, draftSessionId, router]);
+
   function toggle(sentence: string) {
     if (alreadyPicked.includes(sentence)) return;
     setPicked((prev) =>
@@ -58,7 +65,7 @@ export default function MoreDescriptionOptionScreen({
   function addSelected() {
     if (!picked.length) return;
 
-    router.push({
+    router.dismissTo({
       pathname: q12Path as any,
       params: parentReturnTo
         ? { appendMany: picked.join("\n"), returnTo: parentReturnTo }

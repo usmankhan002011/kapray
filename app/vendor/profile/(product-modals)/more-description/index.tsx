@@ -1,7 +1,9 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
+import { useProductDraft } from "@/components/product/ProductDraftContext";
+import { isPristineProductDraft } from "@/components/product/add-product/AddProductWizard";
 
 function safeStr(v: any) {
   return String(v ?? "").trim();
@@ -10,6 +12,7 @@ function safeStr(v: any) {
 export default function MoreDescriptionModal() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { draft, draftResetReason, draftSessionId } = useProductDraft() as any;
 
   const q12Path =
     safeStr((params as any)?.q12Path) ||
@@ -27,8 +30,14 @@ export default function MoreDescriptionModal() {
     { label: "Care", path: "care" },
   ];
 
+  useEffect(() => {
+    if (draftResetReason !== "start-new-product") return;
+    if (!isPristineProductDraft(draft)) return;
+    router.replace("/vendor/profile/add-product" as any);
+  }, [draft, draftResetReason, draftSessionId, router]);
+
   function closeModal() {
-    router.replace({
+    router.dismissTo({
       pathname: q12Path as any,
       params: parentReturnTo ? { returnTo: parentReturnTo } : undefined,
     } as any);

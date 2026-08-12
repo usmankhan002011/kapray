@@ -608,7 +608,7 @@ export default function AddProductScreen() {
         return;
       }
 
-      const productId = created?.id as string | undefined;
+      const productId = created?.id;
       const finalCode = created?.product_code as string | undefined;
 
       if (!productId || !finalCode) {
@@ -704,7 +704,7 @@ export default function AddProductScreen() {
 
       // Done -> go to Products and pass new_product_id so products.tsx can insert at top
       Alert.alert("Saved", `Product created: ${finalCode}`);
-      resetDraft();
+      resetDraft("saved-product");
 
       // Reset local states
       setMoreDescription("");
@@ -714,7 +714,9 @@ export default function AddProductScreen() {
       setTailoringTurnaroundDays(0);
 
       router.replace(
-        `/vendor/profile/products?new_product_id=${encodeURIComponent(productId)}` as any
+        `/vendor/profile/products?new_product_id=${encodeURIComponent(
+          String(productId),
+        )}` as any
       );
     } catch (e: any) {
       Alert.alert("Error", e?.message ?? "Could not save product.");

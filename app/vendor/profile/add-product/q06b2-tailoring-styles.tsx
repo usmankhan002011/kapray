@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo, useState } from "react";
+import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -159,7 +159,7 @@ function normalizePresetImages(v: unknown): TailoringPresetImage[] {
 
   for (const item of arr) {
     const obj = (item ?? {}) as any;
-    const uri = safeStr(obj?.uri ?? obj?.url ?? "");
+    const uri = safeStr(obj?.uri ?? obj?.url ?? obj?.path ?? "");
     if (!uri) continue;
     if (seen.has(uri)) continue;
     seen.add(uri);
@@ -522,6 +522,8 @@ const TailoringPresetCard = memo(function TailoringPresetCard({
   sleeveOptions,
   trouserOptions,
   updatePreset,
+  onExtraCostTextChange,
+  onExtraCostCommit,
   removePreset,
   pickPresetImages,
   makePresetPrimaryImage,
@@ -538,6 +540,8 @@ const TailoringPresetCard = memo(function TailoringPresetCard({
     presetId: string,
     updater: (prev: TailoringStylePreset) => TailoringStylePreset,
   ) => void;
+  onExtraCostTextChange: (presetId: string, text: string) => void;
+  onExtraCostCommit: (presetId: string) => void;
   removePreset: (presetId: string) => void;
   pickPresetImages: (presetId: string) => Promise<void>;
   makePresetPrimaryImage: (presetId: string, index: number) => void;
@@ -648,16 +652,17 @@ const TailoringPresetCard = memo(function TailoringPresetCard({
         value={extraCostText}
         onChangeText={(t) => {
           setExtraCostText(t);
-          updatePreset(preset.id, (prev) => ({
-            ...prev,
-            extra_cost_pkr: safeCostNumber(t),
-          }));
+          onExtraCostTextChange(preset.id, t);
         }}
         placeholder="e.g., 1500"
         placeholderTextColor={apColors.muted}
-        style={apStyles.input}
+        style={[apStyles.input, { color: apColors.danger }]}
         keyboardType="decimal-pad"
         maxLength={12}
+        commitMode="change"
+        commitDelayMs={0}
+        onBlur={() => onExtraCostCommit(preset.id)}
+        onSubmitEditing={() => onExtraCostCommit(preset.id)}
       />
 
       <View
@@ -861,6 +866,7 @@ export default function Q06B2TailoringStyles() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const returnTo = typeof params?.returnTo === "string" ? params.returnTo : "";
+  const isReturnFlow = Boolean(returnTo);
 
   const vendorIdRaw =
     useAppSelector((s: any) => s?.vendorSlice?.vendor?.id ?? null) ??
@@ -881,7 +887,7 @@ export default function Q06B2TailoringStyles() {
 
   const [vendorOffersTailoring, setVendorOffersTailoring] = useState<
     boolean | null
-  >(null);
+  >(() => (isReturnFlow ? true : null));
   const [vendorTailoringOptions, setVendorTailoringOptions] =
     useState<VendorTailoringOptions>({
       blouse_neck: [],
@@ -922,6 +928,7 @@ export default function Q06B2TailoringStyles() {
       ? [createEmptyStylePreset(initialIncludesTrouser)]
       : normalized;
   });
+  const pendingExtraCostsRef = useRef<Record<string, string>>({});
 
   function patchSpec(patch: any) {
     if (typeof ctx.setSpec === "function") {
@@ -947,7 +954,34 @@ export default function Q06B2TailoringStyles() {
     );
   }
 
+  function onExtraCostTextChange(presetId: string, text: string) {
+    pendingExtraCostsRef.current[presetId] = text;
+  }
+
+  function getStylePresetsWithPendingCosts() {
+    return stylePresets.map((preset) => {
+      const pendingText = pendingExtraCostsRef.current[preset.id];
+      if (pendingText === undefined) return preset;
+
+      return {
+        ...preset,
+        extra_cost_pkr: safeCostNumber(pendingText),
+      };
+    });
+  }
+
+  function onExtraCostCommit(presetId: string) {
+    const pendingText = pendingExtraCostsRef.current[presetId];
+    if (pendingText === undefined) return;
+
+    updatePreset(presetId, (prev) => ({
+      ...prev,
+      extra_cost_pkr: safeCostNumber(pendingText),
+    }));
+  }
+
   function removePreset(presetId: string) {
+    delete pendingExtraCostsRef.current[presetId];
     setStylePresets((prev) => prev.filter((p) => p.id !== presetId));
   }
 
@@ -1025,6 +1059,12 @@ export default function Q06B2TailoringStyles() {
     let alive = true;
 
     async function loadVendor() {
+      if (isReturnFlow) {
+        setVendorLoading(false);
+        setVendorOffersTailoring(true);
+        return;
+      }
+
       if (!needsTailoring) {
         if (alive) {
           setVendorLoading(false);
@@ -1097,7 +1137,7 @@ export default function Q06B2TailoringStyles() {
     return () => {
       alive = false;
     };
-  }, [vendorId, needsTailoring]);
+  }, [vendorId, needsTailoring, isReturnFlow]);
 
   useEffect(() => {
     if (!needsTailoring) {
@@ -1137,7 +1177,7 @@ export default function Q06B2TailoringStyles() {
   const canContinue = useMemo(() => {
     if (!vendorId) return false;
     if (!needsTailoring) return true;
-    if (vendorOffersTailoring !== true) return false;
+    if (!isReturnFlow && vendorOffersTailoring !== true) return false;
 
     if (!stylePresets.length) return false;
 
@@ -1146,14 +1186,20 @@ export default function Q06B2TailoringStyles() {
       if (!Array.isArray(p.images) || p.images.length < 1) return false;
       return true;
     });
-  }, [vendorId, needsTailoring, vendorOffersTailoring, stylePresets]);
+  }, [
+    vendorId,
+    needsTailoring,
+    isReturnFlow,
+    vendorOffersTailoring,
+    stylePresets,
+  ]);
   const disabledHint = useMemo(() => {
     if (!vendorId) return "Vendor not loaded.";
     if (!needsTailoring) return "";
-    if (vendorOffersTailoring === null) {
+    if (!isReturnFlow && vendorOffersTailoring === null) {
       return "Loading vendor tailoring settings.";
     }
-    if (vendorOffersTailoring === false) {
+    if (!isReturnFlow && vendorOffersTailoring === false) {
       return "Enable tailoring in your vendor profile first.";
     }
     if (!stylePresets.length) {
@@ -1169,7 +1215,13 @@ export default function Q06B2TailoringStyles() {
     if (missingImage) return "Add at least one image for each tailoring style.";
 
     return "";
-  }, [vendorId, needsTailoring, vendorOffersTailoring, stylePresets]);
+  }, [
+    vendorId,
+    needsTailoring,
+    isReturnFlow,
+    vendorOffersTailoring,
+    stylePresets,
+  ]);
 
   function closeScreen() {
     if (returnTo) {
@@ -1189,11 +1241,16 @@ export default function Q06B2TailoringStyles() {
     }
 
     if (!needsTailoring) {
+      if (returnTo) {
+        router.replace(returnTo as any);
+        return;
+      }
+
       router.push("/vendor/profile/add-product/review" as any);
       return;
     }
 
-    if (vendorOffersTailoring !== true) {
+    if (!isReturnFlow && vendorOffersTailoring !== true) {
       Alert.alert(
         "Tailoring not enabled",
         "You cannot continue because your vendor profile does not offer tailoring. Enable stitching / tailoring in your profile first.",
@@ -1202,7 +1259,7 @@ export default function Q06B2TailoringStyles() {
     }
 
     const cleaned = normalizeTailoringStylePresets(
-      stylePresets,
+      getStylePresetsWithPendingCosts(),
       includesTrouser,
       neckOptions,
       sleeveOptions,
@@ -1262,14 +1319,14 @@ export default function Q06B2TailoringStyles() {
       }
     >
       <View style={apStyles.card}>
-          {vendorLoading || vendorOffersTailoring === null ? (
+          {vendorLoading || (!isReturnFlow && vendorOffersTailoring === null) ? (
             <View style={apStyles.loadingRow}>
               <ActivityIndicator />
               <Text style={apStyles.loadingText}>Loading vendor settings...</Text>
             </View>
           ) : null}
 
-          {vendorOffersTailoring === false ? (
+          {!isReturnFlow && vendorOffersTailoring === false ? (
             <View
               style={{
                 marginTop: 4,
@@ -1296,7 +1353,7 @@ export default function Q06B2TailoringStyles() {
                 product category.
               </Text>
             </View>
-          ) : vendorOffersTailoring === true ? (
+          ) : vendorOffersTailoring === true || isReturnFlow ? (
             <View
               style={{
                 marginTop: 4,
@@ -1356,6 +1413,8 @@ export default function Q06B2TailoringStyles() {
                         sleeveOptions={sleeveOptions}
                         trouserOptions={trouserOptions}
                         updatePreset={updatePreset}
+                        onExtraCostTextChange={onExtraCostTextChange}
+                        onExtraCostCommit={onExtraCostCommit}
                         removePreset={removePreset}
                         pickPresetImages={pickPresetImages}
                         makePresetPrimaryImage={makePresetPrimaryImage}

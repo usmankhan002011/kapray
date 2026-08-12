@@ -181,12 +181,15 @@ export default function ReadyVariantEditor({
         onChangeText={updateExtra}
         placeholder="0"
         placeholderTextColor={apColors.muted}
-        style={apStyles.input}
+        style={[apStyles.input, { color: apColors.danger }]}
         keyboardType="number-pad"
       />
 
       <Text style={apStyles.metaHint}>
-        Final price: Rs {finalPrice.toLocaleString()}
+        Final price:{" "}
+        <Text style={{ color: apColors.danger }}>
+          Rs {finalPrice.toLocaleString()}
+        </Text>
       </Text>
 
       <Text style={apStyles.label}>Style images *</Text>

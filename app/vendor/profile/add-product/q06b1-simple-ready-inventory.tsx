@@ -249,6 +249,8 @@ export default function Q06B1SimpleReadyInventory() {
                     placeholderTextColor={apColors.muted}
                     style={[apStyles.input, styles.qtyInput]}
                     keyboardType="number-pad"
+                    commitMode="change"
+                    commitDelayMs={0}
                     showSoftInputOnFocus
                   />
                 ) : null}

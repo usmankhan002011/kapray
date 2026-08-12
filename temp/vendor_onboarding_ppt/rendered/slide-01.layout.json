@@ -1,0 +1,682 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/lltjh1",
+    "id": "lltjh1",
+    "slide": 1,
+    "layoutId": "7c4767c6-2cd3-446d-999e-0bd9317db249",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "c87b55d3-10d6-4e9d-a87c-eb0e4424e11b",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Helvetica Neue"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "7c4767c6-2cd3-446d-999e-0bd9317db249",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "c87b55d3-10d6-4e9d-a87c-eb0e4424e11b",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "c87b55d3-10d6-4e9d-a87c-eb0e4424e11b",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/d8r2t03i",
+      "id": "1",
+      "bbox": [
+        48,
+        44,
+        380,
+        28
+      ],
+      "geometry": "rect",
+      "text": "VENDOR APP WALKTHROUGH",
+      "textPreview": "VENDOR APP WALKTHROUGH",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "Helvetica Neue",
+        "color": "#2563EB",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "VENDOR APP WALKTHROUGH"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "VENDOR APP WALKTHROUGH",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Helvetica Neue",
+            "color": "#2563EB",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "VENDOR APP WALKTHROUGH",
+              "fontSize": 16,
+              "typeface": "Helvetica Neue",
+              "color": "#2563EB",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/q5gjy547",
+      "id": "2",
+      "bbox": [
+        48,
+        178,
+        590,
+        178
+      ],
+      "geometry": "rect",
+      "text": "Kapray Vendor Onboarding",
+      "textPreview": "Kapray Vendor Onboarding",
+      "resolvedFontSize": 64,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 64,
+        "typeface": "Helvetica Neue",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Kapray Vendor"
+          },
+          {
+            "index": 2,
+            "text": "Onboarding"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Kapray Vendor Onboarding",
+          "resolvedTextStyle": {
+            "fontSize": 64,
+            "typeface": "Helvetica Neue",
+            "color": "#101828",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Kapray Vendor Onboarding",
+              "fontSize": 64,
+              "typeface": "Helvetica Neue",
+              "color": "#101828",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/r6pkrals",
+      "id": "3",
+      "bbox": [
+        50,
+        390,
+        480,
+        92
+      ],
+      "geometry": "rect",
+      "text": "Set up products, services, and orders from the vendor app screens.",
+      "textPreview": "Set up products, services, and orders from the vendor app screens.",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Helvetica Neue",
+        "color": "#667085",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Set up products, services, and orders from the"
+          },
+          {
+            "index": 2,
+            "text": "vendor app screens."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Set up products, services, and orders from the vendor app screens.",
+          "resolvedTextStyle": {
+            "fontSize": 24,
+            "typeface": "Helvetica Neue",
+            "color": "#667085",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Set up products, services, and orders from the vendor app screens.",
+              "fontSize": 24,
+              "typeface": "Helvetica Neue",
+              "color": "#667085",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0bil4fm9",
+      "id": "4",
+      "bbox": [
+        48,
+        562,
+        420,
+        2
+      ],
+      "geometry": "rect",
+      "fillColor": "#101828",
+      "lineColor": "#101828",
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/1cr2xk3u",
+      "id": "5",
+      "name": "Frame Choose dress types",
+      "bbox": [
+        710,
+        54,
+        205,
+        430
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#F8FAFC",
+      "lineColor": "#B8BCC4",
+      "lineWidth": 1
+    },
+    {
+      "order": 6,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/7apczy9o",
+      "id": "6",
+      "bbox": [
+        716,
+        60,
+        193,
+        418
+      ],
+      "geometry": "rect",
+      "alt": "Choose dress types",
+      "contentType": "image/jpeg",
+      "imageFit": "contain",
+      "imageMask": {
+        "geometry": "rect"
+      },
+      "asset": {
+        "assetId": "ad7d31fb-bacd-4b1a-b15e-6a950eb4931c",
+        "contentType": "image/jpeg",
+        "byteLength": 96648
+      }
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/fa9kvalo",
+      "id": "7",
+      "bbox": [
+        710,
+        492,
+        205,
+        26
+      ],
+      "geometry": "rect",
+      "text": "Choose dress types",
+      "textPreview": "Choose dress types",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "Helvetica Neue",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Choose dress types"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Choose dress types",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Helvetica Neue",
+            "color": "#101828",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Choose dress types",
+              "fontSize": 16,
+              "typeface": "Helvetica Neue",
+              "color": "#101828",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/gfe1sbm5",
+      "id": "8",
+      "name": "Frame Review product",
+      "bbox": [
+        936,
+        116,
+        205,
+        430
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#F8FAFC",
+      "lineColor": "#B8BCC4",
+      "lineWidth": 1
+    },
+    {
+      "order": 9,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/gfitcna5",
+      "id": "9",
+      "bbox": [
+        942,
+        122,
+        193,
+        418
+      ],
+      "geometry": "rect",
+      "alt": "Review product",
+      "contentType": "image/jpeg",
+      "imageFit": "contain",
+      "imageMask": {
+        "geometry": "rect"
+      },
+      "asset": {
+        "assetId": "271f5a54-ec2a-4667-b1a4-d0861c450631",
+        "contentType": "image/jpeg",
+        "byteLength": 65014
+      }
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/xkvu9ory",
+      "id": "10",
+      "bbox": [
+        936,
+        554,
+        205,
+        26
+      ],
+      "geometry": "rect",
+      "text": "Review product",
+      "textPreview": "Review product",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "Helvetica Neue",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Review product"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Review product",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Helvetica Neue",
+            "color": "#101828",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Review product",
+              "fontSize": 16,
+              "typeface": "Helvetica Neue",
+              "color": "#101828",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wjmtgjqd",
+      "id": "11",
+      "name": "Frame Fulfil orders",
+      "bbox": [
+        808,
+        246,
+        205,
+        430
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#F8FAFC",
+      "lineColor": "#B8BCC4",
+      "lineWidth": 1
+    },
+    {
+      "order": 12,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/4rqps3qt",
+      "id": "12",
+      "bbox": [
+        814,
+        252,
+        193,
+        418
+      ],
+      "geometry": "rect",
+      "alt": "Fulfil orders",
+      "contentType": "image/jpeg",
+      "imageFit": "contain",
+      "imageMask": {
+        "geometry": "rect"
+      },
+      "asset": {
+        "assetId": "7153c28b-e05f-48f5-beed-bd99d7a86307",
+        "contentType": "image/jpeg",
+        "byteLength": 53008
+      }
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ah4be987",
+      "id": "13",
+      "bbox": [
+        808,
+        684,
+        205,
+        26
+      ],
+      "geometry": "rect",
+      "text": "Fulfil orders",
+      "textPreview": "Fulfil orders",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "Helvetica Neue",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Fulfil orders"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Fulfil orders",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Helvetica Neue",
+            "color": "#101828",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Fulfil orders",
+              "fontSize": 16,
+              "typeface": "Helvetica Neue",
+              "color": "#101828",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/58fud8ru",
+      "id": "14",
+      "bbox": [
+        1185,
+        666,
+        48,
+        24
+      ],
+      "geometry": "rect",
+      "text": "01",
+      "textPreview": "01",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 12,
+        "typeface": "Helvetica Neue",
+        "color": "#667085",
+        "alignment": "right",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "01"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "01",
+          "resolvedTextStyle": {
+            "fontSize": 12,
+            "typeface": "Helvetica Neue",
+            "color": "#667085",
+            "alignment": "right"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "01",
+              "fontSize": 12,
+              "typeface": "Helvetica Neue",
+              "color": "#667085",
+              "alignment": "right"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

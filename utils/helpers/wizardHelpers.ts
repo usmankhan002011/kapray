@@ -11,7 +11,9 @@ export type VendorWizardData = {
   ownerName: string;
   email: string;
   mobile: string;
+  additionalMobileNumbers: string;
   landline: string;
+  additionalLandlineNumbers: string;
   shopName: string;
   address: string;
   locationUrl: string;
@@ -50,6 +52,9 @@ export type StepConfig = {
   subtitle: string;
 };
 
+export const BUSINESS_AUTH_DOCUMENTS_COPY =
+  "Upload all applicable business authorization documents, including owner CNIC, shop/local authority permission or trade license, Shops & Establishment registration, FBR NTN/tax registration, business premises proof and recent utility bill, SECP incorporation or firm/AOP registration and authority letter if applicable, police verification/NOC or sector-specific license if required, and any other local permit. Existing verification documents cannot be deleted after upload; new documents may be added for review.";
+
 export const STEPS: StepConfig[] = [
   {
     id: "owner",
@@ -63,8 +68,8 @@ export const STEPS: StepConfig[] = [
   },
   {
     id: "mobile",
-    title: "What is the mobile number?",
-    subtitle: "Add the primary mobile contact number.",
+    title: "What is the WhatsApp number?",
+    subtitle: "Add the fixed primary WhatsApp contact and optional extra numbers.",
   },
   {
     id: "shop",
@@ -93,8 +98,8 @@ export const STEPS: StepConfig[] = [
   },
   {
     id: "review",
-    title: "Review",
-    subtitle: "Submit vendor.",
+    title: "Final Review",
+    subtitle: "Check locked details before submitting.",
   },
 ];
 
@@ -146,6 +151,29 @@ export async function pickVideos(multiple: boolean) {
     mimeType: a.mimeType,
     fileName: a.fileName,
   })) as Picked[];
+}
+
+export function parseContactList(value?: string | string[] | null) {
+  const raw = Array.isArray(value) ? value.join("\n") : String(value ?? "");
+  const seen = new Set<string>();
+  const items: string[] = [];
+
+  raw
+    .split(/[\n,;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .forEach((item) => {
+      const key = item.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      items.push(item);
+    });
+
+  return items;
+}
+
+export function formatContactList(value?: string[] | null) {
+  return Array.isArray(value) && value.length ? value.join("\n") : "";
 }
 
 export async function uploadToBucket(

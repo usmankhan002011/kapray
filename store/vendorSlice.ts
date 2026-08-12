@@ -22,7 +22,9 @@ export type VendorState = {
   name: string | null;
   email: string | null;
   mobile: string | null;
+  additional_mobile_numbers: string[];
   landline: string | null;
+  additional_landline_numbers: string[];
 
   shop_name: string | null;
   address: string | null;
@@ -71,7 +73,9 @@ const initialState: VendorState = {
   name: null,
   email: null,
   mobile: null,
+  additional_mobile_numbers: [],
   landline: null,
+  additional_landline_numbers: [],
 
   shop_name: null,
   address: null,
@@ -108,12 +112,22 @@ const vendorSlice = createSlice({
   initialState,
   reducers: {
     setSelectedVendor(state, action: PayloadAction<Partial<VendorState>>) {
+      const isChangingVendor =
+        action.payload.id != null && state.id != null && action.payload.id !== state.id;
       const next: VendorState = {
         ...state,
         ...action.payload,
-        export_regions: action.payload.export_regions ?? state.export_regions,
+        additional_mobile_numbers:
+          action.payload.additional_mobile_numbers ??
+          (isChangingVendor ? [] : state.additional_mobile_numbers),
+        additional_landline_numbers:
+          action.payload.additional_landline_numbers ??
+          (isChangingVendor ? [] : state.additional_landline_numbers),
+        export_regions:
+          action.payload.export_regions ?? (isChangingVendor ? [] : state.export_regions),
         tailoring_options:
-          action.payload.tailoring_options ?? state.tailoring_options,
+          action.payload.tailoring_options ??
+          (isChangingVendor ? EMPTY_TAILORING_OPTIONS : state.tailoring_options),
       };
 
       // Derive has_shop if not explicitly provided
@@ -140,6 +154,14 @@ const vendorSlice = createSlice({
 
       if (!next.export_regions) {
         next.export_regions = [];
+      }
+
+      if (!next.additional_mobile_numbers) {
+        next.additional_mobile_numbers = [];
+      }
+
+      if (!next.additional_landline_numbers) {
+        next.additional_landline_numbers = [];
       }
 
       if (!next.tailoring_options) {

@@ -11,6 +11,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "@/utils/supabase/client";
+import { decodeDeliveryPolicyParam } from "@/utils/kapray/deliveryPolicy";
 import DyePaletteReferenceButton from "@/components/product/DyePaletteReferenceButton";
 import {
   apColors,
@@ -49,6 +50,9 @@ type Params = {
   fabric_cost_pkr?: string;
   subtotal_before_delivery_pkr?: string;
   delivery_cost_pkr?: string;
+  delivery_policy?: string;
+  delivery_pricing_source?: string;
+  delivery_pricing_label?: string;
   selected_fabric_length_m?: string;
 
   vendorName?: string;
@@ -99,6 +103,7 @@ type Params = {
 
   destination_type?: string;
   export_region?: string;
+  export_regions?: string;
   weight_kg?: string;
   weight_per_meter_kg?: string;
 
@@ -440,12 +445,27 @@ export default function PaymentScreen() {
       params.subtotal_before_delivery_pkr,
     );
     const deliveryCostPkr = safePositiveNumber(params.delivery_cost_pkr);
+    const deliveryPolicy = decodeDeliveryPolicyParam(
+      params.delivery_policy,
+      safeJsonDecode<string[]>(params.export_regions, []),
+    );
+    const deliveryPricingSource =
+      norm(params.delivery_pricing_source) || "app_calculated";
+    const deliveryPricingLabel =
+      safeDecode(params.delivery_pricing_label) ||
+      "App courier";
     const baseProductCostPkr = safePositiveNumber(params.base_product_cost_pkr);
     const fabricCostPkr = safePositiveNumber(params.fabric_cost_pkr);
     const selectedFabricLengthM = safePositiveNumber(
       safeDecode(params.selected_fabric_length_m),
     );
     const pricePerMeterPkr = safePositiveNumber(params.price_per_meter_pkr);
+    const weightPerMeterKg = safePositiveNumber(params.weight_per_meter_kg);
+    const routeWeightKg = safePositiveNumber(params.weight_kg);
+    const derivedFabricWeightKg =
+      selectedFabricLengthM > 0 && weightPerMeterKg > 0
+        ? Math.round(selectedFabricLengthM * weightPerMeterKg * 100) / 100
+        : 0;
 
     const mode = norm(params.mode) || "standard";
     const selectedSize = norm(params.selectedSize);
@@ -737,6 +757,9 @@ export default function PaymentScreen() {
       totalPkrSafe,
       subtotalBeforeDeliveryPkr,
       deliveryCostPkr,
+      deliveryPolicy,
+      deliveryPricingSource,
+      deliveryPricingLabel,
       baseProductCostPkr,
       fabricCostPkr,
       selectedFabricLengthM,
@@ -759,8 +782,8 @@ export default function PaymentScreen() {
       addressPreview,
       destinationType,
       exportRegion,
-      weightKg: safePositiveNumber(params.weight_kg),
-      weightPerMeterKg: safePositiveNumber(params.weight_per_meter_kg),
+      weightKg: derivedFabricWeightKg || routeWeightKg,
+      weightPerMeterKg,
 
       mode,
       selectedSize,
@@ -1040,6 +1063,15 @@ export default function PaymentScreen() {
       (specSnapshot as any).postal_code = data.postalCode || "";
       (specSnapshot as any).country = data.country || "";
       (specSnapshot as any).delivery_weight_kg = data.weightKg || 0;
+      (specSnapshot as any).delivery_policy = data.deliveryPolicy;
+      (specSnapshot as any).delivery_pricing_source =
+        data.deliveryPricingSource;
+      (specSnapshot as any).delivery_pricing_label =
+        data.deliveryPricingLabel;
+      (specSnapshot as any).delivery_amount_pkr = data.deliveryCostPkr || 0;
+      if (data.selectedFabricLengthM > 0) {
+        (specSnapshot as any).delivery_charge_basis = "per_meter";
+      }
       if (data.weightPerMeterKg > 0) {
         (specSnapshot as any).weight_per_meter_kg = data.weightPerMeterKg;
         (specSnapshot as any).shipping_weight_mode = "per_meter";
@@ -1521,6 +1553,7 @@ export default function PaymentScreen() {
               value={data.destinationType || "inland"}
             />
             <KVRow label="Region" value={data.exportRegion} muted />
+            <KVRow label="Basis" value={data.deliveryPricingLabel} muted />
             {!!data.notes && <KVRow label="Notes" value={data.notes} muted />}
           </PlainSection>
 

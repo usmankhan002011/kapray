@@ -25,6 +25,15 @@ import {
   AddProductFooter,
   AddProductScreen,
 } from "@/components/product/add-product/AddProductWizard";
+import { EXPORT_REGIONS } from "@/data/kapray/exportRegions";
+import type { ExportRegion } from "@/data/kapray/productTypes";
+import {
+  getDeliveryPolicySummary,
+  isUnstitchedDeliveryCategory,
+  normalizeDeliveryPolicy,
+  normalizeExportRegionList,
+} from "@/utils/kapray/deliveryPolicy";
+import { formatFabricWidthFromSpec } from "@/utils/kapray/fabricWidth";
 import {
   apColors,
   apFontFamily,
@@ -503,14 +512,65 @@ function summarizeMadeOrderVariant(
     .join(" / ");
 }
 
+const COST_TEXT_PATTERN = /(Rs\s[\d,]+|\+?PKR\s[\d,]+|\d+(?:\.\d+)?\sPKR)/g;
+
+function renderCostSegments(text: string) {
+  const clean = safeStr(text);
+  if (!clean) return "";
+
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+
+  for (const match of clean.matchAll(COST_TEXT_PATTERN)) {
+    const index = match.index ?? 0;
+    const costText = match[0];
+
+    if (index > lastIndex) {
+      parts.push(clean.slice(lastIndex, index));
+    }
+
+    parts.push(
+      <Text key={`cost-${index}`} style={styles.costValue}>
+        {costText}
+      </Text>,
+    );
+    lastIndex = index + costText.length;
+  }
+
+  if (lastIndex < clean.length) {
+    parts.push(clean.slice(lastIndex));
+  }
+
+  return parts.length ? parts : clean;
+}
+
 export default function AddProductReviewScreen() {
   const router = useRouter();
 
-  const vendorIdRaw =
-    useAppSelector((s: any) => s?.vendorSlice?.vendor?.id ?? null) ??
-    useAppSelector((s: any) => s?.vendor?.id ?? null);
+  const vendorState = useAppSelector((s: any) => {
+    const sliceVendor = s?.vendorSlice?.vendor ?? {};
+    const vendor = s?.vendor ?? {};
+    return {
+      id: sliceVendor?.id ?? s?.vendorSlice?.id ?? vendor?.id ?? null,
+      exports_enabled:
+        sliceVendor?.exports_enabled ??
+        s?.vendorSlice?.exports_enabled ??
+        vendor?.exports_enabled ??
+        false,
+      export_regions:
+        sliceVendor?.export_regions ??
+        s?.vendorSlice?.export_regions ??
+        vendor?.export_regions ??
+        [],
+    };
+  });
 
-  const vendorId = safeInt(vendorIdRaw);
+  const vendorId = safeInt(vendorState.id);
+  const vendorExportRegions = useMemo<ExportRegion[]>(() => {
+    if (!vendorState.exports_enabled) return [];
+    const selected = normalizeExportRegionList(vendorState.export_regions);
+    return EXPORT_REGIONS.filter((region) => selected.includes(region));
+  }, [vendorState.export_regions, vendorState.exports_enabled]);
 
   const { draft } = useProductDraft();
 
@@ -526,8 +586,7 @@ export default function AddProductReviewScreen() {
   const needsDyeing =
     cat === "unstitched_dyeing" || cat === "unstitched_dyeing_tailoring";
   const needsTailoring = cat === "unstitched_dyeing_tailoring";
-  const isFabricByMeter =
-    cat === "unstitched_plain" || cat === "unstitched_dyeing";
+  const isFabricByMeter = isUnstitchedDeliveryCategory(cat);
 
   const hasReadyVariants =
     isStitched &&
@@ -604,6 +663,10 @@ export default function AddProductReviewScreen() {
   const sizeLengthMap = (draft.spec as any)?.size_length_m as
     | SizeLengthMap
     | undefined;
+  const fabricWidthLabel = useMemo(
+    () => formatFabricWidthFromSpec(draft.spec),
+    [draft.spec],
+  );
 
   const weightKg = safeNum(
     isFabricByMeter
@@ -613,6 +676,17 @@ export default function AddProductReviewScreen() {
   );
   const packageCm = (draft.spec as any)?.package_cm ?? {};
   const packageDimensions = formatPackageCm(packageCm, draft.spec);
+  const deliveryPolicy = useMemo(
+    () => normalizeDeliveryPolicy((draft.spec as any)?.delivery_policy, vendorExportRegions),
+    [draft.spec, vendorExportRegions],
+  );
+  const deliveryPolicyRows = useMemo(
+    () =>
+      getDeliveryPolicySummary(deliveryPolicy, vendorExportRegions, {
+        perMeter: isFabricByMeter,
+      }),
+    [deliveryPolicy, isFabricByMeter, vendorExportRegions],
+  );
 
   const moreDescription = safeStr((draft.spec as any)?.more_description ?? "");
 
@@ -873,7 +947,9 @@ export default function AddProductReviewScreen() {
               </Text>
               <Text style={styles.rowValue}>
                 {costTotal > 0
-                  ? `${usesBaseCostWithStyleAdds ? "From " : ""}Rs ${costTotal.toLocaleString()}`
+                  ? renderCostSegments(
+                      `${usesBaseCostWithStyleAdds ? "From " : ""}Rs ${costTotal.toLocaleString()}`,
+                    )
                   : "Not set"}
               </Text>
             </Pressable>
@@ -957,7 +1033,9 @@ export default function AddProductReviewScreen() {
 
                       <View style={styles.variantBody}>
                         <Text style={styles.rowTitle}>{title}</Text>
-                        <Text style={styles.rowValue}>{summary}</Text>
+                        <Text style={styles.rowValue}>
+                          {renderCostSegments(summary)}
+                        </Text>
                       </View>
                     </Pressable>
                   );
@@ -1048,7 +1126,9 @@ export default function AddProductReviewScreen() {
 
                       <View style={styles.variantBody}>
                         <Text style={styles.rowTitle}>{title}</Text>
-                        <Text style={styles.rowValue}>{summary}</Text>
+                        <Text style={styles.rowValue}>
+                          {renderCostSegments(summary)}
+                        </Text>
                       </View>
                     </Pressable>
                   );
@@ -1094,27 +1174,50 @@ export default function AddProductReviewScreen() {
             >
               <Text style={styles.rowTitle}>Cost per Meter (PKR) *</Text>
               <Text style={styles.rowValue}>
-                {costPerMeter > 0 ? String(costPerMeter) : "Not set"}
+                {costPerMeter > 0
+                  ? renderCostSegments(`Rs ${costPerMeter.toLocaleString()}`)
+                  : "Not set"}
               </Text>
             </Pressable>
 
             {isUnstitched ? (
-              <Pressable
-                onPress={() =>
-                  goEdit(
-                    "/vendor/profile/add-product/q05c-unstitched-fabric-length",
-                  )
-                }
-                style={({ pressed }) => [
-                  styles.rowBtn,
-                  pressed ? styles.pressed : null,
-                ]}
-              >
-                <Text style={styles.rowTitle}>Fabric length by size</Text>
-                <Text style={styles.rowValue}>
-                  {formatSizeLengthMap(sizeLengthMap)}
-                </Text>
-              </Pressable>
+              <>
+                <Pressable
+                  onPress={() =>
+                    goEdit(
+                      "/vendor/profile/add-product/q05c-unstitched-fabric-length",
+                    )
+                  }
+                  style={({ pressed }) => [
+                    styles.rowBtn,
+                    pressed ? styles.pressed : null,
+                  ]}
+                >
+                  <Text style={styles.rowTitle}>
+                    Fabric width (Panna / عرض) *
+                  </Text>
+                  <Text style={styles.rowValue}>
+                    {fabricWidthLabel || "Not set"}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() =>
+                    goEdit(
+                      "/vendor/profile/add-product/q05c-unstitched-fabric-length",
+                    )
+                  }
+                  style={({ pressed }) => [
+                    styles.rowBtn,
+                    pressed ? styles.pressed : null,
+                  ]}
+                >
+                  <Text style={styles.rowTitle}>Fabric length by size</Text>
+                  <Text style={styles.rowValue}>
+                    {formatSizeLengthMap(sizeLengthMap)}
+                  </Text>
+                </Pressable>
+              </>
             ) : null}
 
             <Pressable
@@ -1127,7 +1230,9 @@ export default function AddProductReviewScreen() {
               ]}
             >
               <Text style={styles.rowTitle}>Services summary</Text>
-              <Text style={styles.rowValue}>{serviceSummary()}</Text>
+              <Text style={styles.rowValue}>
+                {renderCostSegments(serviceSummary())}
+              </Text>
             </Pressable>
 
             {needsTailoring ? (
@@ -1189,7 +1294,9 @@ export default function AddProductReviewScreen() {
                         : `Style Card ${index + 1}`}
                     </Text>
                     <Text style={styles.rowValue}>
-                      {summarizePreset(preset, includesTrouser)}
+                      {renderCostSegments(
+                        summarizePreset(preset, includesTrouser),
+                      )}
                     </Text>
                   </Pressable>
                 ))}
@@ -1217,6 +1324,19 @@ export default function AddProductReviewScreen() {
           </Text>
         </Pressable>
 
+        {!isFabricByMeter ? (
+          <Pressable
+            onPress={() => goEdit("/vendor/profile/add-product/q06c-shipping")}
+            style={({ pressed }) => [
+              styles.rowBtn,
+              pressed ? styles.pressed : null,
+            ]}
+          >
+            <Text style={styles.rowTitle}>Package dimensions</Text>
+            <Text style={styles.rowValue}>{packageDimensions}</Text>
+          </Pressable>
+        ) : null}
+
         <Pressable
           onPress={() => goEdit("/vendor/profile/add-product/q06c-shipping")}
           style={({ pressed }) => [
@@ -1224,9 +1344,26 @@ export default function AddProductReviewScreen() {
             pressed ? styles.pressed : null,
           ]}
         >
-          <Text style={styles.rowTitle}>Package dimensions</Text>
-          <Text style={styles.rowValue}>{packageDimensions}</Text>
+          <Text style={styles.rowTitle}>Delivery policy</Text>
+          <Text style={styles.rowValue}>{deliveryPolicyRows.join(" / ")}</Text>
         </Pressable>
+
+        {isFabricByMeter ? (
+          <Pressable
+            onPress={() => goEdit("/vendor/profile/add-product/q06c-shipping")}
+            style={({ pressed }) => [
+              styles.rowBtn,
+              pressed ? styles.pressed : null,
+            ]}
+          >
+            <Text style={styles.rowTitle}>Meter checkout limit</Text>
+            <Text style={styles.rowValue}>
+              Max {deliveryPolicy.meter_shipping.max_checkout_m} m / warning above{" "}
+              {deliveryPolicy.meter_shipping.soft_weight_warning_kg} kg / block above{" "}
+              {deliveryPolicy.meter_shipping.max_checkout_weight_kg} kg
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={styles.card}>
@@ -1439,11 +1576,15 @@ const styles = StyleSheet.create({
 
   rowValue: {
     marginTop: 3,
-    color: apColors.subText,
+    color: apColors.text,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "600",
     fontFamily: apFontFamily,
+  },
+
+  costValue: {
+    color: apColors.danger,
   },
 
   variantCard: {

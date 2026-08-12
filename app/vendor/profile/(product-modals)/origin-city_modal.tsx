@@ -10,7 +10,12 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
-import { getOriginCities, OriginCityItem } from "@/utils/supabase/originCity";
+import { closeProductModal } from "@/components/product/productModalNavigation";
+import {
+  getFallbackOriginCities,
+  getOriginCities,
+  OriginCityItem,
+} from "@/utils/supabase/originCity";
 
 const ORIGIN_CITY_LOCAL_IMAGES: Record<string, any> = {
   bahawalpur: require("@/assets/origin-images/Bahawalpur.jpg"),
@@ -44,7 +49,9 @@ export default function ProductOriginCityModal() {
 
   const { draft, setOriginCityIds } = useProductDraft();
 
-  const [items, setItems] = useState<OriginCityItem[]>([]);
+  const [items, setItems] = useState<OriginCityItem[]>(() =>
+    getFallbackOriginCities(),
+  );
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -62,13 +69,13 @@ export default function ProductOriginCityModal() {
 
   useEffect(() => {
     let alive = true;
-    setLoading(true);
+    setLoading(false);
     setErr(null);
 
     getOriginCities()
       .then((res) => {
         if (!alive) return;
-        setItems(res ?? []);
+        setItems(res?.length ? res : getFallbackOriginCities());
       })
       .catch((e) => {
         if (!alive) return;
@@ -85,11 +92,7 @@ export default function ProductOriginCityModal() {
   }, []);
 
   function close() {
-    if (returnTo) {
-      router.replace(returnTo as any);
-      return;
-    }
-    router.back();
+    closeProductModal(router, returnTo);
   }
 
   function toggle(id: string) {
@@ -133,7 +136,9 @@ export default function ProductOriginCityModal() {
         </Pressable>
       </View>
 
-      {loading ? <Text style={styles.infoText}>Loading origins...</Text> : null}
+      {loading && !items.length ? (
+        <Text style={styles.infoText}>Loading origins...</Text>
+      ) : null}
       {err ? <Text style={styles.errorText}>{err}</Text> : null}
 
       <FlatList

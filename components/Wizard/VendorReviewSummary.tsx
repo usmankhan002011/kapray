@@ -5,6 +5,7 @@ import {
   apSpacing,
 } from "@/components/product/addProductStyles";
 import {
+  parseContactList,
   prettyNameFromPicked,
   VendorWizardData,
 } from "@/utils/helpers/wizardHelpers";
@@ -86,6 +87,15 @@ function ReviewRow({
 export default function VendorReviewSummary({ form, jumpToStep }: Props) {
   return (
     <View style={styles.container}>
+      <View style={styles.lockNotice}>
+        <MaterialIcons name="lock" size={18} color={apColors.blue} />
+        <Text style={styles.lockNoticeText}>
+          Final review before submit. Shop name, owner name, linked email, and
+          WhatsApp mobile will be fixed after shop creation. Additional
+          mobiles, landlines, services, location, and media can be edited later.
+        </Text>
+      </View>
+
       <ReviewSection title="Contact">
         <ReviewRow
           icon="person"
@@ -101,8 +111,26 @@ export default function VendorReviewSummary({ form, jumpToStep }: Props) {
         />
         <ReviewRow
           icon="phone"
-          label="Mobile"
+          label="WhatsApp mobile"
           value={textOrEmpty(form.mobile)}
+          onPress={() => jumpToStep(2)}
+        />
+        <ReviewRow
+          icon="add-call"
+          label="Additional mobiles"
+          value={joinOrEmpty(parseContactList(form.additionalMobileNumbers))}
+          onPress={() => jumpToStep(2)}
+        />
+        <ReviewRow
+          icon="phone-in-talk"
+          label="Primary landline"
+          value={textOrEmpty(form.landline)}
+          onPress={() => jumpToStep(2)}
+        />
+        <ReviewRow
+          icon="contact-phone"
+          label="Additional landlines"
+          value={joinOrEmpty(parseContactList(form.additionalLandlineNumbers))}
           onPress={() => jumpToStep(2)}
         />
       </ReviewSection>
@@ -168,10 +196,10 @@ export default function VendorReviewSummary({ form, jumpToStep }: Props) {
         />
         <ReviewRow
           icon="verified-user"
-          label="Permission"
+          label="Business authorization"
           value={
             form.govPermission
-              ? prettyNameFromPicked(form.govPermission, "permission")
+              ? prettyNameFromPicked(form.govPermission, "authorization")
               : "None"
           }
           onPress={() => jumpToStep(7)}
@@ -202,6 +230,23 @@ export default function VendorReviewSummary({ form, jumpToStep }: Props) {
 const styles = StyleSheet.create({
   container: {
     gap: apSpacing.blockGap,
+  },
+  lockNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    borderRadius: apRadii.card,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#D7E3FF",
+    backgroundColor: apColors.blueSoft,
+  },
+  lockNoticeText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "700",
+    color: apColors.text,
   },
   sectionCard: {
     borderRadius: apRadii.card,

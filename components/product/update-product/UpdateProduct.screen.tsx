@@ -21,6 +21,8 @@ import * as FileSystem from "expo-file-system";
 import { decode } from "base64-arraybuffer";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import FastNumberInput from "@/components/product/add-product/FastNumberInput";
+import { EXPORT_REGIONS } from "@/data/kapray/exportRegions";
+import type { ExportRegion } from "@/data/kapray/productTypes";
 import {
   ProductPreviewSection,
   UpdateProductBottomBar,
@@ -60,6 +62,20 @@ import {
   SimpleReadyInventorySection,
   StitchedVariantInventorySection,
 } from "./UpdateProduct.variants";
+import {
+  normalizeDeliveryPolicy,
+  normalizeExportRegionList,
+  safeDeliveryAmount,
+  validateDeliveryPolicy,
+  VENDOR_COURIER_CONSENT_TEXT,
+  type ExportDeliveryMode,
+  type InlandDeliveryMode,
+} from "@/utils/kapray/deliveryPolicy";
+import {
+  formatFabricWidth,
+  normalizeFabricWidth,
+  normalizeFabricWidthFromSpec,
+} from "@/utils/kapray/fabricWidth";
 import {
   cleanNewMadeOrderVariantDraft,
   cleanNewReadyVariantDraft,
@@ -151,6 +167,12 @@ function normalizeInventoryQty(value: unknown, unit: InventoryUnit) {
     : Math.max(0, Math.trunc(n));
 }
 
+function positiveAmountText(value: unknown) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return "";
+  return String(Math.round(n));
+}
+
 function getInventoryRevisionRecordInfo(
   product: ProductRow | null,
 ): InventoryRevisionRecordInfo | null {
@@ -192,12 +214,44 @@ export default function UpdateProductScreen() {
     product_id?: string;
   }>();
 
-  const vendorIdRaw =
-    useAppSelector((s: any) => s?.vendorSlice?.id ?? null) ??
-    useAppSelector((s: any) => s?.vendorSlice?.vendor?.id ?? null) ??
-    useAppSelector((s: any) => s?.vendor?.id ?? null);
+  const vendorState = useAppSelector((s: any) => {
+    const sliceVendor = s?.vendorSlice?.vendor ?? {};
+    const vendor = s?.vendor ?? {};
+    return {
+      id: s?.vendorSlice?.id ?? sliceVendor?.id ?? vendor?.id ?? null,
+      exports_enabled:
+        sliceVendor?.exports_enabled ??
+        s?.vendorSlice?.exports_enabled ??
+        vendor?.exports_enabled ??
+        false,
+      export_regions:
+        sliceVendor?.export_regions ??
+        s?.vendorSlice?.export_regions ??
+        vendor?.export_regions ??
+        [],
+    };
+  });
 
-  const vendorId = safeInt(vendorIdRaw);
+  const vendorId = safeInt(vendorState.id);
+  const [vendorExportsEnabledFromDb, setVendorExportsEnabledFromDb] =
+    useState<boolean | null>(null);
+  const [vendorExportRegionsFromDb, setVendorExportRegionsFromDb] = useState<
+    unknown[]
+  >([]);
+  const vendorExportsEnabled =
+    vendorExportsEnabledFromDb ?? Boolean(vendorState.exports_enabled);
+  const vendorExportRegions = useMemo<ExportRegion[]>(() => {
+    if (!vendorExportsEnabled) return [];
+    const dbRegions = normalizeExportRegionList(vendorExportRegionsFromDb);
+    const selected = dbRegions.length
+      ? dbRegions
+      : normalizeExportRegionList(vendorState.export_regions);
+    return EXPORT_REGIONS.filter((region) => selected.includes(region));
+  }, [
+    vendorExportRegionsFromDb,
+    vendorExportsEnabled,
+    vendorState.export_regions,
+  ]);
   const routeProductId = safeInt(
     (params as any)?.productId ?? (params as any)?.product_id,
   );
@@ -234,7 +288,19 @@ export default function UpdateProductScreen() {
   >("unstitched_per_meter");
   const [priceTotal, setPriceTotal] = useState<number>(0);
   const [pricePerMeter, setPricePerMeter] = useState<number>(0);
+  const [fabricWidthText, setFabricWidthText] = useState("");
   const [availableSizes, setAvailableSizes] = useState<string[]>([]);
+
+  const [inlandDeliveryMode, setInlandDeliveryMode] =
+    useState<InlandDeliveryMode>("app_calculated");
+  const [inlandDeliveryAmountText, setInlandDeliveryAmountText] =
+    useState("");
+  const [exportDeliveryModes, setExportDeliveryModes] = useState<
+    Record<string, ExportDeliveryMode>
+  >({});
+  const [exportDeliveryAmountTexts, setExportDeliveryAmountTexts] = useState<
+    Record<string, string>
+  >({});
 
   const [dyeingEnabled, setDyeingEnabled] = useState<boolean>(false);
   const [dyeingCost, setDyeingCost] = useState<number>(0);
@@ -495,6 +561,8 @@ export default function UpdateProductScreen() {
   const fetchVendorTailoring = useCallback(async () => {
     if (!vendorId) {
       setVendorOffersTailoring(false);
+      setVendorExportsEnabledFromDb(null);
+      setVendorExportRegionsFromDb([]);
       setVendorTailoringOptions({
         blouse_neck: [],
         sleeves: [],
@@ -508,12 +576,14 @@ export default function UpdateProductScreen() {
 
       const { data, error } = await supabase
         .from("vendor")
-        .select("id, offers_tailoring, tailoring_options")
+        .select("id, offers_tailoring, tailoring_options, exports_enabled, export_regions")
         .eq("id", vendorId)
         .single();
 
       if (error) {
         setVendorOffersTailoring(false);
+        setVendorExportsEnabledFromDb(null);
+        setVendorExportRegionsFromDb([]);
         setVendorTailoringOptions({
           blouse_neck: [],
           sleeves: [],
@@ -523,11 +593,19 @@ export default function UpdateProductScreen() {
       }
 
       setVendorOffersTailoring(Boolean((data as any)?.offers_tailoring));
+      setVendorExportsEnabledFromDb(Boolean((data as any)?.exports_enabled));
+      setVendorExportRegionsFromDb(
+        Array.isArray((data as any)?.export_regions)
+          ? ((data as any).export_regions as unknown[])
+          : [],
+      );
       setVendorTailoringOptions(
         readVendorTailoringOptions((data as any)?.tailoring_options),
       );
     } catch {
       setVendorOffersTailoring(false);
+      setVendorExportsEnabledFromDb(null);
+      setVendorExportRegionsFromDb([]);
       setVendorTailoringOptions({
         blouse_neck: [],
         sleeves: [],
@@ -600,6 +678,10 @@ export default function UpdateProductScreen() {
     setPriceMode(mode);
     setPriceTotal(safeNumOrZero(price?.cost_pkr_total));
     setPricePerMeter(safeNumOrZero(price?.cost_pkr_per_meter));
+    const selectedFabricWidth = normalizeFabricWidthFromSpec(spec);
+    setFabricWidthText(
+      selectedFabricWidth ? String(selectedFabricWidth.value) : "",
+    );
 
     setAvailableSizes(
       Array.isArray(price?.available_sizes)
@@ -625,6 +707,27 @@ export default function UpdateProductScreen() {
       tailorCostFromPrice > 0 ? tailorCostFromPrice : tailorCostFromSpec,
     );
 
+    const selectedDeliveryPolicy = normalizeDeliveryPolicy(
+      spec?.delivery_policy,
+      vendorExportRegions,
+    );
+    setInlandDeliveryMode(selectedDeliveryPolicy.inland.mode);
+    setInlandDeliveryAmountText(
+      positiveAmountText(selectedDeliveryPolicy.inland.amount_pkr),
+    );
+    const nextExportModes: Record<string, ExportDeliveryMode> = {};
+    const nextExportAmounts: Record<string, string> = {};
+    for (const region of vendorExportRegions) {
+      nextExportModes[region] =
+        selectedDeliveryPolicy.export_regions[region]?.mode ??
+        "app_calculated";
+      nextExportAmounts[region] = positiveAmountText(
+        selectedDeliveryPolicy.export_regions[region]?.amount_pkr,
+      );
+    }
+    setExportDeliveryModes(nextExportModes);
+    setExportDeliveryAmountTexts(nextExportAmounts);
+
     const daysFromSpec = safeNumOrZero(spec?.tailoring_turnaround_days ?? 0);
     setTailoringTurnaroundDays(daysFromSpec);
 
@@ -640,7 +743,7 @@ export default function UpdateProductScreen() {
         ? [makeEmptyTailoringStyleDraft()]
         : [],
     );
-  }, [selected]);
+  }, [selected, vendorExportRegions]);
 
   useEffect(() => {
     if (!dyeingEnabled && dyeingCost !== 0) setDyeingCost(0);
@@ -882,6 +985,49 @@ export default function UpdateProductScreen() {
     tailoringEnabled,
   ]);
 
+  const editedDeliveryPolicy = useMemo(() => {
+    const exportRegions: Record<string, any> = {};
+    for (const region of vendorExportRegions) {
+      const mode = exportDeliveryModes[region] ?? "app_calculated";
+      exportRegions[region] = {
+        mode,
+        amount_pkr:
+          mode === "vendor_flat"
+            ? safeDeliveryAmount(exportDeliveryAmountTexts[region])
+            : null,
+      };
+    }
+
+    return normalizeDeliveryPolicy(
+      {
+        inland: {
+          mode: inlandDeliveryMode,
+          amount_pkr:
+            inlandDeliveryMode === "vendor_flat"
+              ? safeDeliveryAmount(inlandDeliveryAmountText)
+              : null,
+        },
+        export_regions: exportRegions,
+      },
+      vendorExportRegions,
+    );
+  }, [
+    exportDeliveryAmountTexts,
+    exportDeliveryModes,
+    inlandDeliveryAmountText,
+    inlandDeliveryMode,
+    vendorExportRegions,
+  ]);
+
+  const deliveryPolicyError = useMemo(
+    () => validateDeliveryPolicy(editedDeliveryPolicy, vendorExportRegions),
+    [editedDeliveryPolicy, vendorExportRegions],
+  );
+  const fabricWidth = useMemo(
+    () => normalizeFabricWidth(fabricWidthText),
+    [fabricWidthText],
+  );
+
   const baseRequiredFieldsComplete = useMemo(() => {
     if (!vendorId) return false;
     if (!selectedId) return false;
@@ -890,6 +1036,7 @@ export default function UpdateProductScreen() {
     if (priceMode === "unstitched_per_meter") {
       const n = Number(pricePerMeter ?? 0);
       if (!Number.isFinite(n) || n <= 0) return false;
+      if (!fabricWidth) return false;
 
       if (dyeingEnabled) {
         const d = Number(dyeingCost ?? 0);
@@ -917,13 +1064,17 @@ export default function UpdateProductScreen() {
       if (!Number.isFinite(n) || n <= 0) return false;
     }
 
+    if (deliveryPolicyError) return false;
+
     return true;
   }, [
     vendorId,
     selectedId,
     title,
+    deliveryPolicyError,
     priceMode,
     pricePerMeter,
+    fabricWidth,
     priceTotal,
     dyeingEnabled,
     dyeingCost,
@@ -1076,6 +1227,16 @@ export default function UpdateProductScreen() {
 
     if (missingNewStyleImageMessage) {
       Alert.alert("Missing style image", missingNewStyleImageMessage);
+      return;
+    }
+
+    if (deliveryPolicyError) {
+      Alert.alert("Missing courier charge", deliveryPolicyError);
+      return;
+    }
+
+    if (priceMode === "unstitched_per_meter" && !fabricWidth) {
+      Alert.alert("Missing fabric width", "Enter fabric width (Panna / عرض).");
       return;
     }
 
@@ -1277,6 +1438,7 @@ export default function UpdateProductScreen() {
       };
 
       nextSpec.more_description = String(moreDescription ?? "").trim();
+      nextSpec.delivery_policy = editedDeliveryPolicy;
       const nextProductCategory = editedCategoryFromState(
         priceMode,
         dyeingEnabled,
@@ -1311,6 +1473,9 @@ export default function UpdateProductScreen() {
           nextProductCategory === "unstitched_dyeing_tailoring"
             ? "dress_length"
             : "by_meter";
+        nextSpec.fabric_width = fabricWidth;
+        nextSpec.fabric_width_in = fabricWidth?.value ?? null;
+        nextSpec.fabric_width_label = formatFabricWidth(fabricWidth);
       } else {
         nextSpec.dyeing_enabled = false;
         nextSpec.dyeing_cost_pkr = 0;
@@ -1319,6 +1484,9 @@ export default function UpdateProductScreen() {
         nextSpec.tailoring_cost_pkr = 0;
         nextSpec.tailoring_turnaround_days = 0;
         nextSpec = clearProductTailoringSelections(nextSpec);
+        nextSpec.fabric_width = null;
+        nextSpec.fabric_width_in = null;
+        nextSpec.fabric_width_label = "";
       }
 
       if (priceMode === "stitched_total" && stitchedVariants.length > 0) {
@@ -1957,6 +2125,26 @@ export default function UpdateProductScreen() {
     }
   }
 
+  const usesPerMeterDelivery = priceMode === "unstitched_per_meter";
+  const deliverySectionSubtitle = usesPerMeterDelivery
+    ? "Courier is per meter and multiplies by purchased meters."
+    : "Vendor charge replaces app estimate.";
+  const inlandVendorChargeTitle = usesPerMeterDelivery
+    ? "My Pakistan delivery charge per meter"
+    : "My Pakistan delivery charge";
+  const inlandVendorChargeText = usesPerMeterDelivery
+    ? "Enter PKR per meter."
+    : "Enter one flat PKR charge.";
+  const exportVendorChargeTitle = usesPerMeterDelivery
+    ? "My courier charge per meter"
+    : "My courier charge";
+  const exportVendorChargeText = usesPerMeterDelivery
+    ? "Enter PKR per meter for this region."
+    : "Enter PKR for this region.";
+  const courierConsentText = usesPerMeterDelivery
+    ? `${VENDOR_COURIER_CONSENT_TEXT} Charged per meter.`
+    : VENDOR_COURIER_CONSENT_TEXT;
+
   return (
     <KeyboardAvoidingView
       style={styles.screen}
@@ -2352,6 +2540,18 @@ export default function UpdateProductScreen() {
                     maxLength={12}
                   />
 
+                  <Text style={styles.label}>Fabric width (Panna / عرض) *</Text>
+                  <FastNumberInput
+                    value={fabricWidthText}
+                    onChangeText={(t) => setFabricWidthText(sanitizeNumber(t))}
+                    placeholder="e.g., 44 in"
+                    placeholderTextColor={stylesVars.placeholder}
+                    style={styles.input}
+                    commitMode="change"
+                    keyboardType="decimal-pad"
+                    maxLength={6}
+                  />
+
                   <View
                     style={[
                       styles.serviceEditCard,
@@ -2530,6 +2730,225 @@ export default function UpdateProductScreen() {
           )}
         </UpdateProductSectionCard>
 
+        {selected ? (
+          <UpdateProductSectionCard
+            title="Delivery Policy"
+            subtitle={deliverySectionSubtitle}
+          >
+            <Text style={styles.label}>Within Pakistan</Text>
+            <View style={styles.deliveryChoiceStack}>
+              <Pressable
+                onPress={() => setInlandDeliveryMode("app_calculated")}
+                style={({ pressed }) => [
+                  styles.deliveryChoice,
+                  inlandDeliveryMode === "app_calculated"
+                    ? styles.deliveryChoiceOn
+                    : null,
+                  pressed ? styles.pressed : null,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.deliveryChoiceTitle,
+                    inlandDeliveryMode === "app_calculated"
+                      ? styles.deliveryChoiceTitleOn
+                      : null,
+                  ]}
+                >
+                  App calculated
+                </Text>
+                <Text style={styles.deliveryChoiceText}>
+                  {usesPerMeterDelivery
+                    ? "Uses kg/m; multiplied at checkout."
+                    : "Use app courier estimate."}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setInlandDeliveryMode("free")}
+                style={({ pressed }) => [
+                  styles.deliveryChoice,
+                  inlandDeliveryMode === "free"
+                    ? styles.deliveryChoiceOn
+                    : null,
+                  pressed ? styles.pressed : null,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.deliveryChoiceTitle,
+                    inlandDeliveryMode === "free"
+                      ? styles.deliveryChoiceTitleOn
+                      : null,
+                  ]}
+                >
+                  Free within Pakistan
+                </Text>
+                <Text style={styles.deliveryChoiceText}>
+                  No Pakistan delivery charge.
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setInlandDeliveryMode("vendor_flat")}
+                style={({ pressed }) => [
+                  styles.deliveryChoice,
+                  inlandDeliveryMode === "vendor_flat"
+                    ? styles.deliveryChoiceOn
+                    : null,
+                  pressed ? styles.pressed : null,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.deliveryChoiceTitle,
+                    inlandDeliveryMode === "vendor_flat"
+                      ? styles.deliveryChoiceTitleOn
+                      : null,
+                  ]}
+                >
+                  {inlandVendorChargeTitle}
+                </Text>
+                <Text style={styles.deliveryChoiceText}>
+                  {inlandVendorChargeText}
+                </Text>
+              </Pressable>
+            </View>
+
+            {inlandDeliveryMode === "vendor_flat" ? (
+              <View style={styles.deliveryAmountBox}>
+                <FastNumberInput
+                  value={inlandDeliveryAmountText}
+                  onChangeText={setInlandDeliveryAmountText}
+                  placeholder={
+                    usesPerMeterDelivery
+                      ? "PKR per meter"
+                      : "PKR total"
+                  }
+                  placeholderTextColor={stylesVars.placeholder}
+                  style={styles.input}
+                  commitMode="change"
+                  keyboardType="number-pad"
+                  maxLength={8}
+                />
+                <Text style={styles.deliveryConsentText}>
+                  {courierConsentText}
+                </Text>
+              </View>
+            ) : null}
+
+            <Text style={styles.label}>Export delivery</Text>
+            {vendorExportRegions.length ? (
+              <View style={styles.exportPolicyStack}>
+                {vendorExportRegions.map((region) => {
+                  const mode =
+                    exportDeliveryModes[region] ?? "app_calculated";
+
+                  return (
+                    <View key={region} style={styles.exportPolicyBox}>
+                      <Text style={styles.exportPolicyTitle}>{region}</Text>
+                      <View style={styles.deliveryChoiceStack}>
+                        <Pressable
+                          onPress={() =>
+                            setExportDeliveryModes((prev) => ({
+                              ...prev,
+                              [region]: "app_calculated",
+                            }))
+                          }
+                          style={({ pressed }) => [
+                            styles.deliveryChoice,
+                            mode === "app_calculated"
+                              ? styles.deliveryChoiceOn
+                              : null,
+                            pressed ? styles.pressed : null,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.deliveryChoiceTitle,
+                              mode === "app_calculated"
+                                ? styles.deliveryChoiceTitleOn
+                                : null,
+                            ]}
+                          >
+                            App calculated
+                          </Text>
+                          <Text style={styles.deliveryChoiceText}>
+                            {usesPerMeterDelivery
+                              ? "Uses kg/m for this region."
+                              : "Use app courier estimate."}
+                          </Text>
+                        </Pressable>
+
+                        <Pressable
+                          onPress={() =>
+                            setExportDeliveryModes((prev) => ({
+                              ...prev,
+                              [region]: "vendor_flat",
+                            }))
+                          }
+                          style={({ pressed }) => [
+                            styles.deliveryChoice,
+                            mode === "vendor_flat"
+                              ? styles.deliveryChoiceOn
+                              : null,
+                            pressed ? styles.pressed : null,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.deliveryChoiceTitle,
+                              mode === "vendor_flat"
+                                ? styles.deliveryChoiceTitleOn
+                                : null,
+                            ]}
+                          >
+                            {exportVendorChargeTitle}
+                          </Text>
+                          <Text style={styles.deliveryChoiceText}>
+                            {exportVendorChargeText}
+                          </Text>
+                        </Pressable>
+                      </View>
+
+                      {mode === "vendor_flat" ? (
+                        <View style={styles.deliveryAmountBox}>
+                          <FastNumberInput
+                            value={exportDeliveryAmountTexts[region] ?? ""}
+                            onChangeText={(next) =>
+                              setExportDeliveryAmountTexts((prev) => ({
+                                ...prev,
+                                [region]: next,
+                              }))
+                            }
+                            placeholder={
+                              usesPerMeterDelivery
+                                ? `PKR/m for ${region}`
+                                : `PKR for ${region}`
+                            }
+                            placeholderTextColor={stylesVars.placeholder}
+                            style={styles.input}
+                            commitMode="change"
+                            keyboardType="number-pad"
+                            maxLength={8}
+                          />
+                          <Text style={styles.deliveryConsentText}>
+                            {courierConsentText}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </View>
+            ) : (
+              <Text style={styles.hint}>
+                No export regions selected. Add them in Edit Shop.
+              </Text>
+            )}
+          </UpdateProductSectionCard>
+        ) : null}
+
         {!vendorId ? (
           <UpdateProductNotice title="Vendor not loaded" tone="warning">
             Open from vendor profile.
@@ -2542,7 +2961,9 @@ export default function UpdateProductScreen() {
           canSave={canSave}
           saving={saving}
           saveWarning={
-            showMissingNewStyleImageWarning
+            deliveryPolicyError
+              ? deliveryPolicyError
+              : showMissingNewStyleImageWarning
               ? missingNewStyleImageMessage
               : ""
           }

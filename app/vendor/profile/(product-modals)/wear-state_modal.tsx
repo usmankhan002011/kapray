@@ -9,6 +9,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
+import { closeProductModal } from "@/components/product/productModalNavigation";
 import { getWearStates, WearStateItem } from "@/utils/supabase/wearState";
 
 const GRID_GAP = 8;
@@ -155,11 +156,7 @@ export default function ProductWearStateModal() {
   }, []);
 
   function close() {
-    if (returnTo) {
-      router.replace(returnTo as any);
-      return;
-    }
-    router.back();
+    closeProductModal(router, returnTo);
   }
 
   function toggle(id: string) {

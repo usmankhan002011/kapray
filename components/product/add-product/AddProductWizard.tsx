@@ -19,7 +19,7 @@ import {
   View,
   ViewStyle,
 } from "react-native";
-import { usePathname } from "expo-router";
+import { usePathname, useRouter } from "expo-router";
 
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import {
@@ -141,6 +141,49 @@ function getVisibleSteps(pathname: string, draft: any) {
 function getActiveStep(pathname: string, steps: WizardStep[]) {
   const index = steps.findIndex((step) => step.match(pathname));
   return index >= 0 ? index : 0;
+}
+
+function hasNonEmptyArray(value: unknown) {
+  return Array.isArray(value) && value.length > 0;
+}
+
+function hasPositiveNumber(value: unknown) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0;
+}
+
+function hasText(value: unknown) {
+  return String(value ?? "").trim().length > 0;
+}
+
+export function isPristineProductDraft(draft: any) {
+  const spec = draft?.spec ?? {};
+  const price = draft?.price ?? {};
+  const media = draft?.media ?? {};
+
+  return !(
+    hasText(draft?.title) ||
+    hasPositiveNumber(draft?.inventory_qty) ||
+    hasText(spec?.product_category) ||
+    spec?.made_on_order === true ||
+    hasText(spec?.more_description) ||
+    hasNonEmptyArray(spec?.more_description_parts) ||
+    hasNonEmptyArray(spec?.dressTypeIds) ||
+    hasNonEmptyArray(spec?.fabricTypeIds) ||
+    hasNonEmptyArray(spec?.colorShadeIds) ||
+    hasNonEmptyArray(spec?.workTypeIds) ||
+    hasNonEmptyArray(spec?.workDensityIds) ||
+    hasNonEmptyArray(spec?.originCityIds) ||
+    hasNonEmptyArray(spec?.wearStateIds) ||
+    hasNonEmptyArray(media?.images) ||
+    hasNonEmptyArray(media?.videos) ||
+    hasPositiveNumber(price?.cost_pkr_per_meter) ||
+    hasPositiveNumber(price?.cost_pkr_total) ||
+    hasNonEmptyArray(price?.available_sizes) ||
+    hasNonEmptyArray(price?.simple_ready_inventory) ||
+    hasNonEmptyArray(price?.variants) ||
+    hasNonEmptyArray(price?.made_order_variants)
+  );
 }
 
 function useKeyboardVisible() {
@@ -600,6 +643,25 @@ export function AddProductScreen({
   contentStyle?: StyleProp<ViewStyle>;
   showProgress?: boolean;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const { draft, draftResetReason, draftSessionId } = useProductDraft() as any;
+
+  useEffect(() => {
+    const currentPath = pathname ?? "";
+    const normalizedPath =
+      currentPath.length > 1 && currentPath.endsWith("/")
+        ? currentPath.slice(0, -1)
+        : currentPath;
+
+    if (!normalizedPath.startsWith("/vendor/profile/add-product")) return;
+    if (normalizedPath === "/vendor/profile/add-product") return;
+    if (draftResetReason !== "start-new-product") return;
+    if (!isPristineProductDraft(draft)) return;
+
+    router.replace("/vendor/profile/add-product" as any);
+  }, [draft, draftResetReason, draftSessionId, pathname, router]);
+
   return (
     <KeyboardAvoidingView
       style={apStyles.screen}

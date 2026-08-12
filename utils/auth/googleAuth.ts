@@ -96,6 +96,8 @@ export async function handleGoogleLogin(
           shop_name: user.user_metadata?.shop_name ?? null,
           email: email || null,
           mobile: null,
+          additional_mobile_numbers: [],
+          additional_landline_numbers: [],
           owner_user_id: user.id,
           auth_user_id: user.id,
           offers_dyeing: false,

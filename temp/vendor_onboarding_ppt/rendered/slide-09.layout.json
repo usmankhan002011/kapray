@@ -1,0 +1,721 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/jpotbo",
+    "id": "jpotbo",
+    "slide": 9,
+    "layoutId": "7c4767c6-2cd3-446d-999e-0bd9317db249",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "c87b55d3-10d6-4e9d-a87c-eb0e4424e11b",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Helvetica Neue"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "7c4767c6-2cd3-446d-999e-0bd9317db249",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "c87b55d3-10d6-4e9d-a87c-eb0e4424e11b",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "c87b55d3-10d6-4e9d-a87c-eb0e4424e11b",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/svqxsfm5",
+      "id": "1",
+      "bbox": [
+        48,
+        36,
+        1100,
+        72
+      ],
+      "geometry": "rect",
+      "text": "Orders keep buyer choices through fulfilment",
+      "textPreview": "Orders keep buyer choices through fulfilment",
+      "resolvedFontSize": 38,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 38,
+        "typeface": "Helvetica Neue",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Orders keep buyer choices through fulfilment"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Orders keep buyer choices through fulfilment",
+          "resolvedTextStyle": {
+            "fontSize": 38,
+            "typeface": "Helvetica Neue",
+            "color": "#101828",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Orders keep buyer choices through fulfilment",
+              "fontSize": 38,
+              "typeface": "Helvetica Neue",
+              "color": "#101828",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ruxwzalk",
+      "id": "2",
+      "bbox": [
+        49,
+        112,
+        900,
+        52
+      ],
+      "geometry": "rect",
+      "text": "Order detail screens keep customization, buyer information, payment, delivery, shipping, and tracking together.",
+      "textPreview": "Order detail screens keep customization, buyer information, payment, delivery, shipping, and tracking together.",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 20,
+        "typeface": "Helvetica Neue",
+        "color": "#667085",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Order detail screens keep customization, buyer information, payment, delivery, shipping, and tracking"
+          },
+          {
+            "index": 2,
+            "text": "together."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Order detail screens keep customization, buyer information, payment, delivery, shipping, and tracking together.",
+          "resolvedTextStyle": {
+            "fontSize": 20,
+            "typeface": "Helvetica Neue",
+            "color": "#667085",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Order detail screens keep customization, buyer information, payment, delivery, shipping, and tracking together.",
+              "fontSize": 20,
+              "typeface": "Helvetica Neue",
+              "color": "#667085",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/qtofq54z",
+      "id": "3",
+      "bbox": [
+        48,
+        162,
+        1184,
+        1
+      ],
+      "geometry": "rect",
+      "fillColor": "#B8BCC4",
+      "lineColor": "#B8BCC4",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5sfex03e",
+      "id": "4",
+      "bbox": [
+        1185,
+        666,
+        48,
+        24
+      ],
+      "geometry": "rect",
+      "text": "09",
+      "textPreview": "09",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 12,
+        "typeface": "Helvetica Neue",
+        "color": "#667085",
+        "alignment": "right",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "09"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "09",
+          "resolvedTextStyle": {
+            "fontSize": 12,
+            "typeface": "Helvetica Neue",
+            "color": "#667085",
+            "alignment": "right"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "09",
+              "fontSize": 12,
+              "typeface": "Helvetica Neue",
+              "color": "#667085",
+              "alignment": "right"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/476dovm9",
+      "id": "5",
+      "name": "Frame Place order",
+      "bbox": [
+        138,
+        174,
+        230,
+        480
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#F8FAFC",
+      "lineColor": "#B8BCC4",
+      "lineWidth": 1
+    },
+    {
+      "order": 6,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/mpsj6d8j",
+      "id": "6",
+      "bbox": [
+        144,
+        180,
+        218,
+        468
+      ],
+      "geometry": "rect",
+      "alt": "Place order",
+      "contentType": "image/jpeg",
+      "imageFit": "contain",
+      "imageMask": {
+        "geometry": "rect"
+      },
+      "asset": {
+        "assetId": "aec5b9ae-4fa3-4722-9107-809ddb74e0f8",
+        "contentType": "image/jpeg",
+        "byteLength": 59919
+      }
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/i5ovml43",
+      "id": "7",
+      "bbox": [
+        138,
+        662,
+        230,
+        26
+      ],
+      "geometry": "rect",
+      "text": "Place order",
+      "textPreview": "Place order",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "Helvetica Neue",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Place order"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Place order",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Helvetica Neue",
+            "color": "#101828",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Place order",
+              "fontSize": 16,
+              "typeface": "Helvetica Neue",
+              "color": "#101828",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/9oje943y",
+      "id": "8",
+      "name": "Frame Payment",
+      "bbox": [
+        396,
+        174,
+        230,
+        480
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#F8FAFC",
+      "lineColor": "#B8BCC4",
+      "lineWidth": 1
+    },
+    {
+      "order": 9,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/loj2x87e",
+      "id": "9",
+      "bbox": [
+        402,
+        180,
+        218,
+        468
+      ],
+      "geometry": "rect",
+      "alt": "Payment",
+      "contentType": "image/jpeg",
+      "imageFit": "contain",
+      "imageMask": {
+        "geometry": "rect"
+      },
+      "asset": {
+        "assetId": "e360994d-b142-496b-8073-4c919e85ccee",
+        "contentType": "image/jpeg",
+        "byteLength": 53265
+      }
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/294rqpk7",
+      "id": "10",
+      "bbox": [
+        396,
+        662,
+        230,
+        26
+      ],
+      "geometry": "rect",
+      "text": "Payment",
+      "textPreview": "Payment",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "Helvetica Neue",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Payment"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Payment",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Helvetica Neue",
+            "color": "#101828",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Payment",
+              "fontSize": 16,
+              "typeface": "Helvetica Neue",
+              "color": "#101828",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nud8zals",
+      "id": "11",
+      "name": "Frame Order detail",
+      "bbox": [
+        654,
+        174,
+        230,
+        480
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#F8FAFC",
+      "lineColor": "#B8BCC4",
+      "lineWidth": 1
+    },
+    {
+      "order": 12,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/3epw7i5c",
+      "id": "12",
+      "bbox": [
+        660,
+        180,
+        218,
+        468
+      ],
+      "geometry": "rect",
+      "alt": "Order detail",
+      "contentType": "image/jpeg",
+      "imageFit": "contain",
+      "imageMask": {
+        "geometry": "rect"
+      },
+      "asset": {
+        "assetId": "20b3c597-d6a7-4988-aa4d-e092c597b8b8",
+        "contentType": "image/jpeg",
+        "byteLength": 69151
+      }
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/pwvq1k3i",
+      "id": "13",
+      "bbox": [
+        654,
+        662,
+        230,
+        26
+      ],
+      "geometry": "rect",
+      "text": "Order detail",
+      "textPreview": "Order detail",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "Helvetica Neue",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Order detail"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Order detail",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Helvetica Neue",
+            "color": "#101828",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Order detail",
+              "fontSize": 16,
+              "typeface": "Helvetica Neue",
+              "color": "#101828",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/e5k7m54v",
+      "id": "14",
+      "name": "Frame Delivery tracking",
+      "bbox": [
+        912,
+        174,
+        230,
+        480
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#F8FAFC",
+      "lineColor": "#B8BCC4",
+      "lineWidth": 1
+    },
+    {
+      "order": 15,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/grydw3ml",
+      "id": "15",
+      "bbox": [
+        918,
+        180,
+        218,
+        468
+      ],
+      "geometry": "rect",
+      "alt": "Delivery tracking",
+      "contentType": "image/jpeg",
+      "imageFit": "contain",
+      "imageMask": {
+        "geometry": "rect"
+      },
+      "asset": {
+        "assetId": "bc4dbceb-6fd8-4f88-9835-02de1d016186",
+        "contentType": "image/jpeg",
+        "byteLength": 55581
+      }
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0729ofm1",
+      "id": "16",
+      "bbox": [
+        912,
+        662,
+        230,
+        26
+      ],
+      "geometry": "rect",
+      "text": "Delivery tracking",
+      "textPreview": "Delivery tracking",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "Helvetica Neue",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Delivery tracking"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Delivery tracking",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Helvetica Neue",
+            "color": "#101828",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Delivery tracking",
+              "fontSize": 16,
+              "typeface": "Helvetica Neue",
+              "color": "#101828",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

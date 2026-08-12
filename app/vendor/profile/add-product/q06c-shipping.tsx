@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, type TextInput, View } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAppSelector } from "@/store/hooks";
@@ -13,12 +13,24 @@ import {
 import {
   AddProductCard,
   AddProductChip,
+  AddProductChoice,
   AddProductField,
   AddProductInput,
   AddProductPrimaryButton,
   AddProductScreen,
   AddProductSecondaryButton,
 } from "@/components/product/add-product/AddProductWizard";
+import type { ExportRegion } from "@/data/kapray/productTypes";
+import {
+  isUnstitchedDeliveryCategory,
+  normalizeDeliveryPolicy,
+  normalizeExportRegionList,
+  safeDeliveryAmount,
+  validateDeliveryPolicy,
+  VENDOR_COURIER_CONSENT_TEXT,
+  type ExportDeliveryMode,
+  type InlandDeliveryMode,
+} from "@/utils/kapray/deliveryPolicy";
 
 type DimensionUnit = "cm" | "in";
 type ProductCategory =
@@ -165,17 +177,36 @@ export default function Q06CShipping() {
   const heightRef = useRef<TextInput>(null);
   const previewCalculatedRef = useRef(false);
 
-  const vendorIdRaw =
-    useAppSelector((s: any) => s?.vendorSlice?.vendor?.id ?? null) ??
-    useAppSelector((s: any) => s?.vendor?.id ?? null);
+  const vendorState = useAppSelector((s: any) => {
+    const sliceVendor = s?.vendorSlice?.vendor ?? {};
+    const vendor = s?.vendor ?? {};
+    return {
+      id: sliceVendor?.id ?? s?.vendorSlice?.id ?? vendor?.id ?? null,
+      exports_enabled:
+        sliceVendor?.exports_enabled ??
+        s?.vendorSlice?.exports_enabled ??
+        vendor?.exports_enabled ??
+        false,
+      export_regions:
+        sliceVendor?.export_regions ??
+        s?.vendorSlice?.export_regions ??
+        vendor?.export_regions ??
+        [],
+    };
+  });
 
-  const vendorId = safeInt(vendorIdRaw);
+  const vendorId = safeInt(vendorState.id);
+  const vendorExportsEnabled = Boolean(vendorState.exports_enabled);
+  const vendorExportRegions = useMemo<ExportRegion[]>(() => {
+    if (!vendorExportsEnabled) return [];
+    const selected = normalizeExportRegionList(vendorState.export_regions);
+    return EXPORT_REGIONS.filter((region) => selected.includes(region));
+  }, [vendorState.export_regions, vendorExportsEnabled]);
 
   const ctx = useProductDraft() as any;
   const { draft } = ctx;
   const category = inferCategoryFromDraft(draft);
-  const isFabricByMeter =
-    category === "unstitched_plain" || category === "unstitched_dyeing";
+  const isFabricByMeter = isUnstitchedDeliveryCategory(category);
 
   function patchSpec(patch: any) {
     if (typeof ctx.setSpec === "function") {
@@ -237,10 +268,77 @@ export default function Q06CShipping() {
   const [height, setHeight] = useState<string>(initialHeightText);
   const [hasCalculatedPreview, setHasCalculatedPreview] = useState(false);
 
+  const deliveryPolicySeed = useMemo(
+    () => normalizeDeliveryPolicy(draft?.spec?.delivery_policy, vendorExportRegions),
+    [draft?.spec?.delivery_policy, vendorExportRegions],
+  );
+  const deliveryPolicySeedKey = useMemo(
+    () => JSON.stringify(deliveryPolicySeed),
+    [deliveryPolicySeed],
+  );
+  const initialExportModes = useMemo(() => {
+    const out: Record<string, ExportDeliveryMode> = {};
+    for (const region of vendorExportRegions) {
+      out[region] =
+        deliveryPolicySeed.export_regions[region]?.mode ?? "app_calculated";
+    }
+    return out;
+  }, [deliveryPolicySeed, vendorExportRegions]);
+  const initialExportAmounts = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const region of vendorExportRegions) {
+      out[region] = initialPositiveNumberText(
+        deliveryPolicySeed.export_regions[region]?.amount_pkr,
+      );
+    }
+    return out;
+  }, [deliveryPolicySeed, vendorExportRegions]);
+
+  const [inlandMode, setInlandMode] = useState<InlandDeliveryMode>(
+    deliveryPolicySeed.inland.mode,
+  );
+  const [inlandAmountText, setInlandAmountText] = useState(
+    initialPositiveNumberText(deliveryPolicySeed.inland.amount_pkr),
+  );
+  const [exportModes, setExportModes] =
+    useState<Record<string, ExportDeliveryMode>>(initialExportModes);
+  const [exportAmountTexts, setExportAmountTexts] =
+    useState<Record<string, string>>(initialExportAmounts);
+
+  useEffect(() => {
+    setInlandMode(deliveryPolicySeed.inland.mode);
+    setInlandAmountText(
+      initialPositiveNumberText(deliveryPolicySeed.inland.amount_pkr),
+    );
+    setExportModes(initialExportModes);
+    setExportAmountTexts(initialExportAmounts);
+  }, [deliveryPolicySeedKey, initialExportAmounts, initialExportModes, deliveryPolicySeed]);
+
   const canContinue = useMemo(() => {
     return Boolean(vendorId);
   }, [vendorId]);
   const weightLabel = isFabricByMeter ? "Weight per meter (kg)" : "Weight (kg)";
+  const deliveryAmountHint = isFabricByMeter
+    ? "Courier is per meter and multiplies by purchased meters."
+    : "One delivery rule for this product.";
+  const inlandVendorChargeTitle = isFabricByMeter
+    ? "My Pakistan delivery charge per meter"
+    : "My Pakistan delivery charge";
+  const inlandVendorChargeDescription = isFabricByMeter
+    ? "Enter PKR per meter."
+    : "Enter one flat PKR charge.";
+  const exportVendorChargeTitle = isFabricByMeter
+    ? "My courier charge per meter"
+    : "My courier charge";
+  const exportVendorChargeDescription = isFabricByMeter
+    ? "Enter PKR per meter for this region."
+    : "Enter PKR for this region.";
+  const amountPlaceholder = isFabricByMeter
+    ? "PKR per meter"
+    : "PKR total";
+  const courierConsentText = isFabricByMeter
+    ? `${VENDOR_COURIER_CONSENT_TEXT} Charged per meter.`
+    : VENDOR_COURIER_CONSENT_TEXT;
   const disabledHint = !vendorId ? "Vendor not loaded." : "";
 
   function syncPreviewState() {
@@ -278,17 +376,19 @@ export default function Q06CShipping() {
       Number.isFinite(rawHeightCm) && rawHeightCm > 0 ? Math.ceil(rawHeightCm) : 0;
 
     const dimensionalWeightKg =
-      lengthCm > 0 && widthCm > 0 && heightCm > 0
+      !isFabricByMeter && lengthCm > 0 && widthCm > 0 && heightCm > 0
         ? (lengthCm * widthCm * heightCm) / 5000
         : 0;
 
-    const chargeableWeightKg = Math.max(safeActualWeightKg, dimensionalWeightKg);
+    const chargeableWeightKg = isFabricByMeter
+      ? safeActualWeightKg
+      : Math.max(safeActualWeightKg, dimensionalWeightKg);
 
     const roundedChargeableWeightKg =
       chargeableWeightKg > 0 ? Math.ceil(chargeableWeightKg * 2) / 2 : 0;
 
     const packageCm =
-      lengthCm > 0 && widthCm > 0 && heightCm > 0
+      !isFabricByMeter && lengthCm > 0 && widthCm > 0 && heightCm > 0
         ? { length: lengthCm, width: widthCm, height: heightCm }
         : undefined;
 
@@ -302,7 +402,7 @@ export default function Q06CShipping() {
           } as any)
         : null;
 
-    const exportAmounts = EXPORT_REGIONS.map((region) => ({
+    const exportAmounts = vendorExportRegions.map((region) => ({
       region,
       amountPkr:
         roundedChargeableWeightKg > 0
@@ -332,12 +432,18 @@ export default function Q06CShipping() {
         : [];
 
     const volumetricRatio =
-      safeActualWeightKg > 0 ? dimensionalWeightKg / safeActualWeightKg : 0;
+      !isFabricByMeter && safeActualWeightKg > 0
+        ? dimensionalWeightKg / safeActualWeightKg
+        : 0;
     const dimensionalExceedsActual =
-      safeActualWeightKg > 0 && dimensionalWeightKg > safeActualWeightKg;
+      !isFabricByMeter &&
+      safeActualWeightKg > 0 &&
+      dimensionalWeightKg > safeActualWeightKg;
 
     const efficiencyLevel =
-      dimensionalExceedsActual
+      isFabricByMeter
+        ? "green"
+        : dimensionalExceedsActual
         ? "red"
         : volumetricRatio >= 1.5
           ? "yellow"
@@ -353,14 +459,14 @@ export default function Q06CShipping() {
     const warningText =
       dimensionalExceedsActual
         ? "Review package size. Dimensional weight may push the parcel into the next slab and increase courier cost."
-        : efficiencyLevel === "red"
+        : !isFabricByMeter && efficiencyLevel === "red"
           ? "Volumetric weight is dominating strongly. Courier cost may be much higher than physical weight suggests."
-        : efficiencyLevel === "yellow"
+        : !isFabricByMeter && efficiencyLevel === "yellow"
           ? "Volumetric weight is affecting courier cost. Tighter packaging may reduce charges."
           : "";
 
     const suggestedHeightCm =
-      lengthCm > 0 && widthCm > 0 && safeActualWeightKg > 0
+      !isFabricByMeter && lengthCm > 0 && widthCm > 0 && safeActualWeightKg > 0
         ? Math.max(1, Math.floor((safeActualWeightKg * 5000) / (lengthCm * widthCm)))
         : 0;
 
@@ -405,7 +511,15 @@ export default function Q06CShipping() {
       suggestedChargeableWeightKg,
       suggestedHeightCm,
     };
-  }, [dimensionUnit, height, length, weight, width]);
+  }, [
+    dimensionUnit,
+    height,
+    isFabricByMeter,
+    length,
+    vendorExportRegions,
+    weight,
+    width,
+  ]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -473,19 +587,71 @@ export default function Q06CShipping() {
       return null;
     }
 
-    if (
-      !Number.isFinite(l) ||
-      l <= 0 ||
-      !Number.isFinite(wi) ||
-      wi <= 0 ||
-      !Number.isFinite(h) ||
-      h <= 0
-    ) {
+    const hasValidDimensions =
+      !isFabricByMeter &&
+      Number.isFinite(l) &&
+      l > 0 &&
+      Number.isFinite(wi) &&
+      wi > 0 &&
+      Number.isFinite(h) &&
+      h > 0;
+
+    if (!isFabricByMeter && !hasValidDimensions) {
       Alert.alert("Invalid dimensions", "Enter valid package dimensions.");
       return null;
     }
 
-    return { h, heightInput, l, lengthInput, w, wi, widthInput };
+    return {
+      h,
+      hasPackageDimensions: hasValidDimensions,
+      heightInput,
+      l,
+      lengthInput,
+      w,
+      wi,
+      widthInput,
+    };
+  }
+
+  function buildDeliveryPolicyFromInputs() {
+    const exportRegions: Record<string, any> = {};
+
+    for (const region of vendorExportRegions) {
+      const mode = exportModes[region] ?? "app_calculated";
+      exportRegions[region] = {
+        mode,
+        amount_pkr:
+          mode === "vendor_flat"
+            ? safeDeliveryAmount(exportAmountTexts[region])
+            : null,
+      };
+    }
+
+    return normalizeDeliveryPolicy(
+      {
+        inland: {
+          mode: inlandMode,
+          amount_pkr:
+            inlandMode === "vendor_flat"
+              ? safeDeliveryAmount(inlandAmountText)
+              : null,
+        },
+        export_regions: exportRegions,
+      },
+      vendorExportRegions,
+    );
+  }
+
+  function readValidDeliveryPolicy() {
+    const policy = buildDeliveryPolicyFromInputs();
+    const policyError = validateDeliveryPolicy(policy, vendorExportRegions);
+
+    if (policyError) {
+      Alert.alert("Missing courier charge", policyError);
+      return null;
+    }
+
+    return policy;
   }
 
   function onCalculate() {
@@ -500,31 +666,45 @@ export default function Q06CShipping() {
   function onContinue() {
     const values = readValidShippingValues();
     if (!values) return;
+    const deliveryPolicy = readValidDeliveryPolicy();
+    if (!deliveryPolicy) return;
 
     if (!previewCalculatedRef.current || !hasCalculatedPreview) {
       Alert.alert(
-        "Calculate shipping first",
-        "Press Calculate to review the actual, dimensional, and chargeable weight before continuing.",
+        "Calculate first",
+        "Tap Calculate first.",
       );
       return;
     }
 
-    const { h, heightInput, l, lengthInput, w, wi, widthInput } = values;
+    const {
+      h,
+      hasPackageDimensions,
+      heightInput,
+      l,
+      lengthInput,
+      w,
+      wi,
+      widthInput,
+    } = values;
 
     patchSpec({
+      delivery_policy: deliveryPolicy,
       weight_kg: w,
       weight_per_meter_kg: isFabricByMeter ? w : null,
       shipping_weight_mode: isFabricByMeter ? "per_meter" : "per_order",
-      package_dimension_unit: dimensionUnit,
+      package_dimension_unit: hasPackageDimensions ? dimensionUnit : null,
       package_in:
-        dimensionUnit === "in"
+        hasPackageDimensions && dimensionUnit === "in"
           ? { length: lengthInput, width: widthInput, height: heightInput }
           : null,
-      package_cm: {
-        length: Math.round(l * 100) / 100,
-        width: Math.round(wi * 100) / 100,
-        height: Math.round(h * 100) / 100,
-      },
+      package_cm: hasPackageDimensions
+        ? {
+            length: Math.round(l * 100) / 100,
+            width: Math.round(wi * 100) / 100,
+            height: Math.round(h * 100) / 100,
+          }
+        : null,
     });
 
     if (returnTo) {
@@ -573,80 +753,216 @@ export default function Q06CShipping() {
             keyboardType="decimal-pad"
             maxLength={6}
             returnKeyType="next"
+            commitMode="change"
+            commitDelayMs={0}
           />
         </AddProductField>
 
+        {!isFabricByMeter ? (
+          <AddProductField label="Package dimensions" required>
+            <View style={styles.unitRow}>
+              <AddProductChip
+                label="cm"
+                selected={dimensionUnit === "cm"}
+                onPress={() => onChangeDimensionUnit("cm")}
+              />
+              <AddProductChip
+                label="in"
+                selected={dimensionUnit === "in"}
+                onPress={() => onChangeDimensionUnit("in")}
+              />
+            </View>
+
+            <View style={styles.dimensionRow}>
+              <View style={styles.dimensionField}>
+                <Text style={apStyles.label}>Length</Text>
+                <AddProductInput
+                  key={`length-${dimensionUnit}`}
+                  ref={lengthRef}
+                  defaultValue={length}
+                  onChangeText={markPreviewDirty}
+                  placeholder="L"
+                  textValueRef={lengthTextRef}
+                  sanitizeText={sanitizeNumber}
+                  keyboardType="decimal-pad"
+                  returnKeyType="next"
+                  commitMode="change"
+                  commitDelayMs={0}
+                />
+              </View>
+
+              <View style={styles.dimensionField}>
+                <Text style={apStyles.label}>Width</Text>
+                <AddProductInput
+                  key={`width-${dimensionUnit}`}
+                  ref={widthRef}
+                  defaultValue={width}
+                  onChangeText={markPreviewDirty}
+                  placeholder="W"
+                  textValueRef={widthTextRef}
+                  sanitizeText={sanitizeNumber}
+                  keyboardType="decimal-pad"
+                  returnKeyType="next"
+                  commitMode="change"
+                  commitDelayMs={0}
+                />
+              </View>
+
+              <View style={styles.dimensionField}>
+                <Text style={apStyles.label}>Height</Text>
+                <AddProductInput
+                  key={`height-${dimensionUnit}`}
+                  ref={heightRef}
+                  defaultValue={height}
+                  onChangeText={markPreviewDirty}
+                  placeholder="H"
+                  textValueRef={heightTextRef}
+                  sanitizeText={sanitizeNumber}
+                  keyboardType="decimal-pad"
+                  returnKeyType="done"
+                  commitMode="change"
+                  commitDelayMs={0}
+                />
+              </View>
+            </View>
+          </AddProductField>
+        ) : null}
+
         <AddProductField
-          label={
-            isFabricByMeter
-              ? "Package dimensions per meter"
-              : "Package dimensions"
-          }
-          hint={
-            isFabricByMeter
-              ? "Enter 1m packed size. Keep dimensional weight low; checkout multiplies by meters."
-              : undefined
-          }
+          label="Within Pakistan delivery"
+          required
+          hint={deliveryAmountHint}
         >
-          <View style={styles.unitRow}>
-            <AddProductChip
-              label="cm"
-              selected={dimensionUnit === "cm"}
-              onPress={() => onChangeDimensionUnit("cm")}
+          <View style={styles.choiceStack}>
+            <AddProductChoice
+              title="App calculated"
+              description={
+                isFabricByMeter
+                  ? "Uses kg/m; multiplied at checkout."
+                  : "Use app courier estimate."
+              }
+              selected={inlandMode === "app_calculated"}
+              onPress={() => setInlandMode("app_calculated")}
+              icon="calculate"
+              showCheckIcon
             />
-            <AddProductChip
-              label="in"
-              selected={dimensionUnit === "in"}
-              onPress={() => onChangeDimensionUnit("in")}
+            <AddProductChoice
+              title="Free within Pakistan"
+              description="No Pakistan delivery charge."
+              selected={inlandMode === "free"}
+              onPress={() => setInlandMode("free")}
+              icon="local-shipping"
+              showCheckIcon
+            />
+            <AddProductChoice
+              title={inlandVendorChargeTitle}
+              description={inlandVendorChargeDescription}
+              selected={inlandMode === "vendor_flat"}
+              onPress={() => setInlandMode("vendor_flat")}
+              icon="edit"
+              showCheckIcon
             />
           </View>
 
-          <View style={styles.dimensionRow}>
-            <View style={styles.dimensionField}>
-              <Text style={apStyles.label}>Length</Text>
+          {inlandMode === "vendor_flat" ? (
+            <View style={styles.policyAmountBox}>
               <AddProductInput
-                key={`length-${dimensionUnit}`}
-                ref={lengthRef}
-                defaultValue={length}
-                onChangeText={markPreviewDirty}
-                placeholder="L"
-                textValueRef={lengthTextRef}
+                value={inlandAmountText}
+                onChangeText={setInlandAmountText}
+                placeholder={amountPlaceholder}
                 sanitizeText={sanitizeNumber}
-                keyboardType="decimal-pad"
-                returnKeyType="next"
+                keyboardType="number-pad"
+                maxLength={8}
+                commitMode="change"
+                commitDelayMs={0}
               />
+              <Text style={styles.consentText}>
+                {courierConsentText}
+              </Text>
             </View>
+          ) : null}
+        </AddProductField>
 
-            <View style={styles.dimensionField}>
-              <Text style={apStyles.label}>Width</Text>
-              <AddProductInput
-                key={`width-${dimensionUnit}`}
-                ref={widthRef}
-                defaultValue={width}
-                onChangeText={markPreviewDirty}
-                placeholder="W"
-                textValueRef={widthTextRef}
-                sanitizeText={sanitizeNumber}
-                keyboardType="decimal-pad"
-                returnKeyType="next"
-              />
-            </View>
+        <AddProductField
+          label="Export delivery"
+          hint="Only export regions selected in your shop profile are shown here."
+        >
+          {vendorExportsEnabled && vendorExportRegions.length ? (
+            <View style={styles.exportPolicyStack}>
+              {vendorExportRegions.map((region) => {
+                const mode = exportModes[region] ?? "app_calculated";
 
-            <View style={styles.dimensionField}>
-              <Text style={apStyles.label}>Height</Text>
-              <AddProductInput
-                key={`height-${dimensionUnit}`}
-                ref={heightRef}
-                defaultValue={height}
-                onChangeText={markPreviewDirty}
-                placeholder="H"
-                textValueRef={heightTextRef}
-                sanitizeText={sanitizeNumber}
-                keyboardType="decimal-pad"
-                returnKeyType="done"
-              />
+                return (
+                  <View key={region} style={styles.regionPolicyBox}>
+                    <Text style={styles.regionTitle}>{region}</Text>
+                    <View style={styles.choiceStack}>
+                      <AddProductChoice
+                        title="App calculated"
+                        description={
+                          isFabricByMeter
+                            ? "Uses kg/m; multiplied at checkout."
+                            : "Use app courier estimate."
+                        }
+                        selected={mode === "app_calculated"}
+                        onPress={() =>
+                          setExportModes((prev) => ({
+                            ...prev,
+                            [region]: "app_calculated",
+                          }))
+                        }
+                        icon="calculate"
+                        showCheckIcon
+                      />
+                      <AddProductChoice
+                        title={exportVendorChargeTitle}
+                        description={exportVendorChargeDescription}
+                        selected={mode === "vendor_flat"}
+                        onPress={() =>
+                          setExportModes((prev) => ({
+                            ...prev,
+                            [region]: "vendor_flat",
+                          }))
+                        }
+                        icon="edit"
+                        showCheckIcon
+                      />
+                    </View>
+
+                    {mode === "vendor_flat" ? (
+                      <View style={styles.policyAmountBox}>
+                        <AddProductInput
+                          value={exportAmountTexts[region] ?? ""}
+                          onChangeText={(next) =>
+                            setExportAmountTexts((prev) => ({
+                              ...prev,
+                              [region]: next,
+                            }))
+                          }
+                          placeholder={
+                            isFabricByMeter
+                              ? `PKR/m for ${region}`
+                              : `PKR for ${region}`
+                          }
+                          sanitizeText={sanitizeNumber}
+                          keyboardType="number-pad"
+                          maxLength={8}
+                          commitMode="change"
+                          commitDelayMs={0}
+                        />
+                        <Text style={styles.consentText}>
+                          {courierConsentText}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                );
+              })}
             </View>
-          </View>
+          ) : (
+            <Text style={styles.mutedHint}>
+              No export regions selected. Add them in Edit Shop.
+            </Text>
+          )}
         </AddProductField>
 
         <AddProductSecondaryButton
@@ -658,7 +974,9 @@ export default function Q06CShipping() {
         {hasCalculatedPreview ? (
           <View style={styles.preview}>
             <Text style={styles.previewText}>
-              Courier uses higher of actual and dimensional weight.
+              {isFabricByMeter
+                ? "Uses kg/m only. No dimensions."
+                : "Uses higher of actual and dimensional weight."}
             </Text>
 
             {!!shippingPreview.actualWeightKg && (
@@ -712,7 +1030,7 @@ export default function Q06CShipping() {
                 ))}
                 {isFabricByMeter ? (
                   <Text style={styles.slabGuideNote}>
-                    Final order weight scales with meters purchased.
+                    Max checkout: 20m / 20kg.
                   </Text>
                 ) : null}
               </View>
@@ -757,24 +1075,31 @@ export default function Q06CShipping() {
 
             {!!shippingPreview.inlandAmountPkr && (
               <Text style={styles.previewAmountText}>
-                Within Pakistan Estimated Courier
-                {isFabricByMeter ? " per meter" : " (avg distance)"}: PKR{" "}
-                {shippingPreview.inlandAmountPkr}
+                Pakistan Courier{isFabricByMeter ? " / m" : ""}:{" "}
+                <Text style={styles.costText}>
+                  PKR {shippingPreview.inlandAmountPkr}
+                </Text>
               </Text>
             )}
 
-            <Text style={styles.previewHeadingText}>
-              Export Estimated Courier:
-            </Text>
+            {shippingPreview.exportAmounts.length ? (
+              <>
+                <Text style={styles.previewHeadingText}>
+                  Export Courier:
+                </Text>
 
-            {shippingPreview.exportAmounts.map((item) => (
-              <Text key={item.region} style={styles.previewText}>
-                {item.region}:{" "}
-                {item.amountPkr && Number(item.amountPkr) > 0
-                  ? `PKR ${item.amountPkr}`
-                  : "Not available"}
-              </Text>
-            ))}
+                {shippingPreview.exportAmounts.map((item) => (
+                  <Text key={item.region} style={styles.previewText}>
+                    {item.region}:{" "}
+                    {item.amountPkr && Number(item.amountPkr) > 0 ? (
+                      <Text style={styles.costText}>PKR {item.amountPkr}</Text>
+                    ) : (
+                      "Not available"
+                    )}
+                  </Text>
+                ))}
+              </>
+            ) : null}
           </View>
         ) : null}
 
@@ -813,19 +1138,57 @@ const styles = StyleSheet.create({
   dimensionField: {
     width: "32%",
   },
+  choiceStack: {
+    gap: 6,
+    marginTop: 8,
+  },
+  policyAmountBox: {
+    marginTop: 8,
+    gap: 4,
+  },
+  exportPolicyStack: {
+    gap: 8,
+    marginTop: 8,
+  },
+  regionPolicyBox: {
+    borderWidth: 1,
+    borderColor: apColors.borderSoft,
+    borderRadius: 8,
+    backgroundColor: apColors.bg,
+    padding: 8,
+  },
+  regionTitle: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: apColors.text,
+    fontWeight: "800",
+  },
+  consentText: {
+    fontSize: 10,
+    lineHeight: 13,
+    color: apColors.danger,
+    fontWeight: "700",
+  },
+  mutedHint: {
+    marginTop: 8,
+    fontSize: 11,
+    lineHeight: 16,
+    color: apColors.muted,
+    fontWeight: "600",
+  },
   preview: {
-    marginTop: 12,
-    padding: 10,
+    marginTop: 10,
+    padding: 8,
     borderWidth: 1,
     borderColor: "#BBF7D0",
     borderRadius: 8,
     backgroundColor: apColors.successSoft,
-    gap: 4,
+    gap: 3,
   },
   previewText: {
     fontSize: 10,
     lineHeight: 14,
-    color: apColors.subText,
+    color: apColors.text,
     fontWeight: "600",
   },
   previewMetricText: {
@@ -877,6 +1240,9 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     color: apColors.text,
     fontWeight: "700",
+  },
+  costText: {
+    color: apColors.danger,
   },
   previewHeadingText: {
     marginTop: 4,

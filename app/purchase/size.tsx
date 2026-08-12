@@ -16,6 +16,7 @@ import {
   apRadii,
 } from "@/components/product/addProductStyles";
 import { generateDyePalette } from "@/utils/kapray/dyePalette";
+import { decodeDeliveryPolicyParam } from "@/utils/kapray/deliveryPolicy";
 import ExactMeasurementsModal from "../(tabs)/flow/purchase/exact-measurements-modal";
 import type { ExactMeasurementSheetRow } from "../(tabs)/flow/purchase/exact-measurements-sheet";
 
@@ -56,6 +57,7 @@ const stylesVars = {
   mutedText: apColors.muted,
   placeholder: "#94A3B8",
   danger: apColors.danger,
+  warning: apColors.warning,
   white: apColors.white,
   green: apColors.success,
   greenSoft: apColors.successSoft,
@@ -100,35 +102,6 @@ function sanitizeNumber(input: string) {
 
 function roundMeter(n: number) {
   return Math.round(n * 100) / 100;
-}
-
-function roundCm(n: number) {
-  return Math.round(n * 100) / 100;
-}
-
-function normalizePackageCm(value: unknown) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const row = value as Record<string, unknown>;
-  const length = safePositiveNumber(row.length);
-  const width = safePositiveNumber(row.width);
-  const height = safePositiveNumber(row.height);
-  if (!(length > 0 && width > 0 && height > 0)) return null;
-  return { length, width, height };
-}
-
-function encodePackageCmForMeterPurchase(value: unknown, meterLength: number) {
-  const packageCm = normalizePackageCm(
-    safeJsonDecode<Record<string, unknown> | null>(value, null),
-  );
-  if (!packageCm || !(meterLength > 0)) return norm(value);
-
-  return encodeURIComponent(
-    JSON.stringify({
-      length: roundCm(packageCm.length),
-      width: roundCm(packageCm.width),
-      height: roundCm(packageCm.height * meterLength),
-    }),
-  );
 }
 
 function getShadeColumnIndex(id: string) {
@@ -193,6 +166,7 @@ export default function SizeScreen() {
     price_per_meter_pkr?: string;
     available_fabric_m?: string;
     fabric_purchase_mode?: string;
+    fabric_width_label?: string;
     stitched_total_pkr?: string;
     currency?: string;
     imageUrl?: string;
@@ -224,6 +198,7 @@ export default function SizeScreen() {
 
     exports_enabled?: string;
     export_regions?: string;
+    delivery_policy?: string;
     weight_kg?: string;
     weight_per_meter_kg?: string;
     package_cm?: string;
@@ -448,6 +423,10 @@ export default function SizeScreen() {
     () => safePositiveNumber(params.available_fabric_m),
     [params.available_fabric_m],
   );
+  const fabricWidthLabel = useMemo(
+    () => safeDecode(params.fabric_width_label),
+    [params.fabric_width_label],
+  );
 
   const selectedMeterLength = useMemo(() => {
     const n = Number(sanitizeNumber(fabricLengthText));
@@ -547,27 +526,38 @@ export default function SizeScreen() {
     ? dyeSplitTotalCostPkr
     : selectedMeterDyeingCost;
 
-  const weightPerMeterKg = useMemo(
-    () =>
-      safePositiveNumber(params.weight_per_meter_kg) ||
-      safePositiveNumber(params.weight_kg),
-    [params.weight_kg, params.weight_per_meter_kg],
+  const routeShippingWeightKg = useMemo(
+    () => safePositiveNumber(params.weight_kg),
+    [params.weight_kg],
   );
+  const weightPerMeterKg = useMemo(
+    () => safePositiveNumber(params.weight_per_meter_kg),
+    [params.weight_per_meter_kg],
+  );
+  const deliveryPolicy = useMemo(
+    () => decodeDeliveryPolicyParam(params.delivery_policy),
+    [params.delivery_policy],
+  );
+  const meterShippingLimits = deliveryPolicy.meter_shipping;
 
   const selectedMeterShippingWeightKg = useMemo(
     () => roundMeter(selectedMeterLength * weightPerMeterKg),
     [selectedMeterLength, weightPerMeterKg],
   );
 
-  const selectedMeterPackageCmParam = useMemo(
-    () => encodePackageCmForMeterPurchase(params.package_cm, selectedMeterLength),
-    [params.package_cm, selectedMeterLength],
-  );
+  const meterLengthOverLimit =
+    selectedMeterLength > meterShippingLimits.max_checkout_m;
+  const meterWeightSoftWarning =
+    selectedMeterShippingWeightKg > meterShippingLimits.soft_weight_warning_kg;
+  const meterWeightOverLimit =
+    selectedMeterShippingWeightKg > meterShippingLimits.max_checkout_weight_kg;
 
   const canContinueMeter =
     selectedMeterLength > 0 &&
     pricePerMeterPkr > 0 &&
     (availableFabricM <= 0 || selectedMeterLength <= availableFabricM) &&
+    !meterLengthOverLimit &&
+    !meterWeightOverLimit &&
     dyeSplitsValid;
 
   const dyeStageInstruction = useMemo(() => {
@@ -832,6 +822,10 @@ export default function SizeScreen() {
     }
 
     const fabricCostPkr = isUnstitched ? pricePerMeterPkr * fabricLengthM : 0;
+    const shippingWeightKg =
+      isUnstitched && fabricLengthM > 0 && weightPerMeterKg > 0
+        ? roundMeter(fabricLengthM * weightPerMeterKg)
+        : 0;
     const encodedSize = encodeURIComponent(size);
     setPendingStandardSize(size);
 
@@ -848,6 +842,15 @@ export default function SizeScreen() {
           : "",
       fabric_cost_pkr:
         isUnstitched && fabricCostPkr > 0 ? String(fabricCostPkr) : "",
+      weight_kg:
+        isUnstitched && shippingWeightKg > 0
+          ? String(shippingWeightKg)
+          : norm(params.weight_kg),
+      weight_per_meter_kg:
+        isUnstitched && weightPerMeterKg > 0
+          ? String(weightPerMeterKg)
+          : norm(params.weight_per_meter_kg),
+      package_cm: isUnstitched ? "" : norm(params.package_cm),
 
       m1: "",
       m2: "",
@@ -923,10 +926,12 @@ export default function SizeScreen() {
       weight_kg:
         selectedMeterShippingWeightKg > 0
           ? String(selectedMeterShippingWeightKg)
-          : "",
+          : routeShippingWeightKg > 0
+            ? String(routeShippingWeightKg)
+            : "",
       weight_per_meter_kg:
         weightPerMeterKg > 0 ? String(weightPerMeterKg) : "",
-      package_cm: selectedMeterPackageCmParam,
+      package_cm: "",
 
       m1: "",
       m2: "",
@@ -1082,6 +1087,15 @@ export default function SizeScreen() {
                   </Text>
                 </Text>
 
+                {fabricWidthLabel ? (
+                  <Text style={styles.summaryText}>
+                    Panna / عرض:{" "}
+                    <Text style={styles.summaryStrong}>
+                      {fabricWidthLabel}
+                    </Text>
+                  </Text>
+                ) : null}
+
                 {isFabricByMeterPurchase ? (
                   <Text style={styles.summaryText}>
                     Available fabric:{" "}
@@ -1185,11 +1199,32 @@ export default function SizeScreen() {
               ) : null}
             </View>
 
+            <Text style={styles.helper}>
+              Retail checkout allows up to {meterShippingLimits.max_checkout_m} m per order. Shipping uses actual weight only.
+            </Text>
+
             {availableFabricM > 0 && selectedMeterLength > availableFabricM ? (
               <Text style={styles.validation}>
                 Enter fabric length within available stock.
               </Text>
             ) : null}
+
+            {meterLengthOverLimit ? (
+              <Text style={styles.validation}>
+                Enter {meterShippingLimits.max_checkout_m} m or less for one retail order.
+              </Text>
+            ) : null}
+
+            {meterWeightOverLimit ? (
+              <Text style={styles.validation}>
+                Shipping weight cannot exceed {meterShippingLimits.max_checkout_weight_kg} kg for meter checkout.
+              </Text>
+            ) : meterWeightSoftWarning ? (
+              <Text style={styles.warningText}>
+                This parcel is above {meterShippingLimits.soft_weight_warning_kg} kg. Courier may be expensive, but checkout can continue up to {meterShippingLimits.max_checkout_weight_kg} kg.
+              </Text>
+            ) : null}
+
 
             {requiresDyeSplits ? (
               <View style={styles.dyeSplitBox}>
@@ -2175,6 +2210,15 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: stylesVars.danger,
     fontWeight: "500",
+    letterSpacing: 0,
+  },
+
+  warningText: {
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 18,
+    color: stylesVars.warning,
+    fontWeight: "700",
     letterSpacing: 0,
   },
 

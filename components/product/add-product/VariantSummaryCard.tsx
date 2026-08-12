@@ -22,10 +22,13 @@ export default function VariantSummaryCard({ variant, basePrice }: Props) {
     <View style={[apStyles.card, { gap: 8 }]}>
       <Text style={apStyles.label}>{variant.display_name}</Text>
       <Text style={{ color: apColors.text }}>
-        Price: Rs {finalPrice.toLocaleString()}
+        Price:{" "}
+        <Text style={{ color: apColors.danger }}>
+          Rs {finalPrice.toLocaleString()}
+        </Text>
       </Text>
-      <Text style={{ color: apColors.muted }}>Stock: {totalQty}</Text>
-      <Text style={{ color: apColors.muted }}>
+      <Text style={{ color: apColors.text }}>Stock: {totalQty}</Text>
+      <Text style={{ color: apColors.text }}>
         Sizes:{" "}
         {(variant.sizes || []).map((s) => `${s.size} (${s.qty})`).join(", ") ||
           "None"}

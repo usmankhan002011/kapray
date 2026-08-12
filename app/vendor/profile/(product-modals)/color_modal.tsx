@@ -3,6 +3,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apRadii, apStyles } from "@/components/product/addProductStyles";
+import { closeProductModal } from "@/components/product/productModalNavigation";
 
 type ColorShadeItem = {
   id: string;
@@ -48,11 +49,7 @@ export default function ProductColorModal() {
   }, []);
 
   function closeToAddProduct() {
-    if (returnTo) {
-      router.replace(returnTo as any);
-      return;
-    }
-    router.back();
+    closeProductModal(router, returnTo);
   }
 
   function toggle(id: string) {

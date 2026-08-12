@@ -10,6 +10,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
+import { closeProductModal } from "@/components/product/productModalNavigation";
 import { getDressTypes, DressTypeItem } from "@/utils/supabase/dressType";
 
 type DressTypeOption = {
@@ -70,6 +71,12 @@ export default function ProductDressTypeModal() {
     return m;
   }, [options]);
 
+  const codeByKey = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const o of options) m.set(o.key, o.code);
+    return m;
+  }, [options]);
+
   useEffect(() => {
     let alive = true;
     setLoading(true);
@@ -102,11 +109,7 @@ export default function ProductDressTypeModal() {
   }, []);
 
   function closeToAddProduct() {
-    if (returnTo) {
-      router.replace(returnTo as any);
-      return;
-    }
-    router.back();
+    closeProductModal(router, returnTo);
   }
 
   function toggle(key: string) {
@@ -123,7 +126,13 @@ export default function ProductDressTypeModal() {
       .map((s) => String(s).trim())
       .filter(Boolean);
 
+    const pickedCodes = selected
+      .map((k) => codeByKey.get(k) ?? "")
+      .map((s) => String(s).trim())
+      .filter(Boolean);
+
     (draft.spec as any).dressTypeNames = pickedNames;
+    (draft.spec as any).dressTypeCodes = pickedCodes;
 
     setDressTypeIds(ids);
     closeToAddProduct();
@@ -131,6 +140,7 @@ export default function ProductDressTypeModal() {
 
   function onClear() {
     (draft.spec as any).dressTypeNames = [];
+    (draft.spec as any).dressTypeCodes = [];
     setSelected([]);
     setDressTypeIds([]);
   }

@@ -33,6 +33,11 @@ import {
   BLOUSE_SLEEVE_PATTERNS,
   TROUSER_STYLES,
 } from "@/data/kapray/tailoringOptions";
+import {
+  BUSINESS_AUTH_DOCUMENTS_COPY,
+  formatContactList,
+  parseContactList,
+} from "@/utils/helpers/wizardHelpers";
 
 const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
@@ -52,7 +57,9 @@ type VendorRow = {
   name: string | null;
   email: string | null;
   mobile: string | null;
+  additional_mobile_numbers?: string[] | null;
   landline: string | null;
+  additional_landline_numbers?: string[] | null;
 
   shop_name: string | null;
   address: string | null;
@@ -66,6 +73,7 @@ type VendorRow = {
 
   status: string | null;
 
+  offers_dyeing?: boolean | null;
   offers_tailoring?: boolean | null;
   exports_enabled?: boolean | null;
   export_regions?: string[] | null;
@@ -165,17 +173,27 @@ export default function EditVendorScreen() {
   const vendorId = selectedVendor?.id ?? null;
 
   const [openTailoring, setOpenTailoring] = useState(false);
+  const [openDyeing, setOpenDyeing] = useState(false);
   const [openExport, setOpenExport] = useState(false);
   const [shopName, setShopName] = useState(selectedVendor?.shop_name ?? "");
   const [ownerName, setOwnerName] = useState(selectedVendor?.name ?? "");
   const [email, setEmail] = useState(selectedVendor?.email ?? "");
   const [mobile, setMobile] = useState(selectedVendor?.mobile ?? "");
+  const [additionalMobileText, setAdditionalMobileText] = useState(
+    formatContactList(selectedVendor?.additional_mobile_numbers ?? null)
+  );
   const [landline, setLandline] = useState(selectedVendor?.landline ?? "");
+  const [additionalLandlineText, setAdditionalLandlineText] = useState(
+    formatContactList(selectedVendor?.additional_landline_numbers ?? null)
+  );
   const [address, setAddress] = useState(
     (selectedVendor?.address ?? selectedVendor?.location ?? "") as any
   );
   const [locationUrl, setLocationUrl] = useState(selectedVendor?.location_url ?? "");
 
+  const [offersDyeing, setOffersDyeing] = useState<boolean>(
+    Boolean(selectedVendor?.offers_dyeing)
+  );
   const [offersTailoring, setOffersTailoring] = useState<boolean>(
     Boolean(selectedVendor?.offers_tailoring)
   );
@@ -222,10 +240,15 @@ export default function EditVendorScreen() {
     setOwnerName(selectedVendor?.name ?? "");
     setEmail(selectedVendor?.email ?? "");
     setMobile(selectedVendor?.mobile ?? "");
+    setAdditionalMobileText(formatContactList(selectedVendor?.additional_mobile_numbers ?? null));
     setLandline(selectedVendor?.landline ?? "");
+    setAdditionalLandlineText(
+      formatContactList(selectedVendor?.additional_landline_numbers ?? null)
+    );
     setAddress((selectedVendor?.address ?? selectedVendor?.location ?? "") as any);
     setLocationUrl(selectedVendor?.location_url ?? "");
 
+    setOffersDyeing(Boolean(selectedVendor?.offers_dyeing));
     setOffersTailoring(Boolean(selectedVendor?.offers_tailoring));
     setExportsEnabled(Boolean(selectedVendor?.exports_enabled));
     setExportRegions(
@@ -479,10 +502,6 @@ export default function EditVendorScreen() {
   const canSubmit = useMemo(() => {
     return (
       !!vendorId &&
-      shopName.trim().length > 0 &&
-      ownerName.trim().length > 0 &&
-      email.trim().length > 0 &&
-      mobile.trim().length > 0 &&
       address.trim().length > 0 &&
       (!exportsEnabled || exportRegions.length > 0) &&
       !saving &&
@@ -490,10 +509,6 @@ export default function EditVendorScreen() {
     );
   }, [
     vendorId,
-    shopName,
-    ownerName,
-    email,
-    mobile,
     address,
     exportsEnabled,
     exportRegions.length,
@@ -549,7 +564,9 @@ export default function EditVendorScreen() {
             "name",
             "email",
             "mobile",
+            "additional_mobile_numbers",
             "landline",
+            "additional_landline_numbers",
             "shop_name",
             "address",
             "location_url",
@@ -560,6 +577,7 @@ export default function EditVendorScreen() {
             "shop_video_paths",
             "status",
             "location",
+            "offers_dyeing",
             "offers_tailoring",
             "exports_enabled",
             "export_regions",
@@ -733,7 +751,7 @@ export default function EditVendorScreen() {
       return;
     }
 
-    if (!shopName.trim() || !ownerName.trim() || !email.trim() || !mobile.trim() || !address.trim()) {
+    if (!address.trim()) {
       Alert.alert("Missing", "Fill required fields.");
       return;
     }
@@ -756,15 +774,14 @@ export default function EditVendorScreen() {
     const normalizedExportRegions = exportsEnabled ? exportRegions : [];
 
     const updatePayload = {
-      name: ownerName.trim(),
-      email: email.trim(),
-      mobile: mobile.trim(),
+      additional_mobile_numbers: parseContactList(additionalMobileText),
       landline: landline.trim() || null,
+      additional_landline_numbers: parseContactList(additionalLandlineText),
 
-      shop_name: shopName.trim(),
       address: address.trim(),
       location_url: locationUrl.trim() || null,
 
+      offers_dyeing: Boolean(offersDyeing),
       offers_tailoring: Boolean(offersTailoring),
       exports_enabled: Boolean(exportsEnabled),
       export_regions: normalizedExportRegions,
@@ -790,7 +807,9 @@ export default function EditVendorScreen() {
           "name",
           "email",
           "mobile",
+          "additional_mobile_numbers",
           "landline",
+          "additional_landline_numbers",
           "shop_name",
           "address",
           "location_url",
@@ -801,6 +820,7 @@ export default function EditVendorScreen() {
           "shop_video_paths",
           "status",
           "location",
+          "offers_dyeing",
           "offers_tailoring",
           "exports_enabled",
           "export_regions",
@@ -842,6 +862,7 @@ export default function EditVendorScreen() {
   }
 
   const showSetCurrentLocation = (locationUrl || "").trim().length === 0;
+  const canDeleteCertificates = false;
 
   return (
     <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
@@ -853,64 +874,109 @@ export default function EditVendorScreen() {
           <Text style={styles.title}>Edit Vendor</Text>
         </View>
 
-        <FieldHeader label="Vendor / owner name *" onPress={openAndFocusOwner} />
+        <FieldHeader label="Vendor / owner name (fixed)" onPress={openAndFocusOwner} />
         {openOwner && (
           <View style={optionStyles.card}>
-            <TextInput
-              ref={ownerRef}
-              style={styles.input}
-              value={ownerName}
-              onChangeText={setOwnerName}
-              autoCapitalize="words"
-              placeholder="Enter name"
-              placeholderTextColor="#777"
-            />
+            <Text style={styles.lockedValue}>{joinOrDash([ownerName].filter(Boolean))}</Text>
+            <Text style={styles.lockedHint}>
+              Fixed after shop creation. Contact support to change it.
+            </Text>
           </View>
         )}
 
-        <FieldHeader label="Email *" onPress={openAndFocusEmail} />
+        <FieldHeader label="Linked email (fixed)" onPress={openAndFocusEmail} />
         {openEmail && (
           <View style={optionStyles.card}>
-            <TextInput
-              ref={emailRef}
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              placeholder="Enter email"
-              placeholderTextColor="#777"
-            />
+            <Text style={styles.lockedValue}>{joinOrDash([email].filter(Boolean))}</Text>
+            <Text style={styles.lockedHint}>
+              Fixed after shop creation. Contact support to change it.
+            </Text>
           </View>
         )}
 
-        <FieldHeader label="Mobile *" onPress={openAndFocusMobile} />
+        <FieldHeader label="WhatsApp mobile (fixed)" onPress={openAndFocusMobile} />
+        {openMobile && (
+          <View style={optionStyles.card}>
+            <Text style={styles.lockedValue}>{joinOrDash([mobile].filter(Boolean))}</Text>
+            <Text style={styles.lockedHint}>
+              This primary WhatsApp number remains fixed. Add other mobile
+              numbers below.
+            </Text>
+          </View>
+        )}
+
+        <FieldHeader label="Additional mobile numbers" onPress={openAndFocusMobile} />
         {openMobile && (
           <View style={optionStyles.card}>
             <TextInput
-              ref={mobileRef}
-              style={styles.input}
-              value={mobile}
-              onChangeText={setMobile}
+              style={[styles.input, styles.multi]}
+              value={additionalMobileText}
+              onChangeText={setAdditionalMobileText}
               keyboardType="phone-pad"
-              placeholder="Enter mobile"
+              multiline
+              placeholder="One number per line, or comma-separated"
               placeholderTextColor="#777"
             />
           </View>
         )}
 
-        <FieldHeader label="Shop name *" onPress={openAndFocusShop} />
+        <FieldHeader label="Shop name (fixed)" onPress={openAndFocusShop} />
         {openShop && (
           <View style={optionStyles.card}>
-            <TextInput
-              ref={shopRef}
-              style={styles.input}
-              value={shopName}
-              onChangeText={setShopName}
-              autoCapitalize="words"
-              placeholder="Enter shop name"
-              placeholderTextColor="#777"
-            />
+            <Text style={styles.lockedValue}>{joinOrDash([shopName].filter(Boolean))}</Text>
+            <Text style={styles.lockedHint}>
+              Fixed after shop creation. Contact support to change it.
+            </Text>
+          </View>
+        )}
+
+        <FieldHeader
+          label="Dyeing service"
+          onPress={() => setOpenDyeing((prev) => !prev)}
+        />
+        {openDyeing && (
+          <View style={styles.serviceBox}>
+            <View style={styles.serviceHeaderRow}>
+              <Text style={styles.serviceTitle}>Dyeing service</Text>
+
+              <View style={styles.choiceGrid}>
+                <Pressable
+                  onPress={() => setOffersDyeing(true)}
+                  style={({ pressed }) => [
+                    styles.choiceCard,
+                    offersDyeing && styles.choiceCardActive,
+                    pressed ? styles.choiceCardPressed : null,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.choiceCardTitle,
+                      offersDyeing && styles.choiceCardTitleActive,
+                    ]}
+                  >
+                    Yes
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => setOffersDyeing(false)}
+                  style={({ pressed }) => [
+                    styles.choiceCard,
+                    !offersDyeing && styles.choiceCardActive,
+                    pressed ? styles.choiceCardPressed : null,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.choiceCardTitle,
+                      !offersDyeing && styles.choiceCardTitleActive,
+                    ]}
+                  >
+                    No
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
           </View>
         )}
 
@@ -1063,6 +1129,21 @@ export default function EditVendorScreen() {
           </View>
         )}
 
+        <FieldHeader label="Additional landlines" onPress={openAndFocusLandline} />
+        {openLandline && (
+          <View style={optionStyles.card}>
+            <TextInput
+              style={[styles.input, styles.multi]}
+              value={additionalLandlineText}
+              onChangeText={setAdditionalLandlineText}
+              keyboardType="phone-pad"
+              multiline
+              placeholder="One number per line, or comma-separated"
+              placeholderTextColor="#777"
+            />
+          </View>
+        )}
+
         <FieldHeader label="Address *" onPress={openAndFocusAddress} />
         {openAddress && (
           <View style={optionStyles.card}>
@@ -1177,7 +1258,7 @@ export default function EditVendorScreen() {
 
         <View style={styles.existingBox}>
           <View style={styles.mediaSectionHeaderRow}>
-            <Text style={styles.existingTitle}>Certificates</Text>
+            <Text style={styles.existingTitle}>Business Authorization Documents</Text>
 
             <Pressable
               onPress={() => pickAndUpload("certificate")}
@@ -1188,9 +1269,11 @@ export default function EditVendorScreen() {
                 pressed ? styles.pressed : null,
               ]}
             >
-              <Text style={styles.smallBtnText}>+ Add Certificate</Text>
+              <Text style={styles.smallBtnText}>+ Add Document</Text>
             </Pressable>
           </View>
+
+          <Text style={styles.meta}>{BUSINESS_AUTH_DOCUMENTS_COPY}</Text>
 
           {certificateUrls.length ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -1204,6 +1287,7 @@ export default function EditVendorScreen() {
                       <Image source={{ uri: u }} style={styles.thumb} />
                     </Pressable>
 
+                    {canDeleteCertificates ? (
                     <Pressable
                       onPress={() => removeCertificateAt(idx)}
                       disabled={savingMedia}
@@ -1211,6 +1295,7 @@ export default function EditVendorScreen() {
                     >
                       <Text style={styles.thumbXText}>✕</Text>
                     </Pressable>
+                    ) : null}
                   </View>
                 ))}
               </View>
@@ -1469,6 +1554,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
     color: "#0F172A",
+  },
+
+  lockedValue: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+
+  lockedHint: {
+    marginTop: 6,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+    color: "#64748B",
   },
 
   multi: {

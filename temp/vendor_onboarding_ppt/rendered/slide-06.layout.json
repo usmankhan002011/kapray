@@ -1,0 +1,721 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/1b7q67",
+    "id": "1b7q67",
+    "slide": 6,
+    "layoutId": "7c4767c6-2cd3-446d-999e-0bd9317db249",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "c87b55d3-10d6-4e9d-a87c-eb0e4424e11b",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Helvetica Neue"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "7c4767c6-2cd3-446d-999e-0bd9317db249",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "c87b55d3-10d6-4e9d-a87c-eb0e4424e11b",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "c87b55d3-10d6-4e9d-a87c-eb0e4424e11b",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/idc3ehkz",
+      "id": "1",
+      "bbox": [
+        48,
+        36,
+        1100,
+        72
+      ],
+      "geometry": "rect",
+      "text": "Review and publish the completed product record",
+      "textPreview": "Review and publish the completed product record",
+      "resolvedFontSize": 38,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 38,
+        "typeface": "Helvetica Neue",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Review and publish the completed product record"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Review and publish the completed product record",
+          "resolvedTextStyle": {
+            "fontSize": 38,
+            "typeface": "Helvetica Neue",
+            "color": "#101828",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Review and publish the completed product record",
+              "fontSize": 38,
+              "typeface": "Helvetica Neue",
+              "color": "#101828",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/50nm9w3a",
+      "id": "2",
+      "bbox": [
+        49,
+        112,
+        900,
+        52
+      ],
+      "geometry": "rect",
+      "text": "The review screen gives vendors one last pass across basics, pricing, shipping, media, and description before saving.",
+      "textPreview": "The review screen gives vendors one last pass across basics, pricing, shipping, media, and description before saving.",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 20,
+        "typeface": "Helvetica Neue",
+        "color": "#667085",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "The review screen gives vendors one last pass across basics, pricing, shipping, media, and description before"
+          },
+          {
+            "index": 2,
+            "text": "saving."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "The review screen gives vendors one last pass across basics, pricing, shipping, media, and description before saving.",
+          "resolvedTextStyle": {
+            "fontSize": 20,
+            "typeface": "Helvetica Neue",
+            "color": "#667085",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "The review screen gives vendors one last pass across basics, pricing, shipping, media, and description before saving.",
+              "fontSize": 20,
+              "typeface": "Helvetica Neue",
+              "color": "#667085",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/4ze5gr25",
+      "id": "3",
+      "bbox": [
+        48,
+        162,
+        1184,
+        1
+      ],
+      "geometry": "rect",
+      "fillColor": "#B8BCC4",
+      "lineColor": "#B8BCC4",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/val43ml8",
+      "id": "4",
+      "bbox": [
+        1185,
+        666,
+        48,
+        24
+      ],
+      "geometry": "rect",
+      "text": "06",
+      "textPreview": "06",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 12,
+        "typeface": "Helvetica Neue",
+        "color": "#667085",
+        "alignment": "right",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "06"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "06",
+          "resolvedTextStyle": {
+            "fontSize": 12,
+            "typeface": "Helvetica Neue",
+            "color": "#667085",
+            "alignment": "right"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "06",
+              "fontSize": 12,
+              "typeface": "Helvetica Neue",
+              "color": "#667085",
+              "alignment": "right"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/u9c3ahkn",
+      "id": "5",
+      "name": "Frame Basics review",
+      "bbox": [
+        138,
+        174,
+        230,
+        480
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#F8FAFC",
+      "lineColor": "#B8BCC4",
+      "lineWidth": 1
+    },
+    {
+      "order": 6,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/kn2x8zyl",
+      "id": "6",
+      "bbox": [
+        144,
+        180,
+        218,
+        468
+      ],
+      "geometry": "rect",
+      "alt": "Basics review",
+      "contentType": "image/jpeg",
+      "imageFit": "contain",
+      "imageMask": {
+        "geometry": "rect"
+      },
+      "asset": {
+        "assetId": "f20ae830-a18e-4819-aa3f-7ecb5b2470a5",
+        "contentType": "image/jpeg",
+        "byteLength": 65014
+      }
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wbulcr2t",
+      "id": "7",
+      "bbox": [
+        138,
+        662,
+        230,
+        26
+      ],
+      "geometry": "rect",
+      "text": "Basics review",
+      "textPreview": "Basics review",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "Helvetica Neue",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Basics review"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Basics review",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Helvetica Neue",
+            "color": "#101828",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Basics review",
+              "fontSize": 16,
+              "typeface": "Helvetica Neue",
+              "color": "#101828",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/f654f6ls",
+      "id": "8",
+      "name": "Frame Pricing and shipping",
+      "bbox": [
+        396,
+        174,
+        230,
+        480
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#F8FAFC",
+      "lineColor": "#B8BCC4",
+      "lineWidth": 1
+    },
+    {
+      "order": 9,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/bitwvaho",
+      "id": "9",
+      "bbox": [
+        402,
+        180,
+        218,
+        468
+      ],
+      "geometry": "rect",
+      "alt": "Pricing and shipping",
+      "contentType": "image/jpeg",
+      "imageFit": "contain",
+      "imageMask": {
+        "geometry": "rect"
+      },
+      "asset": {
+        "assetId": "4f8f736f-3d74-4917-b48e-16971d0d565f",
+        "contentType": "image/jpeg",
+        "byteLength": 56078
+      }
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/436p4fup",
+      "id": "10",
+      "bbox": [
+        396,
+        662,
+        230,
+        26
+      ],
+      "geometry": "rect",
+      "text": "Pricing and shipping",
+      "textPreview": "Pricing and shipping",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "Helvetica Neue",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Pricing and shipping"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Pricing and shipping",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Helvetica Neue",
+            "color": "#101828",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Pricing and shipping",
+              "fontSize": 16,
+              "typeface": "Helvetica Neue",
+              "color": "#101828",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/54fqxkba",
+      "id": "11",
+      "name": "Frame Ready to save",
+      "bbox": [
+        654,
+        174,
+        230,
+        480
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#F8FAFC",
+      "lineColor": "#B8BCC4",
+      "lineWidth": 1
+    },
+    {
+      "order": 12,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/9kvyhoj6",
+      "id": "12",
+      "bbox": [
+        660,
+        180,
+        218,
+        468
+      ],
+      "geometry": "rect",
+      "alt": "Ready to save",
+      "contentType": "image/jpeg",
+      "imageFit": "contain",
+      "imageMask": {
+        "geometry": "rect"
+      },
+      "asset": {
+        "assetId": "07f49451-950b-43de-a8b8-afaf4627dce6",
+        "contentType": "image/jpeg",
+        "byteLength": 40164
+      }
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/j2d8vat4",
+      "id": "13",
+      "bbox": [
+        654,
+        662,
+        230,
+        26
+      ],
+      "geometry": "rect",
+      "text": "Ready to save",
+      "textPreview": "Ready to save",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "Helvetica Neue",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Ready to save"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Ready to save",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Helvetica Neue",
+            "color": "#101828",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Ready to save",
+              "fontSize": 16,
+              "typeface": "Helvetica Neue",
+              "color": "#101828",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wzmp0vut",
+      "id": "14",
+      "name": "Frame Saved confirmation",
+      "bbox": [
+        912,
+        174,
+        230,
+        480
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#F8FAFC",
+      "lineColor": "#B8BCC4",
+      "lineWidth": 1
+    },
+    {
+      "order": 15,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/al4zq90r",
+      "id": "15",
+      "bbox": [
+        918,
+        180,
+        218,
+        468
+      ],
+      "geometry": "rect",
+      "alt": "Saved confirmation",
+      "contentType": "image/jpeg",
+      "imageFit": "contain",
+      "imageMask": {
+        "geometry": "rect"
+      },
+      "asset": {
+        "assetId": "227b9e0a-efbf-496e-bfa3-4f57b4b3d22b",
+        "contentType": "image/jpeg",
+        "byteLength": 36462
+      }
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ud47y5cn",
+      "id": "16",
+      "bbox": [
+        912,
+        662,
+        230,
+        26
+      ],
+      "geometry": "rect",
+      "text": "Saved confirmation",
+      "textPreview": "Saved confirmation",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "Helvetica Neue",
+        "color": "#101828",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Saved confirmation"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Saved confirmation",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Helvetica Neue",
+            "color": "#101828",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Saved confirmation",
+              "fontSize": 16,
+              "typeface": "Helvetica Neue",
+              "color": "#101828",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}
