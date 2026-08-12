@@ -382,6 +382,84 @@ export const styles = StyleSheet.create({
     backgroundColor: stylesVars.white,
   },
 
+  deliveryChoiceStack: {
+    marginTop: 8,
+    gap: 8,
+  },
+
+  deliveryChoice: {
+    borderWidth: 1,
+    borderColor: stylesVars.borderSoft,
+    borderRadius: apRadii.control,
+    backgroundColor: stylesVars.white,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+
+  deliveryChoiceOn: {
+    borderColor: "#D7E3FF",
+    backgroundColor: stylesVars.blueSoft,
+  },
+
+  deliveryChoiceTitle: {
+    fontFamily: apFontFamily,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "800",
+    color: stylesVars.text,
+    letterSpacing: 0,
+  },
+
+  deliveryChoiceTitleOn: {
+    color: stylesVars.blue,
+  },
+
+  deliveryChoiceText: {
+    marginTop: 2,
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "500",
+    color: stylesVars.mutedText,
+    letterSpacing: 0,
+  },
+
+  deliveryAmountBox: {
+    marginTop: 10,
+  },
+
+  deliveryConsentText: {
+    marginTop: 6,
+    fontFamily: apFontFamily,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700",
+    color: stylesVars.danger,
+    letterSpacing: 0,
+  },
+
+  exportPolicyStack: {
+    marginTop: 8,
+    gap: 10,
+  },
+
+  exportPolicyBox: {
+    borderWidth: 1,
+    borderColor: stylesVars.border,
+    borderRadius: apRadii.card,
+    backgroundColor: "#F8FAFC",
+    padding: 12,
+  },
+
+  exportPolicyTitle: {
+    fontFamily: apFontFamily,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "900",
+    color: stylesVars.text,
+    letterSpacing: 0,
+  },
+
   priceLabel: {
     color: stylesVars.danger,
     fontSize: 15,

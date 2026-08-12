@@ -45,6 +45,10 @@ import {
   clearCachedDyeSelection,
   getCachedDyeSelection,
 } from "@/app/vendor/profile/(product-modals)/dyeing/dye_palette_modal";
+import {
+  encodeDeliveryPolicyParam,
+  normalizeDeliveryPolicy,
+} from "@/utils/kapray/deliveryPolicy";
 
 const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
@@ -1546,6 +1550,10 @@ export default function ViewProductScreen() {
     if (!v || typeof v !== "object" || Array.isArray(v)) return null;
     return v;
   }, [product]);
+  const deliveryPolicy = useMemo(() => {
+    const spec = (product as any)?.spec ?? {};
+    return normalizeDeliveryPolicy(spec?.delivery_policy, vendorExportRegions);
+  }, [product, vendorExportRegions]);
 
   useEffect(() => {
     if (!tailoringEligible && buyerWantsTailoring) {
@@ -1961,6 +1969,10 @@ export default function ViewProductScreen() {
         export_regions: vendorExportRegions.length
           ? encodeJsonParam(vendorExportRegions)
           : "",
+        delivery_policy: encodeDeliveryPolicyParam(
+          deliveryPolicy,
+          vendorExportRegions,
+        ),
 
         weight_kg:
           !isFabricByMeterPurchase && shippingWeightKg > 0
@@ -1970,7 +1982,8 @@ export default function ViewProductScreen() {
           isFabricByMeterPurchase && shippingWeightKg > 0
             ? String(shippingWeightKg)
             : "",
-        package_cm: packageCm ? encodeJsonParam(packageCm) : "",
+        package_cm:
+          !isFabricByMeterPurchase && packageCm ? encodeJsonParam(packageCm) : "",
       },
     });
   }, [
@@ -1985,6 +1998,7 @@ export default function ViewProductScreen() {
     isStitchedReady,
     isUnstitched,
     packageCm,
+    deliveryPolicy,
     pricePerMeterPkr,
     product,
     productCategory,

@@ -20,6 +20,8 @@ import {
   AddProductScreen,
 } from "@/components/product/add-product/AddProductWizard";
 import { apStyles } from "@/components/product/addProductStyles";
+import { EXPORT_REGIONS } from "@/data/kapray/exportRegions";
+import type { ExportRegion } from "@/data/kapray/productTypes";
 
 import {
   normalizeReadyVariants,
@@ -35,6 +37,11 @@ import {
   type ReadyVariantImage,
   type MadeOrderVariant,
 } from "@/utils/kapray/productVariants";
+import {
+  normalizeDeliveryPolicy,
+  normalizeExportRegionList,
+  validateDeliveryPolicy,
+} from "@/utils/kapray/deliveryPolicy";
 
 const BUCKET_VENDOR = "vendor_images";
 const PRODUCTS_TABLE = "products";
@@ -736,11 +743,30 @@ async function uploadMadeOrderVariantImages(args: {
 export default function AddProductSubmitScreen() {
   const router = useRouter();
 
-  const vendorIdRaw =
-    useAppSelector((s: any) => s?.vendorSlice?.vendor?.id ?? null) ??
-    useAppSelector((s: any) => s?.vendor?.id ?? null);
+  const vendorState = useAppSelector((s: any) => {
+    const sliceVendor = s?.vendorSlice?.vendor ?? {};
+    const vendor = s?.vendor ?? {};
+    return {
+      id: sliceVendor?.id ?? s?.vendorSlice?.id ?? vendor?.id ?? null,
+      exports_enabled:
+        sliceVendor?.exports_enabled ??
+        s?.vendorSlice?.exports_enabled ??
+        vendor?.exports_enabled ??
+        false,
+      export_regions:
+        sliceVendor?.export_regions ??
+        s?.vendorSlice?.export_regions ??
+        vendor?.export_regions ??
+        [],
+    };
+  });
 
-  const vendorId = safeInt(vendorIdRaw);
+  const vendorId = safeInt(vendorState.id);
+  const vendorExportRegions = useMemo<ExportRegion[]>(() => {
+    if (!vendorState.exports_enabled) return [];
+    const selected = normalizeExportRegionList(vendorState.export_regions);
+    return EXPORT_REGIONS.filter((region) => selected.includes(region));
+  }, [vendorState.export_regions, vendorState.exports_enabled]);
 
   const { draft, resetDraft } = useProductDraft();
 
@@ -916,6 +942,18 @@ export default function AddProductSubmitScreen() {
       : (draft.spec as any)?.weight_kg ?? 0,
   );
   const packageCm = (draft.spec as any)?.package_cm ?? {};
+  const deliveryPolicy = useMemo(
+    () =>
+      normalizeDeliveryPolicy(
+        (draft.spec as any)?.delivery_policy,
+        vendorExportRegions,
+      ),
+    [draft.spec, vendorExportRegions],
+  );
+  const deliveryPolicyError = useMemo(
+    () => validateDeliveryPolicy(deliveryPolicy, vendorExportRegions),
+    [deliveryPolicy, vendorExportRegions],
+  );
 
   const includesTrouser = Boolean(
     (draft.spec as any)?.includes_trouser ??
@@ -987,7 +1025,8 @@ export default function AddProductSubmitScreen() {
     }
 
     if (!Number.isFinite(weightKg) || weightKg <= 0) return false;
-    if (!hasValidPackageCm(packageCm)) return false;
+    if (!isFabricByMeter && !hasValidPackageCm(packageCm)) return false;
+    if (deliveryPolicyError) return false;
 
     if ((draft.media.images ?? []).length < 1) return false;
     if ((draft.spec.dressTypeIds ?? []).length < 1) return false;
@@ -1026,6 +1065,8 @@ export default function AddProductSubmitScreen() {
     sizeLengthMap,
     weightKg,
     packageCm,
+    isFabricByMeter,
+    deliveryPolicyError,
     tailoringStylePresets,
     includesTrouser,
   ]);
@@ -1220,12 +1261,21 @@ export default function AddProductSubmitScreen() {
       return;
     }
 
-    if (!hasValidPackageCm(packageCm)) {
+    if (!isFabricByMeter && !hasValidPackageCm(packageCm)) {
       warnSave("save-validation-stop", { reason: "missing-package-cm" });
       Alert.alert(
         "Missing package dimensions",
         "Please enter valid package length, width, and height in cm.",
       );
+      return;
+    }
+
+    if (deliveryPolicyError) {
+      warnSave("save-validation-stop", {
+        reason: "invalid-delivery-policy",
+        message: deliveryPolicyError,
+      });
+      Alert.alert("Courier charge missing", deliveryPolicyError);
       return;
     }
 
@@ -1328,6 +1378,7 @@ export default function AddProductSubmitScreen() {
           ...(draft.spec ?? {}),
           made_on_order: Boolean(madeOnOrder),
           more_description: safeStr(moreDescription),
+          delivery_policy: deliveryPolicy,
 
           product_category: finalCategory,
           variant_mode: hasMadeOrderVariants
@@ -1358,11 +1409,14 @@ export default function AddProductSubmitScreen() {
             finalCategory === "unstitched_dyeing"
               ? "per_meter"
               : "per_order",
-          package_cm: {
-            length: Number(packageCm?.length ?? 0),
-            width: Number(packageCm?.width ?? 0),
-            height: Number(packageCm?.height ?? 0),
-          },
+          package_cm:
+            isFabricByMeter && !hasValidPackageCm(packageCm)
+              ? null
+              : {
+                  length: Number(packageCm?.length ?? 0),
+                  width: Number(packageCm?.width ?? 0),
+                  height: Number(packageCm?.height ?? 0),
+                },
           ...(isUnstitched
             ? {
                 inventory_unit: "m",

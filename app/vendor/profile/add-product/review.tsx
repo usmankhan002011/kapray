@@ -25,6 +25,13 @@ import {
   AddProductFooter,
   AddProductScreen,
 } from "@/components/product/add-product/AddProductWizard";
+import { EXPORT_REGIONS } from "@/data/kapray/exportRegions";
+import type { ExportRegion } from "@/data/kapray/productTypes";
+import {
+  getDeliveryPolicySummary,
+  normalizeDeliveryPolicy,
+  normalizeExportRegionList,
+} from "@/utils/kapray/deliveryPolicy";
 import {
   apColors,
   apFontFamily,
@@ -538,11 +545,30 @@ function renderCostSegments(text: string) {
 export default function AddProductReviewScreen() {
   const router = useRouter();
 
-  const vendorIdRaw =
-    useAppSelector((s: any) => s?.vendorSlice?.vendor?.id ?? null) ??
-    useAppSelector((s: any) => s?.vendor?.id ?? null);
+  const vendorState = useAppSelector((s: any) => {
+    const sliceVendor = s?.vendorSlice?.vendor ?? {};
+    const vendor = s?.vendor ?? {};
+    return {
+      id: sliceVendor?.id ?? s?.vendorSlice?.id ?? vendor?.id ?? null,
+      exports_enabled:
+        sliceVendor?.exports_enabled ??
+        s?.vendorSlice?.exports_enabled ??
+        vendor?.exports_enabled ??
+        false,
+      export_regions:
+        sliceVendor?.export_regions ??
+        s?.vendorSlice?.export_regions ??
+        vendor?.export_regions ??
+        [],
+    };
+  });
 
-  const vendorId = safeInt(vendorIdRaw);
+  const vendorId = safeInt(vendorState.id);
+  const vendorExportRegions = useMemo<ExportRegion[]>(() => {
+    if (!vendorState.exports_enabled) return [];
+    const selected = normalizeExportRegionList(vendorState.export_regions);
+    return EXPORT_REGIONS.filter((region) => selected.includes(region));
+  }, [vendorState.export_regions, vendorState.exports_enabled]);
 
   const { draft } = useProductDraft();
 
@@ -645,6 +671,14 @@ export default function AddProductReviewScreen() {
   );
   const packageCm = (draft.spec as any)?.package_cm ?? {};
   const packageDimensions = formatPackageCm(packageCm, draft.spec);
+  const deliveryPolicy = useMemo(
+    () => normalizeDeliveryPolicy((draft.spec as any)?.delivery_policy, vendorExportRegions),
+    [draft.spec, vendorExportRegions],
+  );
+  const deliveryPolicyRows = useMemo(
+    () => getDeliveryPolicySummary(deliveryPolicy, vendorExportRegions),
+    [deliveryPolicy, vendorExportRegions],
+  );
 
   const moreDescription = safeStr((draft.spec as any)?.more_description ?? "");
 
@@ -1268,9 +1302,41 @@ export default function AddProductReviewScreen() {
             pressed ? styles.pressed : null,
           ]}
         >
-          <Text style={styles.rowTitle}>Package dimensions</Text>
+          <Text style={styles.rowTitle}>
+            {isFabricByMeter
+              ? "Package dimensions (not used for meter checkout)"
+              : "Package dimensions"}
+          </Text>
           <Text style={styles.rowValue}>{packageDimensions}</Text>
         </Pressable>
+
+        <Pressable
+          onPress={() => goEdit("/vendor/profile/add-product/q06c-shipping")}
+          style={({ pressed }) => [
+            styles.rowBtn,
+            pressed ? styles.pressed : null,
+          ]}
+        >
+          <Text style={styles.rowTitle}>Delivery policy</Text>
+          <Text style={styles.rowValue}>{deliveryPolicyRows.join(" / ")}</Text>
+        </Pressable>
+
+        {isFabricByMeter ? (
+          <Pressable
+            onPress={() => goEdit("/vendor/profile/add-product/q06c-shipping")}
+            style={({ pressed }) => [
+              styles.rowBtn,
+              pressed ? styles.pressed : null,
+            ]}
+          >
+            <Text style={styles.rowTitle}>Meter checkout limit</Text>
+            <Text style={styles.rowValue}>
+              Max {deliveryPolicy.meter_shipping.max_checkout_m} m / warning above{" "}
+              {deliveryPolicy.meter_shipping.soft_weight_warning_kg} kg / block above{" "}
+              {deliveryPolicy.meter_shipping.max_checkout_weight_kg} kg
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={styles.card}>
