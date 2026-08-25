@@ -11,7 +11,10 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
 import { closeProductModal } from "@/components/product/productModalNavigation";
-import { getDressTypes, DressTypeItem } from "@/utils/supabase/dressType";
+import {
+  getDressTypes,
+  DressTypeItem,
+} from "@/services/vendor/productLookups";
 
 type DressTypeOption = {
   key: string;

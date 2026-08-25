@@ -15,7 +15,7 @@ import {
   getFallbackWorkDensities,
   getWorkDensities,
   WorkDensityItem,
-} from "@/utils/supabase/workDensity";
+} from "@/services/vendor/productLookups";
 
 const WORK_DENSITY_LOCAL_IMAGES: Record<string, any> = {
   light: require("@/assets/work-density-images/light.png"),

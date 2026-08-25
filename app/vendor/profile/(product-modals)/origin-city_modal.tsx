@@ -15,7 +15,7 @@ import {
   getFallbackOriginCities,
   getOriginCities,
   OriginCityItem,
-} from "@/utils/supabase/originCity";
+} from "@/services/vendor/productLookups";
 
 const ORIGIN_CITY_LOCAL_IMAGES: Record<string, any> = {
   bahawalpur: require("@/assets/origin-images/Bahawalpur.jpg"),

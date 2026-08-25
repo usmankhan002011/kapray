@@ -15,7 +15,7 @@ import {
   getFabricTypes,
   getFallbackFabricTypes,
   FabricTypeItem,
-} from "@/utils/supabase/fabricType";
+} from "@/services/vendor/productLookups";
 
 const FABRIC_LOCAL_IMAGES: Record<string, any> = {
   chiffon: require("@/assets/fabric-types-images/CHIFFON.jpg"),

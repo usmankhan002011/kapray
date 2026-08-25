@@ -10,7 +10,10 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
 import { closeProductModal } from "@/components/product/productModalNavigation";
-import { getWearStates, WearStateItem } from "@/utils/supabase/wearState";
+import {
+  getWearStates,
+  WearStateItem,
+} from "@/services/vendor/productLookups";
 
 const GRID_GAP = 8;
 const H_PADDING = 12;

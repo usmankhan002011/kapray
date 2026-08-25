@@ -15,7 +15,7 @@ import {
   getFallbackWorkTypes,
   getWorkTypes,
   WorkTypeItem,
-} from "@/utils/supabase/workType";
+} from "@/services/vendor/productLookups";
 
 const WORK_LOCAL_IMAGES: Record<string, any> = {
   designer: require("@/assets/work-images/designer.jpg"),
