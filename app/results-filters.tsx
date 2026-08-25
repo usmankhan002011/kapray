@@ -16,13 +16,7 @@ import {
 } from "@/components/product/addProductStyles";
 import { flattenWorkSubTypeNames } from "@/data/workSubTypes";
 import { useAppSelector } from "@/store/hooks";
-import { supabase } from "@/utils/supabase/client";
-
-const TABLE_FABRIC_TYPES = "fabric_types";
-const TABLE_WORK_TYPES = "work_types";
-const TABLE_WORK_DENSITIES = "work_densities";
-const TABLE_ORIGIN_CITIES = "origin_cities";
-const TABLE_WEAR_STATES = "wear_states";
+import { getResultFilterLookupQueries } from "@/services/catalog/catalog";
 
 type NameRow = { id: any; name: string };
 type FilterIconName = React.ComponentProps<typeof MaterialIcons>["name"];
@@ -175,28 +169,7 @@ export default function ResultsFiltersModal() {
     (async () => {
       try {
         const [fabricRes, workRes, densityRes, originRes, wearRes] =
-          await Promise.all([
-            supabase
-              .from(TABLE_FABRIC_TYPES)
-              .select("id, name")
-              .order("sort_order", { ascending: true }),
-            supabase
-              .from(TABLE_WORK_TYPES)
-              .select("id, name")
-              .order("name", { ascending: true }),
-            supabase
-              .from(TABLE_WORK_DENSITIES)
-              .select("id, name")
-              .order("name", { ascending: true }),
-            supabase
-              .from(TABLE_ORIGIN_CITIES)
-              .select("id, name")
-              .order("name", { ascending: true }),
-            supabase
-              .from(TABLE_WEAR_STATES)
-              .select("id, name")
-              .order("name", { ascending: true }),
-          ]);
+          await getResultFilterLookupQueries();
 
         if (!alive) return;
 

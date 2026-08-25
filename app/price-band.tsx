@@ -6,14 +6,12 @@ import MultiSlider from "@ptomasroos/react-native-multi-slider";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearCostRange, setCostRange } from "@/store/filtersSlice";
 import StandardFilterDisplay from "@/components/ui/StandardFilterDisplay";
-import { supabase } from "@/utils/supabase/client";
+import { getCatalogPriceBuckets } from "@/services/catalog/catalog";
 import {
   apColors,
   apFontFamily,
   apRadii,
 } from "@/components/product/addProductStyles";
-
-const TABLE_PRICE_BUCKETS = "price_buckets";
 
 function formatPKR(n: number) {
   return `PKR ${Math.round(n).toLocaleString()}`;
@@ -64,11 +62,7 @@ export default function PriceBand() {
       try {
         setLoading(true);
 
-        const { data } = await supabase
-          .from(TABLE_PRICE_BUCKETS)
-          .select("id, label, min_pkr, max_pkr, sort_order")
-          .eq("is_active", true)
-          .order("sort_order", { ascending: true });
+        const { data } = await getCatalogPriceBuckets();
 
         if (!alive) return;
 

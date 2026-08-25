@@ -23,19 +23,13 @@ import {
   saveFavouriteProductIds,
 } from "@/utils/favourites";
 import { useAppSelector } from "@/store/hooks";
-import { supabase } from "@/utils/supabase/client";
 import { getActiveProductSale } from "@/utils/kapray/productSale";
+import {
+  getCatalogProductMediaUrl,
+  getCatalogProductsPage,
+  getInitialCatalogQueries,
+} from "@/services/catalog/catalog";
 import Wizard from "./wizard";
-
-const PRODUCTS_TABLE = "products";
-const BUCKET_VENDOR = "vendor_images";
-
-const TABLE_DRESS_TYPE = "dress_types";
-const TABLE_FABRIC_TYPES = "fabric_types";
-const TABLE_WORK_TYPES = "work_types";
-const TABLE_WORK_DENSITIES = "work_densities";
-const TABLE_ORIGIN_CITIES = "origin_cities";
-const TABLE_WEAR_STATES = "wear_states";
 
 const PAGE_SIZE = 30;
 const FABRIC_STOCK_EPSILON_M = 0.05;
@@ -139,12 +133,6 @@ function firstImagePath(media: any): string | null {
   } catch {
     return null;
   }
-}
-
-function publicUrlForStoragePath(path: string | null): string | null {
-  if (!path) return null;
-  const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(path);
-  return data?.publicUrl ?? null;
 }
 
 function safeStockQty(v: unknown) {
@@ -689,16 +677,6 @@ export default function ResultsScreen() {
     };
   }, []);
 
-  async function fetchPage(from: number, to: number) {
-    return supabase
-      .from(PRODUCTS_TABLE)
-      .select(
-        "id, vendor_id, product_code, title, created_at, inventory_qty, made_on_order, product_category, spec, price, media",
-      )
-      .order("created_at", { ascending: false })
-      .range(from, to);
-  }
-
   useFocusEffect(
     React.useCallback(() => {
       if (!RESULTS_CACHE) return;
@@ -706,7 +684,10 @@ export default function ResultsScreen() {
       let alive = true;
 
       async function refreshProducts() {
-        const { data, error } = await fetchPage(0, PAGE_SIZE - 1);
+        const { data, error } = await getCatalogProductsPage(
+          0,
+          PAGE_SIZE - 1,
+        );
         if (!alive || error) return;
 
         const rows = ((data as any) ?? []) as ProductRow[];
@@ -745,34 +726,7 @@ export default function ResultsScreen() {
           densityRes,
           originRes,
           wearRes,
-        ] = await Promise.all([
-          fetchPage(0, PAGE_SIZE - 1),
-
-          (supabase as any)
-            .from(TABLE_DRESS_TYPE)
-            .select("id, name")
-            .order("id", { ascending: true }),
-          supabase
-            .from(TABLE_FABRIC_TYPES)
-            .select("id, name")
-            .order("sort_order", { ascending: true }),
-          supabase
-            .from(TABLE_WORK_TYPES)
-            .select("id, name")
-            .order("name", { ascending: true }),
-          supabase
-            .from(TABLE_WORK_DENSITIES)
-            .select("id, name")
-            .order("name", { ascending: true }),
-          supabase
-            .from(TABLE_ORIGIN_CITIES)
-            .select("id, name")
-            .order("name", { ascending: true }),
-          supabase
-            .from(TABLE_WEAR_STATES)
-            .select("id, name")
-            .order("name", { ascending: true }),
-        ]);
+        ] = await getInitialCatalogQueries(0, PAGE_SIZE - 1);
 
         if (!alive) return;
 
@@ -879,7 +833,7 @@ export default function ResultsScreen() {
       const from = products.length;
       const to = from + PAGE_SIZE - 1;
 
-      const { data, error } = await fetchPage(from, to);
+      const { data, error } = await getCatalogProductsPage(from, to);
       if (error) return;
 
       const rows = ((data as any) ?? []) as ProductRow[];
@@ -1434,7 +1388,7 @@ export default function ResultsScreen() {
           }}
           renderItem={({ item }) => {
             const imgPath = firstImagePath(item.media);
-            const url = publicUrlForStoragePath(imgPath);
+            const url = getCatalogProductMediaUrl(imgPath);
             const isFav = favoriteIds.has(item.id);
             const categoryLabel = productCategoryCardLabel(item);
             const badge = stockBadgeText(item);
