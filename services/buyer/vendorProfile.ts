@@ -1,8 +1,8 @@
 import type { VendorState } from "@/store/vendorSlice";
 import type { Tables } from "@/supabase/supabase";
 import { BUYER_VENDOR_MEDIA_BUCKET } from "@/constants/buyer";
+import { appSupabase } from "@/services/supabase";
 import { isHttpUrl, toStringArray } from "@/utils/buyer";
-import { buyerSupabase } from "./client";
 
 type VendorRow = Tables<"vendor">;
 type ReviewRow = Tables<"vendor_reviews">;
@@ -77,9 +77,8 @@ export function getVendorMediaUrl(
 ): string | null {
   if (!path) return null;
   if (isHttpUrl(path)) return path;
-  return buyerSupabase.storage
-    .from(BUYER_VENDOR_MEDIA_BUCKET)
-    .getPublicUrl(path).data.publicUrl;
+  return appSupabase.storage.from(BUYER_VENDOR_MEDIA_BUCKET).getPublicUrl(path)
+    .data.publicUrl;
 }
 
 export function getVendorMediaUrls(paths: unknown): string[] {
@@ -91,7 +90,7 @@ export function getVendorMediaUrls(paths: unknown): string[] {
 export async function getBuyerVendorProfile(
   vendorId: number,
 ): Promise<BuyerVendorProfile> {
-  const { data, error } = await buyerSupabase
+  const { data, error } = await appSupabase
     .from("vendor")
     .select(VENDOR_PROFILE_COLUMNS)
     .eq("id", vendorId)
@@ -108,7 +107,7 @@ export async function getBuyerVendorProfile(
 export async function getBuyerVendorReviewSummary(
   vendorId: number,
 ): Promise<BuyerVendorReviewSummary | null> {
-  const { data, error } = await buyerSupabase
+  const { data, error } = await appSupabase
     .from("vendor_review_summary")
     .select("average_rating, review_count")
     .eq("vendor_id", vendorId)
@@ -121,7 +120,7 @@ export async function getBuyerVendorReviewSummary(
 export async function getBuyerVendorReviews(
   vendorId: number,
 ): Promise<BuyerVendorReview[]> {
-  const { data, error } = await buyerSupabase
+  const { data, error } = await appSupabase
     .from("vendor_reviews")
     .select("id, created_at, rating, comment, vendor_reply")
     .eq("vendor_id", vendorId)

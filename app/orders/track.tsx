@@ -11,7 +11,11 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { supabase } from "@/utils/supabase/client";
+import {
+  getReviewedOrderIds,
+  getTrackedOrders,
+  searchOrderVendors,
+} from "@/services/orders/orderTracking";
 import {
   apColors,
   apFontFamily,
@@ -182,14 +186,7 @@ export default function TrackOrdersScreen() {
     try {
       setVendorLoading(true);
 
-      const { data, error } = await supabase
-        .from("vendor")
-        .select("id,shop_name,name")
-        .or(`shop_name.ilike.%${q}%,name.ilike.%${q}%`)
-        .order("id", { ascending: true })
-        .limit(30);
-
-      if (error) throw error;
+      const data = await searchOrderVendors(q);
 
       const mapped: VendorRow[] = (data ?? []).map((v: any) => ({
         id: Number(v.id),
@@ -226,39 +223,11 @@ export default function TrackOrdersScreen() {
       const mobile = buyerMobileTrim;
       const name = buyerNameTrim;
 
-      let q = supabase
-        .from("orders")
-        .select(
-          `
-          id,
-          created_at,
-          order_no,
-          status,
-          buyer_name,
-          buyer_mobile,
-          city,
-          product_code_snapshot,
-          title_snapshot,
-          total_pkr,
-          currency,
-          vendor_id,
-          spec_snapshot
-        `,
-        )
-        .eq("buyer_mobile", mobile)
-        .order("created_at", { ascending: false })
-        .limit(200);
-
-      if (name) {
-        q = q.ilike("buyer_name", `%${name}%`);
-      }
-
-      if (selectedVendor?.id) {
-        q = q.eq("vendor_id", Number(selectedVendor.id));
-      }
-
-      const { data, error } = await q;
-      if (error) throw error;
+      const data = await getTrackedOrders({
+        buyerMobile: mobile,
+        buyerName: name,
+        vendorId: selectedVendor?.id,
+      });
 
       const mapped: OrderRow[] = (data ?? []).map((o: any) => ({
         id: Number(o.id),
@@ -282,25 +251,16 @@ export default function TrackOrdersScreen() {
         .map((o) => o.id);
 
       if (deliveredIds.length) {
-        const { data: reviewRows, error: reviewError } = await (supabase as any)
-          .from("vendor_reviews")
-          .select("order_id")
-          .in("order_id", deliveredIds);
-
-        if (reviewError) {
-          console.warn("review lookup error:", reviewError.message);
-        } else {
+        try {
           const reviewedIds = new Set<number>(
-            Array.isArray(reviewRows)
-              ? reviewRows
-                  .map((r: any) => Number(r?.order_id))
-                  .filter((n: number) => Number.isFinite(n))
-              : [],
+            await getReviewedOrderIds(deliveredIds),
           );
 
           mapped.forEach((row) => {
             row.has_review = reviewedIds.has(row.id);
           });
+        } catch (error: any) {
+          console.warn("review lookup error:", error?.message ?? error);
         }
       }
 

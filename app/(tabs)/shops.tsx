@@ -11,16 +11,14 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { supabase } from "@/utils/supabase/client";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setVendorIds } from "@/store/filtersSlice";
+import { getShopVendors } from "@/services/shops/shops";
 import {
   apColors,
   apFontFamily,
   apRadii,
 } from "@/components/product/addProductStyles";
-
-const VENDOR_TABLE = "vendor";
 
 type VendorRow = {
   id: number;
@@ -55,20 +53,14 @@ export default function VendorSearchScreen() {
     async function load() {
       try {
         setLoading(true);
-        const { data, error } = await supabase
-          .from(VENDOR_TABLE)
-          .select("id, name, shop_name, location")
-          .order("name", { ascending: true });
+        const data = await getShopVendors();
 
         if (!alive) return;
-
-        if (error) {
-          Alert.alert("Load error", error.message);
-          setVendors([]);
-          return;
-        }
-
-        setVendors(((data as any) ?? []) as VendorRow[]);
+        setVendors(data);
+      } catch (error: any) {
+        if (!alive) return;
+        Alert.alert("Load error", error?.message ?? "Could not load vendors.");
+        setVendors([]);
       } finally {
         if (!alive) return;
         setLoading(false);

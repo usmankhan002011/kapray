@@ -11,7 +11,7 @@ import {
   registerTableQuery,
   resetSupabaseMock,
   storageFromMock,
-} from "./supabaseClientMock";
+} from "../../__tests__/supabaseClientMock";
 
 beforeEach(resetSupabaseMock);
 

@@ -5,7 +5,7 @@ import {
   getUserMock,
   registerTableQuery,
   resetSupabaseMock,
-} from "./supabaseClientMock";
+} from "../../__tests__/supabaseClientMock";
 
 const input = { orderId: 12, vendorId: 7, rating: 5, comment: "  Great  " };
 

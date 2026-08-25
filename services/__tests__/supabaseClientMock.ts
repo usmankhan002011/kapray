@@ -8,16 +8,22 @@ type QueryResults = {
   maybeSingle?: QueryResult;
   list?: QueryResult;
   insert?: QueryResult;
+  update?: QueryResult;
 };
 
 export type SupabaseQueryMock = {
+  then: jest.Mock;
   select: jest.Mock;
   eq: jest.Mock;
+  in: jest.Mock;
+  ilike: jest.Mock;
+  or: jest.Mock;
   order: jest.Mock;
   limit: jest.Mock;
   single: jest.Mock;
   maybeSingle: jest.Mock;
   insert: jest.Mock;
+  update: jest.Mock;
 };
 
 const tableQueries = new Map<string, SupabaseQueryMock>();
@@ -41,17 +47,32 @@ export const supabase = {
 
 export function createQueryMock(results: QueryResults = {}): SupabaseQueryMock {
   const success = { data: null, error: null };
+  let result = results.list ?? success;
   const query = {} as SupabaseQueryMock;
+  const chain = () => query;
 
-  query.select = jest.fn(() => query);
-  query.eq = jest.fn(() => query);
-  query.order = jest.fn(() => query);
-  query.limit = jest.fn().mockResolvedValue(results.list ?? success);
+  query.then = jest.fn((resolve, reject) =>
+    Promise.resolve(result).then(resolve, reject),
+  );
+  query.select = jest.fn(chain);
+  query.eq = jest.fn(chain);
+  query.in = jest.fn(chain);
+  query.ilike = jest.fn(chain);
+  query.or = jest.fn(chain);
+  query.order = jest.fn(chain);
+  query.limit = jest.fn(chain);
   query.single = jest.fn().mockResolvedValue(results.single ?? success);
   query.maybeSingle = jest
     .fn()
     .mockResolvedValue(results.maybeSingle ?? success);
-  query.insert = jest.fn().mockResolvedValue(results.insert ?? success);
+  query.insert = jest.fn(() => {
+    result = results.insert ?? success;
+    return query;
+  });
+  query.update = jest.fn(() => {
+    result = results.update ?? success;
+    return query;
+  });
 
   return query;
 }

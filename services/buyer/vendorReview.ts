@@ -1,6 +1,6 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import type { Tables, TablesInsert } from "@/supabase/supabase";
-import { buyerSupabase } from "./client";
+import { appSupabase } from "@/services/supabase";
 
 export type SubmitVendorReviewInput = {
   orderId: number;
@@ -35,11 +35,11 @@ function isDuplicate(error: PostgrestError): boolean {
 export async function submitVendorReview(
   input: SubmitVendorReviewInput,
 ): Promise<SubmitVendorReviewStatus> {
-  const { data: auth, error: authError } = await buyerSupabase.auth.getUser();
+  const { data: auth, error: authError } = await appSupabase.auth.getUser();
   if (authError) throw authError;
   if (!auth.user) return "requires_sign_in";
 
-  const { data, error: orderError } = await buyerSupabase
+  const { data, error: orderError } = await appSupabase
     .from("orders")
     .select("id, vendor_id, buyer_auth_user_id, status")
     .eq("id", input.orderId)
@@ -68,7 +68,7 @@ export async function submitVendorReview(
     is_hidden: false,
   };
 
-  const { error } = await buyerSupabase.from("vendor_reviews").insert(review);
+  const { error } = await appSupabase.from("vendor_reviews").insert(review);
   if (!error) return "submitted";
   if (isDuplicate(error)) return "already_reviewed";
   throw error;

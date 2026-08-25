@@ -14,8 +14,13 @@ import {
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { supabase } from "@/utils/supabase/client";
 import { useAppSelector } from "@/store/hooks";
+import {
+  getOrderDetails,
+  getOrderMediaPublicUrl,
+  hasCurrentBuyerReviewedOrder,
+  updateOrderStatus,
+} from "@/services/orders/orderDetails";
 import DyePaletteReferenceButton from "@/components/product/DyePaletteReferenceButton";
 import {
   apColors,
@@ -247,8 +252,7 @@ function resolvePublicUrlFromPath(pathOrUrl: string) {
   if (looksLikeUrl(s)) return s;
 
   try {
-    const { data } = supabase.storage.from("vendor_images").getPublicUrl(s);
-    return data?.publicUrl ?? "";
+    return getOrderMediaPublicUrl(s);
   } catch {
     return "";
   }
@@ -457,49 +461,7 @@ export default function OrderDetailScreen() {
     try {
       setLoading(true);
 
-      const { data, error } = await supabase
-        .from("orders")
-        .select(
-          `
-          id,
-          vendor_id,
-          vendor:vendor_id (
-            id,
-            name,
-            shop_name
-          ),
-          created_at,
-          order_no,
-          status,
-          buyer_name,
-          buyer_mobile,
-          buyer_email,
-          delivery_address,
-          city,
-          notes,
-          product_code_snapshot,
-          title_snapshot,
-          spec_snapshot,
-          media_snapshot,
-          price_snapshot,
-          currency,
-          subtotal_pkr,
-          delivery_pkr,
-          discount_pkr,
-          total_pkr,
-          size_mode,
-          selected_size,
-          exact_measurements,
-          courier_name,
-          tracking_number
-        `,
-        )
-        .eq("id", Number(orderId))
-        .single();
-
-      if (error) throw error;
-
-      const o: any = data;
+      const o: any = await getOrderDetails(Number(orderId));
 
       setOrder({
         id: Number(o.id),
@@ -558,29 +520,7 @@ export default function OrderDetailScreen() {
     try {
       setReviewLoading(true);
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user?.id) {
-        setHasReviewed(false);
-        return;
-      }
-
-      const { data, error } = await (supabase as any)
-        .from("vendor_reviews")
-        .select("id")
-        .eq("order_id", Number(orderId))
-        .eq("buyer_user_id", user.id)
-        .limit(1);
-
-      if (error) {
-        console.warn("review state load error:", error.message);
-        setHasReviewed(false);
-        return;
-      }
-
-      setHasReviewed(Array.isArray(data) && data.length > 0);
+      setHasReviewed(await hasCurrentBuyerReviewedOrder(Number(orderId)));
     } catch (e: any) {
       console.warn("review state load error:", e?.message ?? e);
       setHasReviewed(false);
@@ -1247,11 +1187,7 @@ export default function OrderDetailScreen() {
           payload.tracking_number = trackingTrim;
         }
 
-        const { error } = await supabase
-          .from("orders")
-          .update(payload)
-          .eq("id", order.id);
-        if (error) throw error;
+        await updateOrderStatus(order.id, payload);
 
         setDispatchOpen(false);
         await load();

@@ -16,8 +16,8 @@ import {
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { useRouter } from "expo-router";
-import { supabase } from "@/utils/supabase/client";
 import { useAppSelector } from "@/store/hooks";
+import { getVendorOrders } from "@/services/orders/orderList";
 import {
   apColors,
   apFontFamily,
@@ -509,46 +509,7 @@ export default function OrdersIndexScreen() {
         return;
       }
 
-      const activeStatuses = [
-        "placed",
-        "seen",
-        "in_progress",
-        "packed",
-        "dispatched",
-      ];
-
-      let q = supabase
-        .from("orders")
-        .select(
-          `
-          id,
-          created_at,
-          order_no,
-          status,
-          buyer_name,
-          buyer_mobile,
-          city,
-          product_code_snapshot,
-          title_snapshot,
-          spec_snapshot,
-          subtotal_pkr,
-          delivery_pkr,
-          total_pkr,
-          currency
-        `,
-        )
-        .eq("vendor_id", vId)
-        .order("created_at", { ascending: false })
-        .limit(500);
-
-      if (tab === "active") {
-        q = q.in("status", activeStatuses);
-      } else {
-        q = q.eq("status", "delivered");
-      }
-
-      const { data, error } = await q;
-      if (error) throw error;
+      const data = await getVendorOrders(vId, tab);
 
       const mapped: OrderRow[] = (data ?? []).map((o: any) => ({
         id: Number(o.id),
