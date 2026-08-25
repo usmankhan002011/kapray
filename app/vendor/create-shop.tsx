@@ -48,11 +48,15 @@ import {
   pickImages,
   pickVideos,
   parseContactList,
-  uploadToBucket,
+  uploadVendorAsset,
 } from "@/utils/helpers/wizardHelpers";
-import { supabase } from "@/utils/supabase/client";
+import {
+  createShopVendor,
+  getCurrentVendorUser,
+  getVendorByAuthUser,
+  updateShopVendor,
+} from "@/services/vendor/createShop";
 
-const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
 
 const EMPTY_TAILORING_OPTIONS = {
@@ -276,7 +280,7 @@ export default function CreateShopScreen() {
     const {
       data: { user },
       error: userError,
-    } = await supabase.auth.getUser();
+    } = await getCurrentVendorUser();
 
     if (userError || !user) {
       setSaving(false);
@@ -302,11 +306,8 @@ export default function CreateShopScreen() {
       ? form.exportRegions
       : [];
 
-    const { data: existingVendor, error: existingVendorError } = await supabase
-      .from("vendor")
-      .select("id, created_at, auth_user_id")
-      .eq("auth_user_id", authUserId)
-      .maybeSingle();
+    const { data: existingVendor, error: existingVendorError } =
+      await getVendorByAuthUser(authUserId);
 
     if (existingVendorError) {
       setSaving(false);
@@ -320,34 +321,36 @@ export default function CreateShopScreen() {
     let vendor_id: number;
     let vendorCreatedAt: string | null = null;
 
+    const vendorPayload = {
+      owner_user_id: authUserId,
+      auth_user_id: authUserId,
+      name: form.ownerName.trim(),
+      email: form.email.trim(),
+      mobile: form.mobile.trim(),
+      additional_mobile_numbers: parseContactList(
+        form.additionalMobileNumbers,
+      ),
+      landline: form.landline.trim() || null,
+      additional_landline_numbers: parseContactList(
+        form.additionalLandlineNumbers,
+      ),
+      shop_name: form.shopName.trim(),
+      address: form.address.trim(),
+      location_url: form.locationUrl.trim() || null,
+      offers_dyeing: Boolean(form.offersDyeing),
+      offers_tailoring: Boolean(form.offersTailoring),
+      exports_enabled: Boolean(form.exportsEnabled),
+      export_regions: normalizedExportRegions,
+      tailoring_options: normalizedTailoringOptions,
+      location: form.address.trim(),
+      status: "pending",
+    };
+
     if (existingVendor?.id) {
-      const { error: baseUpdateError } = await supabase
-        .from("vendor")
-        .update({
-          owner_user_id: authUserId,
-          auth_user_id: authUserId,
-          name: form.ownerName.trim(),
-          email: form.email.trim(),
-          mobile: form.mobile.trim(),
-          additional_mobile_numbers: parseContactList(
-            form.additionalMobileNumbers,
-          ),
-          landline: form.landline.trim() || null,
-          additional_landline_numbers: parseContactList(
-            form.additionalLandlineNumbers,
-          ),
-          shop_name: form.shopName.trim(),
-          address: form.address.trim(),
-          location_url: form.locationUrl.trim() || null,
-          offers_dyeing: Boolean(form.offersDyeing),
-          offers_tailoring: Boolean(form.offersTailoring),
-          exports_enabled: Boolean(form.exportsEnabled),
-          export_regions: normalizedExportRegions,
-          tailoring_options: normalizedTailoringOptions,
-          location: form.address.trim(),
-          status: "pending",
-        })
-        .eq("id", existingVendor.id);
+      const { error: baseUpdateError } = await updateShopVendor(
+        existingVendor.id,
+        vendorPayload,
+      );
 
       if (baseUpdateError) {
         setSaving(false);
@@ -361,34 +364,8 @@ export default function CreateShopScreen() {
       vendor_id = Number(existingVendor.id);
       vendorCreatedAt = existingVendor.created_at ?? null;
     } else {
-      const { data: vendorRow, error: insertError } = await supabase
-        .from("vendor")
-        .insert({
-          owner_user_id: authUserId,
-          auth_user_id: authUserId,
-          name: form.ownerName.trim(),
-          email: form.email.trim(),
-          mobile: form.mobile.trim(),
-          additional_mobile_numbers: parseContactList(
-            form.additionalMobileNumbers,
-          ),
-          landline: form.landline.trim() || null,
-          additional_landline_numbers: parseContactList(
-            form.additionalLandlineNumbers,
-          ),
-          shop_name: form.shopName.trim(),
-          address: form.address.trim(),
-          location_url: form.locationUrl.trim() || null,
-          offers_dyeing: Boolean(form.offersDyeing),
-          offers_tailoring: Boolean(form.offersTailoring),
-          exports_enabled: Boolean(form.exportsEnabled),
-          export_regions: normalizedExportRegions,
-          tailoring_options: normalizedTailoringOptions,
-          location: form.address.trim(),
-          status: "pending",
-        })
-        .select("id, created_at, auth_user_id")
-        .single();
+      const { data: vendorRow, error: insertError } =
+        await createShopVendor(vendorPayload);
 
       if (insertError || !vendorRow?.id) {
         setSaving(false);
@@ -406,8 +383,7 @@ export default function CreateShopScreen() {
     const ts = Date.now();
 
     const profilePath = form.profile
-      ? await uploadToBucket(
-          BUCKET_VENDOR,
+      ? await uploadVendorAsset(
           `vendors/${vendor_id}/profile/${ts}-${form.profile.fileName || "profile"}`,
           form.profile,
           "image/jpeg",
@@ -415,8 +391,7 @@ export default function CreateShopScreen() {
       : (selectedVendor?.profile_image_path ?? null);
 
     const certPath = form.govPermission
-      ? await uploadToBucket(
-          BUCKET_VENDOR,
+      ? await uploadVendorAsset(
           `vendors/${vendor_id}/certificates/${ts}-${form.govPermission.fileName || "file"}`,
           form.govPermission,
           "image/jpeg",
@@ -424,8 +399,7 @@ export default function CreateShopScreen() {
       : (selectedVendor?.certificate_paths?.[0] ?? null);
 
     const bannerPath = form.banner
-      ? await uploadToBucket(
-          BUCKET_VENDOR,
+      ? await uploadVendorAsset(
           `vendors/${vendor_id}/banner/${ts}-${form.banner.fileName || "banner"}`,
           form.banner,
           "image/jpeg",
@@ -434,8 +408,7 @@ export default function CreateShopScreen() {
 
     const imagePaths: string[] = [];
     for (let i = 0; i < form.images.length; i++) {
-      const p = await uploadToBucket(
-        BUCKET_VENDOR,
+      const p = await uploadVendorAsset(
         `vendors/${vendor_id}/shop-images/${ts}-${i}-${form.images[i].fileName || "image"}`,
         form.images[i],
         "image/jpeg",
@@ -445,8 +418,7 @@ export default function CreateShopScreen() {
 
     const videoPaths: string[] = [];
     for (let i = 0; i < form.videos.length; i++) {
-      const p = await uploadToBucket(
-        BUCKET_VENDOR,
+      const p = await uploadVendorAsset(
         `vendors/${vendor_id}/shop-videos/${ts}-${i}-${form.videos[i].fileName || "video"}`,
         form.videos[i],
         "video/mp4",
@@ -456,34 +428,31 @@ export default function CreateShopScreen() {
 
     const certificate_paths = certPath ? [certPath] : null;
 
-    const { error: upErr } = await supabase
-      .from("vendor")
-      .update({
-        owner_user_id: authUserId,
-        auth_user_id: authUserId,
-        profile_image_path: profilePath,
-        banner_path: bannerPath,
-        certificate_paths,
-        additional_mobile_numbers: parseContactList(
-          form.additionalMobileNumbers,
-        ),
-        additional_landline_numbers: parseContactList(
-          form.additionalLandlineNumbers,
-        ),
-        shop_image_paths: imagePaths.length
-          ? imagePaths
-          : (selectedVendor?.shop_image_paths ?? null),
-        shop_video_paths: videoPaths.length
-          ? videoPaths
-          : (selectedVendor?.shop_video_paths ?? null),
-        offers_dyeing: Boolean(form.offersDyeing),
-        offers_tailoring: Boolean(form.offersTailoring),
-        exports_enabled: Boolean(form.exportsEnabled),
-        export_regions: normalizedExportRegions,
-        tailoring_options: normalizedTailoringOptions,
-        status: "pending",
-      })
-      .eq("id", vendor_id);
+    const { error: upErr } = await updateShopVendor(vendor_id, {
+      owner_user_id: authUserId,
+      auth_user_id: authUserId,
+      profile_image_path: profilePath,
+      banner_path: bannerPath,
+      certificate_paths,
+      additional_mobile_numbers: parseContactList(
+        form.additionalMobileNumbers,
+      ),
+      additional_landline_numbers: parseContactList(
+        form.additionalLandlineNumbers,
+      ),
+      shop_image_paths: imagePaths.length
+        ? imagePaths
+        : (selectedVendor?.shop_image_paths ?? null),
+      shop_video_paths: videoPaths.length
+        ? videoPaths
+        : (selectedVendor?.shop_video_paths ?? null),
+      offers_dyeing: Boolean(form.offersDyeing),
+      offers_tailoring: Boolean(form.offersTailoring),
+      exports_enabled: Boolean(form.exportsEnabled),
+      export_regions: normalizedExportRegions,
+      tailoring_options: normalizedTailoringOptions,
+      status: "pending",
+    });
 
     setSaving(false);
 

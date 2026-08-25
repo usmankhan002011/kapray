@@ -3,7 +3,7 @@ import * as FileSystem from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import { Alert } from "react-native";
 
-import { supabase } from "@/utils/supabase/client";
+import { uploadCreateShopAsset } from "@/services/vendor/createShop";
 
 export type Picked = { uri: string; mimeType?: string; fileName?: string };
 
@@ -69,7 +69,8 @@ export const STEPS: StepConfig[] = [
   {
     id: "mobile",
     title: "What is the WhatsApp number?",
-    subtitle: "Add the fixed primary WhatsApp contact and optional extra numbers.",
+    subtitle:
+      "Add the fixed primary WhatsApp contact and optional extra numbers.",
   },
   {
     id: "shop",
@@ -176,11 +177,10 @@ export function formatContactList(value?: string[] | null) {
   return Array.isArray(value) && value.length ? value.join("\n") : "";
 }
 
-export async function uploadToBucket(
-  bucket: string,
+export async function uploadVendorAsset(
   path: string,
   file: Picked,
-  fallbackContentType: string
+  fallbackContentType: string,
 ): Promise<string | null> {
   try {
     const contentType = file.mimeType || fallbackContentType;
@@ -190,9 +190,11 @@ export async function uploadToBucket(
     });
     const buffer = decode(base64);
 
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(path, buffer, { contentType, upsert: true });
+    const { data, error } = await uploadCreateShopAsset({
+      path,
+      fileBody: buffer,
+      contentType,
+    });
 
     if (error) {
       Alert.alert("Upload failed", error.message);
