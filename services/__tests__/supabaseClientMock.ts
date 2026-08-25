@@ -29,6 +29,7 @@ export type SupabaseQueryMock = {
 const tableQueries = new Map<string, SupabaseQueryMock>();
 
 export const getUserMock = jest.fn();
+export const rpcMock = jest.fn();
 export const getPublicUrlMock = jest.fn();
 export const storageFromMock = jest.fn(() => ({
   getPublicUrl: getPublicUrlMock,
@@ -43,6 +44,7 @@ export const supabase = {
   auth: { getUser: getUserMock },
   storage: { from: storageFromMock },
   from: fromMock,
+  rpc: rpcMock,
 };
 
 export function createQueryMock(results: QueryResults = {}): SupabaseQueryMock {
@@ -88,6 +90,7 @@ export function resetSupabaseMock(): void {
   jest.clearAllMocks();
   tableQueries.clear();
   getUserMock.mockResolvedValue({ data: { user: null }, error: null });
+  rpcMock.mockResolvedValue({ data: null, error: null });
   getPublicUrlMock.mockImplementation((path: string) => ({
     data: { publicUrl: `https://storage.test/${path}` },
   }));

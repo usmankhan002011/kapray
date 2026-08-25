@@ -10,7 +10,11 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { supabase } from "@/utils/supabase/client";
+import {
+  createAtomicPurchaseOrder,
+  getCurrentBuyerId,
+} from "@/services/purchase/purchaseOrder";
+import { getPaymentProduct } from "@/services/purchase/purchaseProducts";
 import { decodeDeliveryPolicyParam } from "@/utils/kapray/deliveryPolicy";
 import DyePaletteReferenceButton from "@/components/product/DyePaletteReferenceButton";
 import {
@@ -888,24 +892,17 @@ export default function PaymentScreen() {
         return;
       }
 
-      let q = supabase
-        .from("products")
-        .select("id,vendor_id,product_code,title,spec,price,media")
-        .limit(1);
-
-      if (data.productId) q = q.eq("id", Number(data.productId));
-      else q = q.eq("product_code", data.productCode);
-
-      const { data: pRow, error: pErr } = await q.single();
-      if (pErr) throw pErr;
+      const pRow = await getPaymentProduct({
+        productId: data.productId ? Number(data.productId) : undefined,
+        productCode: data.productId ? undefined : data.productCode,
+      });
 
       const productId = Number(pRow.id);
       const vendorId = Number(pRow.vendor_id);
       const productCode = String(pRow.product_code ?? data.productCode ?? "");
       const title = String(pRow.title ?? data.productName ?? "Product");
 
-      const { data: auth } = await supabase.auth.getUser();
-      const buyerAuthUserId = auth?.user?.id ?? null;
+      const buyerAuthUserId = await getCurrentBuyerId();
 
       const exactMap: Record<string, string> = {};
       for (const [k, v] of data.exactPairs) exactMap[k] = v;
@@ -1077,47 +1074,43 @@ export default function PaymentScreen() {
         (specSnapshot as any).shipping_weight_mode = "per_meter";
       }
 
-      const { data: rpcData, error: rpcError } = await (supabase as any).rpc(
-        "create_order_atomic_single_unit",
-        {
-          p_product_id: productId,
-          p_selected_variant_id: selectedVariantIdForRpc || null,
-          p_selected_variant_size: data.selectedVariantSize || null,
-          p_buyer_auth_user_id: buyerAuthUserId,
-          p_buyer_name: data.buyerName || "Buyer",
-          p_buyer_mobile: data.buyerMobile || "",
-          p_buyer_email: data.buyerEmail || null,
-          p_delivery_address: data.deliveryAddress || "",
-          p_city: data.city || "",
-          p_notes: data.notes || null,
-          p_product_code_snapshot: productCode,
-          p_title_snapshot: title,
-          p_spec_snapshot: specSnapshot,
-          p_price_snapshot: pRow.price ?? {},
-          p_media_snapshot: pRow.media ?? {},
-          p_currency: data.currency,
-          p_subtotal_pkr:
-            data.subtotalBeforeDeliveryPkr || data.totalPkrSafe || null,
-          p_delivery_pkr: data.deliveryCostPkr || 0,
-          p_discount_pkr: 0,
-          p_total_pkr: data.totalPkrSafe || null,
-          p_size_mode:
-            data.mode === "meter"
-              ? "meter"
-              : data.mode === "exact"
-                ? "exact"
-                : "standard",
-          p_selected_size:
-            data.mode === "exact"
-              ? null
-              : data.selectedVariantSize ||
-                data.selectedUnstitchedSize ||
-                data.selectedSize ||
-                null,
-          p_exact_measurements: data.mode === "exact" ? exactMap : {},
-        },
-      );
-      if (rpcError) throw rpcError;
+      const rpcData = await createAtomicPurchaseOrder({
+        p_product_id: productId,
+        p_selected_variant_id: selectedVariantIdForRpc || null,
+        p_selected_variant_size: data.selectedVariantSize || null,
+        p_buyer_auth_user_id: buyerAuthUserId,
+        p_buyer_name: data.buyerName || "Buyer",
+        p_buyer_mobile: data.buyerMobile || "",
+        p_buyer_email: data.buyerEmail || null,
+        p_delivery_address: data.deliveryAddress || "",
+        p_city: data.city || "",
+        p_notes: data.notes || null,
+        p_product_code_snapshot: productCode,
+        p_title_snapshot: title,
+        p_spec_snapshot: specSnapshot,
+        p_price_snapshot: pRow.price ?? {},
+        p_media_snapshot: pRow.media ?? {},
+        p_currency: data.currency,
+        p_subtotal_pkr:
+          data.subtotalBeforeDeliveryPkr || data.totalPkrSafe || null,
+        p_delivery_pkr: data.deliveryCostPkr || 0,
+        p_discount_pkr: 0,
+        p_total_pkr: data.totalPkrSafe || null,
+        p_size_mode:
+          data.mode === "meter"
+            ? "meter"
+            : data.mode === "exact"
+              ? "exact"
+              : "standard",
+        p_selected_size:
+          data.mode === "exact"
+            ? null
+            : data.selectedVariantSize ||
+              data.selectedUnstitchedSize ||
+              data.selectedSize ||
+              null,
+        p_exact_measurements: data.mode === "exact" ? exactMap : {},
+      });
 
       const rpcRow = Array.isArray(rpcData) ? rpcData[0] : rpcData;
 

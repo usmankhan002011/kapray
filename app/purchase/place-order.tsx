@@ -21,7 +21,10 @@ import {
   apFontFamily,
   apRadii,
 } from "@/components/product/addProductStyles";
-import { supabase } from "@/utils/supabase/client";
+import {
+  getPurchaseMediaPublicUrl,
+  getPurchaseProductDetails,
+} from "@/services/purchase/purchaseProducts";
 import { getDeliveryCost } from "@/utils/kapray/delivery";
 import {
   decodeDeliveryPolicyParam,
@@ -36,7 +39,6 @@ import DyePaletteReferenceButton from "@/components/product/DyePaletteReferenceB
 import ExactMeasurementsModal from "../(tabs)/flow/purchase/exact-measurements-modal";
 import type { ExactMeasurementSheetRow } from "../(tabs)/flow/purchase/exact-measurements-sheet";
 
-const BUCKET_VENDOR = "vendor_images";
 const LAST_CHECKOUT_ADDRESS_KEY = "kapray:last_checkout_address:v1";
 
 type LastCheckoutAddress = {
@@ -375,8 +377,7 @@ function resolvePublicUrl(path: string | null | undefined) {
   const p = norm(path);
   if (!p) return "";
   if (/^https?:\/\//i.test(p)) return p;
-  const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(p);
-  return data?.publicUrl ?? "";
+  return getPurchaseMediaPublicUrl(p);
 }
 
 function cleanReadyToWearTitle(title: string, selectedSize: string) {
@@ -1059,39 +1060,18 @@ export default function PlaceOrderScreen() {
     try {
       setLoadingProduct(true);
 
-      let q = supabase.from("products").select(`
-          id,
-          vendor_id,
-          product_code,
-          title,
-          spec,
-          price,
-          media,
-          vendor:vendor_id (
-            id,
-            name,
-            shop_name,
-            address,
-            mobile,
-            landline,
-            email,
-            location,
-            location_url,
-            profile_image_path,
-            banner_path,
-            status,
-            exports_enabled,
-            export_regions
-          )
-        `);
-
       const numericProductId = Number(base.productId);
-
-      if (Number.isFinite(numericProductId)) q = q.eq("id", numericProductId);
-      else if (base.productCode) q = q.eq("product_code", base.productCode);
-
-      const { data, error } = await q.single();
-      if (!error) setFetchedProduct(data as any);
+      const product = await getPurchaseProductDetails({
+        productId: Number.isFinite(numericProductId)
+          ? numericProductId
+          : undefined,
+        productCode: Number.isFinite(numericProductId)
+          ? undefined
+          : base.productCode,
+      });
+      setFetchedProduct(product as any);
+    } catch {
+      // Keep the existing product details when the optional lookup fails.
     } finally {
       setLoadingProduct(false);
     }
