@@ -9,115 +9,59 @@ import React, {
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   FlatList,
   Image,
   Linking,
   Modal,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { supabase } from "@/utils/supabase/client";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useAppDispatch } from "@/store/hooks";
 import { setSelectedVendor } from "@/store/vendorSlice";
 import ReviewSummaryCard from "@/components/vendor-reviews/ReviewSummaryCard";
-import ReviewList, {
-  ReviewListItem,
-} from "@/components/vendor-reviews/ReviewList";
-
-const BUCKET_VENDOR = "vendor_images";
-const { width } = Dimensions.get("window");
-
-type VendorRow = {
-  id: number;
-  created_at?: string | null;
-
-  name?: string | null;
-  shop_name?: string | null;
-
-  email?: string | null;
-  mobile?: string | null;
-  additional_mobile_numbers?: string[] | null;
-  landline?: string | null;
-  additional_landline_numbers?: string[] | null;
-
-  address?: string | null;
-  location?: string | null;
-  location_url?: string | null;
-
-  profile_image_path?: string | null;
-  banner_path?: string | null;
-
-  certificate_paths?: string[] | null;
-  shop_image_paths?: string[] | null;
-  shop_video_paths?: string[] | null;
-
-  status?: string | null;
-
-  offers_dyeing?: boolean | null;
-  offers_tailoring?: boolean | null;
-  exports_enabled?: boolean | null;
-  export_regions?: string[] | null;
-};
-
-type ReviewSummaryRow = {
-  average_rating: number;
-  review_count: number;
-};
-
-function safeText(v: any) {
-  const t = String(v ?? "").trim();
-  return t.length ? t : "—";
-}
-
-function isHttpUrl(v: any) {
-  return typeof v === "string" && /^https?:\/\//i.test(v);
-}
-
-function firstParam(v: unknown): string | null {
-  if (typeof v === "string") return v.trim() || null;
-  if (Array.isArray(v) && typeof v[0] === "string") return v[0].trim() || null;
-  return null;
-}
-
-function joinOrDash(items?: string[] | null) {
-  return Array.isArray(items) && items.length ? items.join(", ") : "—";
-}
+import ReviewList from "@/components/vendor-reviews/ReviewList";
+import BuyerProfileField from "@/components/buyer/BuyerProfileField";
+import { buyerProfileStyles as styles } from "@/components/buyer/buyerProfileStyles";
+import { BUYER_PROFILE_SCREEN_WIDTH as width } from "@/constants/buyer";
+import {
+  getBuyerVendorProfile,
+  getBuyerVendorReviews,
+  getBuyerVendorReviewSummary,
+  getVendorMediaUrl,
+  getVendorMediaUrls,
+  toSelectedVendor,
+  type BuyerVendorProfile,
+  type BuyerVendorReview,
+  type BuyerVendorReviewSummary,
+} from "@/services/buyer/vendorProfile";
+import {
+  decodeNumberParam,
+  displayText,
+  errorMessage,
+  joinOrDash,
+} from "@/utils/buyer";
 
 export default function BuyerViewProfileScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const dispatch = useAppDispatch();
 
-  const vendorId = useMemo<number | null>(() => {
-    const raw = firstParam(
-      (params as any)?.vendorId ?? (params as any)?.id ?? null,
-    );
-    if (!raw) return null;
-
-    try {
-      const decoded = decodeURIComponent(raw).trim();
-      const parsed = Number(decoded);
-      return Number.isFinite(parsed) ? parsed : null;
-    } catch {
-      const parsed = Number(String(raw).trim());
-      return Number.isFinite(parsed) ? parsed : null;
-    }
-  }, [params]);
+  const vendorId = useMemo(
+    () => decodeNumberParam((params as any)?.vendorId ?? (params as any)?.id),
+    [params],
+  );
 
   const [loading, setLoading] = useState(false);
-  const [vendor, setVendor] = useState<VendorRow | null>(null);
+  const [vendor, setVendor] = useState<BuyerVendorProfile | null>(null);
   const [missingParam, setMissingParam] = useState(false);
 
-  const [reviewSummary, setReviewSummary] = useState<ReviewSummaryRow | null>(
-    null,
-  );
-  const [reviews, setReviews] = useState<ReviewListItem[]>([]);
+  const [reviewSummary, setReviewSummary] =
+    useState<BuyerVendorReviewSummary | null>(null);
+  const [reviews, setReviews] = useState<BuyerVendorReview[]>([]);
 
   const [selectedVideoUrl, setSelectedVideoUrl] = useState<string>("");
 
@@ -126,46 +70,29 @@ export default function BuyerViewProfileScreen() {
   const [gallery, setGallery] = useState<string[]>([]);
   const flatListRef = useRef<FlatList<string>>(null);
 
-  const resolvePublicUrl = useCallback((path: string | null | undefined) => {
-    if (!path) return null;
-    if (isHttpUrl(path)) return path;
-    const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(path);
-    return data?.publicUrl ?? null;
-  }, []);
-
-  const resolveManyPublic = useCallback(
-    (paths: any): string[] => {
-      const list = Array.isArray(paths) ? paths : [];
-      return list
-        .map((p) => resolvePublicUrl(String(p || "").trim()))
-        .filter(Boolean) as string[];
-    },
-    [resolvePublicUrl],
-  );
-
   const bannerUrl = useMemo(
-    () => resolvePublicUrl(vendor?.banner_path ?? null),
-    [vendor, resolvePublicUrl],
+    () => getVendorMediaUrl(vendor?.banner_path),
+    [vendor?.banner_path],
   );
 
   const profileUrl = useMemo(
-    () => resolvePublicUrl(vendor?.profile_image_path ?? null),
-    [vendor, resolvePublicUrl],
+    () => getVendorMediaUrl(vendor?.profile_image_path),
+    [vendor?.profile_image_path],
   );
 
   const certificateUrls = useMemo(
-    () => resolveManyPublic(vendor?.certificate_paths ?? []),
-    [vendor, resolveManyPublic],
+    () => getVendorMediaUrls(vendor?.certificate_paths),
+    [vendor?.certificate_paths],
   );
 
   const shopImageUrls = useMemo(
-    () => resolveManyPublic(vendor?.shop_image_paths ?? []),
-    [vendor, resolveManyPublic],
+    () => getVendorMediaUrls(vendor?.shop_image_paths),
+    [vendor?.shop_image_paths],
   );
 
   const shopVideoUrls = useMemo(
-    () => resolveManyPublic(vendor?.shop_video_paths ?? []),
-    [vendor, resolveManyPublic],
+    () => getVendorMediaUrls(vendor?.shop_video_paths),
+    [vendor?.shop_video_paths],
   );
 
   useEffect(() => {
@@ -256,83 +183,16 @@ export default function BuyerViewProfileScreen() {
     try {
       setMissingParam(false);
       setLoading(true);
-
-      const { data, error } = await supabase
-        .from("vendor")
-        .select(
-          `
-          id,
-          created_at,
-          name,
-          shop_name,
-          email,
-          mobile,
-          additional_mobile_numbers,
-          landline,
-          additional_landline_numbers,
-          address,
-          location,
-          location_url,
-          profile_image_path,
-          banner_path,
-          certificate_paths,
-          shop_image_paths,
-          shop_video_paths,
-          status,
-          offers_dyeing,
-          offers_tailoring,
-          exports_enabled,
-          export_regions
-        `,
-        )
-        .eq("id", vendorId)
-        .single();
-
-      if (error) {
-        Alert.alert("Load error", error.message);
-        setVendor(null);
-        return;
-      }
-
-      const row = data as unknown as VendorRow;
+      const row = await getBuyerVendorProfile(vendorId);
       setVendor(row);
-
-      const banner_url = resolvePublicUrl(row?.banner_path ?? null);
-
-      dispatch(
-        setSelectedVendor({
-          id: row?.id ?? null,
-          shop_name: row?.shop_name ?? null,
-          owner_name: row?.name ?? null,
-          name: row?.name ?? null,
-          mobile: row?.mobile ?? null,
-          additional_mobile_numbers: row?.additional_mobile_numbers ?? [],
-          landline: row?.landline ?? null,
-          additional_landline_numbers: row?.additional_landline_numbers ?? [],
-          email: row?.email ?? null,
-          address: row?.address ?? null,
-          location: row?.location ?? null,
-          location_url: row?.location_url ?? null,
-          profile_image_path: row?.profile_image_path ?? null,
-          banner_path: row?.banner_path ?? null,
-          banner_url: banner_url ?? null,
-          offers_dyeing: row?.offers_dyeing ?? null,
-          offers_tailoring: row?.offers_tailoring ?? null,
-          exports_enabled: row?.exports_enabled ?? false,
-          export_regions: row?.export_regions ?? [],
-          government_permission_url: null,
-          images: row?.shop_image_paths ?? null,
-          videos: row?.shop_video_paths ?? null,
-          status: row?.status ?? null,
-        } as any),
-      );
-    } catch (e: any) {
-      Alert.alert("Error", e?.message ?? "Could not load vendor.");
+      dispatch(setSelectedVendor(toSelectedVendor(row)));
+    } catch (error) {
+      Alert.alert("Load error", errorMessage(error, "Could not load vendor."));
       setVendor(null);
     } finally {
       setLoading(false);
     }
-  }, [vendorId, dispatch, resolvePublicUrl]);
+  }, [vendorId, dispatch]);
 
   const fetchReviewData = useCallback(async () => {
     if (vendorId == null) {
@@ -341,39 +201,21 @@ export default function BuyerViewProfileScreen() {
       return;
     }
 
-    try {
-      const [
-        { data: summaryData, error: summaryError },
-        { data: reviewsData, error: reviewsError },
-      ] = await Promise.all([
-        (supabase as any)
-          .from("vendor_review_summary")
-          .select("average_rating, review_count")
-          .eq("vendor_id", vendorId)
-          .maybeSingle(),
-        (supabase as any)
-          .from("vendor_reviews")
-          .select("id, created_at, rating, comment, vendor_reply")
-          .eq("vendor_id", vendorId)
-          .eq("is_public", true)
-          .eq("is_hidden", false)
-          .order("created_at", { ascending: false })
-          .limit(5),
-      ]);
+    const [summaryResult, reviewsResult] = await Promise.allSettled([
+      getBuyerVendorReviewSummary(vendorId),
+      getBuyerVendorReviews(vendorId),
+    ]);
 
-      if (summaryError) {
-        console.warn("Review summary load error:", summaryError.message);
-      } else {
-        setReviewSummary((summaryData as ReviewSummaryRow | null) ?? null);
-      }
+    if (summaryResult.status === "fulfilled") {
+      setReviewSummary(summaryResult.value);
+    } else {
+      console.warn("Review summary load error:", summaryResult.reason);
+    }
 
-      if (reviewsError) {
-        console.warn("Reviews load error:", reviewsError.message);
-      } else {
-        setReviews((reviewsData as ReviewListItem[] | null) ?? []);
-      }
-    } catch (e: any) {
-      console.warn("Review data load error:", e?.message ?? "Unknown error");
+    if (reviewsResult.status === "fulfilled") {
+      setReviews(reviewsResult.value);
+    } else {
+      console.warn("Reviews load error:", reviewsResult.reason);
     }
   }, [vendorId]);
 
@@ -382,13 +224,6 @@ export default function BuyerViewProfileScreen() {
       fetchVendor();
       fetchReviewData();
     }, [fetchVendor, fetchReviewData]),
-  );
-
-  const Field = ({ label, value }: { label: string; value: any }) => (
-    <View style={styles.row}>
-      <Text style={styles.label}>{label}</Text>
-      <Text style={styles.value}>{safeText(value)}</Text>
-    </View>
   );
 
   return (
@@ -469,29 +304,32 @@ export default function BuyerViewProfileScreen() {
 
             <View style={styles.headerInfo}>
               <Text style={styles.nameText} numberOfLines={1}>
-                {safeText(vendor?.name)}
+                {displayText(vendor?.name)}
               </Text>
               <Text style={styles.shopText} numberOfLines={1}>
-                {safeText(vendor?.shop_name)}
+                {displayText(vendor?.shop_name)}
               </Text>
               <Text style={styles.statusText} numberOfLines={1}>
-                Status: {safeText(vendor?.status)}
+                Status: {displayText(vendor?.status)}
               </Text>
             </View>
           </View>
 
-          <Field label="WhatsApp mobile" value={vendor?.mobile} />
-          <Field
+          <BuyerProfileField label="WhatsApp mobile" value={vendor?.mobile} />
+          <BuyerProfileField
             label="Additional mobiles"
             value={joinOrDash(vendor?.additional_mobile_numbers)}
           />
-          <Field label="Primary landline" value={vendor?.landline} />
-          <Field
+          <BuyerProfileField
+            label="Primary landline"
+            value={vendor?.landline}
+          />
+          <BuyerProfileField
             label="Additional landlines"
             value={joinOrDash(vendor?.additional_landline_numbers)}
           />
-          <Field label="Email" value={vendor?.email} />
-          <Field label="Address" value={vendor?.address} />
+          <BuyerProfileField label="Email" value={vendor?.email} />
+          <BuyerProfileField label="Address" value={vendor?.address} />
 
           {!!String(vendor?.location_url ?? "").trim() ? (
             <Pressable
@@ -522,20 +360,20 @@ export default function BuyerViewProfileScreen() {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Services</Text>
 
-          <Field
+          <BuyerProfileField
             label="Dyeing"
             value={vendor?.offers_dyeing ? "Available" : "Not available"}
           />
-          <Field
+          <BuyerProfileField
             label="Tailoring"
             value={vendor?.offers_tailoring ? "Available" : "Not available"}
           />
-          <Field
+          <BuyerProfileField
             label="Exports"
             value={vendor?.exports_enabled ? "Yes" : "No"}
           />
           {vendor?.exports_enabled ? (
-            <Field
+            <BuyerProfileField
               label="Export Regions"
               value={joinOrDash(vendor?.export_regions)}
             />
@@ -644,29 +482,15 @@ export default function BuyerViewProfileScreen() {
           )}
         </View>
 
-        <View style={[styles.card, { paddingVertical: 12 }]}>
+        <View style={[styles.card, styles.metaCard]}>
           <Text style={styles.sectionTitle}>Meta</Text>
 
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginTop: 6,
-            }}
-          >
+          <View style={styles.metaRow}>
             <Text style={styles.label}>Vendor ID</Text>
-            <Text style={styles.value}>{safeText(vendor?.id)}</Text>
+            <Text style={styles.value}>{displayText(vendor?.id)}</Text>
           </View>
 
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginTop: 8,
-            }}
-          >
+          <View style={styles.metaRowSpaced}>
             <Text style={styles.label}>Created</Text>
             <Text style={styles.value}>
               {vendor?.created_at
@@ -735,355 +559,3 @@ export default function BuyerViewProfileScreen() {
     </View>
   );
 }
-
-const stylesVars = {
-  bg: "#F8FAFC",
-  cardBg: "#FFFFFF",
-  border: "#E5E7EB",
-  borderSoft: "#E5E7EB",
-  blue: "#2563EB",
-  blueSoft: "#EEF4FF",
-  text: "#0F172A",
-  subText: "#475569",
-  mutedText: "#64748B",
-  placeholder: "#94A3B8",
-  danger: "#B91C1C",
-  dangerSoft: "#FEE2E2",
-  dangerBorder: "#FCA5A5",
-  overlayDark: "rgba(0,0,0,0.58)",
-  overlaySoft: "rgba(255,255,255,0.14)",
-  white: "#FFFFFF",
-  black: "#000000",
-};
-
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: stylesVars.bg,
-  },
-
-  content: {
-    padding: 16,
-    paddingBottom: 24,
-    backgroundColor: stylesVars.bg,
-  },
-
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-
-  title: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: stylesVars.text,
-  },
-
-  section: {
-    marginTop: 18,
-    fontSize: 15,
-    fontWeight: "700",
-    color: stylesVars.text,
-  },
-
-  linkBtn: {
-    minHeight: 40,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: stylesVars.blueSoft,
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  linkBtnInline: {
-    marginTop: 10,
-    alignSelf: "flex-start",
-    minHeight: 40,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: stylesVars.blueSoft,
-    borderWidth: 1,
-    borderColor: "#D7E3FF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  linkText: {
-    color: stylesVars.blue,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-
-  loadingRow: {
-    marginTop: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-
-  loadingText: {
-    fontSize: 13,
-    color: stylesVars.mutedText,
-    fontWeight: "600",
-  },
-
-  card: {
-    marginTop: 14,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg,
-    padding: 18,
-  },
-
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: stylesVars.text,
-    marginBottom: 2,
-  },
-
-  meta: {
-    marginTop: 6,
-    fontSize: 13,
-    lineHeight: 18,
-    color: stylesVars.mutedText,
-    fontWeight: "500",
-  },
-
-  row: {
-    marginTop: 10,
-  },
-
-  label: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: stylesVars.text,
-    letterSpacing: 0.2,
-  },
-
-  value: {
-    marginTop: 4,
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: "500",
-    color: stylesVars.text,
-  },
-
-  mediaBlock: {
-    marginTop: 14,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg,
-    overflow: "hidden",
-  },
-
-  heroWrap: {
-    width: "100%",
-    backgroundColor: stylesVars.cardBg,
-  },
-
-  heroImage: {
-    width: "100%",
-    height: 230,
-    resizeMode: "cover",
-    backgroundColor: "#F1F5F9",
-  },
-
-  profileRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-
-  avatarWrap: {
-    width: 74,
-    height: 74,
-    borderRadius: 20,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg,
-  },
-
-  avatarPress: {
-    width: "100%",
-    height: "100%",
-  },
-
-  avatarImg: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "cover",
-  },
-
-  avatarFallback: {
-    width: "100%",
-    height: "100%",
-    backgroundColor: stylesVars.blue,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  avatarFallbackText: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: stylesVars.white,
-  },
-
-  headerInfo: {
-    flex: 1,
-  },
-
-  nameText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: stylesVars.text,
-  },
-
-  shopText: {
-    marginTop: 2,
-    fontSize: 13,
-    fontWeight: "500",
-    color: stylesVars.mutedText,
-  },
-
-  statusText: {
-    marginTop: 8,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: "500",
-    color: stylesVars.mutedText,
-  },
-
-  thumbRow: {
-    flexDirection: "row",
-    gap: 10,
-    paddingTop: 10,
-    paddingBottom: 4,
-  },
-
-  thumbWrap: {
-    width: 84,
-    height: 84,
-    borderRadius: 16,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg,
-  },
-
-  thumb: {
-    width: "100%",
-    height: "100%",
-    backgroundColor: "#F1F5F9",
-  },
-
-  empty: {
-    marginTop: 10,
-    fontSize: 13,
-    color: stylesVars.mutedText,
-    fontWeight: "500",
-  },
-
-  videoBox: {
-    marginTop: 10,
-    borderRadius: 16,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg,
-  },
-
-  video: {
-    width: "100%",
-    height: 220,
-  },
-
-  videoThumb: {
-    width: 110,
-    height: 52,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: stylesVars.border,
-    backgroundColor: stylesVars.cardBg,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  videoThumbOn: {
-    borderColor: stylesVars.blue,
-    borderWidth: 2,
-    backgroundColor: stylesVars.blueSoft,
-  },
-
-  videoThumbText: {
-    color: stylesVars.blue,
-    fontWeight: "700",
-    fontSize: 12,
-  },
-
-  pressed: {
-    opacity: 0.82,
-  },
-
-  viewerContainer: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.95)",
-    justifyContent: "center",
-  },
-
-  viewerSlide: {
-    width,
-    height: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  viewerImage: {
-    width,
-    height: "100%",
-    resizeMode: "contain",
-  },
-
-  closeButton: {
-    position: "absolute",
-    top: 40,
-    right: 18,
-    width: 44,
-    height: 44,
-    borderRadius: 999,
-    backgroundColor: stylesVars.overlaySoft,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  closeText: {
-    color: stylesVars.white,
-    fontSize: 20,
-    fontWeight: "900",
-  },
-
-  indexCaption: {
-    position: "absolute",
-    bottom: 34,
-    alignSelf: "center",
-    backgroundColor: stylesVars.overlaySoft,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-  },
-
-  indexText: {
-    color: stylesVars.white,
-    fontWeight: "900",
-    fontSize: 14,
-  },
-});
