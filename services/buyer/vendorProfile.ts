@@ -33,6 +33,7 @@ export type BuyerVendorProfile = Omit<
     | "offers_tailoring"
     | "exports_enabled"
     | "export_regions"
+    | "tailoring_options"
   >,
   "export_regions"
 > & { export_regions: string[] };
@@ -47,7 +48,7 @@ export type BuyerVendorReviewSummary = Pick<
   "average_rating" | "review_count"
 >;
 
-const VENDOR_PROFILE_COLUMNS = `
+export const VENDOR_PROFILE_COLUMNS = `
   id,
   created_at,
   name,
@@ -69,7 +70,8 @@ const VENDOR_PROFILE_COLUMNS = `
   offers_dyeing,
   offers_tailoring,
   exports_enabled,
-  export_regions
+  export_regions,
+  tailoring_options
 `;
 
 export function getVendorMediaUrl(

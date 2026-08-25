@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
-import { supabase } from "@/utils/supabase/client";
+import { getVendorAddProductSettings } from "@/services/vendor/addProduct";
 import { apStyles } from "@/components/product/addProductStyles";
 import {
   AddProductCard,
@@ -108,11 +108,7 @@ export default function Q02Category() {
           setVendorOffersTailoring(null);
         }
 
-        const { data, error } = await supabase
-          .from("vendor")
-          .select("id, offers_tailoring")
-          .eq("id", vendorId)
-          .single();
+        const { data, error } = await getVendorAddProductSettings(vendorId);
 
         if (!alive) return;
 

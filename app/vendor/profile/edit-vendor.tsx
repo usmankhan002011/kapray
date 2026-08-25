@@ -17,7 +17,6 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { supabase } from "@/utils/supabase/client";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setSelectedVendor } from "@/store/vendorSlice";
 import * as ImagePicker from "expo-image-picker";
@@ -38,8 +37,12 @@ import {
   formatContactList,
   parseContactList,
 } from "@/utils/helpers/wizardHelpers";
+import {
+  getVendorMediaUrl,
+  updateVendorProfile,
+  uploadVendorProfileAsset,
+} from "@/services/vendor/profile";
 
-const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
 const SETTINGS_ROUTE = "/vendor/profile/settings";
 
@@ -90,10 +93,6 @@ function prettyNameFromPicked(p: Picked, fallback: string) {
   return last || fallback;
 }
 
-function isHttpUrl(v: any) {
-  return typeof v === "string" && /^https?:\/\//i.test(v);
-}
-
 function extFromUri(uri: string) {
   const clean = String(uri || "");
   const qIdx = clean.indexOf("?");
@@ -116,7 +115,6 @@ function guessContentTypeFromExt(ext: string) {
 }
 
 async function uploadToBucket(
-  bucket: string,
   path: string,
   file: Picked,
   fallbackContentType: string
@@ -129,9 +127,11 @@ async function uploadToBucket(
     });
     const buffer = decode(base64);
 
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(path, buffer, { contentType, upsert: false });
+    const { data, error } = await uploadVendorProfileAsset({
+      path,
+      fileBody: buffer,
+      contentType,
+    });
 
     if (error) {
       Alert.alert("Upload failed", error.message);
@@ -288,13 +288,7 @@ export default function EditVendorScreen() {
     router.replace(SETTINGS_ROUTE);
   }, [router]);
 
-  const resolvePublicUrl = useCallback((path: string | null | undefined) => {
-    if (!path) return null;
-    if (isHttpUrl(path)) return path;
-
-    const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(path);
-    return data?.publicUrl ?? null;
-  }, []);
+  const resolvePublicUrl = getVendorMediaUrl;
 
   const profileUrl = useMemo(() => resolvePublicUrl(profilePath), [resolvePublicUrl, profilePath]);
   const bannerUrl = useMemo(() => resolvePublicUrl(bannerPath), [resolvePublicUrl, bannerPath]);
@@ -546,45 +540,16 @@ export default function EditVendorScreen() {
     }
   };
 
-  async function saveVendorMedia(next: Partial<VendorRow>) {
+  async function saveVendorMedia(
+    next: Parameters<typeof updateVendorProfile>[1],
+  ) {
     if (!vendorId) return;
     if (savingMedia) return;
 
     try {
       setSavingMedia(true);
 
-      const { data, error } = await supabase
-        .from("vendor")
-        .update(next as any)
-        .eq("id", vendorId)
-        .select(
-          [
-            "id",
-            "created_at",
-            "name",
-            "email",
-            "mobile",
-            "additional_mobile_numbers",
-            "landline",
-            "additional_landline_numbers",
-            "shop_name",
-            "address",
-            "location_url",
-            "profile_image_path",
-            "banner_path",
-            "certificate_paths",
-            "shop_image_paths",
-            "shop_video_paths",
-            "status",
-            "location",
-            "offers_dyeing",
-            "offers_tailoring",
-            "exports_enabled",
-            "export_regions",
-            "tailoring_options",
-          ].join(",")
-        )
-        .single();
+      const { data, error } = await updateVendorProfile(vendorId, next);
 
       if (error) {
         Alert.alert("Media update failed", error.message);
@@ -667,7 +632,6 @@ export default function EditVendorScreen() {
       const storagePath = `vendors/${vendorId}/${folder}/${filename}`;
 
       const uploadedPath = await uploadToBucket(
-        BUCKET_VENDOR,
         storagePath,
         picked,
         isVideo ? "video/mp4" : "image/jpeg"
@@ -796,38 +760,7 @@ export default function EditVendorScreen() {
       shop_video_paths: shopVideoPaths.length ? shopVideoPaths : null,
     };
 
-    const { data, error } = await supabase
-      .from("vendor")
-      .update(updatePayload)
-      .eq("id", vendorId)
-      .select(
-        [
-          "id",
-          "created_at",
-          "name",
-          "email",
-          "mobile",
-          "additional_mobile_numbers",
-          "landline",
-          "additional_landline_numbers",
-          "shop_name",
-          "address",
-          "location_url",
-          "profile_image_path",
-          "banner_path",
-          "certificate_paths",
-          "shop_image_paths",
-          "shop_video_paths",
-          "status",
-          "location",
-          "offers_dyeing",
-          "offers_tailoring",
-          "exports_enabled",
-          "export_regions",
-          "tailoring_options",
-        ].join(",")
-      )
-      .single();
+    const { data, error } = await updateVendorProfile(vendorId, updatePayload);
 
     setSaving(false);
 

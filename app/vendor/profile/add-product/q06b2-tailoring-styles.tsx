@@ -14,7 +14,7 @@ import * as ImagePicker from "expo-image-picker";
 
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
-import { supabase } from "@/utils/supabase/client";
+import { getVendorAddProductSettings } from "@/services/vendor/addProduct";
 import { apColors, apStyles } from "@/components/product/addProductStyles";
 import FastNumberInput from "@/components/product/add-product/FastNumberInput";
 import {
@@ -1092,11 +1092,7 @@ export default function Q06B2TailoringStyles() {
           setVendorOffersTailoring(null);
         }
 
-        const { data, error } = await supabase
-          .from("vendor")
-          .select("id, offers_tailoring, tailoring_options")
-          .eq("id", vendorId)
-          .single();
+        const { data, error } = await getVendorAddProductSettings(vendorId);
 
         if (!alive) return;
 

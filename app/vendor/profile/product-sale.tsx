@@ -22,7 +22,10 @@ import {
   apRadii,
 } from "@/components/product/addProductStyles";
 import { useAppSelector } from "@/store/hooks";
-import { supabase } from "@/utils/supabase/client";
+import {
+  getVendorSaleProduct,
+  updateVendorProductPrice,
+} from "@/services/vendor/productSale";
 import {
   applyProductSale,
   endProductSale,
@@ -30,8 +33,6 @@ import {
   getActiveProductSale,
   getProductSaleReferenceCost,
 } from "@/utils/kapray/productSale";
-
-const PRODUCTS_TABLE = "products";
 
 type ProductRow = {
   id: number;
@@ -131,12 +132,7 @@ export default function ProductSaleScreen() {
     try {
       setLoading(true);
 
-      const { data, error } = await supabase
-        .from(PRODUCTS_TABLE)
-        .select("id, vendor_id, product_code, title, price, updated_at")
-        .eq("id", productId)
-        .eq("vendor_id", vendorId)
-        .single();
+      const { data, error } = await getVendorSaleProduct(productId, vendorId);
 
       if (error) {
         Alert.alert("Load error", error.message);
@@ -220,16 +216,14 @@ export default function ProductSaleScreen() {
       const now = new Date().toISOString();
       const nextPrice = applyProductSale(product.price, cleaned, now);
 
-      const { data, error } = await supabase
-        .from(PRODUCTS_TABLE)
-        .update({
+      const { data, error } = await updateVendorProductPrice(
+        productId,
+        vendorId,
+        {
           price: nextPrice,
           updated_at: now,
-        })
-        .eq("id", productId)
-        .eq("vendor_id", vendorId)
-        .select("id, vendor_id, product_code, title, price, updated_at")
-        .single();
+        },
+      );
 
       if (error) {
         Alert.alert("SALE not saved", error.message);
@@ -280,16 +274,14 @@ export default function ProductSaleScreen() {
       const now = new Date().toISOString();
       const nextPrice = endProductSale(product.price, now);
 
-      const { data, error } = await supabase
-        .from(PRODUCTS_TABLE)
-        .update({
+      const { data, error } = await updateVendorProductPrice(
+        productId,
+        vendorId,
+        {
           price: nextPrice,
           updated_at: now,
-        })
-        .eq("id", productId)
-        .eq("vendor_id", vendorId)
-        .select("id, vendor_id, product_code, title, price, updated_at")
-        .single();
+        },
+      );
 
       if (error) {
         Alert.alert("SALE not ended", error.message);

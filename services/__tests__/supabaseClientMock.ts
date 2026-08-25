@@ -1,6 +1,7 @@
 type QueryResult<T = unknown> = {
   data: T;
   error: unknown;
+  count?: number | null;
 };
 
 type QueryResults = {
@@ -20,6 +21,7 @@ export type SupabaseQueryMock = {
   or: jest.Mock;
   order: jest.Mock;
   limit: jest.Mock;
+  range: jest.Mock;
   single: jest.Mock;
   maybeSingle: jest.Mock;
   insert: jest.Mock;
@@ -29,10 +31,13 @@ export type SupabaseQueryMock = {
 const tableQueries = new Map<string, SupabaseQueryMock>();
 
 export const getUserMock = jest.fn();
+export const signOutMock = jest.fn();
 export const rpcMock = jest.fn();
 export const getPublicUrlMock = jest.fn();
+export const uploadMock = jest.fn();
 export const storageFromMock = jest.fn(() => ({
   getPublicUrl: getPublicUrlMock,
+  upload: uploadMock,
 }));
 export const fromMock = jest.fn((table: string) => {
   const query = tableQueries.get(table);
@@ -41,7 +46,7 @@ export const fromMock = jest.fn((table: string) => {
 });
 
 export const supabase = {
-  auth: { getUser: getUserMock },
+  auth: { getUser: getUserMock, signOut: signOutMock },
   storage: { from: storageFromMock },
   from: fromMock,
   rpc: rpcMock,
@@ -63,6 +68,7 @@ export function createQueryMock(results: QueryResults = {}): SupabaseQueryMock {
   query.or = jest.fn(chain);
   query.order = jest.fn(chain);
   query.limit = jest.fn(chain);
+  query.range = jest.fn(chain);
   query.single = jest.fn().mockResolvedValue(results.single ?? success);
   query.maybeSingle = jest
     .fn()
@@ -90,8 +96,10 @@ export function resetSupabaseMock(): void {
   jest.clearAllMocks();
   tableQueries.clear();
   getUserMock.mockResolvedValue({ data: { user: null }, error: null });
+  signOutMock.mockResolvedValue({ error: null });
   rpcMock.mockResolvedValue({ data: null, error: null });
   getPublicUrlMock.mockImplementation((path: string) => ({
     data: { publicUrl: `https://storage.test/${path}` },
   }));
+  uploadMock.mockResolvedValue({ data: null, error: null });
 }

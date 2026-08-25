@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import { Redirect, useRouter } from "expo-router";
-import { supabase } from "@/utils/supabase/client";
+import { signOutVendor } from "@/services/vendor/vendorAuth";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearSelectedVendor } from "@/store/vendorSlice";
 import {
@@ -71,10 +71,7 @@ export default function VendorSettingsScreen() {
     try {
       setLoggingOut(true);
 
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        throw error;
-      }
+      await signOutVendor();
 
       dispatch(clearSelectedVendor());
       setLogoutVisible(false);

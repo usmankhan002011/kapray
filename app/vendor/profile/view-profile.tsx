@@ -21,14 +21,18 @@ import {
   Dimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { supabase } from "@/utils/supabase/client";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setSelectedVendor } from "@/store/vendorSlice";
 import { VideoView, useVideoPlayer } from "expo-video";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import ReviewSummaryCard from "@/components/vendor-reviews/ReviewSummaryCard";
+import {
+  getVendorMediaUrl,
+  getVendorMediaUrls,
+  getVendorProfile,
+  getVendorProfileReviewSummary,
+} from "@/services/vendor/profile";
 
-const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
 const SETTINGS_ROUTE = "/vendor/profile/settings";
 
@@ -79,10 +83,6 @@ type ReviewSummaryRow = {
 function safeText(v: any) {
   const t = String(v ?? "").trim();
   return t.length ? t : "—";
-}
-
-function isHttpUrl(v: any) {
-  return typeof v === "string" && /^https?:\/\//i.test(v);
 }
 
 function joinOrDash(items?: string[] | null) {
@@ -153,24 +153,6 @@ export default function VendorProfileScreen() {
     return shop || owner || "Vendor Profile";
   }, [vendor]);
 
-  const resolvePublicUrl = useCallback((path: string | null | undefined) => {
-    if (!path) return null;
-    if (isHttpUrl(path)) return path;
-
-    const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(path);
-    return data?.publicUrl ?? null;
-  }, []);
-
-  const resolveManyPublic = useCallback(
-    (paths: any): string[] => {
-      const list = Array.isArray(paths) ? paths : [];
-      return list
-        .map((p) => resolvePublicUrl(String(p || "").trim()))
-        .filter(Boolean) as string[];
-    },
-    [resolvePublicUrl],
-  );
-
   async function openExternal(url: string) {
     const u = String(url || "").trim();
     if (!u) return;
@@ -192,44 +174,7 @@ export default function VendorProfileScreen() {
     try {
       setLoading(true);
 
-      const { data, error } = await supabase
-        .from("vendor")
-        .select(
-          [
-            "id",
-            "created_at",
-            "name",
-            "email",
-            "mobile",
-            "additional_mobile_numbers",
-            "landline",
-            "additional_landline_numbers",
-            "shop_name",
-            "address",
-            "location_url",
-            "profile_image_path",
-            "banner_path",
-            "certificate_paths",
-            "shop_image_paths",
-            "shop_video_paths",
-            "status",
-            "location",
-            "offers_dyeing",
-            "offers_tailoring",
-            "exports_enabled",
-            "export_regions",
-            "tailoring_options",
-          ].join(","),
-        )
-        .eq("id", vendorId)
-        .single();
-
-      if (error) {
-        Alert.alert("Load error", error.message);
-        return;
-      }
-
-      const row = data as unknown as VendorRow;
+      const row = (await getVendorProfile(vendorId)) as unknown as VendorRow;
       setVendor(row);
 
       dispatch(
@@ -239,7 +184,7 @@ export default function VendorProfileScreen() {
         } as any),
       );
     } catch (e: any) {
-      Alert.alert("Error", e?.message ?? "Could not load vendor.");
+      Alert.alert("Load error", e?.message ?? "Could not load vendor.");
     } finally {
       setLoading(false);
     }
@@ -248,13 +193,11 @@ export default function VendorProfileScreen() {
   const fetchReviewSummary = useCallback(async () => {
     if (!vendorId) return;
 
-    const { data, error } = await (supabase as any)
-      .from("vendor_review_summary")
-      .select("average_rating, review_count")
-      .eq("vendor_id", vendorId)
-      .maybeSingle();
-    if (!error) {
+    try {
+      const data = await getVendorProfileReviewSummary(vendorId);
       setReviewSummary((data as ReviewSummaryRow | null) ?? null);
+    } catch {
+      // Keep the profile usable when review summary loading fails.
     }
   }, [vendorId]);
 
@@ -268,11 +211,11 @@ export default function VendorProfileScreen() {
       return;
     }
 
-    setProfileUrl(resolvePublicUrl(v.profile_image_path));
-    setBannerUrl(resolvePublicUrl(v.banner_path));
-    setShopImageUrls(resolveManyPublic(v.shop_image_paths));
-    setCertificateUrls(resolveManyPublic(v.certificate_paths));
-    setVideoUrls(resolveManyPublic(v.shop_video_paths));
+    setProfileUrl(getVendorMediaUrl(v.profile_image_path));
+    setBannerUrl(getVendorMediaUrl(v.banner_path));
+    setShopImageUrls(getVendorMediaUrls(v.shop_image_paths));
+    setCertificateUrls(getVendorMediaUrls(v.certificate_paths));
+    setVideoUrls(getVendorMediaUrls(v.shop_video_paths));
   }
 
   useEffect(() => {

@@ -15,13 +15,17 @@ import {
   Dimensions
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from "expo-router";
-import { supabase } from "@/utils/supabase/client";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useEvent } from "expo";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setSelectedVendor } from "@/store/vendorSlice";
+import {
+  getVendorMediaUrl,
+  getVendorMediaUrls,
+  getVendorProductDetails,
+  resolveProductLookupNames,
+} from "@/services/vendor/productDetails";
 
-const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
 const FOOTER_H = 86;
 
@@ -36,16 +40,6 @@ function makeChoiceKey(productId: string | null, productCode: string | null) {
   if (pc) return `code:${pc}`;
   return "";
 }
-
-// Assumed lookup table names (adjust if your Supabase uses different names)
-const LOOKUP = {
-  dressTypes: "dress_types",
-  fabricTypes: "fabric_types",
-  workTypes: "work_types",
-  workDensities: "work_densities",
-  originCities: "origin_cities",
-  wearStates: "wear_states"
-} as const;
 
 type ProductCategory =
   | "unstitched_plain"
@@ -88,10 +82,6 @@ type ProductRow = {
 function safeText(v: any) {
   const t = String(v ?? "").trim();
   return t.length ? t : "—";
-}
-
-function isHttpUrl(v: any) {
-  return typeof v === "string" && /^https?:\/\//i.test(v);
 }
 
 function firstParam(v: unknown): string | null {
@@ -367,21 +357,8 @@ export default function ViewProductScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
 
-  const resolvePublicUrl = useCallback((path: string | null | undefined) => {
-    if (!path) return null;
-    if (isHttpUrl(path)) return path;
-
-    const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(path);
-    return data?.publicUrl ?? null;
-  }, []);
-
-  const resolveManyPublic = useCallback(
-    (paths: any): string[] => {
-      const list = Array.isArray(paths) ? paths : [];
-      return list.map((p) => resolvePublicUrl(String(p || "").trim())).filter(Boolean) as string[];
-    },
-    [resolvePublicUrl]
-  );
+  const resolvePublicUrl = getVendorMediaUrl;
+  const resolveManyPublic = getVendorMediaUrls;
 
   const imageUrls = useMemo(() => {
     const media = (product as any)?.media ?? {};
@@ -578,44 +555,10 @@ export default function ViewProductScreen() {
       setMissingParam(false);
       setLoading(true);
 
-      let q = supabase
-        .from("products")
-        .select(
-          `
-          id,
-          vendor_id,
-          product_code,
-          title,
-          inventory_qty,
-          made_on_order,
-          product_category,
-          spec,
-          price,
-          media,
-          created_at,
-          updated_at,
-          vendor:vendor_id (
-            id,
-            name,
-            shop_name,
-            address,
-            mobile,
-            landline,
-            email,
-            location,
-            location_url,
-            profile_image_path,
-            banner_path,
-            status,
-            offers_tailoring
-          )
-        `
-        );
-
-      if (productId) q = q.eq("id", productId);
-      else q = q.eq("product_code", productCode);
-
-      const { data, error } = await q.single();
+      const { data, error } = await getVendorProductDetails({
+        productId,
+        productCode,
+      });
 
       if (error) {
         Alert.alert("Load error", error.message);
@@ -624,7 +567,7 @@ export default function ViewProductScreen() {
         return;
       }
 
-      const row = data as ProductRow;
+      const row = data as unknown as ProductRow;
       setProduct(row);
 
       const v = (row as any)?.vendor ?? null;
@@ -657,23 +600,6 @@ export default function ViewProductScreen() {
       setLoading(false);
     }
   }
-
-  const resolveNamesByIds = useCallback(async (table: string, ids: string[]): Promise<string[]> => {
-    const clean = ids.map((x) => String(x).trim()).filter(Boolean);
-    if (!clean.length) return [];
-
-    const { data, error } = await supabase.from(table).select("id, name").in("id", clean);
-    if (error || !data) return [];
-
-    const map = new Map<string, string>();
-    for (const r of data as any[]) {
-      const id = String(r?.id ?? "").trim();
-      const name = String(r?.name ?? "").trim();
-      if (id && name) map.set(id, name);
-    }
-
-    return clean.map((id) => map.get(id) ?? id);
-  }, []);
 
   const resolveColorNames = useCallback((ids: any): string[] => {
     const list = normalizeIdList(ids);
@@ -723,12 +649,12 @@ export default function ViewProductScreen() {
 
       try {
         const [dressType, fabric, work, density, origin, wear] = await Promise.all([
-          resolveNamesByIds(LOOKUP.dressTypes, dressTypeIds),
-          resolveNamesByIds(LOOKUP.fabricTypes, fabricTypeIds),
-          resolveNamesByIds(LOOKUP.workTypes, workTypeIds),
-          resolveNamesByIds(LOOKUP.workDensities, densityIds),
-          resolveNamesByIds(LOOKUP.originCities, originIds),
-          resolveNamesByIds(LOOKUP.wearStates, wearIds)
+          resolveProductLookupNames("dressTypes", dressTypeIds),
+          resolveProductLookupNames("fabricTypes", fabricTypeIds),
+          resolveProductLookupNames("workTypes", workTypeIds),
+          resolveProductLookupNames("workDensities", densityIds),
+          resolveProductLookupNames("originCities", originIds),
+          resolveProductLookupNames("wearStates", wearIds)
         ]);
 
         const color = resolveColorNames(colorIds);
@@ -761,7 +687,7 @@ export default function ViewProductScreen() {
     return () => {
       alive = false;
     };
-  }, [product, resolveNamesByIds, resolveColorNames]);
+  }, [product, resolveColorNames]);
 
   useFocusEffect(
     useCallback(() => {

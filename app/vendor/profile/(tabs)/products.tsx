@@ -13,9 +13,14 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { supabase } from "@/utils/supabase/client";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
+import {
+  getVendorProduct,
+  getVendorProductsPage,
+  type VendorProduct as ProductRow,
+  type VendorProductCategory as ProductCategory,
+} from "@/services/vendor/vendorProducts";
 import {
   apColors,
   apFontFamily,
@@ -29,32 +34,8 @@ import {
   getProductSaleKeys,
 } from "@/utils/kapray/productSale";
 
-const PRODUCTS_TABLE = "products";
-const BUCKET_VENDOR = "vendor_images";
-
 const PAGE_SIZE = 30;
 const LOW_STOCK_THRESHOLD = 5;
-
-type ProductCategory =
-  | "unstitched_plain"
-  | "unstitched_dyeing"
-  | "unstitched_dyeing_tailoring"
-  | "stitched_ready";
-
-type ProductRow = {
-  id: string;
-  product_code: string | null;
-  title: string | null;
-  created_at?: string | null;
-  inventory_qty?: number | null;
-  order_count?: number | null;
-  made_on_order?: boolean | null;
-  product_category?: ProductCategory | null;
-  spec?: any;
-  price?: any;
-  media?: any;
-  banner_url?: string | null;
-};
 
 type VariantInventorySummary = {
   totalQty: number;
@@ -105,23 +86,6 @@ function formatStockQty(n: number) {
 function safeText(v: any) {
   const t = String(v ?? "").trim();
   return t.length ? t : "—";
-}
-
-function firstImagePath(media: any): string | null {
-  try {
-    const p = media?.images?.[0];
-    if (!p) return null;
-    const s = String(p).trim();
-    return s.length ? s : null;
-  } catch {
-    return null;
-  }
-}
-
-function publicUrlForStoragePath(path: string | null): string | null {
-  if (!path) return null;
-  const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(path);
-  return data?.publicUrl ?? null;
 }
 
 function getVariantInventorySummary(
@@ -622,77 +586,6 @@ function getProductCardPriceDisplay(
   };
 }
 
-function getSearchCategories(searchText: string): ProductCategory[] {
-  const q = searchText.toLowerCase().replace(/[_-]+/g, " ").trim();
-  if (!q) return [];
-
-  const words = q.split(/\s+/).filter(Boolean);
-  const hasWord = (word: string) => words.includes(word);
-  const hasPhrase = (phrase: string) => q.includes(phrase);
-
-  if (
-    hasPhrase("ready to wear") ||
-    hasPhrase("ready wear") ||
-    hasPhrase("stitched ready")
-  ) {
-    return ["stitched_ready"];
-  }
-
-  if (hasWord("stitched") && !hasWord("unstitched")) {
-    return ["stitched_ready"];
-  }
-
-  if (hasWord("unstitched")) {
-    if (hasWord("tailoring") || hasWord("tailor")) {
-      return ["unstitched_dyeing_tailoring"];
-    }
-
-    if (hasWord("dyeing") || hasWord("dyed") || hasWord("dye")) {
-      return ["unstitched_dyeing", "unstitched_dyeing_tailoring"];
-    }
-
-    if (hasWord("plain")) {
-      return ["unstitched_plain"];
-    }
-
-    return [
-      "unstitched_plain",
-      "unstitched_dyeing",
-      "unstitched_dyeing_tailoring",
-    ];
-  }
-
-  if (hasWord("plain")) return ["unstitched_plain"];
-  if (hasWord("tailoring") || hasWord("tailor"))
-    return ["unstitched_dyeing_tailoring"];
-  if (hasWord("dyeing") || hasWord("dyed") || hasWord("dye")) {
-    return ["unstitched_dyeing", "unstitched_dyeing_tailoring"];
-  }
-
-  return [];
-}
-
-function applyVendorProductSearch(query: any, searchText: string) {
-  const safeQuery = searchText.replace(/[%_,]/g, " ").trim();
-  if (!safeQuery) return query;
-
-  const categoryMatches = getSearchCategories(safeQuery);
-
-  if (categoryMatches.length === 1) {
-    return query.eq("product_category", categoryMatches[0]);
-  }
-
-  if (categoryMatches.length > 1) {
-    return query.in("product_category", categoryMatches);
-  }
-
-  return query.or(
-    [`product_code.ilike.%${safeQuery}%`, `title.ilike.%${safeQuery}%`].join(
-      ",",
-    ),
-  );
-}
-
 export default function VendorProductsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -723,61 +616,6 @@ export default function VendorProductsScreen() {
   ).trim();
   const refreshParam = String((params as any)?.refresh ?? "").trim();
 
-  function isCountedOrderStatus(status: unknown) {
-    const value = String(status ?? "").trim().toLowerCase();
-    return !["canceled", "cancelled", "rejected", "refunded", "returned"].includes(
-      value,
-    );
-  }
-
-  async function fetchOrderCountsByProductId(
-    productIds: Array<string | number | null | undefined>,
-  ): Promise<Record<string, number>> {
-    if (!vendorId) return {};
-
-    const ids = Array.from(
-      new Set(
-        productIds
-          .map((id) => safeInt(id))
-          .filter((id): id is number => id != null),
-      ),
-    );
-
-    if (!ids.length) return {};
-
-    const { data, error } = await supabase
-      .from("orders")
-      .select("product_id, status")
-      .eq("vendor_id", vendorId)
-      .in("product_id", ids);
-
-    if (error) {
-      console.warn("Could not load product order counts:", error.message);
-      return {};
-    }
-
-    const counts: Record<string, number> = {};
-    for (const row of (data as any[]) ?? []) {
-      if (!isCountedOrderStatus(row?.status)) continue;
-
-      const productId = safeInt(row?.product_id);
-      if (productId == null) continue;
-
-      const key = String(productId);
-      counts[key] = (counts[key] ?? 0) + 1;
-    }
-
-    return counts;
-  }
-
-  async function attachOrderCounts(rows: ProductRow[]) {
-    const counts = await fetchOrderCountsByProductId(rows.map((row) => row.id));
-    return rows.map((row) => ({
-      ...row,
-      order_count: counts[String(safeInt(row.id) ?? row.id)] ?? 0,
-    }));
-  }
-
   async function fetchProductsReset(options?: { showLoading?: boolean }) {
     if (!vendorId) {
       return;
@@ -791,43 +629,20 @@ export default function VendorProductsScreen() {
       }
       setHasMore(true);
 
-      let query = supabase
-        .from(PRODUCTS_TABLE)
-        .select(
-          "id, product_code, title, created_at, inventory_qty, made_on_order, product_category, spec, price, media",
-          { count: "exact" },
-        )
-        .eq("vendor_id", vendorId);
-
-      if (trimmedSearch) {
-        query = applyVendorProductSearch(query, trimmedSearch);
-      }
-
-      const { data, error, count } = await query
-        .order("created_at", { ascending: false })
-        .range(0, PAGE_SIZE - 1);
-
-      if (error) {
-        Alert.alert("Load error", error.message);
-        return;
-      }
-
-      const rows = ((data as any) ?? []) as ProductRow[];
-      const mapped = rows.map((r) => {
-        const imgPath = firstImagePath((r as any).media);
-        return {
-          ...r,
-          banner_url: publicUrlForStoragePath(imgPath),
-        };
+      const { products: rows, totalCount } = await getVendorProductsPage({
+        vendorId,
+        searchText: trimmedSearch,
+        from: 0,
+        to: PAGE_SIZE - 1,
+        includeCount: true,
       });
-      const mappedWithCounts = await attachOrderCounts(mapped);
 
-      setProducts(mappedWithCounts);
-      setProductCount(typeof count === "number" ? count : rows.length);
+      setProducts(rows);
+      setProductCount(totalCount);
       setHasMore(rows.length === PAGE_SIZE);
       loadedVendorIdRef.current = vendorId;
     } catch (e: any) {
-      Alert.alert("Error", e?.message ?? "Could not load products.");
+      Alert.alert("Load error", e?.message ?? "Could not load products.");
     } finally {
       if (showLoading) {
         setLoading(false);
@@ -846,45 +661,22 @@ export default function VendorProductsScreen() {
       const from = products.length;
       const to = from + PAGE_SIZE - 1;
 
-      let query = supabase
-        .from(PRODUCTS_TABLE)
-        .select(
-          "id, product_code, title, created_at, inventory_qty, made_on_order, product_category, spec, price, media",
-        )
-        .eq("vendor_id", vendorId);
-
-      if (trimmedSearch) {
-        query = applyVendorProductSearch(query, trimmedSearch);
-      }
-
-      const { data, error } = await query
-        .order("created_at", { ascending: false })
-        .range(from, to);
-
-      if (error) {
-        Alert.alert("Load error", error.message);
-        return;
-      }
-
-      const rows = ((data as any) ?? []) as ProductRow[];
-      const mapped = rows.map((r) => {
-        const imgPath = firstImagePath((r as any).media);
-        return {
-          ...r,
-          banner_url: publicUrlForStoragePath(imgPath),
-        };
+      const { products: rows } = await getVendorProductsPage({
+        vendorId,
+        searchText: trimmedSearch,
+        from,
+        to,
       });
-      const mappedWithCounts = await attachOrderCounts(mapped);
 
       setProducts((prev) => {
         const seen = new Set(prev.map((p) => p.id));
-        const add = mappedWithCounts.filter((r) => !seen.has(r.id));
+        const add = rows.filter((r) => !seen.has(r.id));
         return [...prev, ...add];
       });
 
       setHasMore(rows.length === PAGE_SIZE);
-    } catch {
-      // ignore
+    } catch (e: any) {
+      Alert.alert("Load error", e?.message ?? "Could not load products.");
     } finally {
       setLoadingMore(false);
     }
@@ -917,29 +709,14 @@ export default function VendorProductsScreen() {
 
     (async () => {
       try {
-        const { data, error } = await supabase
-          .from(PRODUCTS_TABLE)
-          .select(
-            "id, product_code, title, created_at, inventory_qty, made_on_order, product_category, spec, price, media",
-          )
-          .eq("id", targetId)
-          .eq("vendor_id", vendorId)
-          .single();
-
-        if (!alive) return;
-        if (error || !data) return;
-
-        const row = data as any as ProductRow;
-        const imgPath = firstImagePath((row as any).media);
-        const banner_url = publicUrlForStoragePath(imgPath);
-        const [mappedRow] = await attachOrderCounts([{ ...row, banner_url }]);
+        const mappedRow = await getVendorProduct(vendorId, targetId);
 
         if (!alive) return;
 
         setProducts((prev) => {
-          const exists = prev.some((p) => p.id === row.id);
+          const exists = prev.some((p) => p.id === mappedRow.id);
           if (exists) {
-            return prev.map((p) => (p.id === row.id ? mappedRow : p));
+            return prev.map((p) => (p.id === mappedRow.id ? mappedRow : p));
           }
           return shouldPrepend ? [mappedRow, ...prev] : prev;
         });
@@ -1141,7 +918,7 @@ export default function VendorProductsScreen() {
   return (
     <FlatList
       data={products}
-      keyExtractor={(i) => i.id}
+      keyExtractor={(i) => String(i.id)}
       renderItem={renderItem}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.content}

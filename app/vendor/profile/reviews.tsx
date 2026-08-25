@@ -9,7 +9,6 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { supabase } from "@/utils/supabase/client";
 import { useAppSelector } from "@/store/hooks";
 import ReviewList, {
   ReviewListItem,
@@ -20,6 +19,10 @@ import {
   apFontFamily,
   apRadii,
 } from "@/components/product/addProductStyles";
+import {
+  getVendorReviews,
+  getVendorReviewSummary,
+} from "@/services/vendor/profile";
 
 type VendorReviewSummaryRow = {
   vendor_id: number;
@@ -78,17 +81,8 @@ export default function VendorReviewsScreen() {
         { data: summaryData, error: summaryError },
         { data: reviewData, error: reviewError },
       ] = await Promise.all([
-        (supabase as any)
-          .from("vendor_review_summary")
-          .select("*")
-          .eq("vendor_id", vendorId)
-          .maybeSingle(),
-        (supabase as any)
-          .from("vendor_reviews")
-          .select("id, created_at, rating, comment, vendor_reply")
-          .eq("vendor_id", vendorId)
-          .eq("is_hidden", false)
-          .order("created_at", { ascending: false }),
+        getVendorReviewSummary(vendorId),
+        getVendorReviews(vendorId),
       ]);
 
       if (summaryError) {

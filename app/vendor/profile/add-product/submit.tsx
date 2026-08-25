@@ -12,7 +12,14 @@ import { decode } from "base64-arraybuffer";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import { useAppSelector } from "@/store/hooks";
 import { useProductDraft } from "@/components/product/ProductDraftContext";
-import { supabase } from "@/utils/supabase/client";
+import {
+  createVendorProduct,
+  getAddProductAssetPathFromPublicUrl,
+  getAddProductAssetPublicUrl,
+  getVendorAddProductSettings,
+  updateVendorProductMedia,
+  uploadAddProductAsset,
+} from "@/services/vendor/addProduct";
 import {
   AddProductCard,
   AddProductFooter,
@@ -48,8 +55,6 @@ import {
   normalizeFabricWidthFromSpec,
 } from "@/utils/kapray/fabricWidth";
 
-const BUCKET_VENDOR = "vendor_images";
-const PRODUCTS_TABLE = "products";
 const SAVE_DB_TIMEOUT_MS = 30000;
 const SAVE_FILE_READ_TIMEOUT_MS = 30000;
 const SAVE_UPLOAD_TIMEOUT_MS = 60000;
@@ -163,7 +168,6 @@ function normalizePresetArray(v: unknown): TailoringStylePreset[] {
 }
 
 async function uploadAssetToStorage(args: {
-  bucket: string;
   path: string;
   uri: string;
   contentType: string;
@@ -187,17 +191,15 @@ async function uploadAssetToStorage(args: {
   const buffer = decode(base64);
 
   logSave("storage-upload-start", {
-    bucket: args.bucket,
     contentType: args.contentType,
     label,
   });
   const { data, error } = await withSaveTimeout(
-    supabase.storage
-      .from(args.bucket)
-      .upload(args.path, buffer, {
-        contentType: args.contentType,
-        upsert: true,
-      }),
+    uploadAddProductAsset({
+      path: args.path,
+      fileBody: buffer,
+      contentType: args.contentType,
+    }),
     SAVE_UPLOAD_TIMEOUT_MS,
     `${label} storage upload`,
   );
@@ -306,13 +308,11 @@ async function uploadTailoringPresetImages(args: {
       }
 
       if (rawPath && !rawUrl) {
-        const { data } = supabase.storage
-          .from(BUCKET_VENDOR)
-          .getPublicUrl(rawPath);
+        const publicUrl = getAddProductAssetPublicUrl(rawPath);
         uploadedImages.push({
           ...img,
-          uri: data?.publicUrl ?? rawUri ?? "",
-          url: data?.publicUrl ?? "",
+          uri: publicUrl ?? rawUri ?? "",
+          url: publicUrl ?? "",
           path: rawPath,
         });
         continue;
@@ -333,7 +333,6 @@ async function uploadTailoringPresetImages(args: {
       const path = `vendors/${args.vendorId}/products/${args.productCode}/tailoring/${presetId}/${Date.now()}-${imageIndex}.${ext}`;
 
       const uploadedPath = await uploadAssetToStorage({
-        bucket: BUCKET_VENDOR,
         path,
         uri: rawUri,
         contentType: mimeType.startsWith("image/") ? mimeType : "image/jpeg",
@@ -342,14 +341,12 @@ async function uploadTailoringPresetImages(args: {
 
       if (!uploadedPath) continue;
 
-      const { data } = supabase.storage
-        .from(BUCKET_VENDOR)
-        .getPublicUrl(uploadedPath);
+      const publicUrl = getAddProductAssetPublicUrl(uploadedPath);
 
       uploadedImages.push({
         ...img,
-        uri: data?.publicUrl ?? rawUri,
-        url: data?.publicUrl ?? "",
+        uri: publicUrl ?? rawUri,
+        url: publicUrl ?? "",
         path: uploadedPath,
       });
     }
@@ -409,19 +406,6 @@ function isLocalFileUri(v: string) {
   );
 }
 
-function storagePathFromPublicUrl(url: string) {
-  const clean = safeStr(url);
-  if (!clean) return "";
-
-  const marker = `/storage/v1/object/public/${BUCKET_VENDOR}/`;
-  const idx = clean.indexOf(marker);
-  if (idx >= 0) {
-    return decodeURIComponent(clean.slice(idx + marker.length));
-  }
-
-  return "";
-}
-
 function assetLookupKeys(input: ReadyVariantImageInput | any) {
   const keys: string[] = [];
   const uri = safeStr(input?.uri ?? "");
@@ -475,7 +459,7 @@ function normalizeReadyVariantImageInputs(
       const clean = safeStr(item);
       if (!clean) continue;
 
-      const storagePath = storagePathFromPublicUrl(clean);
+      const storagePath = getAddProductAssetPathFromPublicUrl(clean);
       if (storagePath) {
         out.push({ path: storagePath, url: clean });
       } else if (isLocalFileUri(clean)) {
@@ -586,7 +570,7 @@ async function uploadReadyVariantImages(args: {
         continue;
       }
 
-      const pathFromUrl = storagePathFromPublicUrl(rawUrl);
+      const pathFromUrl = getAddProductAssetPathFromPublicUrl(rawUrl);
       if (pathFromUrl) {
         uploadedPaths.push(pathFromUrl);
         continue;
@@ -594,7 +578,7 @@ async function uploadReadyVariantImages(args: {
 
       if (!rawUri) continue;
 
-      const uriPathFromPublicUrl = storagePathFromPublicUrl(rawUri);
+      const uriPathFromPublicUrl = getAddProductAssetPathFromPublicUrl(rawUri);
       if (uriPathFromPublicUrl) {
         uploadedPaths.push(uriPathFromPublicUrl);
         continue;
@@ -614,7 +598,6 @@ async function uploadReadyVariantImages(args: {
       const path = `vendors/${args.vendorId}/products/${args.productCode}/variants/${variantId}/${Date.now()}-${imageIndex}.${ext}`;
 
       const uploadedPath = await uploadAssetToStorage({
-        bucket: BUCKET_VENDOR,
         path,
         uri: rawUri,
         contentType: mimeType.startsWith("image/") ? mimeType : "image/jpeg",
@@ -677,7 +660,7 @@ async function uploadMadeOrderVariantImages(args: {
         continue;
       }
 
-      const pathFromUrl = storagePathFromPublicUrl(rawUrl);
+      const pathFromUrl = getAddProductAssetPathFromPublicUrl(rawUrl);
       if (pathFromUrl) {
         uploadedPaths.push(pathFromUrl);
         continue;
@@ -685,7 +668,7 @@ async function uploadMadeOrderVariantImages(args: {
 
       if (!rawUri) continue;
 
-      const uriPathFromPublicUrl = storagePathFromPublicUrl(rawUri);
+      const uriPathFromPublicUrl = getAddProductAssetPathFromPublicUrl(rawUri);
       if (uriPathFromPublicUrl) {
         uploadedPaths.push(uriPathFromPublicUrl);
         continue;
@@ -720,7 +703,6 @@ async function uploadMadeOrderVariantImages(args: {
       const path = `vendors/${args.vendorId}/products/${args.productCode}/made-order-variants/${variantId}/${Date.now()}-${imageIndex}.${ext}`;
 
       const uploadedPath = await uploadAssetToStorage({
-        bucket: BUCKET_VENDOR,
         path,
         uri: rawUri,
         contentType: mimeType.startsWith("image/") ? mimeType : "image/jpeg",
@@ -810,11 +792,7 @@ export default function AddProductSubmitScreen() {
         logSave("vendor-settings-start", { vendorId });
 
         const { data, error } = await withSaveTimeout(
-          supabase
-            .from("vendor")
-            .select("id, offers_tailoring")
-            .eq("id", vendorId)
-            .single(),
+          getVendorAddProductSettings(vendorId),
           VENDOR_SETTINGS_TIMEOUT_MS,
           "Vendor settings",
         );
@@ -1474,7 +1452,6 @@ export default function AddProductSubmitScreen() {
       };
 
       logSave("insert-start", {
-        table: PRODUCTS_TABLE,
         vendorId,
         finalCategory,
         madeOnOrder,
@@ -1487,11 +1464,7 @@ export default function AddProductSubmitScreen() {
       });
 
       const { data: created, error: insertErr } = await withSaveTimeout(
-        supabase
-          .from(PRODUCTS_TABLE)
-          .insert(insertPayload)
-          .select("id, product_code")
-          .single(),
+        createVendorProduct(insertPayload),
         SAVE_DB_TIMEOUT_MS,
         "Product insert",
       );
@@ -1533,7 +1506,6 @@ export default function AddProductSubmitScreen() {
         const path = `vendors/${vendorId}/products/${finalCode}/images/${Date.now()}-${i}.${ext}`;
 
         const p = await uploadAssetToStorage({
-          bucket: BUCKET_VENDOR,
           path,
           uri,
           contentType: mimeType.startsWith("image/") ? mimeType : "image/jpeg",
@@ -1562,7 +1534,6 @@ export default function AddProductSubmitScreen() {
         const vPath = `vendors/${vendorId}/products/${finalCode}/videos/${Date.now()}-${i}.mp4`;
 
         const vp = await uploadAssetToStorage({
-          bucket: BUCKET_VENDOR,
           path: vPath,
           uri,
           contentType: mimeType.startsWith("video/") ? mimeType : "video/mp4",
@@ -1579,7 +1550,6 @@ export default function AddProductSubmitScreen() {
           if (t?.uri) {
             const tPath = `vendors/${vendorId}/products/${finalCode}/thumbs/${Date.now()}-${i}.jpg`;
             const tp = await uploadAssetToStorage({
-              bucket: BUCKET_VENDOR,
               path: tPath,
               uri: t.uri,
               contentType: "image/jpeg",
@@ -1663,20 +1633,17 @@ export default function AddProductSubmitScreen() {
       });
 
       const { error: updErr } = await withSaveTimeout(
-        supabase
-          .from(PRODUCTS_TABLE)
-          .update({
-            media,
-            spec: finalSpec,
-            price: finalPrice,
-            inventory_qty: Number.isFinite(inventoryQty)
-              ? isUnstitched
-                ? roundMeter(inventoryQty)
-                : Math.trunc(inventoryQty)
-              : 0,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", productId),
+        updateVendorProductMedia(productId, {
+          media,
+          spec: finalSpec,
+          price: finalPrice,
+          inventory_qty: Number.isFinite(inventoryQty)
+            ? isUnstitched
+              ? roundMeter(inventoryQty)
+              : Math.trunc(inventoryQty)
+            : 0,
+          updated_at: new Date().toISOString(),
+        }),
         SAVE_DB_TIMEOUT_MS,
         "Product media update",
       );
