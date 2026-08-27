@@ -1,11 +1,11 @@
-import { supabase } from "@/utils/supabase/client";
+import { signOut } from "@/services/auth/auth";
 import { AppDispatch } from "@/store";
 import { clearBuyer } from "@/store/buyerSlice";
 import { clearSelectedVendor } from "@/store/vendorSlice";
 
 export async function logoutBuyer(dispatch: AppDispatch) {
   try {
-    await supabase.auth.signOut();
+    await signOut();
   } catch (e) {
     console.warn("Buyer logout error:", e);
   } finally {
@@ -16,7 +16,7 @@ export async function logoutBuyer(dispatch: AppDispatch) {
 
 export async function logoutVendor(dispatch: AppDispatch) {
   try {
-    await supabase.auth.signOut();
+    await signOut();
   } catch (e) {
     console.warn("Vendor logout error:", e);
   } finally {

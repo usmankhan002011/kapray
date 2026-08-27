@@ -31,6 +31,12 @@ export type SupabaseQueryMock = {
 const tableQueries = new Map<string, SupabaseQueryMock>();
 
 export const getUserMock = jest.fn();
+export const getSessionMock = jest.fn();
+export const onAuthStateChangeMock = jest.fn();
+export const unsubscribeMock = jest.fn();
+export const resetPasswordForEmailMock = jest.fn();
+export const signInWithIdTokenMock = jest.fn();
+export const updateUserMock = jest.fn();
 export const signOutMock = jest.fn();
 export const rpcMock = jest.fn();
 export const getPublicUrlMock = jest.fn();
@@ -46,7 +52,15 @@ export const fromMock = jest.fn((table: string) => {
 });
 
 export const supabase = {
-  auth: { getUser: getUserMock, signOut: signOutMock },
+  auth: {
+    getUser: getUserMock,
+    getSession: getSessionMock,
+    onAuthStateChange: onAuthStateChangeMock,
+    resetPasswordForEmail: resetPasswordForEmailMock,
+    signInWithIdToken: signInWithIdTokenMock,
+    updateUser: updateUserMock,
+    signOut: signOutMock,
+  },
   storage: { from: storageFromMock },
   from: fromMock,
   rpc: rpcMock,
@@ -96,6 +110,16 @@ export function resetSupabaseMock(): void {
   jest.clearAllMocks();
   tableQueries.clear();
   getUserMock.mockResolvedValue({ data: { user: null }, error: null });
+  getSessionMock.mockResolvedValue({ data: { session: null }, error: null });
+  onAuthStateChangeMock.mockReturnValue({
+    data: { subscription: { unsubscribe: unsubscribeMock } },
+  });
+  resetPasswordForEmailMock.mockResolvedValue({ data: {}, error: null });
+  signInWithIdTokenMock.mockResolvedValue({
+    data: { user: null, session: null },
+    error: null,
+  });
+  updateUserMock.mockResolvedValue({ data: { user: null }, error: null });
   signOutMock.mockResolvedValue({ error: null });
   rpcMock.mockResolvedValue({ data: null, error: null });
   getPublicUrlMock.mockImplementation((path: string) => ({

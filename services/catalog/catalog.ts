@@ -1,8 +1,14 @@
 import { getVendorMediaUrl } from "@/services/buyer/vendorProfile";
 import { appSupabase } from "@/services/supabase";
+import type { Tables } from "@/supabase/supabase";
 
 const PRODUCT_COLUMNS =
   "id, vendor_id, product_code, title, created_at, inventory_qty, made_on_order, product_category, spec, price, media";
+
+export type PriceBandItem = Pick<
+  Tables<"price_bands">,
+  "id" | "name" | "min_pkr" | "max_pkr" | "sort_order"
+>;
 
 function getCommonLookupQueries() {
   return [
@@ -37,6 +43,16 @@ export function getCatalogPriceBuckets() {
     .select("id, label, min_pkr, max_pkr, sort_order")
     .eq("is_active", true)
     .order("sort_order", { ascending: true });
+}
+
+export async function getPriceBands(): Promise<PriceBandItem[]> {
+  const { data, error } = await appSupabase
+    .from("price_bands")
+    .select("id,name,min_pkr,max_pkr,sort_order")
+    .order("sort_order", { ascending: true });
+
+  if (error) throw error;
+  return data ?? [];
 }
 
 export function getCatalogProductsPage(from: number, to: number) {

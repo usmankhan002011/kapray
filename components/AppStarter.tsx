@@ -7,10 +7,14 @@ import { Href, router, useRootNavigationState, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Session } from "@supabase/supabase-js";
+import type { Session } from "@supabase/supabase-js";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { supabase } from "@/utils/supabase/client";
+import {
+  getAppSession,
+  getVendorForAuthUser,
+  subscribeToAuthStateChanges,
+} from "@/services/auth/auth";
 import { useAppDispatch } from "@/store/hooks";
 import { clearBuyer, setBuyer } from "@/store/buyerSlice";
 import { clearSelectedVendor, setSelectedVendor } from "@/store/vendorSlice";
@@ -70,11 +74,7 @@ export default function AppStarter() {
 
       if (role === "vendor") {
         dispatch(clearBuyer());
-        const { data: vendor, error } = await supabase
-          .from("vendor")
-          .select("*")
-          .eq("auth_user_id", user.id)
-          .maybeSingle();
+        const { data: vendor, error } = await getVendorForAuthUser(user.id);
 
         // Important:
         // Vendor auth account may exist before create-shop inserts vendor row.
@@ -159,7 +159,7 @@ export default function AppStarter() {
 
   const bootstrap = useCallback(async () => {
     try {
-      const { data } = await supabase.auth.getSession();
+      const { data } = await getAppSession();
       const session = data.session ?? null;
 
       lastHandledSessionRef.current = session?.access_token ?? null;
@@ -184,7 +184,7 @@ export default function AppStarter() {
   }, [bootstrap]);
 
   useEffect(() => {
-    const { data: listener } = supabase.auth.onAuthStateChange(
+    const { data: listener } = subscribeToAuthStateChanges(
       async (_event, session) => {
         const sessionKey = session?.access_token ?? null;
 

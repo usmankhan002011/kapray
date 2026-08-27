@@ -14,7 +14,13 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { supabase } from "@/utils/supabase/client";
+import { getVendorMediaUrl } from "@/services/vendor/productDetails";
+import {
+  getVendorProductsForUpdate,
+  getVendorUpdateProductSettings,
+  updateVendorProduct,
+  uploadVendorProductAsset,
+} from "@/services/vendor/updateProduct";
 import { useAppSelector } from "@/store/hooks";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
@@ -86,7 +92,6 @@ import {
   extFromUri,
   getStitchedVariantInventoryInfo,
   guessContentTypeFromExt,
-  isHttpUrl,
   makeEmptyMadeOrderVariantDraft,
   makeEmptyReadyVariantDraft,
   makeEmptyTailoringStyleDraft,
@@ -123,9 +128,6 @@ import type {
   ProductTailoringSelections,
   VendorTailoringOptions,
 } from "./UpdateProduct.helpers";
-
-const PRODUCTS_TABLE = "products";
-const BUCKET_VENDOR = "vendor_images";
 
 function roundPriceForCompare(value: number) {
   if (!Number.isFinite(value)) return 0;
@@ -343,12 +345,7 @@ export default function UpdateProductScreen() {
 
   const [videoThumbs, setVideoThumbs] = useState<Record<string, string>>({});
 
-  const resolvePublicUrl = useCallback((path: string | null | undefined) => {
-    if (!path) return null;
-    if (isHttpUrl(path)) return path;
-    const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(path);
-    return data?.publicUrl ?? null;
-  }, []);
+  const resolvePublicUrl = getVendorMediaUrl;
 
   const toggleStyle = useCallback(
     (group: keyof ProductTailoringSelections, value: string) => {
@@ -537,13 +534,7 @@ export default function UpdateProductScreen() {
     try {
       setLoadingList(true);
 
-      const { data, error } = await supabase
-        .from(PRODUCTS_TABLE)
-        .select(
-          "id, vendor_id, product_code, title, inventory_qty, made_on_order, product_category, spec, price, media, created_at, updated_at",
-        )
-        .eq("vendor_id", vendorId)
-        .order("created_at", { ascending: false });
+      const { data, error } = await getVendorProductsForUpdate(vendorId);
 
       if (error) {
         Alert.alert("Load error", error.message);
@@ -574,11 +565,7 @@ export default function UpdateProductScreen() {
     try {
       setVendorLoading(true);
 
-      const { data, error } = await supabase
-        .from("vendor")
-        .select("id, offers_tailoring, tailoring_options, exports_enabled, export_regions")
-        .eq("id", vendorId)
-        .single();
+      const { data, error } = await getVendorUpdateProductSettings(vendorId);
 
       if (error) {
         setVendorOffersTailoring(false);
@@ -1742,15 +1729,11 @@ export default function UpdateProductScreen() {
         }
       }
 
-      const { data, error } = await supabase
-        .from(PRODUCTS_TABLE)
-        .update(updatePayload)
-        .eq("id", selectedId)
-        .eq("vendor_id", vendorId)
-        .select(
-          "id, vendor_id, product_code, title, inventory_qty, made_on_order, product_category, spec, price, media, created_at, updated_at",
-        )
-        .single();
+      const { data, error } = await updateVendorProduct({
+        productId: selectedId,
+        vendorId,
+        payload: updatePayload,
+      });
 
       if (error) {
         Alert.alert("Update failed", error.message);
@@ -1795,15 +1778,11 @@ export default function UpdateProductScreen() {
         updated_at: new Date().toISOString(),
       };
 
-      const { data, error } = await supabase
-        .from(PRODUCTS_TABLE)
-        .update(updatePayload)
-        .eq("id", selectedId)
-        .eq("vendor_id", vendorId)
-        .select(
-          "id, vendor_id, product_code, title, inventory_qty, made_on_order, product_category, spec, price, media, created_at, updated_at",
-        )
-        .single();
+      const { data, error } = await updateVendorProduct({
+        productId: selectedId,
+        vendorId,
+        payload: updatePayload,
+      });
 
       if (error) {
         Alert.alert("Media update failed", error.message);
@@ -1908,12 +1887,11 @@ export default function UpdateProductScreen() {
     const filename = `${Date.now()}_${args.index}_${Math.random().toString(16).slice(2)}.${ext}`;
     const storagePath = `vendors/${args.vendorId}/products/${args.productCode}/${folder}/${filename}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from(BUCKET_VENDOR)
-      .upload(storagePath, arrayBuffer, {
-        contentType,
-        upsert: false,
-      });
+    const { error: uploadError } = await uploadVendorProductAsset({
+      path: storagePath,
+      fileBody: arrayBuffer,
+      contentType,
+    });
 
     if (uploadError) throw new Error(uploadError.message);
     return storagePath;
@@ -2099,15 +2077,11 @@ export default function UpdateProductScreen() {
         updated_at: new Date().toISOString(),
       };
 
-      const { data, error } = await supabase
-        .from(PRODUCTS_TABLE)
-        .update(updatePayload)
-        .eq("id", selectedId)
-        .eq("vendor_id", vendorId)
-        .select(
-          "id, vendor_id, product_code, title, inventory_qty, made_on_order, product_category, spec, price, media, created_at, updated_at",
-        )
-        .single();
+      const { data, error } = await updateVendorProduct({
+        productId: selectedId,
+        vendorId,
+        payload: updatePayload,
+      });
 
       if (error) {
         Alert.alert("Media update failed", error.message);

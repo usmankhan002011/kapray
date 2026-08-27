@@ -30,7 +30,9 @@ const PRODUCT_DETAIL_COLUMNS = `
     profile_image_path,
     banner_path,
     status,
-    offers_tailoring
+    offers_tailoring,
+    exports_enabled,
+    export_regions
   )
 `;
 
@@ -48,7 +50,7 @@ export type ProductLookupKind = keyof typeof PRODUCT_LOOKUP_TABLES;
 export { getVendorMediaUrl, getVendorMediaUrls };
 
 export function getVendorProductDetails(args: {
-  productId: string | null;
+  productId: string | number | null;
   productCode: string | null;
 }) {
   const query = appSupabase.from("products").select(PRODUCT_DETAIL_COLUMNS);

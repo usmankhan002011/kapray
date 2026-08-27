@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { supabase } from "@/utils/supabase/client";
+import { resetPassword } from "@/services/auth/auth";
 import { authStyles } from "@/components/auth/authStyles";
 
 type ForgotPasswordModalProps = {
@@ -32,7 +32,7 @@ export function ForgotPasswordModal({
     try {
       setLoading(true);
 
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+      const { error } = await resetPassword(email.trim());
 
       if (error) {
         throw error;

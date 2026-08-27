@@ -7,7 +7,10 @@ import {
   Text
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { getPriceBands, PriceBandItem } from "@/utils/supabase/priceBand";
+import {
+  getPriceBands,
+  type PriceBandItem,
+} from "@/services/catalog/catalog";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearPriceBands, togglePriceBand } from "@/store/filtersSlice";
 import StandardFilterDisplay from "@/components/ui/StandardFilterDisplay";

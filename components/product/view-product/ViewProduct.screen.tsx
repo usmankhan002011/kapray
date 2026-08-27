@@ -26,7 +26,12 @@ import {
   useSegments,
 } from "expo-router";
 
-import { supabase } from "@/utils/supabase/client";
+import {
+  getVendorMediaUrl,
+  getVendorMediaUrls,
+  getVendorProductDetails,
+  resolveProductLookupNames,
+} from "@/services/vendor/productDetails";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setSelectedVendor } from "@/store/vendorSlice";
 import { FooterBar, MediaBlock, useProductMedia } from "./ViewProduct.media";
@@ -52,7 +57,6 @@ import {
 } from "@/utils/kapray/deliveryPolicy";
 import { formatFabricWidthFromSpec } from "@/utils/kapray/fabricWidth";
 
-const BUCKET_VENDOR = "vendor_images";
 const { width } = Dimensions.get("window");
 const FOOTER_H = 86;
 const FABRIC_STOCK_EPSILON_M = 0.05;
@@ -71,17 +75,6 @@ function makeChoiceKey(productId: number | null, productCode: string | null) {
 
   return "";
 }
-
-const LOOKUP = {
-  dressTypes: "dress_types",
-  fabricTypes: "fabric_types",
-  workTypes: "work_types",
-  workDensities: "work_densities",
-  originCities: "origin_cities",
-  wearStates: "wear_states",
-} as const;
-
-type LookupTable = (typeof LOOKUP)[keyof typeof LOOKUP];
 
 type ProductCategory =
   | "unstitched_plain"
@@ -138,10 +131,6 @@ function designText(value: unknown, fallback = "Design") {
       .replace(/^(?:Variant|Style)\s+\d+$/i, "")
       .trim() || fallback
   );
-}
-
-function isHttpUrl(v: unknown) {
-  return typeof v === "string" && /^https?:\/\//i.test(v);
 }
 
 function safeArray(v: any): any[] {
@@ -811,23 +800,8 @@ export default function ViewProductScreen() {
     }
   }, [params]);
 
-  const resolvePublicUrl = useCallback((path: string | null | undefined) => {
-    if (!path) return null;
-    if (isHttpUrl(path)) return path;
-
-    const { data } = supabase.storage.from(BUCKET_VENDOR).getPublicUrl(path);
-    return data?.publicUrl ?? null;
-  }, []);
-
-  const resolveManyPublic = useCallback(
-    (paths: unknown): string[] => {
-      const list = Array.isArray(paths) ? paths : [];
-      return list
-        .map((p) => resolvePublicUrl(String(p || "").trim()))
-        .filter(Boolean) as string[];
-    },
-    [resolvePublicUrl],
-  );
+  const resolvePublicUrl = getVendorMediaUrl;
+  const resolveManyPublic = getVendorMediaUrls;
 
   const productMediaState = useProductMedia({
     product,
@@ -872,45 +846,10 @@ export default function ViewProductScreen() {
       setMissingParam(false);
       setLoading(true);
 
-      let q = supabase.from("products").select(`
-          id,
-          vendor_id,
-          product_code,
-          title,
-          inventory_qty,
-          made_on_order,
-          product_category,
-          spec,
-          price,
-          media,
-          created_at,
-          updated_at,
-          vendor:vendor_id (
-            id,
-            name,
-            shop_name,
-            address,
-            mobile,
-            landline,
-            email,
-            location,
-            location_url,
-            profile_image_path,
-            banner_path,
-            status,
-            offers_tailoring,
-            exports_enabled,
-            export_regions
-          )
-        `);
-
-      if (productId != null) {
-        q = q.eq("id", productId);
-      } else if (productCode) {
-        q = q.eq("product_code", productCode);
-      }
-
-      const { data, error } = await q.single();
+      const { data, error } = await getVendorProductDetails({
+        productId,
+        productCode,
+      });
 
       if (error) {
         Alert.alert("Load error", error.message);
@@ -961,31 +900,6 @@ export default function ViewProductScreen() {
       setLoading(false);
     }
   }, [dispatch, productCode, productId, resolvePublicUrl]);
-
-  const resolveNamesByIds = useCallback(
-    async (table: LookupTable, ids: string[]): Promise<string[]> => {
-      const clean = ids.map((x) => String(x).trim()).filter(Boolean);
-      if (!clean.length) return [];
-
-      const { data, error } = await (supabase as any)
-        .from(table)
-        .select("id, name")
-        .in("id", clean);
-      if (error || !data) return [];
-
-      const map = new Map<string, string>();
-      for (const r of data as any[]) {
-        const id = String(r?.id ?? "").trim();
-        const name = String(r?.name ?? "").trim();
-        if (id && name) {
-          map.set(id, name);
-        }
-      }
-
-      return clean.map((id) => map.get(id) ?? id);
-    },
-    [],
-  );
 
   const resolveColorNames = useCallback((ids: unknown): string[] => {
     const list = normalizeIdList(ids);
@@ -1051,12 +965,12 @@ export default function ViewProductScreen() {
       try {
         const [dressType, fabric, work, density, origin, wear] =
           await Promise.all([
-            resolveNamesByIds(LOOKUP.dressTypes, dressTypeIds),
-            resolveNamesByIds(LOOKUP.fabricTypes, fabricTypeIds),
-            resolveNamesByIds(LOOKUP.workTypes, workTypeIds),
-            resolveNamesByIds(LOOKUP.workDensities, densityIds),
-            resolveNamesByIds(LOOKUP.originCities, originIds),
-            resolveNamesByIds(LOOKUP.wearStates, wearIds),
+            resolveProductLookupNames("dressTypes", dressTypeIds),
+            resolveProductLookupNames("fabricTypes", fabricTypeIds),
+            resolveProductLookupNames("workTypes", workTypeIds),
+            resolveProductLookupNames("workDensities", densityIds),
+            resolveProductLookupNames("originCities", originIds),
+            resolveProductLookupNames("wearStates", wearIds),
           ]);
 
         const color = resolveColorNames(colorIds);
@@ -1090,7 +1004,7 @@ export default function ViewProductScreen() {
     return () => {
       alive = false;
     };
-  }, [product, resolveColorNames, resolveNamesByIds]);
+  }, [product, resolveColorNames]);
 
   useFocusEffect(
     useCallback(() => {

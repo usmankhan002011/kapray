@@ -3,6 +3,7 @@ import {
   getCatalogProductMediaUrl,
   getCatalogProductsPage,
   getInitialCatalogQueries,
+  getPriceBands,
   getResultFilterLookupQueries,
 } from "../catalog";
 import {
@@ -34,6 +35,22 @@ function registerCommonLookups() {
 }
 
 describe("catalog service", () => {
+  it("loads legacy price bands in display order", async () => {
+    const rows = [
+      { id: "under-10k", name: "Under 10k", min_pkr: 0, max_pkr: 10000 },
+    ];
+    const query = createQueryMock({ list: { data: rows, error: null } });
+    registerTableQuery("price_bands", query);
+
+    await expect(getPriceBands()).resolves.toEqual(rows);
+    expect(query.select).toHaveBeenCalledWith(
+      "id,name,min_pkr,max_pkr,sort_order",
+    );
+    expect(query.order).toHaveBeenCalledWith("sort_order", {
+      ascending: true,
+    });
+  });
+
   it("loads active price buckets in display order", async () => {
     const rows = [{ id: 1, label: "Under 10k", min_pkr: 0, max_pkr: 10000 }];
     const query = createQueryMock({ list: { data: rows, error: null } });

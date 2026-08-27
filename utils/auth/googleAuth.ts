@@ -4,7 +4,12 @@ import {
   statusCodes,
 } from "@react-native-google-signin/google-signin";
 
-import { supabase } from "@/utils/supabase/client";
+import {
+  createGoogleVendor,
+  getVendorForAuthUser,
+  signInWithGoogleIdToken,
+  updateAuthUserMetadata,
+} from "@/services/auth/auth";
 
 export type AuthRole = "buyer" | "vendor";
 
@@ -38,10 +43,7 @@ export async function handleGoogleLogin(
       throw new Error("No ID token received from Google Sign-In.");
     }
 
-    const { data, error } = await supabase.auth.signInWithIdToken({
-      provider: "google",
-      token: idToken,
-    });
+    const { data, error } = await signInWithGoogleIdToken(idToken);
 
     if (error) {
       throw error;
@@ -61,12 +63,10 @@ export async function handleGoogleLogin(
         user.user_metadata?.user_name,
     );
 
-    const { error: updateUserError } = await supabase.auth.updateUser({
-      data: {
-        ...user.user_metadata,
-        role,
-        name,
-      },
+    const { error: updateUserError } = await updateAuthUserMetadata({
+      ...user.user_metadata,
+      role,
+      name,
     });
 
     if (updateUserError) {
@@ -78,35 +78,30 @@ export async function handleGoogleLogin(
       return { ok: true };
     }
 
-    const { data: existingVendor, error: vendorLookupError } = await supabase
-      .from("vendor")
-      .select("id")
-      .eq("auth_user_id", user.id)
-      .maybeSingle();
+    const { data: existingVendor, error: vendorLookupError } =
+      await getVendorForAuthUser(user.id);
 
     if (vendorLookupError) {
       throw vendorLookupError;
     }
 
     if (!existingVendor) {
-      const { error: vendorInsertError } = await supabase
-        .from("vendor")
-        .insert({
-          name,
-          shop_name: user.user_metadata?.shop_name ?? null,
-          email: email || null,
-          mobile: null,
-          additional_mobile_numbers: [],
-          additional_landline_numbers: [],
-          owner_user_id: user.id,
-          auth_user_id: user.id,
-          offers_dyeing: false,
-          offers_tailoring: false,
-          exports_enabled: false,
-          export_regions: [],
-          tailoring_options: {},
-          status: "draft",
-        });
+      const { error: vendorInsertError } = await createGoogleVendor({
+        name,
+        shop_name: user.user_metadata?.shop_name ?? null,
+        email: email || null,
+        mobile: null,
+        additional_mobile_numbers: [],
+        additional_landline_numbers: [],
+        owner_user_id: user.id,
+        auth_user_id: user.id,
+        offers_dyeing: false,
+        offers_tailoring: false,
+        exports_enabled: false,
+        export_regions: [],
+        tailoring_options: {},
+        status: "draft",
+      });
 
       if (vendorInsertError) {
         throw vendorInsertError;
