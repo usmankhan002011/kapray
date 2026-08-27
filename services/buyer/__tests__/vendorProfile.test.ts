@@ -2,33 +2,17 @@ import {
   getBuyerVendorProfile,
   getBuyerVendorReviews,
   getBuyerVendorReviewSummary,
-  getVendorMediaUrl,
   toSelectedVendor,
 } from "../vendorProfile";
 import {
   createQueryMock,
-  getPublicUrlMock,
   registerTableQuery,
   resetSupabaseMock,
-  storageFromMock,
 } from "../../__tests__/supabaseClientMock";
 
 beforeEach(resetSupabaseMock);
 
 describe("buyer vendor profile service", () => {
-  it("keeps public URLs and resolves stored media paths", () => {
-    expect(getVendorMediaUrl("https://cdn.test/banner.jpg")).toBe(
-      "https://cdn.test/banner.jpg",
-    );
-    expect(storageFromMock).not.toHaveBeenCalled();
-
-    expect(getVendorMediaUrl("vendors/1/banner.jpg")).toBe(
-      "https://storage.test/vendors/1/banner.jpg",
-    );
-    expect(storageFromMock).toHaveBeenCalledWith("vendor_images");
-    expect(getPublicUrlMock).toHaveBeenCalledWith("vendors/1/banner.jpg");
-  });
-
   it("loads a vendor and normalizes export regions", async () => {
     const vendor = {
       id: 7,

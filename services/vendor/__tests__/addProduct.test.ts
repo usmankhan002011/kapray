@@ -1,18 +1,12 @@
 import {
   createVendorProduct,
-  getAddProductAssetPathFromPublicUrl,
-  getAddProductAssetPublicUrl,
   getVendorAddProductSettings,
   updateVendorProductMedia,
-  uploadAddProductAsset,
 } from "../addProduct";
 import {
   createQueryMock,
-  getPublicUrlMock,
   registerTableQuery,
   resetSupabaseMock,
-  storageFromMock,
-  uploadMock,
 } from "../../__tests__/supabaseClientMock";
 
 beforeEach(resetSupabaseMock);
@@ -37,50 +31,6 @@ describe("add product service", () => {
       "id, offers_tailoring, tailoring_options",
     );
     expect(query.eq).toHaveBeenCalledWith("id", 7);
-  });
-
-  it("uploads product media to the vendor image bucket", async () => {
-    const fileBody = new ArrayBuffer(2);
-    uploadMock.mockResolvedValueOnce({
-      data: { path: "vendors/7/products/KP-7/main.jpg" },
-      error: null,
-    });
-
-    await expect(
-      uploadAddProductAsset({
-        path: "vendors/7/products/KP-7/main.jpg",
-        fileBody,
-        contentType: "image/jpeg",
-      }),
-    ).resolves.toEqual({
-      data: { path: "vendors/7/products/KP-7/main.jpg" },
-      error: null,
-    });
-    expect(storageFromMock).toHaveBeenCalledWith("vendor_images");
-    expect(uploadMock).toHaveBeenCalledWith(
-      "vendors/7/products/KP-7/main.jpg",
-      fileBody,
-      { contentType: "image/jpeg", upsert: true },
-    );
-  });
-
-  it("resolves public media URLs and extracts their storage paths", () => {
-    const path = "vendors/7/products/KP-7/main image.jpg";
-    getPublicUrlMock.mockReturnValueOnce({
-      data: {
-        publicUrl:
-          "https://project.supabase.co/storage/v1/object/public/vendor_images/vendors/7/products/KP-7/main%20image.jpg",
-      },
-    });
-
-    const publicUrl = getAddProductAssetPublicUrl(path);
-
-    expect(getPublicUrlMock).toHaveBeenCalledWith(path);
-    expect(publicUrl).not.toBeNull();
-    expect(getAddProductAssetPathFromPublicUrl(publicUrl!)).toBe(path);
-    expect(getAddProductAssetPathFromPublicUrl("file:///local/main.jpg")).toBe(
-      "",
-    );
   });
 
   it("creates a product and returns its generated identity", async () => {

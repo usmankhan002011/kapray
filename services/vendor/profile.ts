@@ -2,19 +2,21 @@ import type { TablesUpdate } from "@/supabase/supabase";
 import {
   getBuyerVendorProfile,
   getBuyerVendorReviewSummary,
-  getVendorMediaUrl,
-  getVendorMediaUrls,
   VENDOR_PROFILE_COLUMNS,
 } from "@/services/buyer/vendorProfile";
+import {
+  getVendorMediaUrl,
+  getVendorMediaUrls,
+  uploadVendorMedia,
+} from "@/services/media/media";
 import { appSupabase } from "@/services/supabase";
-
-const VENDOR_MEDIA_BUCKET = "vendor_images";
 
 export {
   getVendorMediaUrl,
   getVendorMediaUrls,
   getBuyerVendorProfile as getVendorProfile,
   getBuyerVendorReviewSummary as getVendorProfileReviewSummary,
+  uploadVendorMedia as uploadVendorProfileAsset,
 };
 
 export function getVendorReviewSummary(vendorId: number) {
@@ -32,19 +34,6 @@ export function getVendorReviews(vendorId: number) {
     .eq("vendor_id", vendorId)
     .eq("is_hidden", false)
     .order("created_at", { ascending: false });
-}
-
-export function uploadVendorProfileAsset(args: {
-  path: string;
-  fileBody: ArrayBuffer;
-  contentType: string;
-}) {
-  return appSupabase.storage
-    .from(VENDOR_MEDIA_BUCKET)
-    .upload(args.path, args.fileBody, {
-      contentType: args.contentType,
-      upsert: false,
-    });
 }
 
 export function updateVendorProfile(

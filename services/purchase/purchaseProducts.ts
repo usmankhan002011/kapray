@@ -1,5 +1,8 @@
 import type { Tables } from "@/supabase/supabase";
+import { getVendorMediaPublicUrl } from "@/services/media/media";
 import { appSupabase } from "@/services/supabase";
+
+export { getVendorMediaPublicUrl as getPurchaseMediaPublicUrl };
 
 type Product = Tables<"products">;
 type Vendor = Tables<"vendor">;
@@ -95,9 +98,4 @@ export function getPurchaseProductDetails(
     identifier,
     false,
   );
-}
-
-export function getPurchaseMediaPublicUrl(path: string): string {
-  return appSupabase.storage.from("vendor_images").getPublicUrl(path).data
-    .publicUrl;
 }

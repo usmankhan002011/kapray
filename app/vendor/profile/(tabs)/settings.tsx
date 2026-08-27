@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import { Redirect, useRouter } from "expo-router";
-import { signOutVendor } from "@/services/vendor/vendorAuth";
+import { signOutOrThrow } from "@/services/auth/auth";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearSelectedVendor } from "@/store/vendorSlice";
 import {
@@ -71,7 +71,7 @@ export default function VendorSettingsScreen() {
     try {
       setLoggingOut(true);
 
-      await signOutVendor();
+      await signOutOrThrow();
 
       dispatch(clearSelectedVendor());
       setLogoutVisible(false);

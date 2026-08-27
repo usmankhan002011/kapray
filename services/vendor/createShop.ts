@@ -1,11 +1,10 @@
 import type { TablesInsert, TablesUpdate } from "@/supabase/supabase";
+import { getCurrentUser } from "@/services/auth/auth";
+import { uploadVendorMediaWithOverwrite } from "@/services/media/media";
 import { appSupabase } from "@/services/supabase";
 
-const VENDOR_MEDIA_BUCKET = "vendor_images";
-
-export function getCurrentVendorUser() {
-  return appSupabase.auth.getUser();
-}
+export { getCurrentUser as getCurrentVendorUser };
+export { uploadVendorMediaWithOverwrite as uploadCreateShopAsset };
 
 export function getVendorByAuthUser(authUserId: string) {
   return appSupabase
@@ -28,17 +27,4 @@ export function updateShopVendor(
   payload: TablesUpdate<"vendor">,
 ) {
   return appSupabase.from("vendor").update(payload).eq("id", vendorId);
-}
-
-export function uploadCreateShopAsset(args: {
-  path: string;
-  fileBody: ArrayBuffer;
-  contentType: string;
-}) {
-  return appSupabase.storage
-    .from(VENDOR_MEDIA_BUCKET)
-    .upload(args.path, args.fileBody, {
-      contentType: args.contentType,
-      upsert: true,
-    });
 }

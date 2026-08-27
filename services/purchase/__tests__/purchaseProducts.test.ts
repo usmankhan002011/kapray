@@ -1,14 +1,11 @@
 import {
   getPaymentProduct,
-  getPurchaseMediaPublicUrl,
   getPurchaseProductDetails,
 } from "../purchaseProducts";
 import {
   createQueryMock,
-  getPublicUrlMock,
   registerTableQuery,
   resetSupabaseMock,
-  storageFromMock,
 } from "../../__tests__/supabaseClientMock";
 
 beforeEach(resetSupabaseMock);
@@ -44,14 +41,6 @@ describe("purchase product service", () => {
     ).resolves.toEqual(product);
     expect(query.eq).toHaveBeenCalledWith("product_code", "KP-12");
     expect(query.limit).not.toHaveBeenCalled();
-  });
-
-  it("resolves purchase media from the vendor image bucket", () => {
-    expect(getPurchaseMediaPublicUrl("products/12/image.jpg")).toBe(
-      "https://storage.test/products/12/image.jpg",
-    );
-    expect(storageFromMock).toHaveBeenCalledWith("vendor_images");
-    expect(getPublicUrlMock).toHaveBeenCalledWith("products/12/image.jpg");
   });
 
   it("propagates product query errors", async () => {

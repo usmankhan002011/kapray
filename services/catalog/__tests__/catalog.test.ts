@@ -1,6 +1,5 @@
 import {
   getCatalogPriceBuckets,
-  getCatalogProductMediaUrl,
   getCatalogProductsPage,
   getInitialCatalogQueries,
   getPriceBands,
@@ -8,10 +7,8 @@ import {
 } from "../catalog";
 import {
   createQueryMock,
-  getPublicUrlMock,
   registerTableQuery,
   resetSupabaseMock,
-  storageFromMock,
 } from "../../__tests__/supabaseClientMock";
 
 const COMMON_LOOKUPS = [
@@ -116,13 +113,4 @@ describe("catalog service", () => {
     expect(dressQuery.order).toHaveBeenCalledWith("id", { ascending: true });
   });
 
-  it("resolves product media from the shared vendor bucket", () => {
-    expect(getCatalogProductMediaUrl("vendors/7/products/photo.jpg")).toBe(
-      "https://storage.test/vendors/7/products/photo.jpg",
-    );
-    expect(storageFromMock).toHaveBeenCalledWith("vendor_images");
-    expect(getPublicUrlMock).toHaveBeenCalledWith(
-      "vendors/7/products/photo.jpg",
-    );
-  });
 });

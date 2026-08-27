@@ -1,4 +1,4 @@
-import { getVendorMediaUrl } from "@/services/buyer/vendorProfile";
+import { getVendorMediaUrl } from "@/services/media/media";
 import { appSupabase } from "@/services/supabase";
 import type { Tables } from "@/supabase/supabase";
 

@@ -1,4 +1,5 @@
 import type { Tables } from "@/supabase/supabase";
+import { getVendorMediaPublicUrl } from "@/services/media/media";
 import { appSupabase } from "@/services/supabase";
 
 const PRODUCT_COLUMNS =
@@ -112,10 +113,7 @@ function firstImagePath(media: any): string | null {
 function getProductImageUrl(media: any): string | null {
   const path = firstImagePath(media);
   if (!path) return null;
-  return (
-    appSupabase.storage.from("vendor_images").getPublicUrl(path).data
-      .publicUrl ?? null
-  );
+  return getVendorMediaPublicUrl(path);
 }
 
 function isCountedOrderStatus(status: string): boolean {

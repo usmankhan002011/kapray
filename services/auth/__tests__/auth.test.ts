@@ -1,16 +1,19 @@
 import {
   createGoogleVendor,
   getAppSession,
+  getCurrentUser,
   getVendorForAuthUser,
   resetPassword,
   signInWithGoogleIdToken,
   signOut,
+  signOutOrThrow,
   subscribeToAuthStateChanges,
   updateAuthUserMetadata,
 } from "../auth";
 import {
   createQueryMock,
   getSessionMock,
+  getUserMock,
   onAuthStateChangeMock,
   registerTableQuery,
   resetPasswordForEmailMock,
@@ -31,6 +34,13 @@ describe("auth service", () => {
       data: { session },
       error: null,
     });
+  });
+
+  it("returns the current authenticated user", async () => {
+    const result = { data: { user: { id: "user-7" } }, error: null };
+    getUserMock.mockResolvedValueOnce(result);
+
+    await expect(getCurrentUser()).resolves.toEqual(result);
   });
 
   it("subscribes to auth state changes", () => {
@@ -64,6 +74,13 @@ describe("auth service", () => {
       "buyer@example.com",
     );
     expect(signOutMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("throws when sign-out fails", async () => {
+    const error = new Error("sign out failed");
+    signOutMock.mockResolvedValueOnce({ error });
+
+    await expect(signOutOrThrow()).rejects.toBe(error);
   });
 
   it("signs in with a Google ID token and updates auth metadata", async () => {

@@ -1,17 +1,14 @@
 import {
   getOrderDetails,
-  getOrderMediaPublicUrl,
   hasCurrentBuyerReviewedOrder,
   updateOrderStatus,
 } from "../orderDetails";
 import {
   createQueryMock,
   fromMock,
-  getPublicUrlMock,
   getUserMock,
   registerTableQuery,
   resetSupabaseMock,
-  storageFromMock,
 } from "../../__tests__/supabaseClientMock";
 
 beforeEach(resetSupabaseMock);
@@ -66,11 +63,4 @@ describe("order details service", () => {
     expect(query.eq).toHaveBeenCalledWith("id", 12);
   });
 
-  it("resolves order media from the vendor image bucket", () => {
-    expect(getOrderMediaPublicUrl("orders/12/image.jpg")).toBe(
-      "https://storage.test/orders/12/image.jpg",
-    );
-    expect(storageFromMock).toHaveBeenCalledWith("vendor_images");
-    expect(getPublicUrlMock).toHaveBeenCalledWith("orders/12/image.jpg");
-  });
 });

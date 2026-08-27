@@ -1,5 +1,9 @@
 import type { Tables, TablesUpdate } from "@/supabase/supabase";
+import { getCurrentUser } from "@/services/auth/auth";
+import { getVendorMediaPublicUrl } from "@/services/media/media";
 import { appSupabase } from "@/services/supabase";
+
+export { getVendorMediaPublicUrl as getOrderMediaPublicUrl };
 
 type Order = Tables<"orders">;
 type Vendor = Tables<"vendor">;
@@ -93,7 +97,7 @@ export async function hasCurrentBuyerReviewedOrder(
 ): Promise<boolean> {
   const {
     data: { user },
-  } = await appSupabase.auth.getUser();
+  } = await getCurrentUser();
 
   if (!user) return false;
 
@@ -118,9 +122,4 @@ export async function updateOrderStatus(
     .eq("id", orderId);
 
   if (error) throw error;
-}
-
-export function getOrderMediaPublicUrl(path: string): string {
-  return appSupabase.storage.from("vendor_images").getPublicUrl(path).data
-    .publicUrl;
 }

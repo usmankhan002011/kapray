@@ -1,7 +1,7 @@
 import {
   getVendorMediaUrl,
   getVendorMediaUrls,
-} from "@/services/buyer/vendorProfile";
+} from "@/services/media/media";
 import { appSupabase } from "@/services/supabase";
 
 const PRODUCT_DETAIL_COLUMNS = `

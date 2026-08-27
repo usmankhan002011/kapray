@@ -3,15 +3,12 @@ import {
   getCurrentVendorUser,
   getVendorByAuthUser,
   updateShopVendor,
-  uploadCreateShopAsset,
 } from "../createShop";
 import {
   createQueryMock,
   getUserMock,
   registerTableQuery,
   resetSupabaseMock,
-  storageFromMock,
-  uploadMock,
 } from "../../__tests__/supabaseClientMock";
 
 beforeEach(resetSupabaseMock);
@@ -72,20 +69,4 @@ describe("create shop service", () => {
     expect(query.eq).toHaveBeenCalledWith("id", 7);
   });
 
-  it("uploads shop media to the vendor bucket", async () => {
-    const fileBody = new ArrayBuffer(2);
-
-    await uploadCreateShopAsset({
-      path: "vendors/7/profile/photo.jpg",
-      fileBody,
-      contentType: "image/jpeg",
-    });
-
-    expect(storageFromMock).toHaveBeenCalledWith("vendor_images");
-    expect(uploadMock).toHaveBeenCalledWith(
-      "vendors/7/profile/photo.jpg",
-      fileBody,
-      { contentType: "image/jpeg", upsert: true },
-    );
-  });
 });

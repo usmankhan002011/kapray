@@ -1,5 +1,6 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import type { Tables, TablesInsert } from "@/supabase/supabase";
+import { getCurrentUser } from "@/services/auth/auth";
 import { appSupabase } from "@/services/supabase";
 
 export type SubmitVendorReviewInput = {
@@ -35,7 +36,7 @@ function isDuplicate(error: PostgrestError): boolean {
 export async function submitVendorReview(
   input: SubmitVendorReviewInput,
 ): Promise<SubmitVendorReviewStatus> {
-  const { data: auth, error: authError } = await appSupabase.auth.getUser();
+  const { data: auth, error: authError } = await getCurrentUser();
   if (authError) throw authError;
   if (!auth.user) return "requires_sign_in";
 

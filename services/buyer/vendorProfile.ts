@@ -1,8 +1,11 @@
 import type { VendorState } from "@/store/vendorSlice";
 import type { Tables } from "@/supabase/supabase";
-import { BUYER_VENDOR_MEDIA_BUCKET } from "@/constants/buyer";
+import {
+  getVendorMediaUrl,
+  getVendorMediaUrls,
+} from "@/services/media/media";
 import { appSupabase } from "@/services/supabase";
-import { isHttpUrl, toStringArray } from "@/utils/buyer";
+import { toStringArray } from "@/utils/buyer";
 
 type VendorRow = Tables<"vendor">;
 type ReviewRow = Tables<"vendor_reviews">;
@@ -74,20 +77,7 @@ export const VENDOR_PROFILE_COLUMNS = `
   tailoring_options
 `;
 
-export function getVendorMediaUrl(
-  path: string | null | undefined,
-): string | null {
-  if (!path) return null;
-  if (isHttpUrl(path)) return path;
-  return appSupabase.storage.from(BUYER_VENDOR_MEDIA_BUCKET).getPublicUrl(path)
-    .data.publicUrl;
-}
-
-export function getVendorMediaUrls(paths: unknown): string[] {
-  return toStringArray(paths)
-    .map(getVendorMediaUrl)
-    .filter((url): url is string => Boolean(url));
-}
+export { getVendorMediaUrl, getVendorMediaUrls };
 
 export async function getBuyerVendorProfile(
   vendorId: number,

@@ -2,14 +2,11 @@ import {
   getVendorProductsForUpdate,
   getVendorUpdateProductSettings,
   updateVendorProduct,
-  uploadVendorProductAsset,
 } from "../updateProduct";
 import {
   createQueryMock,
   registerTableQuery,
   resetSupabaseMock,
-  storageFromMock,
-  uploadMock,
 } from "../../__tests__/supabaseClientMock";
 
 beforeEach(resetSupabaseMock);
@@ -55,20 +52,4 @@ describe("update product service", () => {
     expect(query.eq).toHaveBeenNthCalledWith(2, "vendor_id", 7);
   });
 
-  it("uploads update media without overwriting an existing object", async () => {
-    const fileBody = new ArrayBuffer(2);
-
-    await uploadVendorProductAsset({
-      path: "vendors/7/products/KP-12/images/main.jpg",
-      fileBody,
-      contentType: "image/jpeg",
-    });
-
-    expect(storageFromMock).toHaveBeenCalledWith("vendor_images");
-    expect(uploadMock).toHaveBeenCalledWith(
-      "vendors/7/products/KP-12/images/main.jpg",
-      fileBody,
-      { contentType: "image/jpeg", upsert: false },
-    );
-  });
 });

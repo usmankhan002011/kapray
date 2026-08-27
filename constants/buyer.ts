@@ -1,7 +1,6 @@
 import { Dimensions } from "react-native";
 
 export const BUYER_RATING_VALUES = [1, 2, 3, 4, 5] as const;
-export const BUYER_VENDOR_MEDIA_BUCKET = "vendor_images";
 export const BUYER_PROFILE_SCREEN_WIDTH = Dimensions.get("window").width;
 
 export const BUYER_COLORS = {

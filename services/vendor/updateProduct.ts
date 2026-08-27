@@ -1,9 +1,10 @@
 import type { TablesUpdate } from "@/supabase/supabase";
+import { uploadVendorMedia } from "@/services/media/media";
 import { appSupabase } from "@/services/supabase";
 
 const PRODUCT_COLUMNS =
   "id, vendor_id, product_code, title, inventory_qty, made_on_order, product_category, spec, price, media, created_at, updated_at";
-const PRODUCT_MEDIA_BUCKET = "vendor_images";
+export { uploadVendorMedia as uploadVendorProductAsset };
 
 export function getVendorProductsForUpdate(vendorId: number) {
   return appSupabase
@@ -35,17 +36,4 @@ export function updateVendorProduct(args: {
     .eq("vendor_id", args.vendorId)
     .select(PRODUCT_COLUMNS)
     .single();
-}
-
-export function uploadVendorProductAsset(args: {
-  path: string;
-  fileBody: ArrayBuffer;
-  contentType: string;
-}) {
-  return appSupabase.storage
-    .from(PRODUCT_MEDIA_BUCKET)
-    .upload(args.path, args.fileBody, {
-      contentType: args.contentType,
-      upsert: false,
-    });
 }

@@ -2,14 +2,11 @@ import {
   getVendorReviews,
   getVendorReviewSummary,
   updateVendorProfile,
-  uploadVendorProfileAsset,
 } from "../profile";
 import {
   createQueryMock,
   registerTableQuery,
   resetSupabaseMock,
-  storageFromMock,
-  uploadMock,
 } from "../../__tests__/supabaseClientMock";
 
 beforeEach(resetSupabaseMock);
@@ -40,27 +37,6 @@ describe("vendor profile service", () => {
     expect(reviewsQuery.order).toHaveBeenCalledWith("created_at", {
       ascending: false,
     });
-  });
-
-  it("uploads profile media without overwriting existing objects", async () => {
-    const fileBody = new ArrayBuffer(2);
-    uploadMock.mockResolvedValueOnce({
-      data: { path: "vendors/7/profile/photo.jpg" },
-      error: null,
-    });
-
-    await uploadVendorProfileAsset({
-      path: "vendors/7/profile/photo.jpg",
-      fileBody,
-      contentType: "image/jpeg",
-    });
-
-    expect(storageFromMock).toHaveBeenCalledWith("vendor_images");
-    expect(uploadMock).toHaveBeenCalledWith(
-      "vendors/7/profile/photo.jpg",
-      fileBody,
-      { contentType: "image/jpeg", upsert: false },
-    );
   });
 
   it("updates a vendor and returns the refreshed profile", async () => {

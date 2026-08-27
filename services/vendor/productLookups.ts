@@ -1,4 +1,5 @@
 import type { Tables } from "@/supabase/supabase";
+import { getFabricTypeMediaUrl } from "@/services/media/media";
 import { appSupabase } from "@/services/supabase";
 import { timeoutAfter } from "@/utils/supabase/lookupTimeout";
 
@@ -293,10 +294,7 @@ export async function getFabricTypes(): Promise<FabricTypeItem[]> {
       id,
       code,
       name,
-      imageUrl: image_path
-        ? (appSupabase.storage.from("fabric-types").getPublicUrl(image_path)
-            .data.publicUrl ?? null)
-        : null,
+      imageUrl: image_path ? getFabricTypeMediaUrl(image_path) : null,
     }));
   } catch {
     return getFallbackFabricTypes();

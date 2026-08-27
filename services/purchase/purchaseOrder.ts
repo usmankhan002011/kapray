@@ -1,4 +1,5 @@
 import type { Database } from "@/supabase/supabase";
+import { getCurrentUser } from "@/services/auth/auth";
 import { appSupabase } from "@/services/supabase";
 
 type AtomicOrderFunction =
@@ -17,7 +18,7 @@ export type AtomicOrderResult =
 export type AtomicOrderRpcData = AtomicOrderResult[] | AtomicOrderResult | null;
 
 export async function getCurrentBuyerId(): Promise<string | null> {
-  const { data } = await appSupabase.auth.getUser();
+  const { data } = await getCurrentUser();
   return data.user?.id ?? null;
 }
 
